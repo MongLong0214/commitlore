@@ -1,0 +1,282 @@
+{
+ "filesRead": [
+  "lit-b.md",
+  "claims.json",
+  "schema.json",
+  "prompt.txt",
+  "papers/Jansen_Bosch_2005_WICSA.txt",
+  "papers/Tofan_Galster_Avgeriou_2011_ECSA.txt",
+  "papers/Buchgeher_et_al_2023_IEEE_Access.txt",
+  "papers/2504.08207v1.txt",
+  "papers/2602.08316v3.txt",
+  "papers/2505.23422v1.txt",
+  "papers/2506.11060v2.txt",
+  "papers/2601.15195v1.txt",
+  "papers/2606.13468v1.txt"
+ ],
+ "notRead": [
+  "grok-lit-b.err",
+  "grok-lit-b.json"
+ ],
+ "claims": [
+  {
+   "claim_id": "AK-01",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "knowledge about the design decisions underlying the architecture is lost [20]. This vaporization of design decision information leads to a number of problems associated with software architecture",
+   "source_file": "papers/Jansen_Bosch_2005_WICSA.txt"
+  },
+  {
+   "claim_id": "AK-02",
+   "verdict": "OVERSTATED",
+   "status": "resolved",
+   "quoted_span": "Although the effects of the made decisions are present in the design, the decisions themselves are not visible.",
+   "source_file": "papers/Jansen_Bosch_2005_WICSA.txt",
+   "scope_note": "Jansen & Bosch say decision effects remain in the design while the decisions themselves are not visible. That is not results remaining in code, and not specifically rejection reasons for discarded alternatives. Tofan frames undocumented decisions as AK vaporization and counts documented alternatives, but does not state the code/rejection split."
+  },
+  {
+   "claim_id": "AK-03",
+   "verdict": "NOT_CAUSAL",
+   "status": "resolved",
+   "quoted_span": "Failure to document architectural design decisions can lead to AK vaporization and higher maintenance costs.",
+   "source_file": "papers/Tofan_Galster_Avgeriou_2011_ECSA.txt",
+   "scope_note": "Stated as background motivation (also 'knowledge vaporization leads to increased maintenance costs'). The survey does not measure maintenance cost or test that causal path."
+  },
+  {
+   "claim_id": "ADR-01",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "Our results show that the adoption of ADRs is still low, although the number of repositories using ADRs is increasing every year.",
+   "source_file": "papers/Buchgeher_et_al_2023_IEEE_Access.txt"
+  },
+  {
+   "claim_id": "ADR-02",
+   "verdict": "NOT_CAUSAL",
+   "status": "resolved",
+   "quoted_span": "The currently limited adoption of ADRs raises the questions why the adoption is still so low and how the adoption can be increased in the future?",
+   "source_file": "papers/Buchgeher_et_al_2023_IEEE_Access.txt",
+   "scope_note": "Buchgeher measures low adoption and treats the reason as an open question. DRAFT later writes 'their adoption is limited due to the manual effort involved and insufficient tool support' as background citing this MSR/Capilla barriers, without testing that cause."
+  },
+  {
+   "claim_id": "DRAFT-01",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "We evaluated DRAFT against existing approaches on a dataset of 4,911 ADRs and various LLMs and analyzed them using automated metrics and human evaluations.",
+   "source_file": "papers/2504.08207v1.txt"
+  },
+  {
+   "claim_id": "DRAFT-02",
+   "verdict": "OVERSTATED",
+   "status": "resolved",
+   "quoted_span": "While the Flan-T5 achieved the highest results in the quantitative analysis, it struggled when participants provided custom contexts. In contrast, users reported better overall performance when using Llama-3-8b-it alongside DRAFT, as reflected in their feedback.",
+   "source_file": "papers/2504.08207v1.txt",
+   "scope_note": "Automated metrics: DRAFT+Flan-T5 is best in Table 6. Human evaluation is mixed (shorter/less reasoning, less favourable presentation, some preference for shorter DRAFT outputs). Not best in every respect."
+  },
+  {
+   "claim_id": "DRAFT-03",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "While the goal of generating entire ADRs from a codebase remains a future work, the focus of this study was on utilizing LLMs to generate Design Decisions from Decision Contexts as these are recognized as the core components of any ADR",
+   "source_file": "papers/2504.08207v1.txt"
+  },
+  {
+   "claim_id": "DRAFT-04",
+   "verdict": "MISATTRIBUTED",
+   "status": "resolved",
+   "quoted_span": "Finally, rather than aiming for fully automated ADD generation, incorporating a human-in-the-loop framework could make the approach more practical and reliable. Similar to AI-assisted coding tools like GitHub Copilot, LLM-generated Design Decisioncould be used as recommendations rather than final outputs",
+   "source_file": "papers/2504.08207v1.txt"
+  },
+  {
+   "claim_id": "SWE-01",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "SWE-ContextBench consists of 1,100 base tasks with another 376 related tasks derived from real dependency and reference relationships among GitHub issues and pull requests. SWE-ContextBench groups base tasks and related tasks with shared context across 51 unique repositories and 9 programming languages.",
+   "source_file": "papers/2602.08316v3.txt"
+  },
+  {
+   "claim_id": "SWE-02",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "No-Context (Baseline) ... 26.26 ... Free Context Learning ... 26.26 ... Oracle Context Learning ... 27.27 ... Free Summary Learning ... 22.22 ... Oracle Summary Learning ... 34.34",
+   "source_file": "papers/2602.08316v3.txt",
+   "scope_note": "Table 4 on 99 related tasks from SWE-ContextBench Lite (Claude Sonnet 4.5), not the full 1,476-task benchmark."
+  },
+  {
+   "claim_id": "SWE-03",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "Oracle Summary Learning achieves the best accuracy, improving resolution from 26.26% for the No-Context baseline to 34.34%, while Oracle Context Learning provides a small gain to 27.27%. The oracle–free gap is much larger for summaries than for full trajectories: Oracle Summary Learning outperforms Free Summary Learning by 12.12 points",
+   "source_file": "papers/2602.08316v3.txt",
+   "scope_note": "Same Lite 99-task Table 4 setting. 34.34−26.26 = +8.08pp; Free Summary Learning is 22.22%, below baseline."
+  },
+  {
+   "claim_id": "SWE-04",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "The benefit of oracle summaries is especially strong on harder tasks, where runtime falls by more than 60% for the slowest instances.",
+   "source_file": "papers/2602.08316v3.txt",
+   "scope_note": "Oracle Summary Learning on the Lite 99 related tasks; the drop is for the slowest instances, not a mean runtime cut on all hard tasks."
+  },
+  {
+   "claim_id": "SWE-05",
+   "verdict": "OVERSTATED",
+   "status": "resolved",
+   "quoted_span": "The No-Context baseline remains close to Oracle Context Learning at $0.79, whereas Free Summary Learning and Oracle Summary Learning cost $0.91 and $0.85, respectively. Thus, in this setup, summary-based reuse does not reduce cost relative to the baseline",
+   "source_file": "papers/2602.08316v3.txt",
+   "scope_note": "Cache-read tokens exceed 97% of consumption, but average dollar cost of summary reuse is not below baseline."
+  },
+  {
+   "claim_id": "SWE-06",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "In contrast, unfiltered or incorrectly selected context provides limited or negative benefits.",
+   "source_file": "papers/2602.08316v3.txt"
+  },
+  {
+   "claim_id": "SWE-07",
+   "verdict": "OVERSTATED",
+   "status": "resolved",
+   "quoted_span": "However, models do not always leverage this information effectively and can be misled by incorrect prior assumptions. Retrieval alone is therefore insufficient; agents must also learn when to trust and how to adapt retrieved context for new tasks.",
+   "source_file": "papers/2602.08316v3.txt",
+   "scope_note": "Oracle vs free gaps and Free Summary Learning at 22.22% vs 26.26% baseline are counterexamples to 'if you pass context, the agent follows it.'"
+  },
+  {
+   "claim_id": "CTIM-01",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "We find that CTIM-Rover does not outperform AutoCodeRover in any configuration and thus conclude that neither ExpeL nor DoT-Bank (Lingam et al., 2024) scale to real-world SE problems.",
+   "source_file": "papers/2505.23422v1.txt",
+   "scope_note": "Table 1 overall: AutoCodeRover 42; every CTIM configuration ≤40. Some per-repository cells exceed the baseline (e.g. Matplotlib CTIM-Rover 50 vs 25)."
+  },
+  {
+   "claim_id": "CTIM-02",
+   "verdict": "OVERSTATED",
+   "status": "resolved",
+   "quoted_span": "Our analysis indicates noise introduced by distracting CTIM items or exemplar trajectories as the likely source of the performance degradation.",
+   "source_file": "papers/2505.23422v1.txt",
+   "scope_note": "Qualitative hypothesis from two samples and the title framing ('From Knowledge to Noise'). Not a measured finding that episodic memory is noise rather than knowledge."
+  },
+  {
+   "claim_id": "CTIM-03",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "AutoCodeRover ... Mean ... 11414.02 ... CTIM-Rover ... 17544.93 ... CTIM only ... 13200.96 ... General CTIM only ... 12272.22 ... Repo-level CTIM only ... 12139.87 ... Exemplar only ... 16143.47",
+   "source_file": "papers/2505.23422v1.txt"
+  },
+  {
+   "claim_id": "CR-01",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "achieving a crash-resolution rate (CRR) of 48%, compared to 31.5% by SWE-agent (Yang et al., 2024) and 31% by Agentless (Xia et al., 2024), using OpenAI’s GPT-4o model.",
+   "source_file": "papers/2506.11060v2.txt",
+   "scope_note": "kBenchSyz Linux kernel crashes; GPT-4o; reported with 5 sampled patches (P@5)."
+  },
+  {
+   "claim_id": "CR-02",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "When averaged by trajectory, Code Researcher explores 10 unique files compared to only 1.33 files explored by SWE-agent.",
+   "source_file": "papers/2506.11060v2.txt"
+  },
+  {
+   "claim_id": "CR-03",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "Table 3: Importance of causal analysis of past commits on 96 bugs resolved by Code Researcher. ... Code Researcher (GPT-4o) ... 48.00 ... W / O search_commits ... 38.00",
+   "source_file": "papers/2506.11060v2.txt",
+   "scope_note": "Ablation on the 96 already-resolved bugs (Pass@5, 15 max calls). 'Causal analysis' is the authors' name for search_commits over history, not an independent causal identification."
+  },
+  {
+   "claim_id": "CR-04",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "First, the average memory length (capped at 50K) across all Code Researcher (GPT-4o, P@5, 15 max calls) trajectories dropped from 21, 557 tokens to 7, 797 tokens after filtering. ... Second, in an ablation on 20 randomly sampled crashes (10 resolved, 10 unresolved), disabling filtering reduced resolved crashes from 10 to 8, average recall from 0.41 to 0.35",
+   "source_file": "papers/2506.11060v2.txt",
+   "scope_note": "Quality gain is inferred from a 20-crash ablation plus token-length reduction, not a full-benchmark quality metric."
+  },
+  {
+   "claim_id": "CR-05",
+   "verdict": "OVERSTATED",
+   "status": "resolved",
+   "quoted_span": "We give evidence of the generalizability of Code Researcher by experimenting on an open-source multimedia software, FFmpeg (FFmpeg, 2025), where it resolves 7/10 crashes tested.",
+   "source_file": "papers/2506.11060v2.txt",
+   "scope_note": "Scope is systems/crash repair (Linux kernel + FFmpeg), not general-purpose coding agents."
+  },
+  {
+   "claim_id": "PR-01",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "Of the 33,596 agentic pull requests, the majority originate from OpenAI Codex (21,799), exceeding the output of any other agent by more than a factor of four. ... Across all agents, 71.48% of PRs (24,014) are successfully merged.",
+   "source_file": "papers/2601.15195v1.txt"
+  },
+  {
+   "claim_id": "PR-02",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "Across agents, tasks with consistently higher merge rates include documentations (84%), CI (79%), and build (74%). In contrast, performance (55%) and fix (64%) display the lowest merge rates overall.",
+   "source_file": "papers/2601.15195v1.txt"
+  },
+  {
+   "claim_id": "PR-03",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "Within this level, duplicate PRs are the most common pattern, affecting 142 PRs (23%), where maintainers explicitly reference an existing PR that already implements the same change.",
+   "source_file": "papers/2601.15195v1.txt",
+   "scope_note": "RQ2 qualitative taxonomy on 600 sampled rejected PRs (562 still accessible), not the full 33,596."
+  },
+  {
+   "claim_id": "PR-04",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "Unwanted features account for 24 PRs (4%), where maintainers state that the contribution is misaligned with project goals or introduces excessive or unnecessary changes.",
+   "source_file": "papers/2601.15195v1.txt",
+   "scope_note": "Same 600-PR RQ2 sample."
+  },
+  {
+   "claim_id": "PR-05",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "Reviewer-level abandonment is the most frequent rejection pattern, accounting for 228 PRs (38%).",
+   "source_file": "papers/2601.15195v1.txt",
+   "scope_note": "Same 600-PR RQ2 sample; 38 of 600 were inaccessible at annotation time."
+  },
+  {
+   "claim_id": "PR-06",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "Based on Cliff’s 𝛿 (Table 1), developers make approximately 5% more review comments and 3% more revisions on not-merged PRs compared to merged PRs, although the effect sizes for both are small.",
+   "source_file": "papers/2601.15195v1.txt"
+  },
+  {
+   "claim_id": "PR-07",
+   "verdict": "MISATTRIBUTED",
+   "status": "unresolved",
+   "quoted_span": "To further investigate why some agentic PRs are not merged, we qualitatively analyze 600 PRs to derive a hierarchical taxonomy of rejection patterns. This analysis complements the quantitative findings in RQ1 by uncovering rejection reasons not captured by quantitative metrics, including lack of meaningful reviewer engagement, duplicate PRs, unwanted feature implementations, and agent misalignment.",
+   "source_file": "papers/2601.15195v1.txt",
+   "scope_note": "The 33k paper measures merge outcomes and a rejection-pattern taxonomy for agent PRs. It does not define or count historical rejected architecture decisions."
+  },
+  {
+   "claim_id": "PR2-01",
+   "verdict": "SUPPORTED_WITH_SCOPE",
+   "status": "resolved",
+   "quoted_span": "The AIDev dataset features a total of 3,225 fix pull requests contributed by the four agents, out of which 1,497 were rejected fixes, forming 46.41% of the fixes.",
+   "source_file": "papers/2606.13468v1.txt",
+   "scope_note": "Copilot, Devin, Cursor, and Claude fix PRs only (Codex excluded). Qualitative sample is 306 of 1,497 rejected fixes."
+  },
+  {
+   "claim_id": "PR2-02",
+   "verdict": "SUPPORTED",
+   "status": "resolved",
+   "quoted_span": "Our results shed light on the importance of better guiding the model at these levels: (1) proposing hints about the approach to follow for fixing an issue, (2) outlining constraints or limitations regarding the approaches that should not be taken, and (3) instructing the agent on how to validate the implementation through CI pipelines and without introducing a breaking change.",
+   "source_file": "papers/2606.13468v1.txt"
+  },
+  {
+   "claim_id": "PR2-03",
+   "verdict": "MISATTRIBUTED",
+   "status": "resolved",
+   "quoted_span": "Wrong approach      PRs closed because the issue was resolved through an alternative implementation.      “@copilot – went a different way [...]”                           8 (2.6%)",
+   "source_file": "papers/2606.13468v1.txt",
+   "scope_note": "Taxonomy label is a current-PR alternative implementation (8/306). It is not a revival of historically rejected architecture decisions, and CommitLore is not in this paper."
+  }
+ ]
+}

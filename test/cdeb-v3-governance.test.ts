@@ -101,16 +101,25 @@ describe('CDEB-Fresh v3 corrective governance', () => {
     expect(currentState(OLD_STUDY)).toBe(INVALIDATED);
   });
 
-  it('starts the successor at DRAFT with no selection, seed, or measured run', () => {
+  it('preserves the successor DRAFT origin and unselected, unseeded, unmeasured baseline', () => {
     const study = JSON.parse(readFileSync(join(SUCCESSOR, 'study.json'), 'utf8')) as Record<string, unknown>;
     const status = JSON.parse(readFileSync(join(SUCCESSOR, 'STATUS.json'), 'utf8')) as Record<string, unknown>;
     const selection = JSON.parse(readFileSync(join(SUCCESSOR, 'corpus', 'selection.json'), 'utf8')) as Record<string, unknown>;
+    const ledger = readFileSync(join(SUCCESSOR, 'transitions.jsonl'), 'utf8').trim();
+    const firstTransition = ledger === '' ? undefined : JSON.parse(ledger.split('\n')[0]!) as Record<string, unknown>;
 
     expect(study.study_id).toBe('cdeb-fresh-v3r1');
     expect(study.predecessor_study_id).toBe('cdeb-fresh-v3');
     expect(typeof study.predecessor_reason).toBe('string');
-    expect(currentState(SUCCESSOR)).toBe('DRAFT');
-    expect(status).toMatchObject({ phase: 'draft', measured_run_allowed: false });
+    expect(study.predecessor_reason).not.toBe('');
+    if (firstTransition === undefined) {
+      expect(currentState(SUCCESSOR)).toBe('DRAFT');
+    } else {
+      expect(firstTransition.from).toBe('DRAFT');
+    }
+    const state = currentState(SUCCESSOR);
+    expect(status).toMatchObject({ measured_run_allowed: false });
+    expect(status.phase).toBe(state.toLowerCase().replaceAll('_', '-'));
     expect(selection).toMatchObject({ selected: [], seed: null });
     expect(readFileSync(join(SUCCESSOR, 'corpus', 'candidate-registry.jsonl'), 'utf8')).toBe('');
     expect(existsSync(join(SUCCESSOR, 'corpus', 'census-summary.json'))).toBe(false);
