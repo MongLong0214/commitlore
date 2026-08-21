@@ -15,7 +15,8 @@
           "claim_text",
           "source_id",
           "verdict",
-          "scope_note"
+          "scope_note",
+          "status"
         ],
         "properties": {
           "claim_id": {
@@ -39,6 +40,9 @@
           },
           "scope_note": {
             "type": "string"
+          },
+          "status": {
+            "enum": ["resolved", "unresolved"]
           }
         },
         "additionalProperties": false
