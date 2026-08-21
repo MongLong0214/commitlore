@@ -40,6 +40,8 @@ export interface ProvenanceAuditEntry {
   readonly ordinary_body_chars: number;
   readonly ordinary_body_survives: boolean;
   readonly removed_trailer_count: number;
+  /** Lines the second pass took out after the product's redaction ran. */
+  readonly residual_record_lines_removed: number;
   readonly files_changed: number;
   readonly insertions: number;
   readonly deletions: number;
@@ -99,6 +101,68 @@ const bodyOf = (cwd: string, sha: string): string => {
 const isBenchmarkAuthored = (candidate: V4CandidateEntry): boolean =>
   candidate.provenance_value === "reconstructed" || candidate.provenance_value === "migrated";
 
+
+/**
+ * A second redaction pass, and the reason it exists.
+ *
+ * The product's redaction rebuilds the ordinary trailer tail from Git's own
+ * parse, which deliberately does not treat a `Ruled-out:` sentence in prose as
+ * a record. That is right for the product and wrong here: a squashed commit
+ * embeds whole commit messages, indented, and Git does not see their trailers
+ * either. Two candidates' packets carried a complete record -- including the
+ * ruling a Stage A reviewer must be blind to -- and eleven carried at least one
+ * CommitLore line.
+ *
+ * The bias is deliberately the other way for a blind evidence packet. Removing
+ * a prose sentence that merely looks like a trailer costs a sentence; leaving a
+ * record in costs the answer.
+ */
+export const COMMITLORE_KEY_LINE =
+  /^[ \t]*(?:Ruled-out|Record-Id|Provenance|CommitLore-Version|Limit|Warn|Evidence|Blast|Undo|Certainty|Supersedes|Lifecycle|Expires|Verified|Scope|Deciders|Confidence)[ \t]*:/;
+
+export interface SecondPassResult {
+  readonly text: string;
+  readonly removedLines: number;
+}
+
+export const stripEmbeddedRecordLines = (text: string): SecondPassResult => {
+  const lines = text.split("\n");
+  const kept: string[] = [];
+  let removed = 0;
+  let dropping = false;
+  for (const line of lines) {
+    if (COMMITLORE_KEY_LINE.test(line)) {
+      dropping = true;
+      removed += 1;
+      continue;
+    }
+    // A folded continuation belongs to the line above it, so it goes too.
+    if (dropping && /^[ \t]+\S/.test(line) && line.trim() !== "") {
+      removed += 1;
+      continue;
+    }
+    dropping = false;
+    kept.push(line);
+  }
+  return { text: kept.join("\n").replace(/\n{3,}/gu, "\n\n"), removedLines: removed };
+};
+
+/**
+ * The packet must not contain a CommitLore key line at all. This is checked
+ * after the second pass rather than trusted from it: the first pass looked
+ * clean too.
+ */
+export const assertPacketHasNoRecordLines = (entries: readonly ProvenanceAuditEntry[]): void => {
+  for (const entry of entries) {
+    const offending = entry.ordinary_source.split("\n").filter((line) => COMMITLORE_KEY_LINE.test(line));
+    if (offending.length > 0) {
+      throw new Error(
+        `provenance v4: packet for ${entry.candidate_id} still carries ${String(offending.length)} CommitLore line(s), first: ${offending[0]!.trim().slice(0, 60)}`,
+      );
+    }
+  }
+};
+
 export const auditRepository = (
   cwd: string,
   snapshot: SnapshotEntry,
@@ -121,7 +185,13 @@ export const auditRepository = (
       stat = numstat(cwd, candidate.source_commit_sha);
       stats.set(candidate.source_commit_sha, stat);
     }
-    const redacted = redactCommitMessage(cwd, body);
+    const firstPass = redactCommitMessage(cwd, body);
+    const secondPass = stripEmbeddedRecordLines(firstPass.text);
+    const redacted = {
+      text: secondPass.text,
+      ordinaryBodySurvives: firstPass.ordinaryBodySurvives && secondPass.text.split("\n").slice(1).some((line) => line.trim() !== ""),
+      removedTrailerCount: firstPass.removedTrailerCount,
+    };
     const benchmarkAuthored = isBenchmarkAuthored(candidate);
     const g1 = candidate.pre_cutoff && !benchmarkAuthored;
     const g2Mechanical = redacted.ordinaryBodySurvives && stat.files > 0;
@@ -143,6 +213,7 @@ export const auditRepository = (
       ordinary_body_chars: redacted.text.length,
       ordinary_body_survives: redacted.ordinaryBodySurvives,
       removed_trailer_count: redacted.removedTrailerCount,
+      residual_record_lines_removed: secondPass.removedLines,
       files_changed: stat.files,
       insertions: stat.insertions,
       deletions: stat.deletions,
@@ -224,6 +295,7 @@ export const runProvenanceAudit = (options: RunProvenanceOptions): ProvenanceAud
     }
   }
   assertPacketsCarryNoAnchor(entries);
+  assertPacketHasNoRecordLines(entries);
   assertRedactionDidWork(
     entries,
     new Set(candidates.filter((candidate) => candidate.storage_kind !== "ordinary-source").map((candidate) => candidate.candidate_id)),

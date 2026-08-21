@@ -7,9 +7,11 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import {
+  assertPacketHasNoRecordLines,
   assertPacketsCarryNoAnchor,
   assertRedactionDidWork,
   auditRepository,
+  stripEmbeddedRecordLines,
   type ProvenanceAuditEntry,
 } from "../bench/cdeb/freeze/provenance-v4.ts";
 import { enumerateRepositoryDecisions, type SnapshotEntry } from "../bench/cdeb/freeze/census-v4.ts";
@@ -135,6 +137,69 @@ describe("CDEB v4 provenance audit", () => {
     expect(entry!.benchmark_authored).toBe(true);
     expect(entry!.g1_natural_provenance).toBe(false);
     expect(entry!.mechanical_exclusion).toBe("benchmark-authored");
+  });
+
+  it("removes a whole record that a squashed commit embedded as indented prose", () => {
+    const cwd = repo("squashed-record");
+    commit(cwd, 1, "base");
+    commit(
+      cwd,
+      2,
+      [
+        "Squashed commit of the following:",
+        "",
+        "commit ad1a0e151c1b2559dfc32d5445a3d6eccb22d977",
+        "",
+        "    Document the workflow",
+        "",
+        "    The reasoning for the change is written out here at length.",
+        "",
+        "    Ruled-out: combining --no-ff with the squash policy | it creates a merge commit",
+        "    Record-Id: r-embedded",
+        "    Provenance: authored",
+        "",
+        "B-002: define the evidence gate",
+        "",
+        "Ruled-out: closing the ticket from injected fixtures | the ticket needs a real response",
+        "Record-Id: r-outerrecord",
+        "Provenance: authored",
+      ].join("\n"),
+    );
+
+    const [entry] = audit(cwd);
+    // Git parses only the final trailer block, so the indented record survived
+    // the product's redaction. A Stage A reviewer would have been handed the
+    // ruling it is supposed to be blind to.
+    expect(entry!.residual_record_lines_removed).toBeGreaterThan(0);
+    expect(entry!.ordinary_source).not.toContain("Ruled-out");
+    expect(entry!.ordinary_source).not.toContain("Record-Id");
+    expect(entry!.ordinary_source).not.toContain("combining --no-ff");
+    expect(entry!.ordinary_source).toContain("The reasoning for the change is written out here");
+    expect(() => assertPacketHasNoRecordLines([entry!])).not.toThrow();
+  });
+
+  it("takes the folded continuation of a removed line with it", () => {
+    const stripped = stripEmbeddedRecordLines(
+      ["prose above", "  Ruled-out: an alternative | because of a reason", "    that continued onto this line", "prose below"].join("\n"),
+    );
+    expect(stripped.removedLines).toBe(2);
+    expect(stripped.text).toContain("prose above");
+    expect(stripped.text).toContain("prose below");
+    expect(stripped.text).not.toContain("that continued onto this line");
+  });
+
+  it("refuses a packet that still carries a record line", () => {
+    const cwd = repo("record-line-guard");
+    commit(cwd, 1, "base");
+    commit(
+      cwd,
+      2,
+      ["a decision", "", "Prose that explains the change at some length.", "", "Ruled-out: the shortcut | it dropped the error path", "Record-Id: r-guardcheck", "Provenance: authored"].join("\n"),
+    );
+    const entries = audit(cwd);
+    expect(() => assertPacketHasNoRecordLines(entries)).not.toThrow();
+    const leaked = entries.map((entry) => ({ ...entry, ordinary_source: `${entry.ordinary_source}\n  Record-Id: r-leaked` }));
+    expect(() => assertPacketHasNoRecordLines(leaked)).toThrow(/still carries 1 CommitLore line/);
   });
 
   it("refuses a packet carrying the benchmark's own key", () => {
