@@ -181,6 +181,21 @@ const render = (studyRoot) => {
   lines.push(`  delivered carrying none:          ${String(deliveredWithout)}`);
   lines.push("```");
   lines.push("");
+  lines.push("## Provenance tiers");
+  lines.push("");
+  const tiers = entries.reduce((counts, entry) => {
+    counts[entry.provenance_tier] = (counts[entry.provenance_tier] ?? 0) + 1;
+    return counts;
+  }, {});
+  lines.push("```text");
+  for (const tier of ["P1", "P2", "unsupported"]) lines.push(`${tier.padEnd(12)} ${String(tiers[tier] ?? 0)}`);
+  lines.push("```");
+  lines.push("");
+  lines.push("P2 is the owner-attested tier. No owner testimony was collected in Stage 0, so it");
+  lines.push("is empty by construction rather than by a judgement about its admissibility. That");
+  lines.push("decision belongs to a later preregistration, and nothing here mixes an attested");
+  lines.push("candidate with an independently sourced one.");
+  lines.push("");
   lines.push("## Reviewer agreement, per gate");
   lines.push("");
   lines.push(

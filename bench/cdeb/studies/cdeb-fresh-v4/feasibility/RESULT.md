@@ -76,6 +76,19 @@ content delivery observable:      yes, for identified and id-less alike
   delivered carrying none:          85
 ```
 
+## Provenance tiers
+
+```text
+P1           17
+P2           0
+unsupported  224
+```
+
+P2 is the owner-attested tier. No owner testimony was collected in Stage 0, so it
+is empty by construction rather than by a judgement about its admissibility. That
+decision belongs to a later preregistration, and nothing here mixes an attested
+candidate with an independently sourced one.
+
 ## Reviewer agreement, per gate
 
 | gate | compared | agreed | rate  |
