@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,6 +128,32 @@ describe('CDEB-Fresh v3 corrective governance', () => {
     expect(rows.some((row) => row.qualification_status === 'eligible')).toBe(false);
     expect(existsSync(join(SUCCESSOR, 'corpus', 'census-summary.json'))).toBe(true);
     expect(existsSync(join(SUCCESSOR, 'corpus', 'snapshots.json'))).toBe(true);
+  });
+
+  it('records the corpus-qualified NO-GO as a coherent terminal outcome', () => {
+    const status = JSON.parse(readFileSync(join(SUCCESSOR, 'STATUS.json'), 'utf8')) as Record<string, unknown>;
+    const selection = JSON.parse(readFileSync(join(SUCCESSOR, 'corpus', 'selection.json'), 'utf8')) as Record<string, unknown>;
+    const transitions = readFileSync(join(SUCCESSOR, 'transitions.jsonl'), 'utf8').trim().split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const terminal = transitions.at(-1);
+    const deviations = readFileSync(join(SUCCESSOR, 'deviations.jsonl'), 'utf8').trim().split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const result = readFileSync(join(SUCCESSOR, 'RESULT.md'), 'utf8');
+    const nonPlaceholderRows = readdirSync(join(SUCCESSOR, 'rows')).filter((name) => name !== '.gitkeep');
+
+    expect(terminal).toMatchObject({ from: 'LITERATURE_LOCKED', to: INVALIDATED, actor_role: 'OWNER' });
+    expect(currentState(SUCCESSOR)).toBe(INVALIDATED);
+    expect(status).toMatchObject({ phase: 'invalidated', measured_run_allowed: false });
+    expect(selection).toMatchObject({ selected: [], seed: null });
+    expect(nonPlaceholderRows).toEqual([]);
+    expect(deviations).toContainEqual(expect.objectContaining({
+      deviation_id: 'CDEB-V3R1-NO-GO-CORPUS-QUALIFICATION',
+      kind: 'confirmatory-study-no-go',
+      measured_data_exists: false,
+    }));
+    expect(result.trim()).not.toBe('');
+    expect(result).toContain('no product claim');
+    expect(result).not.toMatch(/CommitLore[\s\S]{0,200}\b\d+(?:\.\d+)?\s*(?:%|percent)\b/i);
   });
 
   it('models a pending field as pending and bars it from selection', () => {
