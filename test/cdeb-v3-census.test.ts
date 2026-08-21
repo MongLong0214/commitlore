@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import {
   readLegacyExclusionIndex,
+  digestReleaseDist,
   runCensus,
   validateRegistryManifest,
   validateV3Candidates,
@@ -14,6 +15,7 @@ import {
   type CensusRegistryManifest,
   type SnapshotEntry,
 } from "../bench/cdeb/freeze/census.ts";
+import { createRepositoryBundle, type RepositoryBundleIdentity } from "../bench/cdeb/freeze/repository-bundle.ts";
 import { assertCandidateSelectable } from "../bench/cdeb/candidate-v3.ts";
 import { gitOrThrow } from "../bench/git.ts";
 import { createTestRepo } from "./git-fixtures.js";
@@ -46,11 +48,19 @@ afterAll(() => {
   for (const path of scratch) rmSync(path, { recursive: true, force: true });
 });
 
-const snapshot = (repositoryId: string, snapshotSha: string): SnapshotEntry => ({
+const snapshot = (repositoryId: string, identity: RepositoryBundleIdentity, bundlePath: string): SnapshotEntry => ({
   repository_id: repositoryId,
   remote_url: `https://example.invalid/${repositoryId}.git`,
   default_branch: "main",
-  snapshot_sha: snapshotSha,
+  snapshot_sha: identity.snapshot_commit,
+  bundle_path: bundlePath,
+  bundle_sha256: identity.bundle_sha256,
+  snapshot_commit: identity.snapshot_commit,
+  snapshot_tree_oid: identity.snapshot_tree_oid,
+  refs_included: identity.refs_included,
+  refs_digest: identity.refs_digest,
+  notes_refs_included: identity.notes_refs_included,
+  notes_ref_digest: identity.notes_ref_digest,
   source_authorization_id: "auth-test",
   frozen_at: "2026-08-20T22:08:19Z",
 });
@@ -88,7 +98,7 @@ const fixture = (exclusions: readonly Record<string, string>[] = []) => {
   const studyRoot = join(root, "study");
   const corpus = join(studyRoot, "corpus");
   mkdirSync(corpus, { recursive: true });
-  writeFileSync(join(studyRoot, "study.json"), `${JSON.stringify({ study_id: "cdeb-test-v3", release_tag: "v-test", release_commit: releaseCommit })}\n`, "utf8");
+  writeFileSync(join(studyRoot, "study.json"), `${JSON.stringify({ study_id: "cdeb-test-v3", release_tag: "v-test", release_commit: releaseCommit, product_dist_sha256: digestReleaseDist(productRoot, releaseCommit) })}\n`, "utf8");
   const snapshotsPath = join(corpus, "snapshots.json");
   const authorizationPath = join(root, "AUTHORIZATION.md");
   const registryPath = join(corpus, "candidate-registry.jsonl");
@@ -107,7 +117,9 @@ const fixture = (exclusions: readonly Record<string, string>[] = []) => {
 };
 
 const writeCensusInputs = (files: ReturnType<typeof fixture>, sha: string): void => {
-  writeFileSync(files.snapshotsPath, `${JSON.stringify({ schema_version: 1, repositories: [snapshot(files.repositoryId, sha)] }, null, 2)}\n`, "utf8");
+  const bundlePath = join(files.studyRoot, "corpus", "bundles", `${files.repositoryId}.bundle`);
+  const identity = createRepositoryBundle(files.repositoryId, files.repositoryPath, bundlePath, sha);
+  writeFileSync(files.snapshotsPath, `${JSON.stringify({ schema_version: 2, repositories: [snapshot(files.repositoryId, identity, join("bundles", `${files.repositoryId}.bundle`))] }, null, 2)}\n`, "utf8");
   writeAuthorization(files.authorizationPath, [files.repositoryId]);
 };
 
@@ -137,6 +149,7 @@ describe("CDEB-Fresh v3 snapshot census", () => {
 
     expect(summary.repositories[0]?.candidates_reported).toBe(1);
     expect(entry).toMatchObject({ schema_version: 3, study_id: "cdeb-test-v3", source_snapshot_sha: frozen, qualification_status: "pending" });
+    expect(entry.pending_fields).toContain("natural_record");
     expect(entry.benchmark).toBeUndefined();
     expect(manifest).toMatchObject({ study_id: "cdeb-test-v3", product_release_tag: "v-test", product_release_commit: expect.stringMatching(/^[0-9a-f]{40}$/), candidate_count: 1, query_protocol_version: "cdeb-candidate-query-v1", index_schema_version: expect.any(Number) });
     expect(manifest.registry_sha256).toBe(createHash("sha256").update(readFileSync(files.registryPath)).digest("hex"));
@@ -190,16 +203,24 @@ describe("CDEB-Fresh v3 snapshot census", () => {
     expect(entry.ineligibility_codes).toContain(`legacy-exclusion:${record!.reason}`);
   });
 
-  it("refuses a working dist whose digest differs from the release-tagged dist", () => {
+  it("refuses a declared dist digest that differs from the release-tagged dist", () => {
     const files = fixture();
     const frozen = commitDecision(files.repositoryPath);
     writeCensusInputs(files, frozen);
-    writeFileSync(join(files.productRoot, "dist", "query.js"), "export const release = false;\n", "utf8");
+    writeFileSync(join(files.studyRoot, "study.json"), `${JSON.stringify({ study_id: "cdeb-test-v3", release_tag: "v-test", release_commit: gitOrThrow(files.productRoot, ["rev-parse", "HEAD"]).trim(), product_dist_sha256: "0".repeat(64) })}\n`, "utf8");
     expect(() => runCensus(files.options)).toThrow(/product dist digest expected [0-9a-f]{64}, received [0-9a-f]{64}/);
   });
 
-  it("requires an explicit repositories root when neither CLI/options nor environment supplies one", () => {
-    expect(() => runCensus()).toThrow(/repositories root is required/);
+  it("reads the sealed bundle after the source branch moves", () => {
+    const files = fixture();
+    const frozen = commitDecision(files.repositoryPath);
+    writeCensusInputs(files, frozen);
+    writeFileSync(join(files.repositoryPath, "later.ts"), "export const later = true;\n", "utf8");
+    gitOrThrow(files.repositoryPath, ["add", "later.ts"]);
+    gitOrThrow(files.repositoryPath, ["commit", "--quiet", "-m", "advance source branch"]);
+
+    const summary = runCensus(files.options);
+    expect(summary.repositories[0]?.candidates_reported).toBe(1);
   });
 
   it("forbids personal paths in runnable code and active-study artifacts", () => {

@@ -10,6 +10,10 @@ node_modules/
 # local bench output
 bench/results/*.local.jsonl
 
+# Durable CDEB corpus bundles are named and digested by snapshots.json, but
+# intentionally stay out of Git because they are large binary evidence.
+bench/cdeb/studies/*/corpus/bundles/
+
 .DS_Store
 
 # Scratch files delegated runs leave behind.

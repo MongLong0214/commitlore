@@ -2,8 +2,9 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -16,6 +17,7 @@ import {
   type CandidateRegistryCensus,
   type CandidateRegistryEntry,
 } from "./candidate-registry.ts";
+import { materializeBundle, type RepositoryBundleIdentity } from "./repository-bundle.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CDEB_ROOT = resolve(HERE, "..");
@@ -27,12 +29,20 @@ export interface SnapshotEntry {
   readonly remote_url: string;
   readonly default_branch: string;
   readonly snapshot_sha: string;
+  readonly bundle_path: string;
+  readonly bundle_sha256: string;
+  readonly snapshot_commit: string;
+  readonly snapshot_tree_oid: string;
+  readonly refs_included: readonly string[];
+  readonly refs_digest: string;
+  readonly notes_refs_included: boolean;
+  readonly notes_ref_digest: string;
   readonly source_authorization_id: string;
   readonly frozen_at: string;
 }
 
 export interface SnapshotManifest {
-  readonly schema_version: 1;
+  readonly schema_version: 2;
   readonly repositories: readonly SnapshotEntry[];
 }
 
@@ -90,6 +100,7 @@ interface StudyManifest {
   readonly study_id: string;
   readonly release_tag: string;
   readonly release_commit: string;
+  readonly product_dist_sha256: string;
 }
 
 export interface CensusOptions {
@@ -122,7 +133,7 @@ const validatorFor = (schemaPath: string) => {
 };
 
 const git = (cwd: string, args: readonly string[], encoding: "utf8" | "buffer" = "utf8") =>
-  spawnSync("git", args, { cwd, encoding });
+  spawnSync("git", args, { cwd, encoding, maxBuffer: 32 * 1024 * 1024 });
 
 const gitText = (cwd: string, args: readonly string[]): string => {
   const result = git(cwd, args);
@@ -185,13 +196,6 @@ export const readGrantedAuthorizations = (authorizationPath: string): ReadonlyMa
   return entries;
 };
 
-const requireFrozenSnapshotObject = (repository: SnapshotEntry, cwd: string): void => {
-  const frozen = git(cwd, ["cat-file", "-e", `${repository.snapshot_sha}^{commit}`]);
-  if (frozen.status !== 0) {
-    throw new Error(`census: repository ${repository.repository_id} does not contain frozen snapshot ${repository.snapshot_sha}; fetch that commit before running the census`);
-  }
-};
-
 const ensureAuthorized = (repository: SnapshotEntry, grants: ReadonlyMap<string, string>): void => {
   const authorizationId = grants.get(repository.repository_id);
   if (authorizationId === undefined || authorizationId !== repository.source_authorization_id) {
@@ -199,21 +203,19 @@ const ensureAuthorized = (repository: SnapshotEntry, grants: ReadonlyMap<string,
   }
 };
 
-const pendingFieldsFor = (candidate: CandidateRegistryEntry): string[] => {
-  const fields: string[] = [];
-  if (candidate.natural_record === "undecided") fields.push("natural_record");
-  if (candidate.benchmark_authored === "undecided") fields.push("benchmark_authored");
-  for (const [field, value] of Object.entries(candidate.eligibility)) if (value === "undecided") fields.push(field);
-  return fields;
-};
-
-const legacyMechanicalCodesFor = (candidate: CandidateRegistryEntry): string[] => {
-  const codes: string[] = [];
-  if (candidate.natural_record === false) codes.push("synthetic_or_backfilled_record");
-  if (candidate.benchmark_authored === true) codes.push("benchmark_authored_record");
-  if (candidate.eligibility.explicit_rejection_reason === false) codes.push("missing_explicit_rejection_reason");
-  return codes;
-};
+// Census is discovery, not adjudication.  The raw registry may expose values
+// that a later reviewer will consider, but this run deliberately makes none
+// of those judgments.  A deterministic legacy exclusion is the sole
+// exception: it remains visible as an ineligible row rather than disappearing.
+const PENDING_ADJUDICATION_FIELDS = [
+  "natural_record",
+  "benchmark_authored",
+  "explicit_rejection_reason",
+  "wrong_path_functionally_viable",
+  "deterministic_oracle_possible",
+  "current_code_does_not_reveal_reason",
+  "bounded_implementation",
+] as const;
 
 const exclusionsFor = (candidate: CandidateRegistryEntry, index: LegacyExclusionIndex): LegacyExclusionEntry[] => {
   const values = new Set([candidate.candidate_id, ...candidate.record_ids, ...candidate.decision_source_refs]);
@@ -222,11 +224,8 @@ const exclusionsFor = (candidate: CandidateRegistryEntry, index: LegacyExclusion
 
 const v3CandidateFor = (candidate: CandidateRegistryEntry, studyId: string, snapshotSha: string, index: LegacyExclusionIndex): CandidateV3Entry => {
   const exclusions = exclusionsFor(candidate, index);
-  const ineligibilityCodes = [
-    ...legacyMechanicalCodesFor(candidate),
-    ...exclusions.map((entry) => `legacy-exclusion:${entry.reason}`),
-  ];
-  const pendingFields = ineligibilityCodes.length === 0 ? pendingFieldsFor(candidate) : [];
+  const ineligibilityCodes = exclusions.map((entry) => `legacy-exclusion:${entry.reason}`);
+  const pendingFields = ineligibilityCodes.length === 0 ? [...PENDING_ADJUDICATION_FIELDS] : [];
   return {
     schema_version: 3,
     study_id: studyId,
@@ -235,10 +234,52 @@ const v3CandidateFor = (candidate: CandidateRegistryEntry, studyId: string, snap
     source_snapshot_sha: snapshotSha,
     source_record_ids: candidate.record_ids,
     source_refs: candidate.decision_source_refs,
-    qualification_status: ineligibilityCodes.length > 0 ? "ineligible" : pendingFields.length > 0 ? "pending" : "eligible",
+    qualification_status: ineligibilityCodes.length > 0 ? "ineligible" : "pending",
     pending_fields: pendingFields,
     ineligibility_codes: [...new Set(ineligibilityCodes)].sort(),
   };
+};
+
+const bundleIdentityFor = (repository: SnapshotEntry): RepositoryBundleIdentity => {
+  if (repository.snapshot_sha !== repository.snapshot_commit) {
+    throw new Error(`census: repository ${repository.repository_id} snapshot_sha ${repository.snapshot_sha} does not match snapshot_commit ${repository.snapshot_commit}`);
+  }
+  return {
+    repository_id: repository.repository_id,
+    bundle_sha256: repository.bundle_sha256,
+    snapshot_commit: repository.snapshot_commit,
+    snapshot_tree_oid: repository.snapshot_tree_oid,
+    refs_digest: repository.refs_digest,
+    notes_ref_digest: repository.notes_ref_digest,
+    refs_included: repository.refs_included,
+    notes_refs_included: repository.notes_refs_included,
+  };
+};
+
+const bundlePathFor = (snapshotsPath: string, repository: SnapshotEntry): string => {
+  if (isAbsolute(repository.bundle_path)) throw new Error(`census: repository ${repository.repository_id} bundle_path must be relative, received ${repository.bundle_path}`);
+  const manifestDirectory = dirname(resolve(snapshotsPath));
+  const path = resolve(manifestDirectory, repository.bundle_path);
+  if (relative(manifestDirectory, path).startsWith("..")) throw new Error(`census: repository ${repository.repository_id} bundle_path escapes snapshots directory`);
+  return path;
+};
+
+const enumerateSealedRepository = (
+  repository: SnapshotEntry,
+  snapshotsPath: string,
+): ReturnType<typeof enumerateCandidateRegistry> => {
+  const temporaryRoot = mkdtempSync(join(tmpdir(), "cdeb-census-"));
+  try {
+    const materializedRepository = join(temporaryRoot, "repository");
+    materializeBundle(bundleIdentityFor(repository), bundlePathFor(snapshotsPath, repository), materializedRepository);
+    return enumerateCandidateRegistry({
+      cwd: materializedRepository,
+      repositoryId: repository.repository_id,
+      snapshotRef: repository.snapshot_commit,
+    });
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
 };
 
 const identityError = (field: string, expected: string, received: unknown): Error =>
@@ -261,25 +302,7 @@ export function validateV3Candidates(candidates: readonly unknown[], studyId: st
 
 // The release tag stores dist as Git blobs, so this is a reproducible shipped
 // artifact digest: sorted `dist/<path>\0<bytes>\0`, not a rebuild-dependent tarball.
-const digestWorkingDist = (root: string): string => {
-  const distRoot = join(root, "dist");
-  if (!existsSync(distRoot)) throw new Error(`census: product dist directory is absent at ${distRoot}`);
-  const files: string[] = [];
-  const visit = (path: string): void => {
-    for (const name of readdirSync(path).sort()) {
-      const child = join(path, name);
-      if (statSync(child).isDirectory()) visit(child); else files.push(child);
-    }
-  };
-  visit(distRoot);
-  const hash = createHash("sha256");
-  for (const file of files.sort()) {
-    hash.update(relative(root, file).split("\\").join("/")); hash.update("\0"); hash.update(readFileSync(file)); hash.update("\0");
-  }
-  return hash.digest("hex");
-};
-
-const digestReleaseDist = (root: string, releaseCommit: string): string => {
+export const digestReleaseDist = (root: string, releaseCommit: string): string => {
   const listing = gitText(root, ["ls-tree", "-r", "-z", releaseCommit, "--", "dist"]);
   const hash = createHash("sha256");
   for (const entry of listing.split("\0").filter((value) => value !== "")) {
@@ -294,16 +317,17 @@ const digestReleaseDist = (root: string, releaseCommit: string): string => {
 
 const readStudyManifest = (studyRoot: string): StudyManifest => {
   const manifest = readJson(join(studyRoot, "study.json")) as Partial<StudyManifest>;
-  if (typeof manifest.study_id !== "string" || typeof manifest.release_tag !== "string" || typeof manifest.release_commit !== "string") throw new Error(`census: study manifest expected study_id, release_tag, and release_commit at ${studyRoot}`);
+  if (typeof manifest.study_id !== "string" || typeof manifest.release_tag !== "string" || typeof manifest.release_commit !== "string" || typeof manifest.product_dist_sha256 !== "string") throw new Error(`census: study manifest expected study_id, release_tag, release_commit, and product_dist_sha256 at ${studyRoot}`);
   requireHex("study manifest release_commit", manifest.release_commit);
+  if (!/^[0-9a-f]{64}$/.test(manifest.product_dist_sha256)) throw new Error(`census: study manifest product_dist_sha256 expected a 64-hex digest, received ${JSON.stringify(manifest.product_dist_sha256)}`);
   return manifest as StudyManifest;
 };
 
 const verifyProductRelease = (study: StudyManifest, productRoot: string): CensusRegistryManifest => {
   const tagCommit = gitText(productRoot, ["rev-parse", "--verify", "--end-of-options", `${study.release_tag}^{commit}`]);
   if (tagCommit !== study.release_commit) throw identityError("product_release_commit", study.release_commit, tagCommit);
-  const expected = digestReleaseDist(productRoot, study.release_commit);
-  const received = digestWorkingDist(productRoot);
+  const expected = study.product_dist_sha256;
+  const received = digestReleaseDist(productRoot, study.release_commit);
   if (expected !== received) throw new Error(`census: product dist digest expected ${expected}, received ${received}; refusing to enumerate with a non-release dist`);
   return {
     schema_version: 1, study_id: study.study_id, snapshot_manifest_sha256: "", generator_commit_sha: "",
@@ -321,13 +345,11 @@ export const validateRegistryManifest = (manifest: CensusRegistryManifest, regis
   if (manifest.registry_sha256 !== receivedHash) throw new Error(`census: manifest registry_sha256 expected ${receivedHash}, received ${manifest.registry_sha256}`);
 };
 
-/** Enumerates only frozen snapshots; it never checks out, fetches, selects, or seeds. */
+/** Enumerates only verified sealed bundles; it never opens a measured repository. */
 export const runCensus = (options: CensusOptions = {}): CensusSummary => {
   const studyRoot = options.studyRoot ?? STUDY_ROOT;
   const snapshotsPath = options.snapshotsPath ?? join(studyRoot, "corpus", "snapshots.json");
   const authorizationPath = options.authorizationPath ?? join(CDEB_ROOT, "AUTHORIZATION.md");
-  const repositoriesRoot = options.repositoriesRoot ?? process.env.CDEB_REPOSITORIES_ROOT;
-  if (repositoriesRoot === undefined || repositoriesRoot === "") throw new Error("census: repositories root is required; pass --repositories-root or set CDEB_REPOSITORIES_ROOT");
   const registryPath = options.registryPath ?? join(studyRoot, "corpus", "candidate-registry.jsonl");
   const summaryPath = options.summaryPath ?? join(studyRoot, "corpus", "census-summary.json");
   const registryManifestPath = options.registryManifestPath ?? join(studyRoot, "corpus", "candidate-registry.manifest.json");
@@ -342,12 +364,7 @@ export const runCensus = (options: CensusOptions = {}): CensusSummary => {
   const summaries: CensusSummaryEntry[] = [];
   for (const repository of snapshots.repositories) {
     ensureAuthorized(repository, grants);
-    const cwd = join(repositoriesRoot, repository.repository_id);
-    requireFrozenSnapshotObject(repository, cwd);
-    const registry = enumerateCandidateRegistry({
-      cwd, repositoryId: repository.repository_id, snapshotRef: repository.snapshot_sha,
-      benchmarkAuthoredRecordIds: exclusions.exclusions.filter((entry) => entry.kind === "benchmark-authored-record").map((entry) => entry.value),
-    });
+    const registry = enumerateSealedRepository(repository, snapshotsPath);
     const v3 = registry.candidates.map((candidate) => v3CandidateFor(candidate, study.study_id, repository.snapshot_sha, exclusions));
     validateV3Candidates(v3, study.study_id, snapshotByRepository);
     entries.push(...v3); summaries.push({ repository_id: repository.repository_id, ...registry.census });

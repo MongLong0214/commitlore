@@ -24,8 +24,9 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 
 import { git, gitOrThrow } from "../../git.ts";
 
@@ -42,6 +43,9 @@ export interface RepositoryBundleIdentity {
   readonly snapshot_tree_oid: string;
   readonly refs_digest: string;
   readonly notes_ref_digest: string;
+  /** `git bundle list-heads` lines, sorted and retained in the freeze manifest. */
+  readonly refs_included: readonly string[];
+  readonly notes_refs_included: boolean;
 }
 
 /** The §6.2 identity of one materialized working copy. */
@@ -79,13 +83,12 @@ const refsListing = (cwd: string): string =>
   ]);
 
 /** The refs a bundle actually carries, read back out of the bundle itself. */
-const bundledRefs = (cwd: string, bundlePath: string): string =>
+const bundledRefLines = (cwd: string, bundlePath: string): string[] =>
   gitOrThrow(cwd, ["bundle", "list-heads", bundlePath])
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "")
-    .sort()
-    .join("\n");
+    .sort();
 
 const notesTip = (cwd: string): string => {
   const result = git(cwd, ["rev-parse", "--verify", "--quiet", NOTES_REF]);
@@ -136,38 +139,42 @@ export const createRepositoryBundle = (
   bundlePath: string,
   snapshotRef = "HEAD",
 ): RepositoryBundleIdentity => {
-  mkdirSync(join(bundlePath, ".."), { recursive: true });
-  const snapshot = gitOrThrow(sourceCwd, ["rev-parse", snapshotRef]).trim();
+  const absoluteBundlePath = resolve(bundlePath);
+  mkdirSync(join(absoluteBundlePath, ".."), { recursive: true });
+  const snapshot = gitOrThrow(sourceCwd, ["rev-parse", `${snapshotRef}^{commit}`]).trim();
 
-  // `git bundle create` takes rev-list arguments and stores the *ref names*
-  // among them, so a bare sha bundles objects with nothing for a clone to land
-  // on. The name has to sit under refs/heads/ — `git clone` builds its checkout
-  // from branches, and a bundle whose only ref was refs/cdeb/snapshot cloned
-  // into a repository that could not read its own tree. Refusing to reuse an
-  // existing name keeps this from ever clobbering a real branch, and the
-  // finally removes the ref whether or not the bundle succeeded.
+  // `git bundle create <out> <snapshot_sha>` cannot advertise a bare SHA as a
+  // bundle head: Git refuses that empty ref set.  Do not manufacture the
+  // needed ref in a measured repository.  Instead make a disposable bare
+  // mirror, add the one advertised snapshot ref there, and delete the mirror
+  // afterwards.  The source is read only: no checkout, fetch, worktree, ref,
+  // config, or index mutation is performed in it.
   const tempRef = `refs/heads/${BUNDLE_REF_NAME}`;
-  if (git(sourceCwd, ["rev-parse", "--verify", "--quiet", tempRef]).status === 0) {
-    throw new Error(`bundle: ${tempRef} already exists in the source — refusing to overwrite it`);
-  }
-  gitOrThrow(sourceCwd, ["update-ref", tempRef, snapshot]);
+  const staging = mkdtempSync(join(tmpdir(), "cdeb-bundle-"));
   try {
+    // --mirror brings the explicit notes ref into the disposable clone; only
+    // `tempRef` and `NOTES_REF` are subsequently written to the bundle.
+    gitOrThrow(tmpdir(), ["clone", "--quiet", "--mirror", "--no-local", sourceCwd, staging]);
+    gitOrThrow(staging, ["update-ref", tempRef, snapshot]);
     const refs = [tempRef];
-    if (notesTip(sourceCwd) !== "absent") refs.push(NOTES_REF);
-    gitOrThrow(sourceCwd, ["bundle", "create", bundlePath, ...refs]);
-    gitOrThrow(sourceCwd, ["bundle", "verify", bundlePath]);
+    const notesRefIncluded = notesTip(staging) !== "absent";
+    if (notesRefIncluded) refs.push(NOTES_REF);
+    gitOrThrow(staging, ["bundle", "create", absoluteBundlePath, ...refs]);
+    gitOrThrow(staging, ["bundle", "verify", absoluteBundlePath]);
+    const refsIncluded = bundledRefLines(staging, absoluteBundlePath);
+    return {
+      repository_id: repositoryId,
+      bundle_sha256: sha256File(absoluteBundlePath),
+      snapshot_commit: snapshot,
+      snapshot_tree_oid: gitOrThrow(staging, ["rev-parse", `${snapshot}^{tree}`]).trim(),
+      refs_digest: sha256(refsIncluded.join("\n")),
+      notes_ref_digest: sha256(notesTip(staging)),
+      refs_included: refsIncluded,
+      notes_refs_included: notesRefIncluded,
+    };
   } finally {
-    git(sourceCwd, ["update-ref", "-d", tempRef]);
+    rmSync(staging, { recursive: true, force: true });
   }
-
-  return {
-    repository_id: repositoryId,
-    bundle_sha256: sha256File(bundlePath),
-    snapshot_commit: snapshot,
-    snapshot_tree_oid: gitOrThrow(sourceCwd, ["rev-parse", `${snapshot}^{tree}`]).trim(),
-    refs_digest: sha256(bundledRefs(sourceCwd, bundlePath)),
-    notes_ref_digest: sha256(notesTip(sourceCwd)),
-  };
 };
 
 /**
@@ -192,6 +199,16 @@ export const materializeBundle = (
     throw new Error(
       `materialize: bundle digest ${actualBundle} does not match the frozen ${identity.bundle_sha256}`,
     );
+  }
+
+  const actualRefs = bundledRefLines(dirname(resolve(bundlePath)), resolve(bundlePath));
+  const actualRefsDigest = sha256(actualRefs.join("\n"));
+  if (actualRefsDigest !== identity.refs_digest || actualRefs.join("\n") !== identity.refs_included.join("\n")) {
+    throw new Error("materialize: bundle refs do not match the frozen manifest");
+  }
+  const actualNotesIncluded = actualRefs.some((ref) => ref.endsWith(` ${NOTES_REF}`));
+  if (actualNotesIncluded !== identity.notes_refs_included) {
+    throw new Error("materialize: bundle notes-ref policy does not match the frozen manifest");
   }
 
   mkdirSync(targetDir, { recursive: true });
