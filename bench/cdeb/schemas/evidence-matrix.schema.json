@@ -6,6 +6,10 @@
     "schema_version": {
       "const": 1
     },
+    "study_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "claims": {
       "type": "array",
       "items": {

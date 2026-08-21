@@ -67,3 +67,5 @@ defining delivery success as `Record-Id` visibility, this instrument excludes
 No measured data exists. Nothing was tuned after seeing an outcome. This
 document makes no product claim, and no statement here is evidence for or
 against CommitLore working.
+
+The NO-GO conclusion stands, no measured data exists, the corpus figures are verified in their own artifacts, and this particular historical digest is not usable as audit proof.

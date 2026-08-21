@@ -18,10 +18,10 @@ import {
   type CandidateRegistryEntry,
 } from "./candidate-registry.ts";
 import { materializeBundle, type RepositoryBundleIdentity } from "./repository-bundle.ts";
+import { resolveActiveStudyRoot } from "../active-study.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CDEB_ROOT = resolve(HERE, "..");
-const STUDY_ROOT = join(CDEB_ROOT, "studies", "cdeb-fresh-v3r1");
 const QUERY_PROTOCOL_VERSION = "cdeb-candidate-query-v1";
 
 export interface SnapshotEntry {
@@ -347,7 +347,7 @@ export const validateRegistryManifest = (manifest: CensusRegistryManifest, regis
 
 /** Enumerates only verified sealed bundles; it never opens a measured repository. */
 export const runCensus = (options: CensusOptions = {}): CensusSummary => {
-  const studyRoot = options.studyRoot ?? STUDY_ROOT;
+  const studyRoot = options.studyRoot ?? resolveActiveStudyRoot(CDEB_ROOT);
   const snapshotsPath = options.snapshotsPath ?? join(studyRoot, "corpus", "snapshots.json");
   const authorizationPath = options.authorizationPath ?? join(CDEB_ROOT, "AUTHORIZATION.md");
   const registryPath = options.registryPath ?? join(studyRoot, "corpus", "candidate-registry.jsonl");

@@ -8,7 +8,7 @@ import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
 
 import { assertTransition, canTransition, FORWARD_STUDY_STATES } from '../bench/cdeb/lifecycle.js';
-import { appendTransition, currentState, readTransitions } from '../bench/cdeb/ledger.js';
+import { appendTransition, buildTransitionArtifact, currentState, readTransitions } from '../bench/cdeb/ledger.js';
 
 const HERE = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const ROOT = resolve(HERE, '..');
@@ -60,6 +60,13 @@ const transition = (from = 'DRAFT', to = 'LITERATURE_LOCKED') => ({
   checks: ['verified'],
   deviations: [],
 });
+
+const boundTransition = (study: string, from = 'DRAFT', to = 'LITERATURE_LOCKED') =>
+  buildTransitionArtifact(study, {
+    ...transition(from, to),
+    input_artifacts: ['study.json', 'literature/source-lock.json'],
+    output_artifacts: ['study.json', 'literature/evidence-matrix.json'],
+  });
 
 const gold = () => ({
   schema_version: 3,
@@ -217,7 +224,7 @@ describe('CDEB-Fresh v3 lifecycle', () => {
     writeReadyLiteratureLock(study);
 
     expect(currentState(study)).toBe('DRAFT');
-    appendTransition(study, transition());
+    appendTransition(study, boundTransition(study));
     expect(readFileSync(ledger, 'utf8').trim().split('\n')).toHaveLength(1);
     expect(currentState(study)).toBe('LITERATURE_LOCKED');
   });

@@ -1,0 +1,7 @@
+{
+  "active_study_id": null,
+  "last_terminal_study_id": "cdeb-fresh-v3r1",
+  "status": "no-active-study",
+  "reason": "cdeb-fresh-v3 and cdeb-fresh-v3r1 are invalidated terminal studies; no measured data exists and neither may be resumed.",
+  "successor_requires_new_study_id": true
+}
