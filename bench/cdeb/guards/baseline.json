@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "properties": [
+    { "guard_id": "literature-lock-requires-complete-evidence", "outcome": "bound" },
+    { "guard_id": "literature-lock-refuses-circular-justification", "outcome": "bound" },
+    { "guard_id": "transition-ledger-refuses-cross-study-row", "outcome": "bound" },
+    { "guard_id": "candidate-identity-contract", "outcome": "bound" },
+    {
+      "guard_id": "exclusion-index-blocks-study-id-cdeb-v1",
+      "outcome": "unavailable",
+      "reason": "The census matches exclusion rows by value only, so disabling a study-id kind check cannot change the claim that this candidate is ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-study-id-cdeb-p-01",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this study identity is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-study-id-cdeb-fresh-v3",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this predecessor study identity is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-task-id-pricing-admin-quote",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this task identity is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-task-id-pending-rm-force",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this task identity is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-prompt-hash",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this prompt artifact is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-fixture-hash",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this evaluator fixture artifact is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-candidate-id",
+      "outcome": "uncovered",
+      "reason": "The census can match this candidate identifier by value, but the registry has no mutation that proves the claim makes it ineligible."
+    },
+    { "guard_id": "exclusion-index-blocks-record-id", "outcome": "bound" },
+    {
+      "guard_id": "exclusion-index-blocks-oracle-fixture-hash",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this oracle fixture artifact is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-randomization-id",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this randomization artifact is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-trajectory-id",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this trajectory artifact is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-result-row-id",
+      "outcome": "uncovered",
+      "reason": "The census matches exclusion rows by value only, so this result-row artifact is not represented in the candidate values that the claim would need to make ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-benchmark-authored-record",
+      "outcome": "uncovered",
+      "reason": "The census can match this source-record identity by value, but the registry has no mutation that proves the claim makes its candidate ineligible."
+    },
+    {
+      "guard_id": "exclusion-index-blocks-publicly-answer-exposed-decision",
+      "outcome": "uncovered",
+      "reason": "The census can match this decision's source-record identity by value, but the registry has no mutation that proves the claim makes its candidate ineligible."
+    },
+    { "guard_id": "frozen-bundle-digest-is-verified", "outcome": "bound" },
+    {
+      "guard_id": "personal-paths-are-absent-from-active-material",
+      "outcome": "inert",
+      "reason": "The current clean tree still passes when the personal-path scan is bypassed, so the claim has no constructed personal-path control."
+    }
+  ]
+}

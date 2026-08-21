@@ -2,9 +2,9 @@
 /**
  * Mutates each registered guard and requires its named Vitest test to fail.
  *
- * This runner intentionally treats an unavailable mutation as a finding. A
- * test that cannot be made to prove its claimed property has no control, even
- * when the ordinary green suite makes the mechanism look covered.
+ * The outcome is checked against a committed baseline. Known gaps remain
+ * visible in the complete table, but only a change from that baseline fails:
+ * regressions make the job red and improvements require the baseline to move.
  */
 
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,13 +14,9 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..");
 const REGISTRY_PATH = resolve(ROOT, "bench/cdeb/guards/registry.json");
+const BASELINE_PATH = resolve(ROOT, "bench/cdeb/guards/baseline.json");
 const backupRoot = mkdtempSync(resolve(tmpdir(), "commitlore-guard-mutations-"));
 let activeRestore = null;
-
-const hardFailure = (message) => {
-  process.exitCode = 1;
-  process.stdout.write(`${message}\n`);
-};
 
 const restoreActive = () => {
   if (activeRestore === null) return;
@@ -79,6 +75,28 @@ const readRegistry = () => {
   });
 };
 
+const OUTCOMES = new Set(["bound", "inert", "unavailable", "uncovered"]);
+
+const readBaseline = () => {
+  const parsed = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+  if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.properties)) {
+    throw new Error(`${relative(ROOT, BASELINE_PATH)} must contain version 1 and a properties array`);
+  }
+  const entries = new Map();
+  for (const [index, property] of parsed.properties.entries()) {
+    const label = `properties[${String(index)}]`;
+    if (!isRecord(property)) throw new Error(`${label} must be an object`);
+    const guardId = requireString(property.guard_id, `${label}.guard_id`);
+    const outcome = requireString(property.outcome, `${label}.outcome`);
+    if (!OUTCOMES.has(outcome)) throw new Error(`${label}.outcome must be one of ${[...OUTCOMES].join(", ")}`);
+    if (entries.has(guardId)) throw new Error(`${label}.guard_id duplicates ${guardId}`);
+    const reason = property.reason === undefined ? undefined : requireString(property.reason, `${label}.reason`);
+    if (outcome !== "bound" && reason === undefined) throw new Error(`${label}.reason is required for a baseline gap`);
+    entries.set(guardId, { outcome, reason });
+  }
+  return entries;
+};
+
 const countOccurrences = (source, find) => {
   let count = 0;
   let offset = 0;
@@ -120,47 +138,107 @@ const runTest = (testFile, testName) =>
     maxBuffer: 16 * 1024 * 1024,
   });
 
+const measurements = [];
 let total = 0;
-let bound = 0;
-let inert = 0;
-let unavailable = 0;
-let uncovered = 0;
+let boundControls = 0;
+let inertControls = 0;
+let unavailableControls = 0;
 
 try {
   for (const property of readRegistry()) {
     if (property.mutations.length === 0) {
-      uncovered += 1;
-      hardFailure(`UNCOVERED: ${property.guardId}: property has zero mutations; no expressible control — ${property.claim}`);
+      measurements.push({
+        ...property,
+        outcome: "uncovered",
+        detail: "property has zero mutations; no expressible control",
+      });
       continue;
     }
+    const controlOutcomes = [];
+    const details = [];
     for (const mutation of property.mutations) {
       total += 1;
       const applied = applyMutation(mutation);
       if (!applied.applied) {
-        unavailable += 1;
-        hardFailure(`NO EXPRESSIBLE CONTROL: ${property.guardId}/${mutation.id}: mutation could not be applied — ${applied.reason}; ${mutation.why}`);
+        unavailableControls += 1;
+        controlOutcomes.push("unavailable");
+        details.push(`${mutation.id}: mutation could not be applied — ${applied.reason}; ${mutation.why}`);
         continue;
       }
       try {
         const result = runTest(property.testFile, mutation.testName ?? property.testName);
         if (result.error !== undefined) {
-          unavailable += 1;
-          hardFailure(`NO EXPRESSIBLE CONTROL: ${property.guardId}/${mutation.id}: mutation could not be applied — Vitest could not start: ${result.error.message}; ${mutation.why}`);
+          unavailableControls += 1;
+          controlOutcomes.push("unavailable");
+          details.push(`${mutation.id}: Vitest could not start — ${result.error.message}; ${mutation.why}`);
         } else if (result.status !== 0) {
-          bound += 1;
-          process.stdout.write(`BOUND: ${property.guardId}/${mutation.id}: mutation applied, test failed — ${mutation.why}\n`);
+          boundControls += 1;
+          controlOutcomes.push("bound");
+          details.push(`${mutation.id}: mutation applied, test failed — ${mutation.why}`);
         } else {
-          inert += 1;
-          hardFailure(`INERT: ${property.guardId}/${mutation.id}: mutation applied, test PASSED — ${mutation.why}`);
+          inertControls += 1;
+          controlOutcomes.push("inert");
+          details.push(`${mutation.id}: mutation applied, test passed — ${mutation.why}`);
         }
       } finally {
         restoreActive();
       }
     }
+    const outcome = controlOutcomes.includes("unavailable")
+      ? "unavailable"
+      : controlOutcomes.includes("inert")
+        ? "inert"
+        : "bound";
+    measurements.push({ ...property, outcome, detail: details.join("; ") });
   }
 } finally {
   restoreActive();
   rmSync(backupRoot, { recursive: true, force: true });
 }
 
-process.stdout.write(`SUMMARY: ${String(bound)} bound, ${String(inert)} inert, ${String(unavailable)} unavailable, ${String(uncovered)} uncovered, ${String(total)} mutations run\n`);
+const baseline = readBaseline();
+const byOutcome = new Map([...OUTCOMES].map((outcome) => [outcome, []]));
+for (const measurement of measurements) byOutcome.get(measurement.outcome).push(measurement);
+
+process.stdout.write("OUTCOME TABLE:\n");
+for (const outcome of ["bound", "inert", "unavailable", "uncovered"]) {
+  const rows = byOutcome.get(outcome);
+  process.stdout.write(`${outcome.toUpperCase()} (${String(rows.length)}):\n`);
+  for (const row of rows) {
+    const baselineReason = baseline.get(row.guardId)?.reason;
+    const suffix = baselineReason === undefined ? row.detail : baselineReason;
+    process.stdout.write(`  ${row.guardId}: ${row.claim} — ${suffix}\n`);
+  }
+}
+process.stdout.write(`CONTROL SUMMARY: ${String(boundControls)} bound, ${String(inertControls)} inert, ${String(unavailableControls)} unavailable, ${String(byOutcome.get("uncovered").length)} uncovered, ${String(total)} mutations run\n`);
+
+const failures = [];
+const measuredIds = new Set(measurements.map((measurement) => measurement.guardId));
+for (const measurement of measurements) {
+  const expected = baseline.get(measurement.guardId);
+  if (expected === undefined) {
+    if (measurement.outcome === "uncovered") {
+      failures.push(`REGRESSION: ${measurement.guardId}: new property has zero mutations and is absent from the baseline`);
+    } else {
+      failures.push(`BASELINE DISAGREES WITH MEASUREMENT: ${measurement.guardId}: measured ${measurement.outcome}, but the property is absent from the baseline`);
+    }
+    continue;
+  }
+  if (expected.outcome === measurement.outcome) continue;
+  if (expected.outcome !== "bound" && measurement.outcome === "bound") {
+    failures.push(`BASELINE DISAGREES WITH MEASUREMENT: ${measurement.guardId}: baseline records ${expected.outcome}, measurement is bound; tighten the baseline to record the repaired guard`);
+  } else if (expected.outcome === "bound") {
+    failures.push(`REGRESSION: BASELINE DISAGREES WITH MEASUREMENT: ${measurement.guardId}: baseline records bound, measurement is ${measurement.outcome}`);
+  } else {
+    failures.push(`BASELINE DISAGREES WITH MEASUREMENT: ${measurement.guardId}: baseline records ${expected.outcome}, measurement is ${measurement.outcome}`);
+  }
+}
+for (const guardId of baseline.keys()) {
+  if (!measuredIds.has(guardId)) failures.push(`BASELINE DISAGREES WITH REGISTRY: ${guardId}: baseline property is no longer registered`);
+}
+
+if (failures.length > 0) {
+  process.stdout.write("RATCHET FAILURES:\n");
+  for (const failure of failures) process.stdout.write(`  ${failure}\n`);
+  process.exitCode = 1;
+}

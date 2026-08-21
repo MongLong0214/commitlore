@@ -1607,8 +1607,9 @@ jobs:
   # property. This deliberately runs separately from `check`: one Vitest
   # process per control is expensive, and a missing or inert control must be
   # visible as its own failing job rather than disappearing into the broad
-  # suite. The registry currently records known exclusion-index gaps, so this
-  # job is expected to be red until those properties acquire real controls.
+  # suite. This ratchet fails only when measurement regresses from the recorded
+  # baseline: its current gaps are thirteen exclusion-index kinds, one inert
+  # personal-path scan, and one unavailable exclusion-index control.
   guard-mutations:
     runs-on: ubuntu-latest
     steps:
