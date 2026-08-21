@@ -1,6 +1,6 @@
 /**
  * The fan-in gate exists so branch protection can require one stable context
- * instead of eleven, several of which are matrix-interpolated: `check (22.23.2)`
+ * instead of twelve, several of which are matrix-interpolated: `check (22.23.2)`
  * carries the exact pinned floor, so raising that floor RENAMES the required
  * context. While admins are exempt a rename is survivable; once they are not, a
  * renamed context means no commit can satisfy protection and `main` freezes with
@@ -69,7 +69,7 @@ describe('the CI fan-in gate', () => {
   it('lint reports on pull requests, which is the only place protection can see it', () => {
     // `lint` does not report on `main` commits and is not supposed to: a squash
     // produces a commit carrying no `lint` context, which is why the release
-    // gate requires ten jobs and not eleven. It reports on PR heads, and a PR
+    // gate requires eleven jobs and not twelve. It reports on PR heads, and a PR
     // head is what branch protection evaluates.
     //
     // So the `pull_request` trigger is load-bearing for protection. Remove it

@@ -1,0 +1,287 @@
+{
+  "version": 1,
+  "properties": [
+    {
+      "guard_id": "literature-lock-requires-complete-evidence",
+      "claim": "A study cannot enter LITERATURE_LOCKED unless its source record, resolved claims, and all three independent audit artifacts are present.",
+      "test_file": "test/cdeb-v3-governance.test.ts",
+      "test_name": "refuses LITERATURE_LOCKED with 0 sources",
+      "mutations": [
+        {
+          "mutation_id": "literature-lock-allows-zero-sources",
+          "file": "bench/cdeb/ledger.ts",
+          "find": "if (sources === 0) failures.push(\"source-lock sources must be > 0 (measured 0)\");",
+          "replace": "if (false) failures.push(\"source-lock sources must be > 0 (measured 0)\");",
+          "must_fail_test": true,
+          "why": "A study with no locked sources would be allowed to advance."
+        },
+        {
+          "mutation_id": "literature-lock-allows-zero-claims",
+          "file": "bench/cdeb/ledger.ts",
+          "find": "if (claims === 0) failures.push(\"evidence-matrix claims must be > 0 (measured 0)\");",
+          "replace": "if (false) failures.push(\"evidence-matrix claims must be > 0 (measured 0)\");",
+          "must_fail_test": true,
+          "why": "A study with no adjudicated claims would be allowed to advance.",
+          "test_name": "refuses LITERATURE_LOCKED with 0 claims"
+        },
+        {
+          "mutation_id": "literature-lock-allows-missing-lit-a",
+          "file": "bench/cdeb/ledger.ts",
+          "find": "if (audits.litA === 0) failures.push(\"literature/audits LIT-A artifact must exist (measured 0)\");",
+          "replace": "if (false) failures.push(\"literature/audits LIT-A artifact must exist (measured 0)\");",
+          "must_fail_test": true,
+          "why": "The required independent LIT-A audit could be absent.",
+          "test_name": "refuses LITERATURE_LOCKED with missing LIT-A audit"
+        },
+        {
+          "mutation_id": "literature-lock-allows-missing-lit-b",
+          "file": "bench/cdeb/ledger.ts",
+          "find": "if (audits.litB === 0) failures.push(\"literature/audits LIT-B artifact must exist (measured 0)\");",
+          "replace": "if (false) failures.push(\"literature/audits LIT-B artifact must exist (measured 0)\");",
+          "must_fail_test": true,
+          "why": "The required independent LIT-B audit could be absent.",
+          "test_name": "refuses LITERATURE_LOCKED with missing LIT-B audit"
+        },
+        {
+          "mutation_id": "literature-lock-allows-missing-adjudication",
+          "file": "bench/cdeb/ledger.ts",
+          "find": "if (audits.adjudication === 0) failures.push(\"literature/audits adjudication artifact must exist (measured 0)\");",
+          "replace": "if (false) failures.push(\"literature/audits adjudication artifact must exist (measured 0)\");",
+          "must_fail_test": true,
+          "why": "The final adjudication artifact could be absent.",
+          "test_name": "refuses LITERATURE_LOCKED with missing adjudication audit"
+        },
+        {
+          "mutation_id": "literature-lock-allows-unresolved-claims",
+          "file": "bench/cdeb/ledger.ts",
+          "find": "if (unresolved !== 0) failures.push(`evidence-matrix unresolved claims must be 0 (measured ${unresolved})`);",
+          "replace": "if (false) failures.push(`evidence-matrix unresolved claims must be 0 (measured ${unresolved})`);",
+          "must_fail_test": true,
+          "why": "A study with unresolved evidence would be allowed to advance.",
+          "test_name": "refuses LITERATURE_LOCKED with an unresolved claim"
+        }
+      ]
+    },
+    {
+      "guard_id": "literature-lock-refuses-circular-justification",
+      "claim": "A study cannot justify entering a state by claiming that the destination state is already recorded.",
+      "test_file": "test/cdeb-v3-governance.test.ts",
+      "test_name": "refuses UNKNOWN and a circular destination check even with real artifact-shaped inputs",
+      "mutations": [
+        {
+          "mutation_id": "circular-check-is-never-detected",
+          "file": "bench/cdeb/ledger.ts",
+          "find": "check.toUpperCase().includes(transition.to),",
+          "replace": "false,",
+          "must_fail_test": true,
+          "why": "A transition whose only stated check is its destination would be accepted."
+        }
+      ]
+    },
+    {
+      "guard_id": "transition-ledger-refuses-cross-study-row",
+      "claim": "A study's transition ledger cannot accept an artifact from another study.",
+      "test_file": "test/cdeb-v3-lifecycle.test.ts",
+      "test_name": "refuses a row from another study and names both study ids",
+      "mutations": [
+        {
+          "mutation_id": "foreign-transition-study-is-accepted",
+          "file": "bench/cdeb/ledger.ts",
+          "find": "if (value.study_id !== expected) {",
+          "replace": "if (false) {",
+          "must_fail_test": true,
+          "why": "A valid-looking transition from a different study could enter this ledger."
+        }
+      ]
+    },
+    {
+      "guard_id": "candidate-identity-contract",
+      "claim": "Only rows belonging to this v3 study, tied to its frozen repository snapshot, and free of a legacy benchmark identity may enter its candidate registry.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "refuses re-adding benchmark: cdeb-v1 to a v3 row by naming expected and received identity",
+      "mutations": [
+        {
+          "mutation_id": "legacy-benchmark-identity-is-accepted",
+          "file": "bench/cdeb/freeze/census.ts",
+          "find": "if (\"benchmark\" in row) throw identityError(\"benchmark (must be absent)\", \"absent\", row.benchmark);",
+          "replace": "if (false) throw identityError(\"benchmark (must be absent)\", \"absent\", row.benchmark);",
+          "must_fail_test": true,
+          "why": "A legacy benchmark row could be relabelled as a v3 candidate."
+        },
+        {
+          "mutation_id": "foreign-candidate-study-is-accepted",
+          "file": "bench/cdeb/freeze/census.ts",
+          "find": "if (row.study_id !== studyId) throw identityError(\"study_id\", studyId, row.study_id);",
+          "replace": "if (false) throw identityError(\"study_id\", studyId, row.study_id);",
+          "must_fail_test": true,
+          "why": "A candidate belonging to another study could enter this registry.",
+          "test_name": "refuses a foreign v3 study_id by naming expected and received identity"
+        },
+        {
+          "mutation_id": "unfrozen-candidate-snapshot-is-accepted",
+          "file": "bench/cdeb/freeze/census.ts",
+          "find": "if (row.source_snapshot_sha !== expectedSnapshot) throw identityError(\"source_snapshot_sha\", expectedSnapshot, row.source_snapshot_sha);",
+          "replace": "if (false) throw identityError(\"source_snapshot_sha\", expectedSnapshot, row.source_snapshot_sha);",
+          "must_fail_test": true,
+          "why": "A candidate could be attributed to a different source snapshot.",
+          "test_name": "refuses a source snapshot that differs from its frozen repository snapshot"
+        }
+      ]
+    },
+    {
+      "guard_id": "exclusion-index-blocks-study-id-cdeb-v1",
+      "claim": "A candidate associated with the legacy study cdeb-v1 cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": [
+        {
+          "mutation_id": "study-id-kind-is-not-read",
+          "file": "bench/cdeb/freeze/census.ts",
+          "find": "entry.kind === \"study-id\"",
+          "replace": "false",
+          "must_fail_test": true,
+          "why": "No study-id-specific comparison exists: the index matcher never reads kind, so this property has no expressible control."
+        }
+      ]
+    },
+    {
+      "guard_id": "exclusion-index-blocks-study-id-cdeb-p-01",
+      "claim": "A candidate associated with the legacy study cdeb-p-01 cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-study-id-cdeb-fresh-v3",
+      "claim": "A candidate associated with the invalidated predecessor study cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-task-id-pricing-admin-quote",
+      "claim": "A candidate associated with the legacy task pricing-admin-quote cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-task-id-pending-rm-force",
+      "claim": "A candidate associated with the legacy task pending-rm-force cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-prompt-hash",
+      "claim": "A candidate associated with the recorded legacy prompt cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-fixture-hash",
+      "claim": "A candidate associated with the recorded legacy evaluator fixture cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-candidate-id",
+      "claim": "The candidate r-d0004gatecensus cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-record-id",
+      "claim": "A candidate carrying an excluded source record identity cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": [
+        {
+          "mutation_id": "record-id-match-is-disabled",
+          "file": "bench/cdeb/freeze/census.ts",
+          "find": "return index.exclusions.filter((entry) => values.has(entry.value));",
+          "replace": "return [];",
+          "must_fail_test": true,
+          "why": "An excluded source record would remain pending instead of becoming visibly ineligible."
+        }
+      ]
+    },
+    {
+      "guard_id": "exclusion-index-blocks-oracle-fixture-hash",
+      "claim": "A candidate associated with the recorded legacy oracle fixture cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-randomization-id",
+      "claim": "A candidate associated with the recorded legacy randomization block cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-trajectory-id",
+      "claim": "A candidate associated with the recorded legacy trajectory cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-result-row-id",
+      "claim": "A candidate associated with the recorded legacy result row cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-benchmark-authored-record",
+      "claim": "A candidate associated with the recorded benchmark-authored decision cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "exclusion-index-blocks-publicly-answer-exposed-decision",
+      "claim": "A candidate associated with the publicly answer-exposed decision cannot reach the registry as anything but ineligible.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
+      "mutations": []
+    },
+    {
+      "guard_id": "frozen-bundle-digest-is-verified",
+      "claim": "A repository bundle whose bytes differ from its frozen identity cannot be materialized for a study run.",
+      "test_file": "test/cdeb-materializer.test.ts",
+      "test_name": "refuses a bundle whose bytes do not match the freeze",
+      "mutations": [
+        {
+          "mutation_id": "tampered-bundle-is-materialized",
+          "file": "bench/cdeb/freeze/repository-bundle.ts",
+          "find": "if (actualBundle !== identity.bundle_sha256) {",
+          "replace": "if (false) {",
+          "must_fail_test": true,
+          "why": "Tampered bundle bytes would be handed to the materializer."
+        }
+      ]
+    },
+    {
+      "guard_id": "personal-paths-are-absent-from-active-material",
+      "claim": "Runnable code and active-study artifacts contain no personal filesystem path.",
+      "test_file": "test/cdeb-v3-census.test.ts",
+      "test_name": "forbids personal paths in runnable code and active-study artifacts",
+      "mutations": [
+        {
+          "mutation_id": "personal-path-scan-is-bypassed",
+          "file": "test/cdeb-v3-census.test.ts",
+          "find": "const personalPaths = scanned.filter((path) => readFileSync(path, \"utf8\").includes(\"/Users/\"));",
+          "replace": "const personalPaths: string[] = [];",
+          "must_fail_test": true,
+          "why": "The current clean tree still passes when the scan is bypassed, so this test has no constructed personal-path control."
+        }
+      ]
+    }
+  ]
+}
