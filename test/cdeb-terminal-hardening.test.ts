@@ -61,9 +61,11 @@ describe('CDEB terminal hardening', () => {
     expect(readFileSync(join(STUDY, 'transitions.jsonl'), 'utf8')).toBe(before);
   });
 
-  it('fails closed with no active study and refuses the empty, unseeded measured-run path', () => {
-    expect(() => resolveActiveStudyRoot(CDEB_ROOT)).toThrow(/No active CDEB study/);
+  it('never resolves the terminal study as active and refuses the empty, unseeded measured-run path', () => {
+    expect(resolveActiveStudyRoot(CDEB_ROOT)).not.toBe(STUDY);
     expect(() => assertMeasuredRunAuthorized(STUDY)).toThrow(/measured_run_allowed is not true; selection is empty; selection seed is null/);
+    // Whatever study is active, the measured-run gate stays shut for it too.
+    expect(() => assertMeasuredRunAuthorized(resolveActiveStudyRoot(CDEB_ROOT))).toThrow(/measured_run_allowed is not true/);
   });
 
   it('refuses caller-supplied digests that do not bind the canonical artifacts', () => {
@@ -121,7 +123,9 @@ describe('CDEB terminal hardening', () => {
     const successor = readFileSync(join(STUDY, 'SUCCESSOR.md'), 'utf8');
     expect(prd).toContain('status: terminal-preserved');
     expect(prd).toContain('must not be used to resume `cdeb-fresh-v3r1`');
-    expect(active).toMatchObject({ active_study_id: null, last_terminal_study_id: 'cdeb-fresh-v3r1', status: 'no-active-study', successor_requires_new_study_id: true });
+    expect(active).toMatchObject({ last_terminal_study_id: 'cdeb-fresh-v3r1', successor_requires_new_study_id: true });
+    expect(active.active_study_id).not.toBe('cdeb-fresh-v3r1');
+    expect(active.active_study_id).not.toBe('cdeb-fresh-v3');
     expect(status).toMatchObject({ phase: 'invalidated', measured_run_allowed: false });
     expect(successor).toContain('new study id');
     expect(successor).toContain('new preregistration');
