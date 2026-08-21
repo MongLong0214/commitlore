@@ -1,7 +1,7 @@
 {
-  "active_study_id": null,
+  "active_study_id": "cdeb-fresh-v4",
   "last_terminal_study_id": "cdeb-fresh-v3r1",
-  "status": "no-active-study",
-  "reason": "cdeb-fresh-v3 and cdeb-fresh-v3r1 are invalidated terminal studies; no measured data exists and neither may be resumed.",
+  "status": "active",
+  "reason": "cdeb-fresh-v4 is a Stage 0 corpus-feasibility study under a new study id, new preregistration and a new estimand. cdeb-fresh-v3 and cdeb-fresh-v3r1 remain invalidated terminal studies holding no measured data; neither may be resumed, and neither may be named here.",
   "successor_requires_new_study_id": true
 }
