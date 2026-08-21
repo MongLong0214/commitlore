@@ -10,7 +10,7 @@
  * rather than merely failing.
  */
 
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -151,8 +151,33 @@ describe('#445 the frozen repository materializer', () => {
     writeFileSync(bundle, bytes);
 
     expect(() => materializeBundle(identity, bundle, join(temp('tamper-wt'), 'wt'))).toThrow(
-      /bundle digest .* does not match the frozen/,
+      new RegExp(`bundle digest [0-9a-f]{64} does not match the frozen ${identity.bundle_sha256}`),
     );
+  });
+
+  it('materializes from the bundle alone after the source repository is unavailable', () => {
+    const source = sourceRepo('bundle-alone');
+    const bundle = join(temp('bundle-alone-bundle'), 'repo.bundle');
+    const identity = createRepositoryBundle('repo-a', source, bundle);
+    const unavailable = `${source}.unavailable`;
+    renameSync(source, unavailable);
+    const materialized = materializeBundle(identity, bundle, join(temp('bundle-alone-wt'), 'wt'));
+    renameSync(unavailable, source);
+    expect(materialized.head).toBe(identity.snapshot_commit);
+  });
+
+  it('keeps yielding the frozen commit after the source branch advances', () => {
+    const source = sourceRepo('branch-moves');
+    const bundle = join(temp('branch-moves-bundle'), 'repo.bundle');
+    const identity = createRepositoryBundle('repo-a', source, bundle);
+    writeFileSync(join(source, 'later.ts'), 'export const later = true;\n');
+    gitOrThrow(source, ['add', 'later.ts']);
+    gitOrThrow(source, ['commit', '--quiet', '-m', 'advance the branch after sealing']);
+
+    const target = join(temp('branch-moves-wt'), 'wt');
+    const materialized = materializeBundle(identity, bundle, target);
+    expect(materialized.head).toBe(identity.snapshot_commit);
+    expect(gitOrThrow(target, ['ls-files', 'later.ts'])).toBe('');
   });
 
   it('refuses a missing bundle rather than materializing nothing', () => {

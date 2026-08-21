@@ -3,6 +3,7 @@
   "schema_version": 3,
   "release_tag": "v1.2.0",
   "release_commit": "90a8b212e1db70cccf69fbf48415b9c036b2d854",
+  "product_dist_sha256": "318e16612206ae0aa3732033127b2937276ce2f142872c33a91ec04a33133b91",
   "repositories": [
     "gitseed",
     "agent-operator-score",

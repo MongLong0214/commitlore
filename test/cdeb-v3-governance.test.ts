@@ -101,7 +101,7 @@ describe('CDEB-Fresh v3 corrective governance', () => {
     expect(currentState(OLD_STUDY)).toBe(INVALIDATED);
   });
 
-  it('preserves the successor DRAFT origin and unselected, unseeded, unmeasured baseline', () => {
+  it('preserves the successor DRAFT origin and its unselected, unseeded, unmeasured corrected census', () => {
     const study = JSON.parse(readFileSync(join(SUCCESSOR, 'study.json'), 'utf8')) as Record<string, unknown>;
     const status = JSON.parse(readFileSync(join(SUCCESSOR, 'STATUS.json'), 'utf8')) as Record<string, unknown>;
     const selection = JSON.parse(readFileSync(join(SUCCESSOR, 'corpus', 'selection.json'), 'utf8')) as Record<string, unknown>;
@@ -121,9 +121,13 @@ describe('CDEB-Fresh v3 corrective governance', () => {
     expect(status).toMatchObject({ measured_run_allowed: false });
     expect(status.phase).toBe(state.toLowerCase().replaceAll('_', '-'));
     expect(selection).toMatchObject({ selected: [], seed: null });
-    expect(readFileSync(join(SUCCESSOR, 'corpus', 'candidate-registry.jsonl'), 'utf8')).toBe('');
-    expect(existsSync(join(SUCCESSOR, 'corpus', 'census-summary.json'))).toBe(false);
-    expect(existsSync(join(SUCCESSOR, 'corpus', 'snapshots.json'))).toBe(false);
+    const rows = readFileSync(join(SUCCESSOR, 'corpus', 'candidate-registry.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.schema_version === 3 && row.study_id === 'cdeb-fresh-v3r1' && !('benchmark' in row))).toBe(true);
+    expect(rows.every((row) => row.qualification_status === 'pending' || row.qualification_status === 'ineligible')).toBe(true);
+    expect(rows.some((row) => row.qualification_status === 'eligible')).toBe(false);
+    expect(existsSync(join(SUCCESSOR, 'corpus', 'census-summary.json'))).toBe(true);
+    expect(existsSync(join(SUCCESSOR, 'corpus', 'snapshots.json'))).toBe(true);
   });
 
   it('models a pending field as pending and bars it from selection', () => {
