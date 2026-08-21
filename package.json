@@ -28,7 +28,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/commitlore.mjs",
     "bench:m5": "node --experimental-strip-types bench/m5-analysis.ts",
-    "bench:cdeb:verify": "node bench/cdeb/verify.mjs",
+    "bench:cdeb:verify": "node bench/cdeb/verify.mjs && npm run bench:cdeb:evidence-matrix",
+    "bench:cdeb:evidence-matrix": "node scripts/render-evidence-matrix.mjs --check --input bench/cdeb/studies/cdeb-fresh-v3r1/literature/evidence-matrix.json --output bench/cdeb/studies/cdeb-fresh-v3r1/literature/evidence-matrix.md",
     "bench:cdeb:analyze": "node --experimental-strip-types bench/cdeb/analyze.ts",
     "bench:cdeb:registry": "node --experimental-strip-types bench/cdeb/freeze/candidate-registry.ts"
   },

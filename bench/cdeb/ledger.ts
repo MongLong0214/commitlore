@@ -1,5 +1,6 @@
-import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { createHash } from "node:crypto";
 
 import { Ajv2020 } from "ajv/dist/2020.js";
 
@@ -27,6 +28,23 @@ export interface TransitionArtifact {
   readonly output_digest: string;
   readonly checks: readonly string[];
   readonly deviations: readonly unknown[];
+  /**
+   * Required for new appends. Historical rows predate artifact binding and
+   * remain readable without these fields.
+   */
+  readonly input_artifacts?: readonly string[];
+  readonly output_artifacts?: readonly string[];
+}
+
+export interface TransitionArtifactDraft {
+  readonly from: StudyState;
+  readonly to: StudyState;
+  readonly timestamp: string;
+  readonly actor_role: string;
+  readonly checks: readonly string[];
+  readonly deviations: readonly unknown[];
+  readonly input_artifacts: readonly string[];
+  readonly output_artifacts: readonly string[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -64,6 +82,74 @@ const validator = (() => {
 const validationMessage = (): string => validator.errors?.map((error) => `${error.instancePath || "/"} ${error.message ?? "invalid"}`).join("; ") ?? "invalid";
 
 const transitionPath = (studyDir: string): string => join(studyDir, TRANSITIONS_FILE);
+
+/**
+ * Digest the exact bytes of a named artifact set. Paths are normalized and
+ * sorted before hashing, and each length is included so distinct path/byte
+ * sequences cannot share an ambiguous serialization.
+ */
+export const digestTransitionArtifacts = (studyDir: string, artifactPaths: readonly string[]): string => {
+  if (artifactPaths.length === 0) throw new Error("Transition artifact binding must name at least one artifact");
+  const root = resolve(studyDir);
+  const studyId = readStudyId(root);
+  const normalized = artifactPaths.map((artifactPath) => {
+    if (typeof artifactPath !== "string" || artifactPath === "" || isAbsolute(artifactPath) || artifactPath.includes("\\")) {
+      throw new Error(`Invalid transition artifact path ${JSON.stringify(artifactPath)}`);
+    }
+    const absolute = resolve(root, artifactPath);
+    const canonical = relative(root, absolute).split(sep).join("/");
+    if (canonical === "" || canonical === ".." || canonical.startsWith("../") || canonical !== artifactPath) {
+      throw new Error(`Transition artifact path must stay under the study root: ${JSON.stringify(artifactPath)}`);
+    }
+    if (!existsSync(absolute) || !statSync(absolute).isFile()) {
+      throw new Error(`Missing transition artifact ${canonical}`);
+    }
+    const bytes = readFileSync(absolute);
+    try {
+      const parsed: unknown = JSON.parse(bytes.toString("utf8"));
+      assertStudyIdentity(root, parsed);
+    } catch (error) {
+      // Non-JSON artifacts have no embedded study identity. JSON artifacts
+      // that do name one are checked above; syntax itself is not constrained.
+      if (error instanceof Error && error.message.startsWith("Mixed-study refusal:")) throw error;
+    }
+    return { path: canonical, bytes };
+  });
+  normalized.sort((left, right) => left.path.localeCompare(right.path));
+  if (new Set(normalized.map(({ path }) => path)).size !== normalized.length) {
+    throw new Error("Transition artifact binding names an artifact more than once");
+  }
+  const hash = createHash("sha256");
+  const write = (value: string | Buffer): void => { hash.update(String(Buffer.byteLength(value))); hash.update(":"); hash.update(value); hash.update("\0"); };
+  write("cdeb-transition-artifact-set-v1");
+  write(studyId);
+  for (const artifact of normalized) {
+    write(artifact.path);
+    write(artifact.bytes);
+  }
+  return hash.digest("hex");
+};
+
+/** Build a new transition only from canonical, study-local artifact bytes. */
+export const buildTransitionArtifact = (studyDir: string, draft: TransitionArtifactDraft): TransitionArtifact => ({
+  ...draft,
+  input_digest: digestTransitionArtifacts(studyDir, draft.input_artifacts),
+  output_digest: digestTransitionArtifacts(studyDir, draft.output_artifacts),
+});
+
+const assertAppendBinding = (studyDir: string, transition: TransitionArtifact): void => {
+  if (transition.input_artifacts === undefined || transition.output_artifacts === undefined) {
+    throw new Error("Refused transition append without canonical input_artifacts and output_artifacts bindings");
+  }
+  const inputDigest = digestTransitionArtifacts(studyDir, transition.input_artifacts);
+  const outputDigest = digestTransitionArtifacts(studyDir, transition.output_artifacts);
+  if (transition.input_digest !== inputDigest) {
+    throw new Error(`Refused transition append: input_digest does not match canonical artifacts (expected ${inputDigest})`);
+  }
+  if (transition.output_digest !== outputDigest) {
+    throw new Error(`Refused transition append: output_digest does not match canonical artifacts (expected ${outputDigest})`);
+  }
+};
 
 const countArrayArtifact = (path: string, property: string): number => {
   try {
@@ -185,6 +271,9 @@ export const appendTransition = (studyDir: string, artifact: unknown): void => {
     throw new Error(`Refused transition from ${transition.from}: ledger is currently ${current}`);
   }
   assertTransition(transition.from, transition.to);
+  // This applies only to newly written records. Historical ledger rows may
+  // contain the schema-valid placeholder digests that prompted this binding.
+  assertAppendBinding(studyDir, transition);
   // This is intentionally evaluated only for a proposed append. Historical
   // bad rows remain readable so they can be invalidated rather than erased.
   assertLiteratureLockGate(studyDir, transition);

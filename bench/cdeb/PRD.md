@@ -7,8 +7,8 @@ audit_snapshot_main_sha: 42cb032823a9c2078d9dcc8e0f0f6bf25d58c32e
 current_release_at_review: v1.2.0
 measured_release: latest stable release at freeze
 study_id: cdeb-fresh-v3
-status: implementation-ready
-measured_run_status: no-go-until-all-freeze-gates-pass
+status: terminal-preserved
+measured_run_status: terminal-no-go-no-measured-run
 human_operator_count: 1
 external_people_required: 0
 execution_mode: solo-owner-plus-isolated-multi-agent-roles
@@ -27,6 +27,11 @@ preserves_as_history:
 ---
 
 # CommitLore CDEB-Fresh v3 엔터프라이즈 최종 PRD
+
+> **Terminal notice:** This PRD is preserved as the authoritative design of a
+> terminated line. It must not be used to resume `cdeb-fresh-v3r1`; any
+> successor requires a new study id and a new preregistration. The design body
+> below remains intact so its terminated rules stay auditable.
 
 > **연구 목적**
 >

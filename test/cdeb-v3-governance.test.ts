@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import { assertCandidateSelectable, qualificationStatusFor } from '../bench/cdeb/candidate-v3.js';
 import { INVALIDATED, STUDY_STATES, canTransition } from '../bench/cdeb/lifecycle.js';
-import { appendTransition, currentState } from '../bench/cdeb/ledger.js';
+import { appendTransition, buildTransitionArtifact, currentState } from '../bench/cdeb/ledger.js';
 
 const HERE = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const ROOT = resolve(HERE, '..');
@@ -29,6 +29,13 @@ const transition = (overrides: Record<string, unknown> = {}) => ({
   deviations: [],
   ...overrides,
 });
+
+const boundTransition = (study: string, overrides: Record<string, unknown> = {}) =>
+  buildTransitionArtifact(study, {
+    ...transition(overrides),
+    input_artifacts: ['study.json', 'literature/source-lock.json'],
+    output_artifacts: ['study.json', 'literature/evidence-matrix.json'],
+  });
 
 const tempStudy = (): string => {
   const study = mkdtempSync(join(tmpdir(), 'cdeb-v3-governance-'));
@@ -71,19 +78,19 @@ describe('CDEB-Fresh v3 corrective governance', () => {
     writeReadyLiterature(study);
     mutate(study);
 
-    expect(() => appendTransition(study, transition())).toThrow(refusal);
+    expect(() => appendTransition(study, boundTransition(study))).toThrow(refusal);
   });
 
   it('refuses UNKNOWN and a circular destination check even with real artifact-shaped inputs', () => {
     const unknown = tempStudy();
     writeReadyLiterature(unknown);
-    expect(() => appendTransition(unknown, transition({ actor_role: 'UNKNOWN' }))).toThrow(
+    expect(() => appendTransition(unknown, boundTransition(unknown, { actor_role: 'UNKNOWN' }))).toThrow(
       /actor_role must be OWNER or FREEZE \(measured 0 authorized roles for UNKNOWN\)/,
     );
 
     const circular = tempStudy();
     writeReadyLiterature(circular);
-    expect(() => appendTransition(circular, transition({ checks: ['LITERATURE_LOCKED is recorded'] }))).toThrow(
+    expect(() => appendTransition(circular, boundTransition(circular, { checks: ['LITERATURE_LOCKED is recorded'] }))).toThrow(
       /circular check names destination state LITERATURE_LOCKED \(measured 1\)/,
     );
   });

@@ -15,10 +15,10 @@ import { dirname, join, relative, resolve } from "node:path";
 import { git, gitOrThrow, parseTrailers, type Trailer } from "../../git.ts";
 import { materializeBundle, type RepositoryBundleIdentity } from "./repository-bundle.ts";
 import type { SnapshotEntry } from "./census.ts";
+import { resolveActiveStudyRoot } from "../active-study.ts";
 
 const HERE = dirname(new URL(import.meta.url).pathname);
 const CDEB_ROOT = resolve(HERE, "..");
-const DEFAULT_STUDY_ROOT = join(CDEB_ROOT, "studies", "cdeb-fresh-v3r1");
 
 /** The complete public CommitLore trailer vocabulary, including legacy fields. */
 const COMMITLORE_TRAILER_KEYS = new Set([
@@ -81,7 +81,7 @@ export interface SourcePacketResult {
 export interface BuildSourcePacketOptions {
   readonly candidate: SourcePacketCandidate;
   readonly snapshot: SnapshotEntry;
-  /** The active study holding the sealed corpus; defaults to cdeb-fresh-v3r1. */
+  /** The active study holding the sealed corpus; defaults fail closed. */
   readonly studyRoot?: string;
   /** Defaults to the active study's source-packets directory. */
   readonly outputRoot?: string;
@@ -249,7 +249,7 @@ export const buildSourcePacket = (options: BuildSourcePacketOptions): SourcePack
   if (candidate.source_refs.length === 0) throw new Error(`source packet: candidate ${candidate.candidate_id} has no ordinary source refs`);
   if (new Set(candidate.source_refs).size !== candidate.source_refs.length) throw new Error(`source packet: candidate ${candidate.candidate_id} repeats a source ref`);
 
-  const studyRoot = options.studyRoot ?? DEFAULT_STUDY_ROOT;
+  const studyRoot = options.studyRoot ?? resolveActiveStudyRoot(CDEB_ROOT);
   const outputRoot = options.outputRoot ?? join(studyRoot, "source-packets");
   const destination = join(outputRoot, candidate.candidate_id);
   if (existsSync(destination)) throw new Error(`source packet: refusing to overwrite existing packet ${destination}`);
