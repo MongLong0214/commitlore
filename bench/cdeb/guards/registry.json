@@ -282,6 +282,130 @@
           "why": "The current clean tree still passes when the scan is bypassed, so this test has no constructed personal-path control."
         }
       ]
+    },
+    {
+      "guard_id": "active-study-refuses-terminal-study",
+      "claim": "A study that has written phase invalidated about itself cannot be resolved as the active study, however the declaration is edited.",
+      "test_file": "test/cdeb-v4-stage0-governance.test.ts",
+      "test_name": "refuses to make either invalidated predecessor the active study",
+      "mutations": [
+        {
+          "mutation_id": "active-study-skips-terminal-check",
+          "file": "bench/cdeb/active-study.ts",
+          "find": "  assertStudyNotTerminal(studyRoot, value.active_study_id);",
+          "replace": "  void assertStudyNotTerminal;",
+          "must_fail_test": true,
+          "why": "An invalidated predecessor could be named active and resolve cleanly."
+        },
+        {
+          "mutation_id": "active-study-accepts-contradictory-declaration",
+          "file": "bench/cdeb/active-study.ts",
+          "find": "  if ((value.status === \"no-active-study\") !== (value.active_study_id === null)) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "A declaration whose status and id disagree would resolve to whichever half the reader trusts.",
+          "test_name": "refuses a declaration whose status and id disagree in either direction"
+        }
+      ]
+    },
+    {
+      "guard_id": "blind-packet-carries-no-record-line",
+      "claim": "An ordinary-source packet handed to a blind reviewer contains no CommitLore key line, including one a squashed commit embedded as indented prose.",
+      "test_file": "test/cdeb-v4-provenance.test.ts",
+      "test_name": "removes a whole record that a squashed commit embedded as indented prose",
+      "mutations": [
+        {
+          "mutation_id": "second-redaction-pass-removes-nothing",
+          "file": "bench/cdeb/freeze/provenance-v4.ts",
+          "find": "    if (COMMITLORE_KEY_LINE.test(line)) {",
+          "replace": "    if (false) {",
+          "must_fail_test": true,
+          "why": "A squashed commit's embedded record would reach the reviewer that must be blind to it."
+        },
+        {
+          "mutation_id": "packet-record-line-check-passes-anything",
+          "file": "bench/cdeb/freeze/provenance-v4.ts",
+          "find": "    if (offending.length > 0) {",
+          "replace": "    if (false) {",
+          "must_fail_test": true,
+          "why": "A packet still holding a record line would be reported clean.",
+          "test_name": "refuses a packet that still carries a record line"
+        }
+      ]
+    },
+    {
+      "guard_id": "delivery-refuses-false-zero",
+      "claim": "A delivery result in which the injector never started, or never forwarded a byte, is an error rather than zero delivery.",
+      "test_file": "test/cdeb-v4-delivery.test.ts",
+      "test_name": "refuses a result in which the injector never ran, rather than reporting zero delivery",
+      "mutations": [
+        {
+          "mutation_id": "injector-control-ignores-exit-codes",
+          "file": "bench/cdeb/freeze/delivery-v4.ts",
+          "find": "  if (started.length === 0) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "A harness failure would be published as a finding of zero delivery."
+        },
+        {
+          "mutation_id": "injector-control-ignores-empty-payloads",
+          "file": "bench/cdeb/freeze/delivery-v4.ts",
+          "find": "  if (withPayload.length === 0) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "An injector forwarding nothing anywhere could not be told from one with nothing to say."
+        }
+      ]
+    },
+    {
+      "guard_id": "review-coverage-requires-whole-batch",
+      "claim": "A reviewer response must account for every candidate it was given; silence is not coverage and an unknown id is not diligence.",
+      "test_file": "test/cdeb-v4-qualification.test.ts",
+      "test_name": "refuses a response that leaves part of its batch unmentioned",
+      "mutations": [
+        {
+          "mutation_id": "coverage-ignores-unaccounted-candidates",
+          "file": "bench/cdeb/freeze/review-v4.ts",
+          "find": "  if (missing.length > 0) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "A reviewer that answered three of ten would be indistinguishable from one that answered all ten."
+        },
+        {
+          "mutation_id": "coverage-ignores-invented-ids",
+          "file": "bench/cdeb/freeze/review-v4.ts",
+          "find": "  if (invented.length > 0) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "A verdict about a candidate that was never handed over would enter the corpus.",
+          "test_name": "refuses invented ids and a candidate both judged and declined"
+        }
+      ]
+    },
+    {
+      "guard_id": "qualification-fails-closed-on-disagreement",
+      "claim": "A gate on which the two blind reviewers disagreed, with no third vote, fails rather than passing or being averaged.",
+      "test_file": "test/cdeb-v4-qualification.test.ts",
+      "test_name": "fails closed on a split pair with no third vote, and resolves by majority when there is one",
+      "mutations": [
+        {
+          "mutation_id": "split-pair-passes",
+          "file": "bench/cdeb/freeze/qualify-v4.ts",
+          "find": "  if (third === undefined) return { passed: false, source: \"unresolved\" };",
+          "replace": "  if (third === undefined) return { passed: true, source: \"unresolved\" };",
+          "must_fail_test": true,
+          "why": "An unresolved disagreement would be rounded into a qualification."
+        },
+        {
+          "mutation_id": "missing-reviewer-passes",
+          "file": "bench/cdeb/freeze/qualify-v4.ts",
+          "find": "  if (left === undefined || right === undefined) return { passed: false, source: \"unavailable\" };",
+          "replace": "  if (left === undefined || right === undefined) return { passed: true, source: \"unavailable\" };",
+          "must_fail_test": true,
+          "why": "A candidate no reviewer judged would qualify.",
+          "test_name": "treats a missing reviewer verdict as a failure, never as a pass"
+        }
+      ]
     }
   ]
 }

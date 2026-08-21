@@ -1,10 +1,22 @@
 {
   "version": 1,
   "properties": [
-    { "guard_id": "literature-lock-requires-complete-evidence", "outcome": "bound" },
-    { "guard_id": "literature-lock-refuses-circular-justification", "outcome": "bound" },
-    { "guard_id": "transition-ledger-refuses-cross-study-row", "outcome": "bound" },
-    { "guard_id": "candidate-identity-contract", "outcome": "bound" },
+    {
+      "guard_id": "literature-lock-requires-complete-evidence",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "literature-lock-refuses-circular-justification",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "transition-ledger-refuses-cross-study-row",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "candidate-identity-contract",
+      "outcome": "bound"
+    },
     {
       "guard_id": "exclusion-index-blocks-study-id-cdeb-v1",
       "outcome": "unavailable",
@@ -45,7 +57,10 @@
       "outcome": "uncovered",
       "reason": "The census can match this candidate identifier by value, but the registry has no mutation that proves the claim makes it ineligible."
     },
-    { "guard_id": "exclusion-index-blocks-record-id", "outcome": "bound" },
+    {
+      "guard_id": "exclusion-index-blocks-record-id",
+      "outcome": "bound"
+    },
     {
       "guard_id": "exclusion-index-blocks-oracle-fixture-hash",
       "outcome": "uncovered",
@@ -76,11 +91,34 @@
       "outcome": "uncovered",
       "reason": "The census can match this decision's source-record identity by value, but the registry has no mutation that proves the claim makes its candidate ineligible."
     },
-    { "guard_id": "frozen-bundle-digest-is-verified", "outcome": "bound" },
+    {
+      "guard_id": "frozen-bundle-digest-is-verified",
+      "outcome": "bound"
+    },
     {
       "guard_id": "personal-paths-are-absent-from-active-material",
       "outcome": "inert",
       "reason": "The current clean tree still passes when the personal-path scan is bypassed, so the claim has no constructed personal-path control."
+    },
+    {
+      "guard_id": "active-study-refuses-terminal-study",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "blind-packet-carries-no-record-line",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "delivery-refuses-false-zero",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "review-coverage-requires-whole-batch",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "qualification-fails-closed-on-disagreement",
+      "outcome": "bound"
     }
   ]
 }
