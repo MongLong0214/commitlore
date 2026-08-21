@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "repositories": [
+    {
+      "repository_id": "gitseed",
+      "records_examined": 84,
+      "candidates_reported": 84,
+      "eligible": 0,
+      "rejected": 84,
+      "blocked_on_human_review": 84,
+      "rejection_reasons": {
+        "after_snapshot_cutoff": 0,
+        "missing_explicit_rejection_reason": 13,
+        "invalid_record_identity": 10,
+        "synthetic_or_backfilled_record": 0,
+        "benchmark_authored_record": 0,
+        "commitlore_repository": 0,
+        "notes_cutoff_undecidable": 0,
+        "source_authorization_unverified": 0,
+        "human_review_required": 84
+      },
+      "undecided_fields": {
+        "natural_record": 84,
+        "benchmark_authored": 84,
+        "explicit_rejection_reason": 0,
+        "wrong_path_functionally_viable": 84,
+        "deterministic_oracle_possible": 84,
+        "current_code_does_not_reveal_reason": 84,
+        "bounded_implementation": 84
+      }
+    },
+    {
+      "repository_id": "agent-operator-score",
+      "records_examined": 156,
+      "candidates_reported": 156,
+      "eligible": 0,
+      "rejected": 156,
+      "blocked_on_human_review": 156,
+      "rejection_reasons": {
+        "after_snapshot_cutoff": 1,
+        "missing_explicit_rejection_reason": 126,
+        "invalid_record_identity": 117,
+        "synthetic_or_backfilled_record": 0,
+        "benchmark_authored_record": 0,
+        "commitlore_repository": 0,
+        "notes_cutoff_undecidable": 0,
+        "source_authorization_unverified": 0,
+        "human_review_required": 156
+      },
+      "undecided_fields": {
+        "natural_record": 156,
+        "benchmark_authored": 156,
+        "explicit_rejection_reason": 0,
+        "wrong_path_functionally_viable": 156,
+        "deterministic_oracle_possible": 156,
+        "current_code_does_not_reveal_reason": 156,
+        "bounded_implementation": 156
+      }
+    },
+    {
+      "repository_id": "logic-pro-mcp",
+      "records_examined": 53,
+      "candidates_reported": 53,
+      "eligible": 0,
+      "rejected": 53,
+      "blocked_on_human_review": 53,
+      "rejection_reasons": {
+        "after_snapshot_cutoff": 0,
+        "missing_explicit_rejection_reason": 24,
+        "invalid_record_identity": 53,
+        "synthetic_or_backfilled_record": 0,
+        "benchmark_authored_record": 0,
+        "commitlore_repository": 0,
+        "notes_cutoff_undecidable": 0,
+        "source_authorization_unverified": 0,
+        "human_review_required": 53
+      },
+      "undecided_fields": {
+        "natural_record": 53,
+        "benchmark_authored": 53,
+        "explicit_rejection_reason": 0,
+        "wrong_path_functionally_viable": 53,
+        "deterministic_oracle_possible": 53,
+        "current_code_does_not_reveal_reason": 53,
+        "bounded_implementation": 53
+      }
+    },
+    {
+      "repository_id": "agent-control-plane",
+      "records_examined": 92,
+      "candidates_reported": 92,
+      "eligible": 0,
+      "rejected": 92,
+      "blocked_on_human_review": 92,
+      "rejection_reasons": {
+        "after_snapshot_cutoff": 2,
+        "missing_explicit_rejection_reason": 64,
+        "invalid_record_identity": 91,
+        "synthetic_or_backfilled_record": 0,
+        "benchmark_authored_record": 0,
+        "commitlore_repository": 0,
+        "notes_cutoff_undecidable": 0,
+        "source_authorization_unverified": 0,
+        "human_review_required": 92
+      },
+      "undecided_fields": {
+        "natural_record": 92,
+        "benchmark_authored": 92,
+        "explicit_rejection_reason": 0,
+        "wrong_path_functionally_viable": 92,
+        "deterministic_oracle_possible": 92,
+        "current_code_does_not_reveal_reason": 92,
+        "bounded_implementation": 92
+      }
+    }
+  ]
+}

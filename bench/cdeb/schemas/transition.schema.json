@@ -26,7 +26,8 @@
         "RUNNING",
         "ROWS_SEALED",
         "ANALYSIS_LOCKED",
-        "PUBLISHED"
+        "PUBLISHED",
+        "INVALIDATED"
       ]
     },
     "to": {
@@ -43,7 +44,8 @@
         "RUNNING",
         "ROWS_SEALED",
         "ANALYSIS_LOCKED",
-        "PUBLISHED"
+        "PUBLISHED",
+        "INVALIDATED"
       ]
     },
     "timestamp": { "type": "string", "format": "date-time" },

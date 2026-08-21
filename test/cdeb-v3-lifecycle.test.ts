@@ -7,7 +7,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
 
-import { assertTransition, canTransition, STUDY_STATES } from '../bench/cdeb/lifecycle.js';
+import { assertTransition, canTransition, FORWARD_STUDY_STATES } from '../bench/cdeb/lifecycle.js';
 import { appendTransition, currentState, readTransitions } from '../bench/cdeb/ledger.js';
 
 const HERE = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -140,6 +140,15 @@ const tempStudy = (id = 'cdeb-test'): string => {
   return directory;
 };
 
+const writeReadyLiteratureLock = (study: string): void => {
+  mkdirSync(join(study, 'literature', 'audits'), { recursive: true });
+  writeFileSync(join(study, 'literature', 'source-lock.json'), JSON.stringify({ sources: [{ source_id: 'LIT-1' }] }));
+  writeFileSync(join(study, 'literature', 'evidence-matrix.json'), JSON.stringify({ claims: [{ claim_id: 'C-1', status: 'resolved' }] }));
+  writeFileSync(join(study, 'literature', 'audits', 'lit-a.json'), '{}');
+  writeFileSync(join(study, 'literature', 'audits', 'lit-b.json'), '{}');
+  writeFileSync(join(study, 'literature', 'audits', 'adjudication.json'), '{}');
+};
+
 const filesUnder = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -158,24 +167,24 @@ describe('CDEB-Fresh v3 lifecycle', () => {
   });
 
   it('allows each earned forward step and refuses every other direction', () => {
-    for (let index = 0; index < STUDY_STATES.length - 1; index += 1) {
-      const from = STUDY_STATES[index]!;
-      const to = STUDY_STATES[index + 1]!;
+    for (let index = 0; index < FORWARD_STUDY_STATES.length - 1; index += 1) {
+      const from = FORWARD_STUDY_STATES[index]!;
+      const to = FORWARD_STUDY_STATES[index + 1]!;
       expect(canTransition(from, to), `${from} -> ${to}`).toBe(true);
       expect(() => assertTransition(from, to)).not.toThrow();
     }
 
-    for (let fromIndex = 0; fromIndex < STUDY_STATES.length; fromIndex += 1) {
-      const from = STUDY_STATES[fromIndex]!;
+    for (let fromIndex = 0; fromIndex < FORWARD_STUDY_STATES.length; fromIndex += 1) {
+      const from = FORWARD_STUDY_STATES[fromIndex]!;
       expect(canTransition(from, from), `${from} -> ${from}`).toBe(false);
       expect(() => assertTransition(from, from)).toThrow(`${from} to ${from}`);
       for (let toIndex = 0; toIndex < fromIndex; toIndex += 1) {
-        const to = STUDY_STATES[toIndex]!;
+        const to = FORWARD_STUDY_STATES[toIndex]!;
         expect(canTransition(from, to), `${from} -> ${to}`).toBe(false);
         expect(() => assertTransition(from, to)).toThrow(`${from} to ${to}`);
       }
-      for (let toIndex = fromIndex + 2; toIndex < STUDY_STATES.length; toIndex += 1) {
-        const skipped = STUDY_STATES[toIndex]!;
+      for (let toIndex = fromIndex + 2; toIndex < FORWARD_STUDY_STATES.length; toIndex += 1) {
+        const skipped = FORWARD_STUDY_STATES[toIndex]!;
         expect(canTransition(from, skipped), `${from} -> ${skipped}`).toBe(false);
       }
     }
@@ -185,9 +194,9 @@ describe('CDEB-Fresh v3 lifecycle', () => {
     // The ledger is authoritative if the two ever disagree: it is the append-only
     // audit trail specified by §4.2, while STATUS.json is its readable projection.
     const status = readJson(join(STUDY_ROOT, 'STATUS.json')) as { phase: string };
-    const statusToState: Record<string, string> = { 'literature-lock': 'LITERATURE_LOCKED' };
+    const statusToState: Record<string, string> = { invalidated: 'INVALIDATED' };
     expect(currentState(STUDY_ROOT)).toBe(statusToState[status.phase]);
-    expect(readTransitions(STUDY_ROOT)).toHaveLength(1);
+    expect(readTransitions(STUDY_ROOT)).toHaveLength(2);
   });
 
   it('refuses a schema-invalid append without changing the ledger', () => {
@@ -205,6 +214,7 @@ describe('CDEB-Fresh v3 lifecycle', () => {
   it('appends exactly one valid next transition to an empty ledger', () => {
     const study = tempStudy();
     const ledger = join(study, 'transitions.jsonl');
+    writeReadyLiteratureLock(study);
 
     expect(currentState(study)).toBe('DRAFT');
     appendTransition(study, transition());

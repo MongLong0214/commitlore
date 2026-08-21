@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cdeb-fresh-v3-candidate",
+  "title": "CDEB-Fresh v3 candidate registry entry",
+  "description": "A v3 candidate has explicit study and frozen-snapshot provenance. Pending is never selectable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "study_id",
+    "candidate_id",
+    "repository_id",
+    "source_snapshot_sha",
+    "source_record_ids",
+    "source_refs",
+    "qualification_status",
+    "pending_fields",
+    "ineligibility_codes"
+  ],
+  "properties": {
+    "schema_version": { "const": 3 },
+    "study_id": { "type": "string", "minLength": 1 },
+    "candidate_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "repository_id": { "type": "string", "minLength": 1 },
+    "source_snapshot_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "source_record_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "qualification_status": { "enum": ["pending", "eligible", "ineligible"] },
+    "pending_fields": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "ineligibility_codes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "qualification_status": { "const": "pending" } } },
+      "then": {
+        "properties": {
+          "pending_fields": { "type": "array", "minItems": 1 },
+          "ineligibility_codes": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "qualification_status": { "const": "eligible" } } },
+      "then": {
+        "properties": {
+          "pending_fields": { "type": "array", "maxItems": 0 },
+          "ineligibility_codes": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "qualification_status": { "const": "ineligible" } } },
+      "then": {
+        "properties": {
+          "pending_fields": { "type": "array", "maxItems": 0 },
+          "ineligibility_codes": { "type": "array", "minItems": 1 }
+        }
+      }
+    }
+  ]
+}
