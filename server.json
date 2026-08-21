@@ -1,0 +1,54 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.MongLong0214/commitlore",
+  "title": "CommitLore",
+  "description": "Git-native decision memory for coding agents: only the decisions still in force for the edited path",
+  "repository": {
+    "url": "https://github.com/MongLong0214/commitlore",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/MongLong0214/commitlore#readme",
+  "version": "1.2.0",
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "registryFit": "Distribution is a tagged git checkout plus a Claude Code plugin marketplace (ADR-0011 registry-free git distribution, ADR-0026 no compiled executables and no uploaded release asset), so no official package type applies and this record relies on websiteUrl plus publisher metadata.",
+      "distribution": {
+        "status": "metadata-only",
+        "claudeCodePlugin": [
+          "/plugin marketplace add MongLong0214/commitlore",
+          "/plugin install commitlore@commitlore"
+        ],
+        "installer": "curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0",
+        "release": "https://github.com/MongLong0214/commitlore/releases/tag/v1.2.0"
+      },
+      "runtime": {
+        "transport": "stdio",
+        "command": "commitlore",
+        "args": [
+          "mcp"
+        ],
+        "clientConfig": {
+          "mcpServers": {
+            "commitlore": {
+              "command": "commitlore",
+              "args": [
+                "mcp"
+              ],
+              "cwd": "."
+            }
+          }
+        },
+        "note": "The repository whose decisions are delivered is the process working directory, so the host must launch the server with cwd set to that repository."
+      },
+      "capabilities": {
+        "tools": 8,
+        "resourceTemplates": 1
+      },
+      "requirements": {
+        "node": ">=22.23.2",
+        "git": "required"
+      },
+      "license": "MIT"
+    }
+  }
+}
