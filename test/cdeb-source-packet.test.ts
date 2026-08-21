@@ -5,7 +5,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -27,6 +27,14 @@ import { createTestRepo } from "./git-fixtures.js";
 const ROOT = join(import.meta.dirname, "..");
 const ACTIVE_STUDY_ROOT = join(ROOT, "bench", "cdeb", "studies", "cdeb-fresh-v3r1");
 const scratch: string[] = [];
+
+/**
+ * These remain deliberately visible rather than being represented by a false
+ * CI assertion. A property is listed here until CI can observe it directly.
+ */
+export const KNOWN_UNVERIFIED = [
+  "the redaction leak assertions are exercised against real sealed-bundle packets only on a machine holding the bundles; CI runs the synthetic-fixture cases only",
+] as const;
 
 afterAll(() => {
   for (const path of scratch) rmSync(path, { recursive: true, force: true });
@@ -105,6 +113,23 @@ const activeCandidates = (): readonly SourcePacketCandidate[] =>
     .split("\n")
     .map((line) => JSON.parse(line) as SourcePacketCandidate);
 
+const activeBundlePath = (snapshot: SnapshotEntry): string =>
+  join(ACTIVE_STUDY_ROOT, "corpus", snapshot.bundle_path);
+
+const missingActiveBundle = activeSnapshots().find((snapshot) => !existsSync(activeBundlePath(snapshot)));
+
+const realBundleAuditSkipMessage = missingActiveBundle === undefined
+  ? null
+  : `sealed bundle ${activeBundlePath(missingActiveBundle)} is missing; restore the original frozen artifact at that path (rebuilding from the snapshot SHA cannot reproduce snapshots.json's digest)`;
+
+if (realBundleAuditSkipMessage !== null) {
+  console.info(`CDEB source-packet real-bundle audit skipped: ${realBundleAuditSkipMessage}`);
+}
+
+const realBundleAuditName = realBundleAuditSkipMessage === null
+  ? "audits real packets made from sealed bundles, including the required negative control"
+  : `audits real packets made from sealed bundles, including the required negative control — SKIPPED: ${realBundleAuditSkipMessage}`;
+
 const identityFor = (snapshot: SnapshotEntry): RepositoryBundleIdentity => ({
   repository_id: snapshot.repository_id,
   bundle_sha256: snapshot.bundle_sha256,
@@ -123,6 +148,10 @@ const noteFromSealedBundle = (snapshot: SnapshotEntry, sourceRef: string, root: 
 };
 
 describe("CDEB-Fresh v3 ordinary-source packets", () => {
+  it("declares every known verification gap", () => {
+    expect(KNOWN_UNVERIFIED.length).toBeGreaterThan(0);
+  });
+
   it("removes every CommitLore trailer and continuation while retaining ordinary prose and Git trailers", () => {
     const packet = buildFixturePacket([
       "feat: keep source-side policy explicit",
@@ -181,7 +210,7 @@ describe("CDEB-Fresh v3 ordinary-source packets", () => {
     expect(packet.manifest.decision_content_after_redaction).toBe("empty");
   });
 
-  it("audits real packets made from sealed bundles, including the required negative control", () => {
+  it.skipIf(missingActiveBundle !== undefined)(realBundleAuditName, () => {
     const snapshots = activeSnapshots();
     const candidates = activeCandidates();
     const snapshotByRepository = new Map(snapshots.map((snapshot) => [snapshot.repository_id, snapshot]));
