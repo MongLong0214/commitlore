@@ -234,12 +234,38 @@ describe("§19.5-6 the buildability census covers 62 and its reasons are schema-
     expect(validate({ ...sample, disposition: "NOT_BUILDABLE:too-awkward-to-bother" })).toBe(false);
   });
 
-  it("throws on the census as committed, because 62 dispositions are still open", () => {
+  it("throws while any disposition is still open, and tracks the census rather than a snapshot of it", () => {
     const rows = censusRows();
-    expect(summarizeCensus(rows)).toMatchObject({ total: 62, buildable: 0, not_buildable: 0, undecided: 62 });
+    const summary = summarizeCensus(rows);
+    expect(summary.total).toBe(62);
+    expect(summary.buildable + summary.not_buildable + summary.undecided).toBe(62);
+    // Pinning the undecided count to a literal means editing this test every
+    // time a candidate is disposed, which is how a test stops being read. What
+    // must hold is that an open slot fails closed.
+    expect(summary.undecided).toBeGreaterThan(0);
     expect(() => {
       assertCensusComplete(rows);
-    }).toThrow(/62 of 62 candidates have no frozen disposition/);
+    }).toThrow(new RegExp(`${String(summary.undecided)} of 62 candidates have no frozen disposition`));
+    // The committed summary must agree with the rows it summarizes.
+    const committed = readJson(join(R1, "buildability-summary.json")).summary as Record<string, number>;
+    expect(committed).toMatchObject({
+      total: summary.total,
+      buildable: summary.buildable,
+      not_buildable: summary.not_buildable,
+      undecided: summary.undecided,
+    });
+  });
+
+  it("backs every NOT_BUILDABLE row with evidence and an attempt log", () => {
+    const disposed = censusRows().filter((row) => row.disposition !== null && row.disposition !== BUILDABLE);
+    for (const row of disposed) {
+      expect(row.evidence ?? "", row.candidate_id).not.toBe("");
+      expect(row.attempt_log_digest ?? "", row.candidate_id).toMatch(/^[0-9a-f]{64}$/);
+    }
+    // And the whole set still validates against the committed schema.
+    expect(() => {
+      assertCensusComplete(censusRows());
+    }).toThrow();
   });
 
   it("refuses a row that could see an outcome", () => {
@@ -1108,7 +1134,7 @@ describe("adversarial review findings, closed", () => {
     const preconditions = analysisPreconditions(V5);
     expect(preconditions.ready).toBe(false);
     const joined = preconditions.blockers.join("\n");
-    expect(joined).toMatch(/62 of 62 candidates have no frozen disposition/);
+    expect(joined).toMatch(/of 62 candidates have no frozen disposition/);
     expect(joined).toMatch(/17 field\(s\) are unset/);
     expect(joined).toMatch(/no seed is committed/);
     expect(joined).toMatch(/no schedule hash is committed/);

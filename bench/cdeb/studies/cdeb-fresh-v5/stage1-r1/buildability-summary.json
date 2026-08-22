@@ -6,9 +6,11 @@
   "summary": {
     "total": 62,
     "buildable": 0,
-    "not_buildable": 0,
-    "undecided": 62,
-    "by_reason": {}
+    "not_buildable": 1,
+    "undecided": 61,
+    "by_reason": {
+      "no-functionally-passing-violation": 1
+    }
   },
   "repositories": [
     {
@@ -40,5 +42,5 @@
       "refuted": 0
     }
   ],
-  "note": "A mechanical screen can only refute buildability. Rows with disposition null survived every screen and are still undecided, because BUILDABLE asserts a validated discriminating oracle and none has been built."
+  "note": "A mechanical screen can only refute buildability; rows still carrying disposition null survived every screen and await oracle construction. Rows disposed NOT_BUILDABLE were disposed by a built and executed attempt, with the attempt log digested into the row."
 }
