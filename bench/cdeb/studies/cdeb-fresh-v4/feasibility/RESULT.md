@@ -89,6 +89,28 @@ is empty by construction rather than by a judgement about its admissibility. Tha
 decision belongs to a later preregistration, and nothing here mixes an attested
 candidate with an independently sourced one.
 
+## How much work the correspondence floor does
+
+G2 as implemented is a lexical test: content-word overlap between a reviewer's
+blind quote and this candidate's recorded ruling, against a floor fixed before
+any overlap was computed. It cannot tell a paraphrase from a different decision,
+and 159 pairs found *a* rejection while 17 matched *this* one -- so the floor,
+not the bare absence of a written rejection, separates most of them.
+
+```text
+floor 0.200  would pass  46
+floor 0.250  would pass  39
+floor 0.300  would pass  24
+floor 0.333  would pass  24
+floor 0.340  would pass  17  <- registered
+floor 0.400  would pass  17
+floor 0.500  would pass  14
+```
+
+The verdict does not turn on the choice. The most generous floor above still
+passes fewer candidates than the registered total of 48, before the other six
+gates take their share.
+
 ## Reviewer agreement, per gate
 
 | gate | compared | agreed | rate  |
@@ -133,6 +155,10 @@ message alone, same candidates: 6 (10%)
 
 Adding the diff moves the pass rate by three points on the same candidates. The narrow packet is not why G2 fails; the rejected alternative is not written outside the record.
 
+Read as one test of one alternative explanation, not as elimination of the
+class: the arm broadened the packet by a single commit's diff, on a sample of
+60, and reports no uncertainty interval.
+
 ## What these gates were judged from
 
 Stage 0 is a screen, not a qualification freeze, and the evidence each gate was
@@ -145,8 +171,16 @@ decided from bounds what its number means.
   informed judgements about a maintenance task rather than measurements of one.
 - **G5** classifies whether a deterministic oracle *could* be written. No oracle
   was built, and none may be at this stage.
-- **G6** is a measurement: the shipping hook was run against the frozen release for
-  every candidate, and the bytes it forwarded were read.
+- **G6** is a measurement, with three bounds worth naming. The hook was run
+  against the frozen release for every candidate and the forwarded bytes were
+  read, so ruling and reason visibility are observed. Scope is tested against
+  **one** non-touched path, not the whole tree. Lifecycle is not read from the
+  payload: an active decision counts as lifecycle-correct whenever its ruling is
+  visible, so that field discriminates only the superseded cases.
+  `before_first_mutation` is structural -- the payload is a synthetic
+  `PreToolUse` `Edit` on a path the decision itself touched, so it is true by
+  construction rather than observed against a real agent. And `identity_present`
+  is `record_id !== null`, nothing more.
 
 ## Verdict
 
@@ -161,19 +195,26 @@ Unmet:
 
 `insufficient-provenance` — 190 of 241 enumerated decisions.
 
-It is corpus, not instrument. The instrument works: the shipping path delivers
-the ruling, the reason, the scope and the lifecycle for 154 of the 207 candidates
-that had ordinary source at all, and it does so for decisions with no identifier
-just as well as for decisions with one. What the corpus does not have is an
-independent written record of *which* alternative was rejected and why. For most
-of these decisions the `Ruled-out:` trailer is the only place that exists, so gold
-built from ordinary source cannot be written — and gold copied from the record
-would make the benchmark measure its own instrument.
+**Stated exactly.** Of the enumerated candidates, only 17 had a rejected
+alternative that two blind reviewers could quote from the redacted source-commit
+prose and that lexically matched this candidate's own ruling. Gold for the rest
+could not be written from the material this stage examined, and gold copied from
+the record would make the benchmark measure its own instrument.
 
-The robustness arm above rules out the obvious alternative explanation: showing
-the reviewer the commit's diff as well as its message moves the rate by three
-points. The rejection is not written outside the record in some form the packet
-was simply too narrow to see.
+**What this does not establish.** It is not a census of decisions in these
+repositories -- the pool is whatever the `Ruled-out:` trailer discovers. It is
+not proof that the rejection is written nowhere else: pull requests, issues,
+design documents, code comments, tests and other commits were never searched.
+The robustness arm broadened the packet in one direction only, by one commit's
+diff, on 60 candidates, and moved the count from 6 to 8 -- weak evidence against
+one alternative explanation, not the elimination of all of them. Owner
+testimony, which the preregistration permits as an independent tier, was never
+collected, so the P2 route to gold is untested rather than closed.
+
+**What the instrument did show.** The shipping path put the ruling and the
+reason in front of a synthetic pre-edit event for 154 of the 207 probed
+candidates, 85 of them carrying no identifier. That result is independent of the
+HOLD and stands on its own, read with the delivery-gate bounds above.
 
 ## Deviations recorded
 
@@ -182,6 +223,8 @@ was simply too narrow to see.
 - `CDEB-V4-PACKET-SECOND-REDACTION` — instrument-correction
 - `CDEB-V4-DELIVERY-HARNESS-FALSE-ZERO` — instrument-correction
 - `CDEB-V4-G2-DIFF-ROBUSTNESS-ARM` — added-robustness-check
+- `CDEB-V4-THIRD-VOTE-INSTEAD-OF-ADJUDICATOR` — analysis-change
+- `CDEB-V4-G2-NARROWER-THAN-REGISTERED` — gate-implemented-narrower-than-registered
 
 ## Deliberately not done
 

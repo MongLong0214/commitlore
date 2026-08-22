@@ -196,6 +196,25 @@ const render = (studyRoot) => {
   lines.push("decision belongs to a later preregistration, and nothing here mixes an attested");
   lines.push("candidate with an independently sourced one.");
   lines.push("");
+  lines.push("## How much work the correspondence floor does");
+  lines.push("");
+  lines.push("G2 as implemented is a lexical test: content-word overlap between a reviewer's");
+  lines.push("blind quote and this candidate's recorded ruling, against a floor fixed before");
+  lines.push("any overlap was computed. It cannot tell a paraphrase from a different decision,");
+  lines.push("and 159 pairs found *a* rejection while 17 matched *this* one -- so the floor,");
+  lines.push("not the bare absence of a written rejection, separates most of them.");
+  lines.push("");
+  lines.push("```text");
+  for (const point of qualification.quote_overlap_sensitivity ?? []) {
+    const mark = point.floor === qualification.quote_overlap_floor ? "  <- registered" : "";
+    lines.push(`floor ${point.floor.toFixed(3)}  would pass ${String(point.would_pass).padStart(3)}${mark}`);
+  }
+  lines.push("```");
+  lines.push("");
+  lines.push("The verdict does not turn on the choice. The most generous floor above still");
+  lines.push("passes fewer candidates than the registered total of 48, before the other six");
+  lines.push("gates take their share.");
+  lines.push("");
   lines.push("## Reviewer agreement, per gate");
   lines.push("");
   lines.push(
@@ -244,6 +263,10 @@ const render = (studyRoot) => {
     lines.push("");
     lines.push(robustness.reading);
     lines.push("");
+    lines.push("Read as one test of one alternative explanation, not as elimination of the");
+    lines.push("class: the arm broadened the packet by a single commit's diff, on a sample of");
+    lines.push("60, and reports no uncertainty interval.");
+    lines.push("");
   }
   lines.push("## What these gates were judged from");
   lines.push("");
@@ -257,8 +280,16 @@ const render = (studyRoot) => {
   lines.push("  informed judgements about a maintenance task rather than measurements of one.");
   lines.push("- **G5** classifies whether a deterministic oracle *could* be written. No oracle");
   lines.push("  was built, and none may be at this stage.");
-  lines.push("- **G6** is a measurement: the shipping hook was run against the frozen release for");
-  lines.push("  every candidate, and the bytes it forwarded were read.");
+  lines.push("- **G6** is a measurement, with three bounds worth naming. The hook was run");
+  lines.push("  against the frozen release for every candidate and the forwarded bytes were");
+  lines.push("  read, so ruling and reason visibility are observed. Scope is tested against");
+  lines.push("  **one** non-touched path, not the whole tree. Lifecycle is not read from the");
+  lines.push("  payload: an active decision counts as lifecycle-correct whenever its ruling is");
+  lines.push("  visible, so that field discriminates only the superseded cases.");
+  lines.push("  `before_first_mutation` is structural -- the payload is a synthetic");
+  lines.push("  `PreToolUse` `Edit` on a path the decision itself touched, so it is true by");
+  lines.push("  construction rather than observed against a real agent. And `identity_present`");
+  lines.push("  is `record_id !== null`, nothing more.");
   lines.push("");
   lines.push("## Verdict");
   lines.push("");
@@ -277,19 +308,26 @@ const render = (studyRoot) => {
     lines.push("");
     lines.push(`\`${worstReason}\` — ${String(worstCount)} of ${String(entries.length)} enumerated decisions.`);
     lines.push("");
-    lines.push("It is corpus, not instrument. The instrument works: the shipping path delivers");
-    lines.push("the ruling, the reason, the scope and the lifecycle for 154 of the 207 candidates");
-    lines.push("that had ordinary source at all, and it does so for decisions with no identifier");
-    lines.push("just as well as for decisions with one. What the corpus does not have is an");
-    lines.push("independent written record of *which* alternative was rejected and why. For most");
-    lines.push("of these decisions the `Ruled-out:` trailer is the only place that exists, so gold");
-    lines.push("built from ordinary source cannot be written — and gold copied from the record");
-    lines.push("would make the benchmark measure its own instrument.");
+    lines.push("**Stated exactly.** Of the enumerated candidates, only 17 had a rejected");
+    lines.push("alternative that two blind reviewers could quote from the redacted source-commit");
+    lines.push("prose and that lexically matched this candidate's own ruling. Gold for the rest");
+    lines.push("could not be written from the material this stage examined, and gold copied from");
+    lines.push("the record would make the benchmark measure its own instrument.");
     lines.push("");
-    lines.push("The robustness arm above rules out the obvious alternative explanation: showing");
-    lines.push("the reviewer the commit's diff as well as its message moves the rate by three");
-    lines.push("points. The rejection is not written outside the record in some form the packet");
-    lines.push("was simply too narrow to see.");
+    lines.push("**What this does not establish.** It is not a census of decisions in these");
+    lines.push("repositories -- the pool is whatever the `Ruled-out:` trailer discovers. It is");
+    lines.push("not proof that the rejection is written nowhere else: pull requests, issues,");
+    lines.push("design documents, code comments, tests and other commits were never searched.");
+    lines.push("The robustness arm broadened the packet in one direction only, by one commit's");
+    lines.push("diff, on 60 candidates, and moved the count from 6 to 8 -- weak evidence against");
+    lines.push("one alternative explanation, not the elimination of all of them. Owner");
+    lines.push("testimony, which the preregistration permits as an independent tier, was never");
+    lines.push("collected, so the P2 route to gold is untested rather than closed.");
+    lines.push("");
+    lines.push("**What the instrument did show.** The shipping path put the ruling and the");
+    lines.push("reason in front of a synthetic pre-edit event for 154 of the 207 probed");
+    lines.push("candidates, 85 of them carrying no identifier. That result is independent of the");
+    lines.push("HOLD and stands on its own, read with the delivery-gate bounds above.");
     lines.push("");
   }
   lines.push("## Deviations recorded");

@@ -56,6 +56,37 @@
     "mean_jaccard": 0.5707922950153806,
     "near_identical": 72
   },
+  "quote_overlap_floor": 0.34,
+  "quote_overlap_sensitivity": [
+    {
+      "floor": 0.2,
+      "would_pass": 46
+    },
+    {
+      "floor": 0.25,
+      "would_pass": 39
+    },
+    {
+      "floor": 0.3,
+      "would_pass": 24
+    },
+    {
+      "floor": 0.333,
+      "would_pass": 24
+    },
+    {
+      "floor": 0.34,
+      "would_pass": 17
+    },
+    {
+      "floor": 0.4,
+      "would_pass": 17
+    },
+    {
+      "floor": 0.5,
+      "would_pass": 14
+    }
+  ],
   "exclusion_reasons": {
     "insufficient-provenance": 190,
     "source-packet-empty": 33,

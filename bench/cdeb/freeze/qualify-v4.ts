@@ -417,6 +417,26 @@ export const quoteConcordance = (
   return { pairs, mean_jaccard: pairs === 0 ? 0 : total / pairs, near_identical: nearIdentical };
 };
 
+/**
+ * How many candidates G2 would pass at other floors.
+ *
+ * The floor was fixed before any overlap was computed, which stops the count
+ * choosing the method -- but it does not make the choice weightless. An
+ * adversarial review of this result showed the correspondence rule does most of
+ * the work separating 159 pairs that found *a* rejection from 17 that matched
+ * this one, so the sensitivity is published rather than left for a reader to
+ * recompute.
+ */
+export const OVERLAP_SENSITIVITY_FLOORS = [0.2, 0.25, 0.3, 0.333, 0.34, 0.4, 0.5] as const;
+
+export const overlapSensitivity = (
+  entries: readonly QualificationEntry[],
+): { floor: number; would_pass: number }[] =>
+  OVERLAP_SENSITIVITY_FLOORS.map((floor) => ({
+    floor,
+    would_pass: entries.filter((entry) => entry.quote_overlap !== null && entry.quote_overlap >= floor).length,
+  }));
+
 export interface RunQualificationOptions {
   readonly studyRoot: string;
 }
@@ -427,6 +447,7 @@ export interface QualificationOutput {
   readonly verdict: Stage0Verdict;
   readonly agreement: readonly AgreementSummary[];
   readonly concordance: { pairs: number; mean_jaccard: number; near_identical: number };
+  readonly sensitivity: { floor: number; would_pass: number }[];
 }
 
 export const runQualification = (options: RunQualificationOptions): QualificationOutput => {
@@ -464,6 +485,7 @@ export const runQualification = (options: RunQualificationOptions): Qualificatio
     verdict: decideStage0(repositories, entries),
     agreement: agreementByGate(entries),
     concordance: quoteConcordance(stageA),
+    sensitivity: overlapSensitivity(entries),
   };
 };
 
@@ -492,6 +514,8 @@ const main = (argv: readonly string[]): void => {
         verdict: output.verdict,
         reviewer_agreement_by_gate: output.agreement,
         reviewer_quote_concordance: output.concordance,
+        quote_overlap_floor: QUOTE_OVERLAP_FLOOR,
+        quote_overlap_sensitivity: output.sensitivity,
         exclusion_reasons: exclusionCounts(output.entries),
         identity_composition: identityCounts(output.entries),
       },
