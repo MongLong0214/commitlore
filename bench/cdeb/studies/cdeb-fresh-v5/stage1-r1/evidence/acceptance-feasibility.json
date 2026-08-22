@@ -88,5 +88,13 @@
   },
   "consequence_if_logic_pro_mcp_falls": "Retained because it remains the rule rather than the outcome: Delta is an equal-weight average over four fixed repositories, a stratum contributing no analysable candidate makes it undefined, and SSOT 7.3 requires at least 8 BUILDABLE per repository. On this screen logic-pro-mcp survives; it can still fall later on G2 or G4.",
   "what_this_does_not_establish": "A repository that can run its suite is not thereby buildable. G2 still needs a discriminating oracle per candidate and G4 needs a revival that passes acceptance, and the first candidate attempted failed the latter. This screen only removes candidates; it admits none.",
-  "screen_result": "All four repositories can run acceptance deterministically. This screen disposes no candidate. Two acceptance configurations are frozen by it: agent-control-plane excludes tests/unit/deploy-launchd.test.ts, and logic-pro-mcp runs --no-parallel."
+  "screen_result": "All four repositories can run acceptance deterministically. This screen disposes no candidate. Two acceptance configurations are frozen by it: agent-control-plane excludes tests/unit/deploy-launchd.test.ts, and logic-pro-mcp runs --no-parallel.",
+  "discarded_screen_g4_by_text_matching": {
+    "what_was_tried": "A cheap proxy for gate G4: for each candidate, take the distinctive terms of its Ruled-out clause and ask whether any test file in its own repository mentions them. The hope was that a guarded decision would show up as test files naming the thing the decision forbade, so the expensive per-candidate revival build could be prioritised or skipped.",
+    "raw_result": "61 of 62 candidates matched 6 or more test files, 1 matched between 1 and 5, none matched zero.",
+    "null_control": "The same query shape run with 12 terms drawn from an unrelated English vocabulary, 8 draws per repository: gitseed 0 every time, agent-operator-score 0 to 8, logic-pro-mcp 0 to 12, agent-control-plane 4 to 9.",
+    "verdict": "DISCARDED. The observed result sits inside the null range for two of the four repositories, so the screen does not separate 'the ruled-out approach is guarded' from 'these are ordinary words in a large test suite'. Reporting 61 of 62 as a finding would have been reporting the null.",
+    "what_this_means_for_the_census": "G4 cannot be shortcut by text matching. Deciding whether a revival passes acceptance requires building the revival and running the suite, candidate by candidate, which is what the first attempt did. The census is therefore expensive by nature rather than by choice, and that cost is the reason to expect it to be the binding gate.",
+    "why_this_is_recorded": "A screen that failed its own null is worth keeping in the record so the next reader does not spend the same afternoon on it, and so the 61-of-62 number cannot resurface later detached from the null that kills it."
+  }
 }
