@@ -96,6 +96,19 @@ import {
 } from "../bench/cdeb/freeze/effect-independence-v5.ts";
 import { analysisPreconditions, assertEnvelopeArtifactsAgree } from "../bench/cdeb/freeze/stage1-analysis-v5.ts";
 import {
+  CLAIM_POPULATION,
+  MIN_DISTINCT_APPROACHES_FOR_A_NEGATIVE,
+  adjudicationOf,
+  assertAdjudicationConsistent,
+  assertClaimPopulationScoped,
+  assertNegativeIsBounded,
+  assertTreeEnforcedIsEvidenced,
+  assertViolableIsEvidenced,
+  type CandidateAdjudication,
+  type RevivalAttempt,
+} from "../bench/cdeb/freeze/adjudicate-v5.ts";
+import { assertFloorsUnchanged, buildCensusReport } from "../bench/cdeb/freeze/census-report-v5.ts";
+import {
   MIN_NEEDS,
   assertNeedScoutAnswer,
   needScoutPrompt,
@@ -1447,6 +1460,155 @@ describe("the record-blind task-author chain", () => {
     expect(validation.record_leakage_shared_4grams).toBe(0);
     expect(validation.cited_files_missing).toBe(0);
     expect((evidence.needs as unknown[]).length).toBe(3);
+  });
+});
+
+describe("G4 adjudication and the TREE_ENFORCED taxonomy", () => {
+  const attempt = (over: Partial<RevivalAttempt> = {}): RevivalAttempt => ({
+    attempt_id: "a1",
+    approach: "replace the store",
+    acceptance_passed: false,
+    acceptance_summary: "2 failed",
+    failures_attributable_to_the_patch: [],
+    failures_no_implementation_can_avoid: ["a test names the forbidden shape"],
+    enforcing_mechanism: "test",
+    enforcement_locator: "tests/test_store.py:12",
+    ...over,
+  });
+  const row = (over: Partial<CandidateAdjudication> = {}): CandidateAdjudication => ({
+    schema_version: 1,
+    study_id: "cdeb-fresh-v5",
+    stage: "stage1-r1",
+    candidate_id: "v4-0000000000000000",
+    repository_id: "gitseed",
+    ruled_out_approach: "JSON files instead of SQLite",
+    acceptance_command: "pytest -q",
+    baseline_summary: "318 passed",
+    attempts: [attempt(), attempt({ attempt_id: "a2", approach: "swap the backend" }), attempt({ attempt_id: "a3", approach: "convert on read" })],
+    adjudication: "TREE_ENFORCED",
+    adjudicated_at: new Date(0).toISOString(),
+    ...over,
+  });
+
+  it("treats one passing revival as settling it, however many failed", () => {
+    expect(adjudicationOf([attempt(), attempt({ attempt_id: "a2", acceptance_passed: true })])).toBe(
+      "FUNCTIONALLY_VIOLABLE",
+    );
+    expect(adjudicationOf([attempt(), attempt({ attempt_id: "a2" })])).toBe("TREE_ENFORCED");
+    expect(() => adjudicationOf([])).toThrow(/has not been adjudicated/);
+  });
+
+  it("refuses a negative that stopped at the count already shown insufficient", () => {
+    expect(MIN_DISTINCT_APPROACHES_FOR_A_NEGATIVE).toBe(3);
+    // Two was not a hypothetical floor: every negative re-examined that had
+    // stopped at two was overturned.
+    expect(() => {
+      assertNegativeIsBounded(row({ attempts: [attempt(), attempt({ attempt_id: "a2", approach: "swap the backend" })] }));
+    }).toThrow(/below the registered 3/);
+    // And repeating the same approach under a new id does not count as distinct.
+    expect(() => {
+      assertNegativeIsBounded(
+        row({ attempts: [attempt(), attempt({ attempt_id: "a2" }), attempt({ attempt_id: "a3" })] }),
+      );
+    }).toThrow(/below the registered 3/);
+    expect(() => {
+      assertNegativeIsBounded(row());
+    }).not.toThrow();
+  });
+
+  it("refuses a negative whose only failures the adjudicator caused", () => {
+    expect(() => {
+      assertTreeEnforcedIsEvidenced(
+        row({
+          attempts: row().attempts.map((a) => ({
+            ...a,
+            failures_no_implementation_can_avoid: [],
+            failures_attributable_to_the_patch: ["I forgot to update the loader"],
+          })),
+        }),
+      );
+    }).toThrow(/evidence about the patch, not about the tree/);
+  });
+
+  it("requires a registered mechanism and a place to look", () => {
+    expect(() => {
+      assertTreeEnforcedIsEvidenced(
+        row({ attempts: row().attempts.map((a) => ({ ...a, enforcing_mechanism: null })) }),
+      );
+    }).toThrow(/names no registered enforcement mechanism/);
+    expect(() => {
+      assertTreeEnforcedIsEvidenced(
+        row({ attempts: row().attempts.map((a) => ({ ...a, enforcement_locator: "  " })) }),
+      );
+    }).toThrow(/does not say where/);
+  });
+
+  it("will not let the verdict and its evidence drift apart", () => {
+    expect(() => {
+      assertViolableIsEvidenced(row({ adjudication: "FUNCTIONALLY_VIOLABLE" }));
+    }).toThrow(/no attempt that passed acceptance/);
+    expect(() => {
+      assertAdjudicationConsistent(row({ adjudication: "FUNCTIONALLY_VIOLABLE" }));
+    }).toThrow();
+  });
+
+  it("scopes the claim population and refuses \"all decisions\"", () => {
+    expect(CLAIM_POPULATION).toBe("decisions that remained functionally violable at the frozen snapshot");
+    expect(() => {
+      assertClaimPopulationScoped("delivery improved outcomes across all decisions");
+    }).toThrow(/not the population this study measured/);
+    expect(() => {
+      assertClaimPopulationScoped("delivery improved outcomes");
+    }).toThrow(/must name its population/);
+    expect(() => {
+      assertClaimPopulationScoped(`delivery improved outcomes for ${CLAIM_POPULATION}`);
+    }).not.toThrow();
+  });
+
+  it("judges the floor per stratum rather than by the pooled share", () => {
+    const population = [
+      ...Array.from({ length: 20 }, (_, i) => ({ candidate_id: `a${String(i)}`, repository_id: "big" })),
+      ...Array.from({ length: 10 }, (_, i) => ({ candidate_id: `b${String(i)}`, repository_id: "small" })),
+    ];
+    // Every big-repository candidate violable, only two in the small one: a
+    // pooled share of 73% that still fails, because the estimand averages over
+    // fixed strata rather than over candidates.
+    const rows = population.map((row, index) =>
+      row.repository_id === "big" || index >= population.length - 2
+        ? { ...row, adjudication: "FUNCTIONALLY_VIOLABLE" as const }
+        : { ...row, adjudication: "TREE_ENFORCED" as const },
+    );
+    const report = buildCensusReport(
+      rows.map((r) => ({ ...row(), candidate_id: r.candidate_id, repository_id: r.repository_id, adjudication: r.adjudication, attempts: r.adjudication === "FUNCTIONALLY_VIOLABLE" ? [attempt({ acceptance_passed: true })] : row().attempts })),
+      population,
+      { big: "pytest -q", small: "npm test" },
+    );
+    expect(report.complete).toBe(true);
+    expect(report.verdict).toBe("TERMINAL_HOLD");
+    expect(report.reasons.join(" ")).toMatch(/small: 2 violable of 10/);
+    expect(report.repositories.find((r) => r.repository_id === "big")?.meets_floor).toBe(true);
+  });
+
+  it("reads a partial census as incomplete rather than as a result", () => {
+    const population = Array.from({ length: 10 }, (_, i) => ({ candidate_id: `c${String(i)}`, repository_id: "one" }));
+    const report = buildCensusReport(
+      [{ ...row(), candidate_id: "c0", repository_id: "one", adjudication: "FUNCTIONALLY_VIOLABLE", attempts: [attempt({ acceptance_passed: true })] }],
+      population,
+      { one: "pytest -q" },
+    );
+    // The unfinished rows are not a random sample of the finished ones -- the
+    // slowest repository finishes last and is the one whose floor is least sure.
+    expect(report.verdict).toBe("INCOMPLETE");
+    expect(report.complete).toBe(false);
+  });
+
+  it("keeps the floors where they were registered", () => {
+    expect(() => {
+      assertFloorsUnchanged(8, 24);
+    }).not.toThrow();
+    expect(() => {
+      assertFloorsUnchanged(7, 24);
+    }).toThrow(/chosen to be met/);
   });
 });
 
