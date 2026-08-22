@@ -1282,6 +1282,24 @@ describe("the record-blind task-author chain", () => {
     expect(new Set(seeds).size).toBeGreaterThan(1);
   });
 
+  it("records a first complete chain whose both halves were record-blind", () => {
+    const pair = JSON.parse(
+      readFileSync(join(R1, "evidence", "task-chain-first-pair.json"), "utf8"),
+    ) as Record<string, unknown>;
+    const firewall = pair.firewall as Record<string, unknown>;
+    expect(firewall.sandbox_git_metadata_present).toBe(false);
+    expect(firewall.need_vs_ruling_shared_4grams).toBe(0);
+    expect(firewall.acceptance_vs_ruling_shared_4grams).toBe(0);
+    expect(firewall.ordering_negative_control).toMatch(/refused/);
+    // The acceptance command has to resolve in the frozen tree, or the criteria
+    // are prose about a command that does not exist.
+    expect((pair.command_grounding as Record<string, unknown>).workspace_exists).toBe(true);
+    // And the artifact has to say what it does not show, in the artifact rather
+    // than in a commit message nobody reads next to it.
+    expect(String(pair.what_this_does_not_show)).toMatch(/oracle half has not been built/);
+    expect(String(pair.what_this_does_not_show)).toMatch(/placeholder digest/);
+  });
+
   it("records a first run in which the scout saw no record and repeated none", () => {
     const evidence = JSON.parse(
       readFileSync(join(R1, "evidence", "need-scout-first-run.json"), "utf8"),
