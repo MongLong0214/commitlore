@@ -6,10 +6,10 @@
   "summary": {
     "total": 62,
     "buildable": 0,
-    "not_buildable": 1,
-    "undecided": 61,
+    "not_buildable": 2,
+    "undecided": 60,
     "by_reason": {
-      "no-functionally-passing-violation": 1
+      "no-functionally-passing-violation": 2
     }
   },
   "repositories": [
