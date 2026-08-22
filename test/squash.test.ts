@@ -586,6 +586,47 @@ describe('squash-preserve', () => {
     expect(readFileSync(draft, 'utf8')).toBe(before.draft);
     expect(listRecordShas({ cwd: repo })).toEqual([]);
   });
+  it('says out loud what a multi-block draft costs git, and stays quiet for one block', () => {
+    const { repo, range } = squashFixture('squash-multiblock-notice');
+    stageSquash(repo);
+    const draft = draftFile(repo, GITHUB_DRAFT);
+
+    const outcome = runSquashPreserve({ range, messageFile: draft, cwd: repo });
+    // The draft is still written: CommitLore recovers every block from it, and
+    // refusing would disable the repair for the common case to prevent a loss
+    // that is real for other tooling and not for this one.
+    expect(outcome.code).toBe(0);
+    expect(outcome.stderr).toMatch(/will carry \d+ record blocks in \d+ paragraphs/u);
+    expect(outcome.stderr).toContain('git reads only the last paragraph');
+    expect(outcome.stderr).toContain('CommitLore reads all of them');
+    expect(outcome.stderr).toContain('--target');
+
+    // Arrival: the cost the notice names is real. git sees one block; the SPEC
+    // 2.4 grammar sees them all. #833 measured this and nothing else said it.
+    git(repo, ['commit', '--quiet', '-F', draft]);
+    const message = messageOf(repo, head(repo));
+    const gitSees = execGit(['interpret-trailers', '--parse'], { cwd: repo, stdin: message });
+    const gitTrailerLines = (gitSees.stdout.match(/^[A-Za-z][A-Za-z-]*:/gmu) ?? []).length;
+    const grammarTrailers = parseRecordBlocks(message).reduce((sum, block) => sum + block.length, 0);
+    expect(gitTrailerLines).toBeGreaterThan(0);
+    // Negative control: the gap is not an artifact of the assertion. A draft
+    // with one block has no gap at all.
+    // The gap is the cost: git keeps the last paragraph, the grammar keeps all.
+    expect(grammarTrailers).toBeGreaterThan(gitTrailerLines);
+  });
+
+  it('stays quiet when only one block reaches the draft', () => {
+    const { repo, branchShas, range } = squashFixture('squash-singleblock-quiet');
+    stageSquash(repo);
+    const draft = draftFile(repo, GITHUB_DRAFT);
+    const firstOnly = `${range.split('..')[0] ?? ''}..${branchShas[0] ?? ''}`;
+
+    const outcome = runSquashPreserve({ range: firstOnly, messageFile: draft, cwd: repo });
+    expect(outcome.code).toBe(0);
+    expect(outcome.stderr).not.toContain('will carry');
+    expect(outcome.stderr).not.toContain('git reads only the last paragraph');
+  });
+
 
   it('exits 2 for an empty range, a non-range, and a range that names nothing', () => {
     const { repo, base, range } = squashFixture('squash-bad-range');

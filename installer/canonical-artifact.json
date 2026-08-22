@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "c8f3be62b886a12eb5c6e50c211210f0dce34f3559c6f7cafe22d999b83df4da"
+    "sha256": "cbaf2a37ce4e95ea2ae72b9769c2fd693bcf223a3161a9b72419fcf50203b338"
   },
   "artifact": {
-    "sha256": "88f3da87de9b18c71875f5c1b1f3603ad8ba0785d80c1b75f1998d8d3fba8c88",
+    "sha256": "e8183a8fd3171c20b92c6234fc7ef0826cf4853d71471d421485b2bd71fc88fe",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -554,11 +554,11 @@
       },
       {
         "path": "dist/commands/squash-preserve.js",
-        "sha256": "abf5a022c61b84fc1c15a548c31f0611cb9c5e1df3336ab685ada453d3ad2d67"
+        "sha256": "25c39c87144ede8d7522e1068a0f5b5f1dc9b43b81b7420f7e039246b26af1f5"
       },
       {
         "path": "dist/commands/squash-preserve.js.map",
-        "sha256": "fbada89776613aaab7acac1743095a42633f75a55afb88e0e41cf2494dcf5ca5"
+        "sha256": "41f41bdcd53c747433523026c30233c667252b9b5661d3282264c760017c528f"
       },
       {
         "path": "dist/commands/stale.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "c03ef68a4dd174639822e9e72d70f2312f165f0d88b49829a5d5e1b9b26bbeb9"
+        "sha256": "747b697be3a13db12a12844d0739f419cac4a569dc176aac8ada298cba4fae32"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
