@@ -2,19 +2,60 @@
 document_id: cdeb-fresh-v5-stage1-preregistration
 study_id: cdeb-fresh-v5
 stage: stage1-confirmatory
-status: registered-except-N-awaiting-power-artifact
+status: DRAFT-NOT-FROZEN-failed-adversarial-review
 measured_run_allowed: false
 registered_at: 2026-08-22T05:10:00Z
 ---
 
-# CDEB-Fresh v5 Stage 1 preregistration
+# CDEB-Fresh v5 Stage 1 preregistration — DRAFT, NOT FROZEN
 
-Registered before any task, gold contract, oracle, arm assignment or agent
-episode exists. Everything that can be fixed without the pilot is fixed here.
-One slot is deferred, named in §7, and filling it is the only edit this document
-permits.
+> **This document does not register anything yet.** An adversarial review of the
+> Stage 1 design, run before freezing and committed at
+> `stage1/adversarial-review.md`, found six defects that would let a wrong
+> conclusion through. Under §7 of this document, anything but the deferred N
+> requires a replacement preregistration — so these are not amendments and this
+> draft is superseded, not patched.
+>
+> **A measured run may not begin against this document.**
 
-## 1. Hypothesis
+## 0. What must be resolved before any preregistration is frozen
+
+1. **The endpoint is not yet shown judgeable.** Stage 0 recorded that reviewers
+   thought an oracle possible; none was built. Each oracle needs a ruled-out
+   patch that passes functional acceptance *and* trips the oracle, plus
+   compliant passing patches that do not. Determinism is not sensitivity.
+2. **No rule covers oracle-construction failure.** The population is the 50
+   reserve candidates but N may be smaller, with no frozen selection rule — so a
+   builder could keep the candidates with crisp boundaries and lose the awkward
+   ones. Every reserve candidate needs an outcome-blind buildability disposition
+   and a content-blind sampling rule fixed before N.
+3. **The interval in §6 is invalid.** Bootstrapping four *fixed* repositories
+   treats them as drawn from a superpopulation, ignores candidate and episode
+   variation inside each, and admits only 4^4 = 256 distinct resamples whatever
+   number is requested. No confidence level was stated. Replace with a
+   repository-stratified analysis that resamples candidates within each fixed
+   repository, or a randomization test.
+4. **Too much is deferred.** Opaque arm labels hide direction, not magnitude.
+   Alpha, power, the target effect, the paired correlation model, the attrition
+   allowance and the stopping rule must all be fixed before the pilot; only N
+   may follow from it.
+5. **The exclusions condition on post-treatment events.** Completion, timeout
+   and oracle indeterminacy can differ by arm, so removing them can manufacture
+   the contrast. Needs an intention-to-treat denominator, a paired-missingness
+   rule, and task success as a co-primary — otherwise a treatment that merely
+   prevents completion scores as preventing revival.
+6. **The pilot blind protects the analyst, not the operator.** The study
+   operator holds the key and would see the pilot effect before deciding to
+   continue. The key needs an independent custodian and effect-independent
+   continuation thresholds.
+
+Two further findings are recorded as limitations rather than defects: the two
+arms differ in payload volume and hook activity as well as in decision content,
+so the contrast is the total effect of automatic delivery rather than the effect
+of the content alone; and the record stays discoverable in Git under both arms,
+so the contrast is automatic delivery versus none, not access versus none.
+
+## 1. Hypothesis (draft)
 
 > Automatically delivering a naturally recorded, pre-study repository decision
 > before a relevant code mutation reduces the rate at which a coding agent

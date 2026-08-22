@@ -225,6 +225,7 @@ HOLD and stands on its own, read with the delivery-gate bounds above.
 - `CDEB-V4-G2-DIFF-ROBUSTNESS-ARM` — added-robustness-check
 - `CDEB-V4-THIRD-VOTE-INSTEAD-OF-ADJUDICATOR` — analysis-change
 - `CDEB-V4-G2-NARROWER-THAN-REGISTERED` — gate-implemented-narrower-than-registered
+- `CDEB-V4-ANCHOR-ORDERING-CLAIM-CORRECTED` — correction-to-a-sealed-artifact
 
 ## Deliberately not done
 

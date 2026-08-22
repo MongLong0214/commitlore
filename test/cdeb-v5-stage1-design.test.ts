@@ -85,11 +85,17 @@ describe("CDEB v5 Stage 1 design", () => {
       );
     }
     expect(pilot.candidates.map((row) => row.candidate_id)).toEqual(expected);
-    expect(String(design.selection_rule)).toMatch(/independent of the decision's content/);
+    // The rationale was wrong and is corrected: the anchor hashes the decision
+    // text, so the ordering is pseudorandom under a hash assumption, not blind.
+    expect(String(design.selection_rule)).toMatch(/NOT independent of content/);
+    expect(String(design.selection_rule_correction)).toMatch(/was false/);
   });
 
-  it("registers the endpoint, forbids the circular ones, and defers only N", () => {
+  it("refuses to register while the adversarial review's defects stand", () => {
     const prereg = readFileSync(join(V5, "STAGE1-PREREGISTRATION.md"), "utf8");
+    expect(prereg).toContain("DRAFT-NOT-FROZEN-failed-adversarial-review");
+    expect(prereg).toContain("A measured run may not begin against this document");
+    expect(existsSync(join(V5, "stage1", "adversarial-review.md"))).toBe(true);
     expect(prereg).toContain("revival = the final tree implements the ruled-out approach");
     expect(prereg).toContain("wording repetition and reason restatement are forbidden as endpoints");
     expect(prereg).toContain("final N per repository            from the power artifact");

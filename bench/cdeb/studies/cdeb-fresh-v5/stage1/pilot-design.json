@@ -3,7 +3,7 @@
   "study_id": "cdeb-fresh-v5",
   "stage": "stage1-design",
   "measured_run_allowed": false,
-  "selection_rule": "the first three qualified candidates per repository ordered by candidate_id. candidate_id is derived from the decision audit anchor, a SHA-256 over canonical inputs, so the order is independent of the decision's content, date and author. Fixed here before any task, gold or oracle exists.",
+  "selection_rule": "the first three qualified candidates per repository ordered by candidate_id. candidate_id is the first 16 hex of the decision audit anchor, a SHA-256 over canonical inputs that INCLUDE the normalized decision text, the normalized reason, the source commit SHA and the path scope. The ordering is therefore deterministic pseudorandom under a hash assumption, NOT independent of content: it is unpredictable in practice and was fixed before any candidate was inspected, but a selector who could mine hashes could in principle influence it. Nothing here was mined -- every record predates the study by construction and the anchors were computed after the fact.",
   "fixed_repository_set": [
     "agent-control-plane",
     "agent-operator-score",
@@ -116,7 +116,8 @@
         "independent_corroboration": true,
         "authority_strength": "A1"
       }
-    ]
+    ],
+    "sample_character": "a feasibility sample, not a representative one and not sized to estimate nuisance parameters. Three binary observations per repository cannot stably estimate a baseline rate or a within-repository variance, and the power plan must not treat them as if they could."
   },
   "confirmatory_reserve": {
     "n": 50,
@@ -536,5 +537,6 @@
       }
     ]
   },
-  "note": "candidate_id carries a v4- prefix because it is the decision audit anchor, which both studies compute identically. The shared identifier is what makes the v4-to-v5 join auditable; renumbering would break it."
+  "note": "candidate_id carries a v4- prefix because it is the decision audit anchor, which both studies compute identically. The shared identifier is what makes the v4-to-v5 join auditable; renumbering would break it.",
+  "selection_rule_correction": "An earlier draft called this ordering independent of the decision's content, date and author. That was false and an adversarial review of the Stage 1 design caught it. The claim is corrected here rather than defended."
 }

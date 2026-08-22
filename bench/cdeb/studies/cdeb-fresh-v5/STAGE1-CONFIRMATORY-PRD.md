@@ -96,10 +96,17 @@ logic-pro-mcp          13
 
 12 candidates, three per repository, listed in `stage1/pilot-design.json`.
 
-The selection rule is fixed here and is content-blind: the first three qualified
-candidates per repository ordered by `candidate_id`, which is derived from the
-decision audit anchor — a SHA-256 over canonical inputs — so the ordering is
-independent of the decision's content, date and author.
+The selection rule is fixed here: the first three qualified candidates per
+repository ordered by `candidate_id`, the leading hex of the decision audit
+anchor.
+
+**It is not content-blind, and an earlier draft of this document said it was.**
+The anchor hashes the normalized decision text, the normalized reason, the source
+commit SHA and the path scope. The ordering is deterministic pseudorandom under a
+hash assumption — unpredictable in practice, fixed before any candidate was
+inspected, and computed after the fact over records that all predate the study —
+but a selector able to mine hashes could in principle influence it. The claim is
+corrected rather than defended.
 
 What the pilot is for:
 
