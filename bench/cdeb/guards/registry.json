@@ -411,7 +411,7 @@
       "guard_id": "stage1-r1-census-refuses-open-disposition",
       "claim": "A buildability census with any undecided candidate cannot fix the study population.",
       "test_file": "test/cdeb-v5-stage1-r1.test.ts",
-      "test_name": "throws on the census as committed, because 62 dispositions are still open",
+      "test_name": "throws while any disposition is still open, and tracks the census rather than a snapshot of it",
       "mutations": [
         {
           "mutation_id": "undecided-candidates-are-tolerated",
