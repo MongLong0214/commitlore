@@ -8,6 +8,8 @@
  * never been shown to fail on the thing it guards.
  */
 
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -1116,41 +1118,86 @@ describe("adversarial review findings, closed", () => {
 });
 
 describe("the record-blind sandbox", () => {
-  const snapshot = (): { repository_id: string; bundle_path: string; bundle_sha256: string; snapshot_commit: string } => {
-    const corpus = JSON.parse(readFileSync(join(V5, "corpus", "snapshots.json"), "utf8")) as {
-      repositories: { repository_id: string; bundle_path: string; bundle_sha256: string; snapshot_commit: string }[];
-    };
-    const found = corpus.repositories.find((row) => row.repository_id === "agent-operator-score");
-    if (found === undefined) throw new Error("agent-operator-score is not in the corpus");
-    return found;
+  /**
+   * The sealed corpus bundles are gitignored on purpose -- they mirror private
+   * repositories and must not be published -- so this builds its own, with a
+   * record in the commit message AND in refs/notes/commitlore. That is the
+   * stronger test: it proves the sandbox strips a history whose contents are
+   * known, rather than one nobody looked inside.
+   */
+  const buildBundleWithARecord = (): { dir: string; bundle: string; sha256: string; commit: string } => {
+    const dir = mkdtempSync(join(tmpdir(), "cdeb-src-"));
+    const run = (args: string[], cwd = dir): string =>
+      execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    run(["init", "--quiet", "-b", "main"]);
+    run(["config", "user.email", "study@example.invalid"]);
+    run(["config", "user.name", "study"]);
+    writeFileSync(join(dir, "app.ts"), "export const value = 1;\n", "utf8");
+    run(["add", "app.ts"]);
+    run([
+      "commit",
+      "--quiet",
+      "-m",
+      "widen the floor\n\nRecord-Id: r-secretdecision\nProvenance: authored\nRuled-out: caching the value globally | it outlives the request",
+    ]);
+    const commit = run(["rev-parse", "HEAD"]).trim();
+    run(["notes", "--ref", "commitlore", "add", "-m", "Record-Id: r-secretdecision\nRuled-out: caching the value globally | it outlives the request", commit]);
+    run(["update-ref", "refs/heads/cdeb-snapshot", commit]);
+    const bundle = join(dir, "sealed.bundle");
+    run(["bundle", "create", bundle, "refs/heads/cdeb-snapshot", "refs/notes/commitlore"]);
+    return { dir, bundle, sha256: createHash("sha256").update(readFileSync(bundle)).digest("hex"), commit };
   };
 
-  it("hands the author a tree with no history and no notes ref", () => {
-    const entry = snapshot();
-    const sandbox = materializeRecordBlindTree({
-      bundlePath: join(V5, "corpus", entry.bundle_path),
-      bundleSha256: entry.bundle_sha256,
-      snapshotCommit: entry.snapshot_commit,
-      repositoryId: entry.repository_id,
-    });
+  it("destroys a history that provably contained the record", () => {
+    const source = buildBundleWithARecord();
     try {
-      // The whole firewall rests on this: a bundle carries every record in its
-      // history and its notes ref, so leaving .git in place would make the
-      // control "the author chose not to run git log".
-      expect(existsSync(join(sandbox.dir, ".git"))).toBe(false);
-      expect(sandbox.file_count).toBeGreaterThan(100);
-      expect(sandbox.tree_digest).toMatch(/^[0-9a-f]{64}$/);
-      expect(() => {
-        assertSandboxIsRecordBlind(sandbox);
-      }).not.toThrow();
+      const sandbox = materializeRecordBlindTree({
+        bundlePath: source.bundle,
+        bundleSha256: source.sha256,
+        snapshotCommit: source.commit,
+        repositoryId: "synthetic",
+      });
+      try {
+        // The bundle carried the ruling twice over: in the commit message and
+        // in refs/notes/commitlore. Neither survives into the author's tree.
+        expect(existsSync(join(sandbox.dir, ".git"))).toBe(false);
+        expect(readFileSync(join(sandbox.dir, "app.ts"), "utf8")).toContain("export const value");
+        expect(sandbox.file_count).toBe(1);
+        expect(sandbox.leaks).toEqual([]);
+        expect(() => {
+          assertSandboxIsRecordBlind(sandbox);
+        }).not.toThrow();
+        // And the ruling really is unreachable, not merely un-checked-out.
+        expect(() =>
+          execFileSync("git", ["log", "-1"], { cwd: sandbox.dir, stdio: ["ignore", "pipe", "pipe"] }),
+        ).toThrow();
+      } finally {
+        rmSync(sandbox.dir, { recursive: true, force: true });
+      }
     } finally {
-      rmSync(sandbox.dir, { recursive: true, force: true });
+      rmSync(source.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a bundle whose bytes do not match the freeze", () => {
+    const source = buildBundleWithARecord();
+    try {
+      expect(() =>
+        materializeRecordBlindTree({
+          bundlePath: source.bundle,
+          bundleSha256: "f".repeat(64),
+          snapshotCommit: source.commit,
+          repositoryId: "synthetic",
+        }),
+      ).toThrow(/not the frozen/);
+    } finally {
+      rmSync(source.dir, { recursive: true, force: true });
     }
   });
 
   it("refuses a tree whose own files quote a record", () => {
-    // Two repositories in this corpus really do carry one; the check has to
-    // fire on content, because removing the history cannot reach it.
+    // Two repositories in the real corpus do; the check has to fire on content,
+    // because removing the history cannot reach it.
     const leaked = {
       dir: mkdtempSync(join(tmpdir(), "cdeb-leak-")),
       repository_id: "gitseed",
