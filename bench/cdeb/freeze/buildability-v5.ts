@@ -85,9 +85,29 @@ export interface BuildabilityRow {
   readonly disposition: Disposition | null;
   readonly decided_at: string | null;
   readonly evidence: string | null;
+  /**
+   * Digest of the failed construction artifacts. Required for the five reasons
+   * that assert an attempt was made, so "we could not build one" is backed by
+   * what was built.
+   */
+  readonly attempt_log_digest?: string | null;
 }
 
 const REASON_SET: ReadonlySet<string> = new Set(NOT_BUILDABLE_REASONS);
+
+/**
+ * The five reasons that are claims about a failed attempt rather than about the
+ * corpus. The other two -- `scope-cannot-be-isolated` and
+ * `firewall-provenance-cannot-be-demonstrated` -- are decided by the mechanical
+ * screens, where the screen result is itself the evidence.
+ */
+const CONSTRUCTION_ATTEMPT_REASONS: ReadonlySet<string> = new Set([
+  "NOT_BUILDABLE:no-neutral-record-blind-task",
+  "NOT_BUILDABLE:no-deterministic-functional-acceptance",
+  "NOT_BUILDABLE:no-functionally-passing-violation-control",
+  "NOT_BUILDABLE:fewer-than-two-compliant-passing-controls",
+  "NOT_BUILDABLE:oracle-cannot-distinguish-controls",
+]);
 
 /** Parses a disposition string, failing closed on anything off the list. */
 export const parseDisposition = (raw: string): Disposition => {
@@ -161,6 +181,19 @@ export const assertCensusComplete = (rows: readonly BuildabilityRow[]): void => 
     if (row.disposition !== null) parseDisposition(row.disposition);
     if (row.decided_at === null) {
       throw new Error(`buildability: ${row.candidate_id} is disposed without a decision time`);
+    }
+    if (row.disposition !== null && row.disposition !== BUILDABLE && (row.evidence ?? "").trim() === "") {
+      throw new Error(
+        `buildability: ${row.candidate_id} is ${row.disposition} with no evidence. An exclusion whose ` +
+          `justification is a label is a builder's decision to stop trying, and a builder who knows the ` +
+          `records can stop trying on the decisions they expect to show little benefit`,
+      );
+    }
+    if (CONSTRUCTION_ATTEMPT_REASONS.has(row.disposition ?? "") && (row.attempt_log_digest ?? "") === "") {
+      throw new Error(
+        `buildability: ${row.candidate_id} claims ${row.disposition}, which asserts that construction was ` +
+          `attempted and failed, but carries no attempt log. The failed artifacts are the evidence`,
+      );
     }
   }
 };

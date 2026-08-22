@@ -550,6 +550,150 @@
           "why": "An unregistered knob is an unaudited difference the arms could carry."
         }
       ]
+    },
+    {
+      "guard_id": "stage1-r1-controls-are-distinct-trees",
+      "claim": "Two oracle controls cannot share a patch or a final tree, because a tree-reading oracle cannot answer differently for the same tree.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses two controls that share a patch or a tree",
+      "mutations": [
+        {
+          "mutation_id": "identical-control-trees-are-accepted",
+          "file": "bench/cdeb/freeze/oracle-v5.ts",
+          "find": "      if (ids.length > 1) {",
+          "replace": "      if (false) {",
+          "must_fail_test": true,
+          "why": "A matrix declaring contradictory verdicts for one tree reports declarations rather than a replay."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-exclusion-needs-evidence",
+      "claim": "A NOT_BUILDABLE disposition whose justification is only its label is a builder's decision to stop trying.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a NOT_BUILDABLE row whose justification is only its label",
+      "mutations": [
+        {
+          "mutation_id": "evidence-free-exclusion-is-accepted",
+          "file": "bench/cdeb/freeze/buildability-v5.ts",
+          "find": "    if (row.disposition !== null && row.disposition !== BUILDABLE && (row.evidence ?? \"\").trim() === \"\") {",
+          "replace": "    if (false) {",
+          "must_fail_test": true,
+          "why": "A builder who knows the records could stop trying on the decisions expected to show little benefit."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-itt-refuses-duplicate-observation",
+      "claim": "An assigned episode cannot carry two observations; a retry cannot overwrite the failure it followed.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a second observation of one assigned episode, and a wrong repository label",
+      "mutations": [
+        {
+          "mutation_id": "retry-overwrites-the-failure",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "    if (byKey.has(key)) {\n      throw new Error(",
+          "replace": "    if (false) {\n      throw new Error(",
+          "must_fail_test": true,
+          "why": "Last-write-wins erases treatment failures while leaving every assigned key present, invisible to the drop check."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-bootstrap-represents-repeat-noise",
+      "claim": "The interval represents within-candidate repeat noise as well as between-candidate spread, so agreeing candidates do not collapse it to zero width.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "does not collapse the interval when every candidate agrees",
+      "mutations": [
+        {
+          "mutation_id": "repeats-are-not-resampled",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "        sum += drawMean(cluster.on, random) - drawMean(cluster.suppressed, random);",
+          "replace": "        sum += mean(cluster.on) - mean(cluster.suppressed);",
+          "must_fail_test": true,
+          "why": "Resampling only candidate point estimates reported a zero-width interval and declared superiority."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-nondegradation-weights-repositories-equally",
+      "claim": "Completion and functional-pass margins are judged under the same equal-repository weighting as the primary endpoint.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "does not let three large repositories mask a completion collapse in a small one",
+      "mutations": [
+        {
+          "mutation_id": "nondegradation-pools-across-repositories",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "    const interval = stratifiedBootstrap(clusters, fixedRepositories, options);",
+          "replace": "    const interval = stratifiedBootstrap(clusters.map((cluster) => ({ ...cluster, repository_id: \"pooled\" })), [\"pooled\"], options);",
+          "must_fail_test": true,
+          "why": "Pooling lets three large repositories dilute a completion collapse confined to a small one -- measured at -1.6 points against a true -25."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-runtime-lock-catches-common-drift",
+      "claim": "An episode is compared to the freeze itself, so both arms drifting together is still caught.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "catches both arms drifting together away from the freeze",
+      "mutations": [
+        {
+          "mutation_id": "episode-is-not-compared-to-the-freeze",
+          "file": "bench/cdeb/freeze/runtime-lock-v5.ts",
+          "find": "  const drift = RUNTIME_LOCK_FIELDS.filter(\n    (field) => JSON.stringify(lock.fields[field]) !== JSON.stringify(episode[field]),\n  );",
+          "replace": "  const drift: RuntimeLockField[] = [];",
+          "must_fail_test": true,
+          "why": "A rolled-forward hosted model moves both arms together and an arm-versus-arm comparison sees two equal objects."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-envelope-holds-rather-than-lowers-the-target",
+      "claim": "An envelope that cannot detect the registered minimum important effect is a HOLD, never a reason to lower the effect.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "holds rather than lowering the important effect the envelope cannot reach",
+      "mutations": [
+        {
+          "mutation_id": "underpowered-envelope-is-certified",
+          "file": "bench/cdeb/freeze/effect-independence-v5.ts",
+          "find": "  if (detectable > input.minimum_important_effect) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "Certifying an envelope that detects 17.2 points against a 15-point target presents a positive result with power it does not have."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-firewall-covers-the-prose-inputs",
+      "claim": "The maintenance need and acceptance criteria must be produced by someone declared record-blind, not merely handed over by one.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a task whose maintenance need came from someone who read the record",
+      "mutations": [
+        {
+          "mutation_id": "prose-input-producer-is-unchecked",
+          "file": "bench/cdeb/freeze/firewall-v5.ts",
+          "find": "    if (producer === undefined) {",
+          "replace": "    if (false) {",
+          "must_fail_test": true,
+          "why": "A record-aware coordinator can paraphrase the ruled-out approach into the maintenance need and the key-name check stays clean."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-nondegradation-uses-a-confidence-bound",
+      "claim": "The noninferiority margin is judged against a confidence bound, so an imprecise estimate just above the margin does not pass.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "judges the margin on the confidence bound, not the point estimate",
+      "mutations": [
+        {
+          "mutation_id": "margin-compared-to-the-point-estimate",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "    return { point: interval.point, lower: interval.lower, margin, holds: interval.lower >= margin };",
+          "replace": "    return { point: interval.point, lower: interval.lower, margin, holds: interval.point >= margin };",
+          "must_fail_test": true,
+          "why": "A point estimate of -3.1 points clears a -5 margin while its bound reaches -7.8."
+        }
+      ]
     }
   ]
 }

@@ -94,3 +94,33 @@ export const assertArmsDifferOnlyByDelivery = (
     );
   }
 };
+
+/**
+ * Comparing the arms to each other is not enough, and an adversarial review
+ * showed why: a hosted model or harness revision that rolls forward mid-run
+ * moves **both** arms together. `assertArmsDifferOnlyByDelivery` sees two equal
+ * objects and passes, and if the revision lands part-way through a schedule the
+ * drift is credited to whichever arm was running.
+ *
+ * So every episode is also compared to the freeze itself. This is the check the
+ * scheduler runs per episode, not once per study.
+ */
+export const assertEpisodeMatchesFrozenLock = (
+  lock: RuntimeLock,
+  episode: Readonly<Partial<Record<RuntimeLockField, unknown>>>,
+  episodeLabel: string,
+): void => {
+  if (lock.frozen_at === null) {
+    throw new Error(`runtime-lock: ${episodeLabel} cannot be compared to a lock that was never frozen`);
+  }
+  const drift = RUNTIME_LOCK_FIELDS.filter(
+    (field) => JSON.stringify(lock.fields[field]) !== JSON.stringify(episode[field]),
+  );
+  if (drift.length > 0) {
+    throw new Error(
+      `runtime-lock: ${episodeLabel} ran under a runtime that differs from the freeze in ${drift.join(", ")}. ` +
+        `Both arms drifting together is invisible to an arm-versus-arm comparison and is the shape a rolled-` +
+        `forward hosted model takes`,
+    );
+  }
+};

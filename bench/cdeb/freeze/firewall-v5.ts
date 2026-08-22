@@ -63,6 +63,14 @@ export const FORBIDDEN_TASK_AUTHOR_INPUTS = [
   "oracle",
 ] as const;
 
+/** The allowed inputs that carry prose, and can therefore carry the record. */
+export const CONTENT_BEARING_INPUTS = ["maintenance_need", "functional_acceptance"] as const;
+
+export interface InputProducer {
+  readonly producer_id: string;
+  readonly record_blind: boolean;
+}
+
 export interface TaskAuthorManifest {
   readonly schema_version: 1;
   readonly study_id: "cdeb-fresh-v5";
@@ -74,6 +82,8 @@ export interface TaskAuthorManifest {
   readonly sequence: number;
   /** sha256 of each input's bytes, keyed by name. Keys must be allowed. */
   readonly inputs: Readonly<Record<string, string>>;
+  /** Who produced each content-bearing input, and whether they were record-blind. */
+  readonly input_producers?: Readonly<Record<string, InputProducer>>;
   /** sha256 of the frozen task text and acceptance criteria. */
   readonly task_digest: string;
   readonly acceptance_digest: string;
@@ -139,6 +149,39 @@ export const assertTaskAuthorInputsAllowed = (manifest: TaskAuthorManifest): voi
   }
   if (!("base_tree_oid" in manifest.inputs)) {
     throw new Error(`firewall: ${manifest.candidate_id}'s task manifest does not pin a base tree`);
+  }
+  assertContentBearingInputsAreRecordBlind(manifest);
+};
+
+/**
+ * `maintenance_need` and `functional_acceptance` are the two allowed inputs
+ * that carry prose rather than an identifier, and an adversarial review pointed
+ * at exactly that: a record-aware coordinator can paraphrase the ruled-out
+ * approach into the maintenance need, hand the task author only that, and the
+ * key-name check stays clean. The task then contains the answer and the ON arm
+ * is told where to look.
+ *
+ * The manifest therefore has to say who produced each of them, and that
+ * producer has to have been record-blind too. This does not make the claim
+ * true -- a declaration cannot -- but it moves the claim from unstated to
+ * stated, where the ordering check and the leakage scan can bear on it.
+ */
+export const assertContentBearingInputsAreRecordBlind = (manifest: TaskAuthorManifest): void => {
+  for (const input of CONTENT_BEARING_INPUTS) {
+    if (!(input in manifest.inputs)) continue;
+    const producer = manifest.input_producers?.[input];
+    if (producer === undefined) {
+      throw new Error(
+        `firewall: ${manifest.candidate_id}'s manifest supplies "${input}" without naming who produced it. ` +
+          `A maintenance need written by someone who read the record is the record in different words`,
+      );
+    }
+    if (!producer.record_blind) {
+      throw new Error(
+        `firewall: ${manifest.candidate_id}'s "${input}" was produced by ${producer.producer_id}, who is not ` +
+          `declared record-blind. The firewall covers whoever wrote the words, not only whoever assembled them`,
+      );
+    }
   }
 };
 

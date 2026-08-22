@@ -36,6 +36,7 @@
     "bench:cdeb:v4:qualify": "node --experimental-strip-types bench/cdeb/freeze/qualify-v4.ts --study-root bench/cdeb/studies/cdeb-fresh-v4",
     "bench:cdeb:v4:result": "node scripts/render-stage0-result.mjs --check --study-root bench/cdeb/studies/cdeb-fresh-v4",
     "bench:cdeb:v5:stage1-census": "node --experimental-strip-types bench/cdeb/freeze/stage1-census-v5.ts --study-root bench/cdeb/studies/cdeb-fresh-v5",
+    "bench:cdeb:v5:stage1-analysis": "node --experimental-strip-types bench/cdeb/freeze/stage1-analysis-v5.ts --study-root bench/cdeb/studies/cdeb-fresh-v5",
     "bench:cdeb:analyze": "node --experimental-strip-types bench/cdeb/analyze.ts",
     "bench:cdeb:registry": "node --experimental-strip-types bench/cdeb/freeze/candidate-registry.ts"
   },

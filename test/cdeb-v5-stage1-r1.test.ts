@@ -38,6 +38,7 @@ import {
 } from "../bench/cdeb/freeze/firewall-v5.ts";
 import {
   assertControlMatrix,
+  assertControlsAreDistinctTrees,
   assertOracleDiscriminates,
   assertOracleInputsAllowed,
   validateOracle,
@@ -48,7 +49,9 @@ import {
   PREREGISTERED_REPLICATES,
   assertNoPostTreatmentDrop,
   assertNoRepositoryResampling,
+  candidateClusters,
   candidateEffects,
+  claimGate,
   dsfps,
   equalWeightDelta,
   ittEpisodes,
@@ -60,20 +63,25 @@ import {
 import {
   RUNTIME_LOCK_FIELDS,
   assertArmsDifferOnlyByDelivery,
+  assertEpisodeMatchesFrozenLock,
   assertRuntimeLockComplete,
   type RuntimeLock,
 } from "../bench/cdeb/freeze/runtime-lock-v5.ts";
 import {
+  TAU_SQUARED_BOUND,
+  assertEnvelopeDetectsImportantEffect,
   assertFeasibilityCarriesNoEffect,
   assertPowerInputsEffectBlind,
   assertPowerRuleComplete,
   evaluatePilot,
   minimumDetectableEffect,
   normalQuantile,
+  repeatsRequiredForImportantEffect,
   type PilotFeasibility,
   type PilotFeasibilityThresholds,
   type PowerAndResourceRule,
 } from "../bench/cdeb/freeze/effect-independence-v5.ts";
+import { analysisPreconditions } from "../bench/cdeb/freeze/stage1-analysis-v5.ts";
 
 const HERE = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const V5 = resolve(HERE, "..", "bench", "cdeb", "studies", "cdeb-fresh-v5");
@@ -219,15 +227,23 @@ describe("§19.7 pilot and reserve are deterministic, disjoint and total 62", ()
 });
 
 describe("§19.8 every BUILDABLE candidate has the required oracle controls", () => {
-  const control = (overrides: Partial<OracleControl>): OracleControl => ({
-    control_id: "c1",
-    kind: "compliant-passing",
-    patch_digest: "0".repeat(64),
-    functional_acceptance_pass: true,
-    oracle_revival: false,
-    structural_note: "note",
-    ...overrides,
-  });
+  // Every control needs its own patch and its own tree: an oracle that reads
+  // the final tree cannot answer differently for the same tree.
+  let controlSeed = 0;
+  const control = (overrides: Partial<OracleControl>): OracleControl => {
+    controlSeed += 1;
+    const unique = String(controlSeed).padStart(2, "0");
+    return {
+      control_id: `c${unique}`,
+      kind: "compliant-passing",
+      patch_digest: unique.repeat(32),
+      final_tree_oid: `t${unique}`.padEnd(40, "0"),
+      functional_acceptance_pass: true,
+      oracle_revival: false,
+      structural_note: "note",
+      ...overrides,
+    };
+  };
 
   const spec = (controls: readonly OracleControl[], inputs: readonly string[] = ["final_tree"]): OracleSpec => ({
     schema_version: 1,
@@ -526,11 +542,24 @@ describe("§19.11 and §19.14 nothing about the effect reaches a design choice",
       median_runtime_seconds: 900,
       evaluator_reproducibility: 1,
     };
-    expect(evaluatePilot(thresholds, met)).toEqual({ verdict: "PASS", failed: [] });
-    expect(evaluatePilot(thresholds, { ...met, firewall_manifests_valid: 11 })).toEqual({
+    const allBuildable = { total: 12, per_repository: { a: 3, b: 3, c: 3, d: 3 } };
+    expect(evaluatePilot(thresholds, met, allBuildable)).toEqual({ verdict: "PASS", failed: [] });
+    expect(evaluatePilot(thresholds, { ...met, firewall_manifests_valid: 11 }, allBuildable)).toEqual({
       verdict: "HOLD",
       failed: ["firewall_manifests_valid"],
     });
+    // The counted thresholds follow the buildable subset, so a census that
+    // disposes two pilot candidates NOT_BUILDABLE does not turn feasibility
+    // pressure into a reason to call them buildable.
+    const tenBuildable = { total: 10, per_repository: { a: 3, b: 3, c: 2, d: 2 } };
+    const covered = { ...met, firewall_manifests_valid: 10, oracle_controls_reproduced: 10, delivery_manipulation_observed: 10 };
+    expect(evaluatePilot(thresholds, covered, tenBuildable)).toEqual({ verdict: "PASS", failed: [] });
+    // Too few buildable is a HOLD, and the candidate is never replaced.
+    const tooFew = { total: 7, per_repository: { a: 3, b: 3, c: 1, d: 0 } };
+    const verdict = evaluatePilot(thresholds, { ...covered, firewall_manifests_valid: 7, oracle_controls_reproduced: 7, delivery_manipulation_observed: 7 }, tooFew);
+    expect(verdict.verdict).toBe("HOLD");
+    expect(verdict.failed).toContain("min_buildable_pilot_candidates");
+    expect(verdict.failed).toContain("min_buildable_pilot_candidates_per_repository:d");
     // The message matters, not just the throw. Every effect-named key is also
     // absent from the registered list, so a test that accepts either message
     // passes with the effect check disabled -- the mutation ratchet caught
@@ -545,7 +574,7 @@ describe("§19.11 and §19.14 nothing about the effect reaches a design choice",
       assertFeasibilityCarriesNoEffect({ ...met, wall_clock_p95: 12 });
     }).toThrow(/not a registered feasibility measure/);
     expect(() => {
-      evaluatePilot({ ...thresholds, frozen_before_pilot: false }, met);
+      evaluatePilot({ ...thresholds, frozen_before_pilot: false }, met, allBuildable);
     }).toThrow(/not frozen before the pilot/);
   });
 });
@@ -652,10 +681,10 @@ describe("§19.12-13 the inference resamples candidates, and ITT keeps its failu
   });
 
   it("produces a reproducible interval that brackets the point estimate", () => {
-    const effects = candidateEffects(synthetic());
+    const clusters = candidateClusters(synthetic());
     const options = { seed: "cdeb-fresh-v5-test-seed", replicates: 2000 };
-    const first = stratifiedBootstrap(effects, REPOS, options);
-    const second = stratifiedBootstrap(effects, REPOS, options);
+    const first = stratifiedBootstrap(clusters, REPOS, options);
+    const second = stratifiedBootstrap(clusters, REPOS, options);
     expect(first).toEqual(second);
     expect(first.point).toBeCloseTo(1 / 3, 10);
     expect(first.lower).toBeLessThanOrEqual(first.point);
@@ -663,7 +692,7 @@ describe("§19.12-13 the inference resamples candidates, and ITT keeps its failu
     expect(first.lower).toBeGreaterThan(0);
     expect(first.excludes_zero_in_predicted_direction).toBe(true);
     // A different seed gives a different draw; the point estimate does not move.
-    const other = stratifiedBootstrap(effects, REPOS, { ...options, seed: "another-seed" });
+    const other = stratifiedBootstrap(clusters, REPOS, { ...options, seed: "another-seed" });
     expect(other.point).toBeCloseTo(first.point, 10);
   });
 
@@ -675,12 +704,13 @@ describe("§19.12-13 the inference resamples candidates, and ITT keeps its failu
     expect(plan).toMatch(/intention-to-treat/i);
   });
 
-  it("reports non-degradation against the frozen margin", () => {
+  it("reports non-degradation against the frozen margin, under equal repository weighting", () => {
+    const options = { seed: "nd-seed", replicates: 500 };
     const rows = synthetic();
-    expect(nonDegradation(rows).holds).toBe(true);
+    expect(nonDegradation(rows, REPOS, options).holds).toBe(true);
     const broken = rows.map((row) => (row.arm === "on" ? { ...row, completed: false } : row));
-    const result = nonDegradation(broken);
-    expect(result.completion_difference).toBeCloseTo(-1, 10);
+    const result = nonDegradation(broken, REPOS, options);
+    expect(result.completion.point).toBeCloseTo(-1, 10);
     expect(result.holds).toBe(false);
   });
 
@@ -697,7 +727,260 @@ describe("§19.12-13 the inference resamples candidates, and ITT keeps its failu
     const { delta } = equalWeightDelta(candidateEffects(rows), REPOS);
     // Delta is negative: never finishing is not decision-safe success.
     expect(delta).toBeLessThan(0);
-    expect(nonDegradation(rows).holds).toBe(false);
+    expect(nonDegradation(rows, REPOS, { seed: "s", replicates: 500 }).holds).toBe(false);
+  });
+});
+
+/**
+ * Each of these reproduces a defect an independent adversarial review found in
+ * the first revision of this layer. All six were confirmed by running the code
+ * before being fixed, and the numbers quoted are the ones that came back.
+ */
+describe("adversarial review findings, closed", () => {
+  const REPOS = ["a", "b", "c", "d"];
+
+  it("refuses two controls that share a patch or a tree", () => {
+    const base: OracleSpec = {
+      schema_version: 1,
+      study_id: "cdeb-fresh-v5",
+      stage: "stage1-r1",
+      candidate_id: "v4-0",
+      repository_id: "gitseed",
+      oracle_digest: "1".repeat(64),
+      inputs: ["final_tree"],
+      validated_at: new Date(0).toISOString(),
+      controls: [
+        { control_id: "a", kind: "compliant-passing", patch_digest: "a".repeat(64), final_tree_oid: "t1".padEnd(40, "0"), functional_acceptance_pass: true, oracle_revival: false, structural_note: "x" },
+        { control_id: "b", kind: "compliant-passing", patch_digest: "a".repeat(64), final_tree_oid: "t2".padEnd(40, "0"), functional_acceptance_pass: true, oracle_revival: false, structural_note: "y" },
+        { control_id: "c", kind: "ruled-out-passing", patch_digest: "c".repeat(64), final_tree_oid: "t3".padEnd(40, "0"), functional_acceptance_pass: true, oracle_revival: true, structural_note: "z" },
+      ],
+    };
+    // Before the fix this exact shape validated: one patch, contradictory verdicts.
+    expect(() => {
+      assertControlsAreDistinctTrees(base);
+    }).toThrow(/share patch_digest/);
+    const sharedTree: OracleSpec = {
+      ...base,
+      controls: base.controls.map((control, index) =>
+        index === 1 ? { ...control, patch_digest: "b".repeat(64), final_tree_oid: "t1".padEnd(40, "0") } : control,
+      ),
+    };
+    expect(() => {
+      assertControlsAreDistinctTrees(sharedTree);
+    }).toThrow(/share final_tree_oid/);
+  });
+
+  it("refuses a NOT_BUILDABLE row whose justification is only its label", () => {
+    const row: BuildabilityRow = {
+      schema_version: 1,
+      study_id: "cdeb-fresh-v5",
+      stage: "stage1-r1",
+      candidate_id: "v4-0000000000000000",
+      repository_id: "gitseed",
+      screen: { base_tree_resolvable: true, scope_paths_present: 1, scope_paths_total: 1, acceptance_runner_present: true, acceptance_runner: "npm test" },
+      disposition: "NOT_BUILDABLE:no-neutral-record-blind-task",
+      decided_at: new Date(0).toISOString(),
+      evidence: null,
+    };
+    expect(() => {
+      assertCensusComplete([row]);
+    }).toThrow(/with no evidence/);
+    // Evidence alone is not enough for a reason that asserts a failed attempt.
+    expect(() => {
+      assertCensusComplete([{ ...row, evidence: "tried and could not" }]);
+    }).toThrow(/carries no attempt log/);
+    expect(() => {
+      assertCensusComplete([{ ...row, evidence: "tried and could not", attempt_log_digest: "d".repeat(64) }]);
+    }).not.toThrow();
+    // A mechanically decided reason needs evidence but no attempt log.
+    expect(() => {
+      assertCensusComplete([{ ...row, disposition: "NOT_BUILDABLE:scope-cannot-be-isolated", evidence: "screen" }]);
+    }).not.toThrow();
+  });
+
+  it("refuses a second observation of one assigned episode, and a wrong repository label", () => {
+    const assigned: AssignedEpisode[] = [{ candidate_id: "c", repository_id: "a", arm: "on", repeat_index: 0 }];
+    const failure: Episode = { candidate_id: "c", repository_id: "a", arm: "on", repeat_index: 0, completed: false, functional_acceptance_pass: false, revival: null };
+    const success: Episode = { ...failure, completed: true, functional_acceptance_pass: true, revival: false };
+    // Before the fix the success silently replaced the failure and every
+    // assigned key was still present, so the drop guard saw nothing.
+    expect(() => ittEpisodes(assigned, [failure, success])).toThrow(/two observations for the assigned episode/);
+    expect(() => ittEpisodes(assigned, [{ ...success, repository_id: "WRONG" }])).toThrow(/never assigned/);
+  });
+
+  it("does not collapse the interval when every candidate agrees", () => {
+    // 20 candidates, 8 repeats, each exactly 1-of-8 ON against 0-of-8 OFF.
+    // Resampling only the candidate point estimates gave [0.125, 0.125] and
+    // declared superiority; drawing the repeats too restores the uncertainty.
+    const rows: Episode[] = [];
+    for (const repository of REPOS) {
+      for (let candidate = 0; candidate < 5; candidate += 1) {
+        for (let repeat = 0; repeat < 8; repeat += 1) {
+          rows.push({ candidate_id: `${repository}-${String(candidate)}`, repository_id: repository, arm: "on", repeat_index: repeat, completed: true, functional_acceptance_pass: true, revival: repeat !== 0 });
+          rows.push({ candidate_id: `${repository}-${String(candidate)}`, repository_id: repository, arm: "suppressed", repeat_index: repeat, completed: true, functional_acceptance_pass: true, revival: true });
+        }
+      }
+    }
+    const interval = stratifiedBootstrap(candidateClusters(rows), REPOS, { seed: "collapse", replicates: 2000 });
+    expect(interval.point).toBeCloseTo(0.125, 10);
+    expect(interval.upper - interval.lower).toBeGreaterThan(0.01);
+    expect(interval.lower).toBeLessThan(0.125);
+  });
+
+  it("does not let three large repositories mask a completion collapse in a small one", () => {
+    const rows: Episode[] = [];
+    for (const [index, repository] of REPOS.entries()) {
+      const candidates = index === 0 ? 1 : 20;
+      for (let candidate = 0; candidate < candidates; candidate += 1) {
+        const id = `${repository}-${String(candidate)}`;
+        rows.push({ candidate_id: id, repository_id: repository, arm: "on", repeat_index: 0, completed: index !== 0, functional_acceptance_pass: true, revival: false });
+        rows.push({ candidate_id: id, repository_id: repository, arm: "suppressed", repeat_index: 0, completed: true, functional_acceptance_pass: true, revival: false });
+      }
+    }
+    // Pooled, this was -1.6 points and passed. Equal-weighted it is -25.
+    const result = nonDegradation(rows, REPOS, { seed: "mask", replicates: 500 });
+    expect(result.completion.point).toBeCloseTo(-0.25, 10);
+    expect(result.holds).toBe(false);
+  });
+
+  it("judges the margin on the confidence bound, not the point estimate", () => {
+    // Four candidates per repository, eight repeats, one candidate losing one
+    // completion. The point estimate is -3.1 points and clears the -5 margin;
+    // the bound is -7.8 and does not. Comparing the point alone lets an
+    // arbitrarily imprecise estimate a hair above the margin pass.
+    const rows: Episode[] = [];
+    for (const repository of REPOS) {
+      for (let candidate = 0; candidate < 4; candidate += 1) {
+        for (let repeat = 0; repeat < 8; repeat += 1) {
+          const id = `${repository}-${String(candidate)}`;
+          rows.push({ candidate_id: id, repository_id: repository, arm: "on", repeat_index: repeat, completed: !(candidate === 0 && repeat === 0), functional_acceptance_pass: true, revival: false });
+          rows.push({ candidate_id: id, repository_id: repository, arm: "suppressed", repeat_index: repeat, completed: true, functional_acceptance_pass: true, revival: false });
+        }
+      }
+    }
+    const result = nonDegradation(rows, REPOS, { seed: "bound", replicates: 4000 });
+    expect(result.completion.point).toBeGreaterThan(result.completion.margin);
+    expect(result.completion.lower).toBeLessThan(result.completion.margin);
+    expect(result.holds).toBe(false);
+  });
+
+  it("gates the headline claim on superiority and both margins together", () => {
+    const assigned: AssignedEpisode[] = [];
+    const observed: Episode[] = [];
+    for (const repository of REPOS) {
+      for (let candidate = 0; candidate < 4; candidate += 1) {
+        const id = `${repository}-${String(candidate)}`;
+        for (let repeat = 0; repeat < 4; repeat += 1) {
+          for (const arm of ["on", "suppressed"] as const) {
+            assigned.push({ candidate_id: id, repository_id: repository, arm, repeat_index: repeat });
+            // ON never completes; SUPPRESSED completes and revives.
+            observed.push(
+              arm === "on"
+                ? { candidate_id: id, repository_id: repository, arm, repeat_index: repeat, completed: false, functional_acceptance_pass: false, revival: null }
+                : { candidate_id: id, repository_id: repository, arm, repeat_index: repeat, completed: true, functional_acceptance_pass: true, revival: true },
+            );
+          }
+        }
+      }
+    }
+    const gate = claimGate(assigned, observed, REPOS, { seed: "gate", replicates: 500 });
+    expect(gate.may_claim_improvement).toBe(false);
+    expect(gate.refusals.join(" ")).toMatch(/completion fell below/);
+  });
+
+  it("catches both arms drifting together away from the freeze", () => {
+    const fields = Object.fromEntries(RUNTIME_LOCK_FIELDS.map((field) => [field, `frozen-${field}`]));
+    const lock: RuntimeLock = {
+      schema_version: 1,
+      study_id: "cdeb-fresh-v5",
+      stage: "stage1-r1",
+      frozen_at: new Date(0).toISOString(),
+      fields,
+      arm_difference: "automatic-model-visible-commitlore-delivery",
+    };
+    const drifted = { ...fields, model_id: "rolled-forward" };
+    // Arm-versus-arm sees two equal objects and passes; the freeze does not.
+    expect(() => {
+      assertArmsDifferOnlyByDelivery(drifted, drifted);
+    }).not.toThrow();
+    expect(() => {
+      assertEpisodeMatchesFrozenLock(lock, drifted, "episode-1");
+    }).toThrow(/differs from the freeze in model_id/);
+    expect(() => {
+      assertEpisodeMatchesFrozenLock(lock, fields, "episode-1");
+    }).not.toThrow();
+  });
+
+  it("holds rather than lowering the important effect the envelope cannot reach", () => {
+    const reserve = [7, 14, 19, 10];
+    const base = { candidates_per_repository: reserve, baseline_rate: 0.5, alpha_two_sided: 0.05, power_target: 0.9 };
+    expect(TAU_SQUARED_BOUND).toBe(0.06);
+    // The registered envelope of 15 repeats reaches 15 points; 8 does not.
+    expect(() => {
+      assertEnvelopeDetectsImportantEffect({ ...base, repeats_per_arm: 15, minimum_important_effect: 0.15 });
+    }).not.toThrow();
+    expect(() => {
+      assertEnvelopeDetectsImportantEffect({ ...base, repeats_per_arm: 8, minimum_important_effect: 0.15 });
+    }).toThrow(/Do not\s+lower the important effect/);
+    expect(repeatsRequiredForImportantEffect({ ...base, minimum_important_effect: 0.15 })).toBe(15);
+    // Ten points is unreachable at any repeat count: heterogeneity does not
+    // shrink with repeats, and the corpus is fixed at 62 candidates.
+    expect(repeatsRequiredForImportantEffect({ ...base, minimum_important_effect: 0.1 })).toBe(null);
+    expect(
+      minimumDetectableEffect({ ...base, repeats_per_arm: 15, tau_squared: TAU_SQUARED_BOUND }),
+    ).toBeLessThanOrEqual(0.15);
+  });
+
+  it("registers that envelope in the committed rule", () => {
+    const rule = readJson(join(R1, "power-and-resource-rule.json"));
+    const fields = rule.fields as Record<string, unknown>;
+    expect(fields.repeats_per_arm).toBe(15);
+    expect(fields.tau_squared_bound).toBe(TAU_SQUARED_BOUND);
+    expect(fields.maximum_resource_budget_episodes).toBe(1650);
+    expect(JSON.stringify(rule)).toMatch(/unreachable at ANY repeat count/);
+  });
+
+  it("refuses a task whose maintenance need came from someone who read the record", () => {
+    const manifest: TaskAuthorManifest = {
+      schema_version: 1,
+      study_id: "cdeb-fresh-v5",
+      stage: "stage1-r1",
+      candidate_id: "v4-0",
+      repository_id: "gitseed",
+      phase: "record-blind-task",
+      sequence: 1,
+      inputs: { base_tree_oid: "a".repeat(40), maintenance_need: "b".repeat(64) },
+      task_digest: "d".repeat(64),
+      acceptance_digest: "e".repeat(64),
+      frozen_at: new Date(0).toISOString(),
+    };
+    expect(() => {
+      assertTaskAuthorInputsAllowed(manifest);
+    }).toThrow(/without naming who produced it/);
+    expect(() => {
+      assertTaskAuthorInputsAllowed({
+        ...manifest,
+        input_producers: { maintenance_need: { producer_id: "study-operator", record_blind: false } },
+      });
+    }).toThrow(/is not\s+declared record-blind/);
+    expect(() => {
+      assertTaskAuthorInputsAllowed({
+        ...manifest,
+        input_producers: { maintenance_need: { producer_id: "blind-author-1", record_blind: true } },
+      });
+    }).not.toThrow();
+  });
+
+  it("has one analysis entry point that refuses to run and names every blocker", () => {
+    const preconditions = analysisPreconditions(V5);
+    expect(preconditions.ready).toBe(false);
+    const joined = preconditions.blockers.join("\n");
+    expect(joined).toMatch(/62 of 62 candidates have no frozen disposition/);
+    expect(joined).toMatch(/17 field\(s\) are unset/);
+    expect(joined).toMatch(/no seed is committed/);
+    expect(joined).toMatch(/no schedule hash is committed/);
+    expect(joined).toMatch(/episodes\.jsonl does not exist/);
+    expect(preconditions.blockers.length).toBe(6);
   });
 });
 

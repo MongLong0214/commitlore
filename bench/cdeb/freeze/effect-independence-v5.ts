@@ -56,6 +56,29 @@ export const PERMITTED_PILOT_INPUTS = [
   "infrastructure_failure_rate",
 ] as const;
 
+/**
+ * The frozen upper bound on between-candidate heterogeneity in the ON-minus-OFF
+ * difference.
+ *
+ * This constant exists because the design was internally contradictory and an
+ * adversarial review named it: `minimumDetectableEffect` needs `tau_squared`,
+ * which is a property of the *arm contrast*, while the power rule forbids the
+ * sizing step from reading any arm comparison. The pilot cannot supply it
+ * either -- three candidates per repository cannot estimate a variance.
+ *
+ * The resolution is to stop treating it as something to be measured later.
+ * `TAU_SQUARED_BOUND` is fixed here, before any outcome, at the top of the
+ * bracket the design was already reporting. The study then registers what it
+ * can detect under that bound and lives with the answer, rather than
+ * substituting a smaller within-arm variance and certifying a power it does not
+ * have.
+ *
+ * The bound is conservative in the sense that matters: if the true
+ * heterogeneity is lower, the study detects more than it promised, which is the
+ * safe direction to be wrong in.
+ */
+export const TAU_SQUARED_BOUND = 0.06;
+
 /** Substrings that mark a key as carrying an arm contrast rather than a nuisance parameter. */
 const EFFECT_MARKERS = ["effect", "delta", "difference", "contrast", "improvement", "lift", "arm_", "_on_vs", "treatment"];
 
@@ -194,18 +217,79 @@ export const normalQuantile = (p: number): number => {
   return (horner(a, r) * q) / (horner(b, r) * r + 1);
 };
 
+/**
+ * The executable HOLD calculation the power rule refers to.
+ *
+ * It is deliberately one-directional. If the envelope cannot detect the
+ * registered minimum important effect at `TAU_SQUARED_BOUND`, the answer is
+ * HOLD and a report. It is never "lower the important effect to what the
+ * envelope reaches", which is the move that turns an underpowered study into a
+ * study that found something.
+ */
+export const assertEnvelopeDetectsImportantEffect = (input: {
+  readonly candidates_per_repository: readonly number[];
+  readonly repeats_per_arm: number;
+  readonly baseline_rate: number;
+  readonly minimum_important_effect: number;
+  readonly alpha_two_sided: number;
+  readonly power_target: number;
+}): void => {
+  const detectable = minimumDetectableEffect({ ...input, tau_squared: TAU_SQUARED_BOUND });
+  if (detectable > input.minimum_important_effect) {
+    throw new Error(
+      `power-rule: at ${String(input.repeats_per_arm)} repeats over ` +
+        `${input.candidates_per_repository.join("/")} candidates the envelope detects ` +
+        `${(detectable * 100).toFixed(1)} percentage points, which is larger than the registered minimum ` +
+        `important effect of ${(input.minimum_important_effect * 100).toFixed(1)}. HOLD and report. Do not ` +
+        `lower the important effect to match what the envelope reaches`,
+    );
+  }
+};
+
+/** The smallest repeat count whose envelope reaches the important effect, or null if none within `maxRepeats`. */
+export const repeatsRequiredForImportantEffect = (
+  input: {
+    readonly candidates_per_repository: readonly number[];
+    readonly baseline_rate: number;
+    readonly minimum_important_effect: number;
+    readonly alpha_two_sided: number;
+    readonly power_target: number;
+  },
+  maxRepeats = 200,
+): number | null => {
+  for (let repeats = 1; repeats <= maxRepeats; repeats += 1) {
+    const detectable = minimumDetectableEffect({ ...input, repeats_per_arm: repeats, tau_squared: TAU_SQUARED_BOUND });
+    if (detectable <= input.minimum_important_effect) return repeats;
+  }
+  return null;
+};
+
 export interface PilotFeasibilityThresholds {
   readonly schema_version: 1;
   readonly study_id: "cdeb-fresh-v5";
   readonly stage: "stage1-r1";
   readonly frozen_before_pilot: boolean;
+  /**
+   * The counted thresholds are denominated in the *buildable* subset of the 12,
+   * not in 12. Requiring all 12 while the census may legitimately dispose a
+   * pilot candidate NOT_BUILDABLE puts feasibility pressure behind the decision
+   * to call a marginal candidate buildable, and that decision has to be free of
+   * it. A NOT_BUILDABLE pilot candidate is not replaced; too few of them is a
+   * HOLD.
+   */
+  readonly min_buildable_pilot_candidates: number;
+  readonly min_buildable_pilot_candidates_per_repository: number;
+  readonly require_all_buildable_covered: boolean;
   /** Every threshold is a property of the instrument, never of the contrast. */
-  readonly min_firewall_manifests_valid: number;
-  readonly min_oracle_controls_reproduced: number;
-  readonly min_delivery_manipulation_observed: number;
   readonly max_infrastructure_failure_rate: number;
   readonly max_median_runtime_seconds: number;
   readonly min_evaluator_reproducibility: number;
+}
+
+/** How many pilot candidates the census called buildable, overall and per repository. */
+export interface PilotBuildableCount {
+  readonly total: number;
+  readonly per_repository: Readonly<Record<string, number>>;
 }
 
 /** What the pilot may report. Note that no field names an arm or an outcome contrast. */
@@ -254,16 +338,25 @@ export interface PilotVerdict {
 export const evaluatePilot = (
   thresholds: PilotFeasibilityThresholds,
   feasibility: PilotFeasibility,
+  buildable: PilotBuildableCount,
 ): PilotVerdict => {
   assertFeasibilityCarriesNoEffect(feasibility as unknown as Record<string, unknown>);
   if (!thresholds.frozen_before_pilot) {
     throw new Error("pilot-gate: thresholds were not frozen before the pilot, so they could have been set to what it produced");
   }
   const failed: string[] = [];
-  if (feasibility.firewall_manifests_valid < thresholds.min_firewall_manifests_valid) failed.push("firewall_manifests_valid");
-  if (feasibility.oracle_controls_reproduced < thresholds.min_oracle_controls_reproduced) failed.push("oracle_controls_reproduced");
-  if (feasibility.delivery_manipulation_observed < thresholds.min_delivery_manipulation_observed) {
-    failed.push("delivery_manipulation_observed");
+  if (buildable.total < thresholds.min_buildable_pilot_candidates) failed.push("min_buildable_pilot_candidates");
+  for (const [repository, count] of Object.entries(buildable.per_repository)) {
+    if (count < thresholds.min_buildable_pilot_candidates_per_repository) {
+      failed.push(`min_buildable_pilot_candidates_per_repository:${repository}`);
+    }
+  }
+  // The counted measures are denominated in the buildable subset, so full
+  // coverage means covering exactly those, not covering twelve.
+  if (thresholds.require_all_buildable_covered) {
+    if (feasibility.firewall_manifests_valid < buildable.total) failed.push("firewall_manifests_valid");
+    if (feasibility.oracle_controls_reproduced < buildable.total) failed.push("oracle_controls_reproduced");
+    if (feasibility.delivery_manipulation_observed < buildable.total) failed.push("delivery_manipulation_observed");
   }
   if (feasibility.infrastructure_failure_rate > thresholds.max_infrastructure_failure_rate) failed.push("infrastructure_failure_rate");
   if (feasibility.median_runtime_seconds > thresholds.max_median_runtime_seconds) failed.push("median_runtime_seconds");

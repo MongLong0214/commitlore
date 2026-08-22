@@ -155,6 +155,42 @@
     {
       "guard_id": "stage1-r1-runtime-lock-must-be-complete",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-controls-are-distinct-trees",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-exclusion-needs-evidence",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-itt-refuses-duplicate-observation",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-bootstrap-represents-repeat-noise",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-nondegradation-weights-repositories-equally",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-runtime-lock-catches-common-drift",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-envelope-holds-rather-than-lowers-the-target",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-firewall-covers-the-prose-inputs",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-nondegradation-uses-a-confidence-bound",
+      "outcome": "bound"
     }
   ]
 }

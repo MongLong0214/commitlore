@@ -9,11 +9,12 @@
     "power_target": 0.9,
     "confidence": 0.95,
     "minimum_practically_important_dsfps_effect": 0.15,
-    "maximum_resource_budget_episodes": 880,
-    "repeats_per_arm": 8,
+    "maximum_resource_budget_episodes": 1650,
+    "repeats_per_arm": 15,
     "infrastructure_allowance": 0.1,
     "minimum_buildable_candidates_per_repository": 5,
-    "hold_rule": "HOLD if any fixed repository has fewer than 5 buildable confirmatory candidates, or if the detectable effect computed at the frozen envelope from the pilot's nuisance parameters exceeds minimum_practically_important_dsfps_effect. In the second case the study reports that it cannot detect an effect worth acting on and stops. It does not lower the minimum important effect to match what it can detect, and it does not raise N beyond maximum_resource_budget_episodes."
+    "tau_squared_bound": 0.06,
+    "hold_rule": "HOLD if any fixed repository has fewer than 5 buildable confirmatory candidates, or if assertEnvelopeDetectsImportantEffect throws at the frozen envelope and tau_squared_bound. In the second case the study reports that it cannot detect an effect worth acting on and stops. It does not lower the minimum important effect to match what it can detect, and it does not raise N beyond maximum_resource_budget_episodes."
   },
   "permitted_pilot_inputs": [
     "per_repository_baseline_dsfps_suppressed",
@@ -34,8 +35,9 @@
       "repeats_12": { "episodes": 1200, "tau2_0.00": 10.0, "tau2_0.01": 11.2, "tau2_0.03": 13.1, "tau2_0.06": 15.7 },
       "repeats_20": { "episodes": 2000, "tau2_0.00": 7.8, "tau2_0.01": 9.2, "tau2_0.03": 11.5, "tau2_0.06": 14.3 }
     },
-    "why_repeats_is_8": "8 repeats per arm is the smallest registered envelope whose detectable effect stays at or under 15 points across the plausible range of between-candidate heterogeneity up to tau^2 = 0.03. It costs 800 episodes, and with the 10% infrastructure allowance the budget is 880.",
-    "the_tension_this_exposes": "The corpus cannot detect a small effect. Reaching 10 points needs 12 repeats and only if candidates are homogeneous; at tau^2 = 0.06 even 20 repeats and 2,000 episodes leaves 14.3 points undetectable. This is a property of a 50-candidate corpus spread over four fixed strata, and no analysis choice removes it. It is registered here, before the pilot, so that a later result reported as null cannot be read as evidence of no effect when it is evidence of an underpowered corpus."
+    "why_repeats_is_15": "15 is the smallest repeat count whose detectable effect reaches 15 points at the frozen tau_squared_bound of 0.06, computed by repeatsRequiredForImportantEffect. It costs 1,500 episodes, and with the 10% infrastructure allowance the budget is 1,650. An earlier revision of this file registered 8 repeats, which detects 17.2 points at the same bound and therefore fails its own HOLD rule -- 8 was chosen against a mid-range tau^2 that the design had no way to obtain, which is the defect described in why_tau_squared_is_frozen.",
+    "why_tau_squared_is_frozen": "tau^2 is between-candidate variance in the ON-minus-SUPPRESSED difference, so it is a property of the arm contrast. Requiring it as a sizing input while forbidding the sizing step to read any arm comparison was internally contradictory, and the 12-candidate pilot cannot estimate a variance in any case. It is therefore fixed here, before any outcome, at the top of the bracket the design was already reporting. If true heterogeneity is lower the study detects more than it promised, which is the safe direction.",
+    "the_ceiling_this_exposes": "At tau_squared_bound = 0.06 a 10-point effect is unreachable at ANY repeat count -- the search runs to 200 repeats and never gets there. Repeats shrink only the within-candidate binomial term; the heterogeneity term shrinks only with more candidates, and the corpus is fixed at 62. No budget and no analysis choice removes this. It is registered before the pilot so that a later null result cannot be read as evidence of no effect when it is evidence of a corpus that could not have shown one."
   },
   "what_this_rule_may_not_do": [
     "read the pilot's estimated treatment effect, in any form or under any name",

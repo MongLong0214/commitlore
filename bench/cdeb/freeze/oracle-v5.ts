@@ -32,6 +32,8 @@ export interface OracleControl {
   readonly kind: ControlKind;
   /** sha256 of the patch bytes, so a control cannot be silently rewritten. */
   readonly patch_digest: string;
+  /** The git tree the patch produces. Two controls cannot share one. */
+  readonly final_tree_oid: string;
   /** What the frozen acceptance suite returned for this control's final tree. */
   readonly functional_acceptance_pass: boolean;
   /** What the oracle returned for this control's final tree. */
@@ -185,9 +187,42 @@ export const assertOracleDiscriminates = (spec: OracleSpec): void => {
   throw new Error(`oracle: ${spec.candidate_id}'s oracle does not discriminate: ${parts.join("; ")}`);
 };
 
+/**
+ * Two controls that produce the same tree cannot receive different verdicts
+ * from an oracle that reads the tree and nothing else. A spec claiming they do
+ * is describing something other than the oracle it is validating.
+ *
+ * This was found by an adversarial review, in this module's own positive test:
+ * three controls shared one `patch_digest`, two declaring `revival=false` and
+ * one `revival=true`, and validation accepted it. The declared booleans are
+ * still declarations rather than a replay -- that gap is registered as open --
+ * but a spec that is internally impossible no longer passes.
+ */
+export const assertControlsAreDistinctTrees = (spec: OracleSpec): void => {
+  for (const field of ["patch_digest", "final_tree_oid"] as const) {
+    const seen = new Map<string, string[]>();
+    for (const control of spec.controls) {
+      const key = control[field];
+      const bucket = seen.get(key);
+      if (bucket === undefined) seen.set(key, [control.control_id]);
+      else bucket.push(control.control_id);
+    }
+    for (const [value, ids] of seen) {
+      if (ids.length > 1) {
+        throw new Error(
+          `oracle: ${spec.candidate_id}'s controls ${ids.join(", ")} share ${field} ${value.slice(0, 12)}. ` +
+            `An oracle reading the final tree alone cannot answer differently for the same tree, so a matrix ` +
+            `that says it did is reporting declarations rather than a replay`,
+        );
+      }
+    }
+  }
+};
+
 /** The full G2 gate. Candidates that pass it are the only ones that may be BUILDABLE. */
 export const validateOracle = (spec: OracleSpec): void => {
   assertOracleInputsAllowed(spec);
+  assertControlsAreDistinctTrees(spec);
   assertControlMatrix(spec);
   assertOracleDiscriminates(spec);
 };
