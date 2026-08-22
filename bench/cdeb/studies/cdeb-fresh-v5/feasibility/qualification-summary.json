@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "measured_product_effect_rows": 0,
+  "thresholds": {
+    "minQualifiedPerEligibleRepository": 8,
+    "minEligibleRepositories": 3,
+    "minTotalQualified": 36
+  },
+  "verdict": {
+    "verdict": "GO",
+    "eligible_repositories": 4,
+    "total_qualified": 62,
+    "recommended_fixed_set": [
+      "agent-control-plane",
+      "agent-operator-score",
+      "gitseed",
+      "logic-pro-mcp"
+    ],
+    "unmet": [],
+    "delivery_observable_identified": true,
+    "delivery_observable_id_less": true
+  },
+  "reviewer_agreement_by_gate": [
+    {
+      "gate": "G2",
+      "compared": 240,
+      "agreed": 216,
+      "rate": 0.9
+    },
+    {
+      "gate": "G3",
+      "compared": 240,
+      "agreed": 141,
+      "rate": 0.5875
+    },
+    {
+      "gate": "G4",
+      "compared": 240,
+      "agreed": 209,
+      "rate": 0.8708333333333333
+    },
+    {
+      "gate": "G5",
+      "compared": 240,
+      "agreed": 217,
+      "rate": 0.9041666666666667
+    },
+    {
+      "gate": "G7",
+      "compared": 240,
+      "agreed": 237,
+      "rate": 0.9875
+    }
+  ],
+  "exclusion_reasons": {
+    "record-ambiguous": 44,
+    "reason-obvious-from-code-unresolved": 43,
+    "reason-obvious-from-code": 41,
+    "shipping-content-not-observable": 27,
+    "record-ambiguous-unresolved": 9,
+    "wrong-path-not-functionally-viable": 8,
+    "wrong-path-not-functionally-viable-unresolved": 3,
+    "oracle-not-deterministic-unresolved": 2,
+    "oracle-not-deterministic": 2
+  },
+  "v4_comparison": {
+    "qualified_total": 62,
+    "what_v4_did": {
+      "insufficient-provenance": 47,
+      "source-packet-empty": 10,
+      "v4-qualified": 4,
+      "wrong-path-not-functionally-viable": 1
+    }
+  },
+  "corroboration_states": {
+    "a1_hit": 18,
+    "no_hit_decidable": 10,
+    "undecidable": 34
+  },
+  "interpretation_coverage": {
+    "reviewer_a": 240,
+    "reviewer_b": 241,
+    "tiebreak_c": 131,
+    "tiebreak_d": 131,
+    "paired": 240,
+    "enumerated": 241
+  },
+  "tiebreak_sensitivity": {
+    "no_tiebreak": {
+      "qualified": 44,
+      "eligible": 3,
+      "verdict": "GO"
+    },
+    "single_tiebreak_same_model_as_a": {
+      "qualified": 88,
+      "eligible": 4,
+      "verdict": "GO"
+    },
+    "both_tiebreakers_must_agree": {
+      "qualified": 62,
+      "eligible": 4,
+      "verdict": "GO"
+    }
+  },
+  "tiebreak_rule": "a split is resolved only when both tie-breakers, drawn from the two different models, return the same answer; otherwise the gate stays unresolved and fails closed"
+}

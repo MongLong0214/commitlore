@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "cutoff": "2026-08-20T22:08:19Z",
+  "corroboration_coverage_threshold": 0.6,
+  "corroboration_window_lines": 40,
+  "corroboration_min_ruling_words": 5,
+  "corroboration_note": "A1 is metadata and never gates admission. A window match means the decision is discussed in one place rather than its words being scattered across a file, and a ruling with fewer than the minimum content words is marked undecidable rather than matched -- three generic words clear any threshold.",
+  "a0_discrimination": [
+    {
+      "condition": "pre_cutoff",
+      "failed": 0,
+      "inert": true
+    },
+    {
+      "condition": "in_frozen_snapshot",
+      "failed": 0,
+      "inert": true
+    },
+    {
+      "condition": "not_benchmark_authored",
+      "failed": 0,
+      "inert": true
+    },
+    {
+      "condition": "not_reconstructed_or_backfilled",
+      "failed": 0,
+      "inert": true
+    },
+    {
+      "condition": "explicit_ruled_out",
+      "failed": 0,
+      "inert": true
+    },
+    {
+      "condition": "explicit_reason",
+      "failed": 0,
+      "inert": true
+    },
+    {
+      "condition": "scope_recoverable",
+      "failed": 0,
+      "inert": true
+    },
+    {
+      "condition": "lifecycle_recoverable",
+      "failed": 0,
+      "inert": true
+    },
+    {
+      "condition": "authorized_repository",
+      "failed": 0,
+      "inert": true
+    }
+  ],
+  "a0_discrimination_note": "An inert condition passed for every candidate in this corpus. Most A0 conditions are satisfied by how the census builds its input -- it emits a candidate only when a ruled-out alternative and its reason parsed from a record inside the frozen bundle -- so their pass is structural, not a filter that ran. The condition that can genuinely fail here is not_benchmark_authored.",
+  "authority_digest": "c30b37fc4c384691c680586e7e75c5e60cbfce24300172be062426937e01a797",
+  "repositories": [
+    {
+      "repository_id": "agent-control-plane",
+      "raw_decisions": 35,
+      "a0": 35,
+      "a1": 11,
+      "a0_only": 24,
+      "a0_no_hit_decidable": 5,
+      "a0_corroboration_undecidable": 19,
+      "identified": 1,
+      "id_less": 34,
+      "a0_failures": {}
+    },
+    {
+      "repository_id": "agent-operator-score",
+      "raw_decisions": 59,
+      "a0": 59,
+      "a1": 23,
+      "a0_only": 36,
+      "a0_no_hit_decidable": 22,
+      "a0_corroboration_undecidable": 14,
+      "identified": 48,
+      "id_less": 11,
+      "a0_failures": {}
+    },
+    {
+      "repository_id": "gitseed",
+      "raw_decisions": 104,
+      "a0": 104,
+      "a1": 27,
+      "a0_only": 77,
+      "a0_no_hit_decidable": 10,
+      "a0_corroboration_undecidable": 67,
+      "identified": 94,
+      "id_less": 10,
+      "a0_failures": {}
+    },
+    {
+      "repository_id": "logic-pro-mcp",
+      "raw_decisions": 43,
+      "a0": 43,
+      "a1": 19,
+      "a0_only": 24,
+      "a0_no_hit_decidable": 3,
+      "a0_corroboration_undecidable": 21,
+      "identified": 0,
+      "id_less": 43,
+      "a0_failures": {}
+    }
+  ]
+}
