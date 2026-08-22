@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "stage": "stage1-r1",
+  "artifact": "first-record-blind-need-scout-run",
+  "candidate_id": "v4-04c1de5e41d66868",
+  "repository_id": "agent-operator-score",
+  "sandbox": {
+    "tree_digest": "b0d0f07a5e3d2207aed24b2002ddb0cbf61708c1fdaf67ef4f99ce24ab5f3568",
+    "git_metadata_present": false,
+    "file_count": 354
+  },
+  "path_scope": [
+    "fixtures/doctor/blocked-and-imported.json",
+    "fixtures/doctor/blocked.json",
+    "fixtures/doctor/complete.json",
+    "fixtures/doctor/degraded.json",
+    "fixtures/doctor/imported-and-degraded.json",
+    "fixtures/doctor/imported-only.json",
+    "packages/schema/src/doctor-contract.ts",
+    "packages/schema/test/doctor-contract.test.ts",
+    "specs/doctor-output.v0.json",
+    "tests/planning-contract.test.mjs",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "needs": [
+    {
+      "need_id": "canonical-case-table-is-not-exhaustive",
+      "summary": "The shared canonical-case table covers only six reports although the frozen manifest declares eight, leaving generic verdict, required-group, and fail-closed assertions without coverage for two canonical fixture combinations.",
+      "tree_evidence": [
+        "specs/doctor-output.v0.json",
+        "packages/schema/test/doctor-contract.test.ts",
+        "fixtures/doctor/blocking-and-degraded.json",
+        "fixtures/doctor/blocking-and-imported.json"
+      ],
+      "rationale": "The spec lists eight canonical reports, but CANONICAL_CASES omits blocking-and-degraded and blocking-and-imported. Those fixtures have dedicated tests, yet the shared loops use the six-case table. Completion is checkable by the focused doctor-contract test after making the shared-case coverage agree with the manifest."
+    },
+    {
+      "need_id": "focused-doctor-lane-runs-unrelated-test-files",
+      "summary": "The advertised doctor-contract focused lane executes every schema test file with a name filter, so its reported 41 passes includes ten unrelated empty test-file harnesses rather than only the doctor contract cases.",
+      "tree_evidence": [
+        "packages/schema/test/doctor-contract.test.ts",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "rationale": "Running `npm test -w @aos/schema -- doctor-contract` showed the 31 doctor subtests plus ten unrelated test files reported as passing. workspace-skeleton pins 41 as the focused-lane count, so the receipt is noisier and less precise than its label implies. Completion can be checked by rerunning that repository command and confirming the lane reports only its intended test scope."
+    },
+    {
+      "need_id": "doctor-corpus-loader-does-not-handle-non-file-entries",
+      "summary": "Doctor fixture discovery assumes every directory entry is readable as a file; a directory or symlink placed in fixtures/doctor can cause an OS read error or follow an unintended target instead of producing the contract\u2019s named fail-closed corpus result.",
+      "tree_evidence": [
+        "packages/schema/test/doctor-contract.test.ts",
+        "fixtures/doctor/complete.json",
+        "fixtures/doctor/degraded.json",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "rationale": "readCorpusText enumerates fixtures/doctor and immediately readFileSyncs each entry. Its malformed-fixture case covers ordinary non-JSON files, but not directories or symlinks, while the workspace fixture census explicitly treats symlinks as unsafe. A focused test with either filesystem entry would currently demonstrate the missing controlled contract outcome."
+    }
+  ],
+  "validation": {
+    "shape": "OK",
+    "cited_files_missing": 0,
+    "record_leakage_shared_4grams": 0,
+    "leaked": false
+  },
+  "note": "The scout ran in a tree with no .git, so the record history and refs/notes/commitlore were not there to be read. Its three needs share zero 4-word runs with the candidate's Ruled-out and Reason text, and every file it cited exists in the tree it was given. The needs land in the decision's neighbourhood -- one cites the very file the first Ruled-out line names -- without restating the ruling, which is the shape a usable task has to have.",
+  "what_this_does_not_show": "One candidate, one scout, one model. FUNCTIONAL-AUTHOR has not run, so no manifest pair exists and gate G3's ordering is still unproven end to end. A zero-overlap result also cannot rule out a paraphrase that shares no 4-word run."
+}

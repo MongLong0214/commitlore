@@ -94,6 +94,12 @@ import {
 } from "../bench/cdeb/freeze/effect-independence-v5.ts";
 import { analysisPreconditions, assertEnvelopeArtifactsAgree } from "../bench/cdeb/freeze/stage1-analysis-v5.ts";
 import {
+  MIN_NEEDS,
+  assertNeedScoutAnswer,
+  needScoutPrompt,
+  selectNeed,
+} from "../bench/cdeb/freeze/task-chain-v5.ts";
+import {
   assertSandboxIsRecordBlind,
   materializeRecordBlindTree,
   scanForRecordLeaks,
@@ -1182,6 +1188,63 @@ describe("the record-blind sandbox", () => {
     expect(screen).toContain("34             0");
     expect(screen).toContain("no reviewer read the current code or ran a test");
     expect(screen).toContain("What this does not establish");
+  });
+});
+
+describe("the record-blind task-author chain", () => {
+  const answer = (): { candidate_id: string; needs: { need_id: string; summary: string; tree_evidence: string[]; rationale: string }[] } => ({
+    candidate_id: "v4-0000000000000000",
+    needs: [
+      { need_id: "a", summary: "The loader assumes every entry is a readable file.", tree_evidence: ["src/load.ts"], rationale: "r" },
+      { need_id: "b", summary: "The case table covers six of the eight declared reports.", tree_evidence: ["spec.json"], rationale: "r" },
+    ],
+  });
+  const request = { candidate_id: "v4-0000000000000000", repository_id: "gitseed", sandbox_dir: "/tmp/x", tree_digest: "0".repeat(64), path_scope: ["src/load.ts"], prompt: "" };
+
+  it("asks for maintenance work without mentioning that a decision exists", () => {
+    const prompt = needScoutPrompt(["src/load.ts", "spec.json"]);
+    expect(prompt).toContain("src/load.ts");
+    // A scout told "there is a ruling here you must not see" writes around the
+    // shape of the thing it was told about.
+    for (const word of ["decision", "record", "ruled out", "Record-Id", "CommitLore"]) {
+      expect(prompt.toLowerCase()).not.toContain(word.toLowerCase());
+    }
+  });
+
+  it("refuses a need with no tree evidence, and a wrong count", () => {
+    expect(MIN_NEEDS).toBe(2);
+    expect(() => {
+      assertNeedScoutAnswer(request, answer());
+    }).not.toThrow();
+    const noEvidence = answer();
+    noEvidence.needs[0]!.tree_evidence = [];
+    expect(() => {
+      assertNeedScoutAnswer(request, noEvidence);
+    }).toThrow(/cites no file/);
+    expect(() => {
+      assertNeedScoutAnswer(request, { ...answer(), needs: answer().needs.slice(0, 1) });
+    }).toThrow(/produced 1 needs/);
+  });
+
+  it("selects a need from the seed alone, and the seed moves the choice", () => {
+    const chosen = selectNeed("seed-one", answer());
+    expect(selectNeed("seed-one", answer()).need_id).toBe(chosen.need_id);
+    const seeds = ["s1", "s2", "s3", "s4", "s5", "s6"].map((seed) => selectNeed(seed, answer()).need_id);
+    // Deterministic per seed, but not constant across seeds -- otherwise the
+    // "external seed" is decoration and the first need always wins.
+    expect(new Set(seeds).size).toBeGreaterThan(1);
+  });
+
+  it("records a first run in which the scout saw no record and repeated none", () => {
+    const evidence = JSON.parse(
+      readFileSync(join(R1, "evidence", "need-scout-first-run.json"), "utf8"),
+    ) as Record<string, unknown>;
+    const sandbox = evidence.sandbox as Record<string, unknown>;
+    const validation = evidence.validation as Record<string, unknown>;
+    expect(sandbox.git_metadata_present).toBe(false);
+    expect(validation.record_leakage_shared_4grams).toBe(0);
+    expect(validation.cited_files_missing).toBe(0);
+    expect((evidence.needs as unknown[]).length).toBe(3);
   });
 });
 
