@@ -36,7 +36,14 @@
     "agent-operator-score": {
       "command": "node --test --test-name-pattern doctor-contract",
       "cwd": "packages/schema",
-      "install": "none"
+      "install": "none",
+      "excluded": [
+        "tests/planning-contract.test.mjs::planning contract validator reports the truthful structural census",
+        "tests/planning-contract.test.mjs::D0 identity control-plane paths are allowed while unrelated source is rejected",
+        "tests/planning-contract.test.mjs::banned-wording-guard-is-load-bearing",
+        "tests/planning-contract.test.mjs::banned-wording-guard-covers-commit-messages"
+      ],
+      "why_excluded": "these resolve commits outside the sealed snapshot's reachable set; the bundle carries one ref and 429 reachable commits, so a reviewed_head on another branch is absent by construction and no patch can make it resolvable"
     },
     "gitseed": {
       "command": "python3 -m pytest -q",
@@ -61,6 +68,7 @@
         714,
         685
       ]
-    }
+    },
+    "_acceptance_runs_with_git_metadata": "Acceptance runs in a tree that has .git, as SSOT 11.3 requires. The record-blind sandbox with .git removed is for NEED-SCOUT and FUNCTIONAL-AUTHOR only; running acceptance there fails tests that shell out to git for reasons that belong to the sandbox rather than to the patch."
   }
 }
