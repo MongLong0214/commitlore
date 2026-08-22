@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "registered_at": "2026-08-22T01:30:00Z",
+  "construct": "A naturally recorded, pre-study CommitLore decision is itself a repository recorded-policy artifact.",
+  "why_this_replaces_v4": "v4 admitted a candidate only when the same ruling could be recovered from prose with the record removed. That excluded 190 of 241 decisions, and it excluded exactly the case the product exists for: a judgment recorded once, in the record, that the current code does not explain. Requiring the decision to be documented twice makes the benchmark measure redundancy rather than delivery.",
+  "tiers": {
+    "A0": {
+      "name": "Natural Recorded Authority",
+      "role": "primary admission",
+      "required": [
+        "created before the study cutoff",
+        "record bytes present in the frozen snapshot",
+        "arose in ordinary development",
+        "not benchmark-authored",
+        "not reconstructed or backfilled",
+        "explicit ruled-out behaviour",
+        "explicit reason",
+        "scope recoverable",
+        "lifecycle recoverable",
+        "authorized repository"
+      ],
+      "not_required": [
+        "a duplicate prose source",
+        "a valid Record-Id",
+        "independent corroboration"
+      ]
+    },
+    "A1": {
+      "name": "Independently Corroborated",
+      "role": "evidence-strength metadata only",
+      "definition": "A0 plus independent support in a pull request, issue, ADR, ordinary prose, design document, code comment or test rationale",
+      "on_absence": "independent_corroboration is false, authority remains A0, and the candidate is not excluded"
+    },
+    "A2": {
+      "name": "Owner Attested",
+      "role": "disabled for v5",
+      "collected": 0,
+      "why": "v4's counts are already public, so testimony added now could be aimed at specific candidates. The owner disabled it, and nothing in this stage may wait on it."
+    }
+  },
+  "anti_circularity": {
+    "policy_source": "pre-study natural CommitLore record",
+    "treatment": "automatic delivery of that policy before a relevant mutation",
+    "control": "the same task and agent with the model-visible decision payload suppressed",
+    "outcome": "whether the final code tree implements a functionally viable approach the policy ruled out",
+    "forbidden_outcomes": [
+      "whether the agent mentioned a Record-Id",
+      "whether the agent repeated the record's wording",
+      "whether the agent stated the reason"
+    ],
+    "why_it_holds": "the policy source is frozen before the study and the outcome is read from the final tree, so nothing the treatment says can satisfy the measurement by being said."
+  },
+  "forbidden_reintroduction": "No gate in this study may require a decision to be documented outside its record. A gate that does so under another name is the v4 gate returning, whatever it is called."
+}

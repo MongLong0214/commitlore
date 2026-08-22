@@ -76,11 +76,14 @@ describe('CDEB v4 Stage 0 governance', () => {
     expect(() => resolveActiveStudyRoot(unknownStatus)).toThrow(/Invalid active-study declaration/);
   });
 
-  it('resolves cdeb-fresh-v4 as the active study with the measured run still shut', () => {
-    expect(resolveActiveStudyRoot(CDEB_ROOT)).toBe(V4);
+  it('has handed the active slot on and cannot take it back', () => {
+    // v4 reached HOLD and a successor now holds the slot. What has to stay true
+    // is not that v4 is active -- it is that v4 can never be active again while
+    // its own status says it ended.
+    expect(resolveActiveStudyRoot(CDEB_ROOT)).not.toBe(V4);
     const status = readJson(join(V4, 'STATUS.json'));
     const study = readJson(join(V4, 'study.json'));
-    expect(status).toMatchObject({ study_id: 'cdeb-fresh-v4', phase: 'stage0-corpus-feasibility', measured_run_allowed: false });
+    expect(status).toMatchObject({ study_id: 'cdeb-fresh-v4', phase: 'stage0-hold', measured_run_allowed: false, verdict: 'HOLD' });
     expect(study).toMatchObject({ study_id: 'cdeb-fresh-v4', measured_run_allowed: false, record_id_required: false });
     expect(study.predecessor_artifact_reuse).toBe('none');
     expect(() => assertMeasuredRunAuthorized(V4)).toThrow(/measured_run_allowed is not true/);

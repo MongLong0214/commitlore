@@ -1,0 +1,21 @@
+{
+  "study_id": "cdeb-fresh-v5",
+  "schema_version": 1,
+  "phase": "stage0-authority-corpus-feasibility",
+  "measured_run_allowed": false,
+  "construct": "A naturally recorded, pre-study CommitLore decision is itself a repository recorded-policy artifact.",
+  "primary_admission_authority": "A0",
+  "owner_testimony": "disabled",
+  "record_id_required": false,
+  "independent_corroboration_required": false,
+  "predecessors": ["cdeb-fresh-v3", "cdeb-fresh-v3r1", "cdeb-fresh-v4"],
+  "predecessor_status": "v3 and v3r1 invalidated; v4 stage0-hold. None resumable, no measured data in any.",
+  "predecessor_artifact_reuse": "infrastructure code only, after verification; no qualification outcome, reviewer verdict, task, gold, oracle, trajectory or result row",
+  "product_release_tag": "v1.2.0",
+  "product_release_commit": "90a8b212e1db70cccf69fbf48415b9c036b2d854",
+  "product_dist_sha256": "318e16612206ae0aa3732033127b2937276ce2f142872c33a91ec04a33133b91",
+  "study_cutoff": "2026-08-20T22:08:19Z",
+  "stage0_survey_repositories": ["gitseed", "agent-operator-score", "logic-pro-mcp", "agent-control-plane"],
+  "fixed_repository_set": null,
+  "created_at": "2026-08-22T01:30:00Z"
+}
