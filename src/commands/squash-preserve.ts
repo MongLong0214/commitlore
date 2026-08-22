@@ -236,6 +236,30 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
     };
   }
 
+  // What a multi-block draft costs, said out loud (#833).
+  //
+  // git decides a commit's trailers by reading only the last paragraph, so a
+  // draft carrying one block per inherited record leaves every block but the
+  // last outside what `git interpret-trailers` and `git log --format=%(trailers)`
+  // will report. CommitLore itself is unaffected -- `parseRecordBlocks` walks
+  // every paragraph and recovers all of them, which is the whole point of the
+  // SPEC §2.4 grammar and is what the D3 repair relies on.
+  //
+  // So this warns rather than refusing. Refusing would disable the repair for
+  // the common case -- most branches carry more than one record -- to prevent a
+  // loss that is real for other tooling and not for this one. What the report
+  // asked for is that it stop being silent: the draft reads correctly, and
+  // `commitlore validate` does not object, so nothing else says it.
+  const multiBlockNotice =
+    input.messageFile === undefined || plan.blocks.length <= 1
+      ? ''
+      : `${PREFIX} ${input.messageFile} will carry ${String(plan.blocks.length)} record blocks in ` +
+        `${String(plan.blocks.length)} paragraphs. git reads only the last paragraph as a commit's ` +
+        `trailers, so ${String(plan.blocks.length - 1)} of them will be ordinary prose to ` +
+        `git-native tooling once the merge commit exists; CommitLore reads all of them. Pass ` +
+        `--target <sha> as well to mirror every record onto the notes ref, which git does not ` +
+        `parse as a trailer block.\n`;
+
   const applied: Applied = { messageFile: null, target: null };
   try {
     if (input.target !== undefined) {
@@ -250,14 +274,14 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
       applied.messageFile = input.messageFile;
     }
   } catch (error) {
-    return { code: 2, stdout: '', stderr: `${warnings}${PREFIX} ${messageOf(error)}\n`, plan };
+    return { code: 2, stdout: '', stderr: `${warnings}${multiBlockNotice}${PREFIX} ${messageOf(error)}\n`, plan };
   }
 
   if (input.json === true) {
     return {
       code: 0,
       stdout: `${JSON.stringify({ range, ...plan, skippedRecordIds, applied }, null, 2)}\n`,
-      stderr: warnings,
+      stderr: `${warnings}${multiBlockNotice}`,
       plan,
     };
   }
@@ -279,7 +303,7 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
     };
   }
 
-  return { code: 0, stdout: '', stderr: `${warnings}${summary} — wrote ${wrote.join(' and ')}\n`, plan };
+  return { code: 0, stdout: '', stderr: `${warnings}${multiBlockNotice}${summary} — wrote ${wrote.join(' and ')}\n`, plan };
 };
 
 /** Commander's parsed flags for this command. */

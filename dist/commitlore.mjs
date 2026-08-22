@@ -36173,6 +36173,8 @@ var runSquashPreserve = (input = {}) => {
       plan
     };
   }
+  const multiBlockNotice = input.messageFile === void 0 || plan.blocks.length <= 1 ? "" : `${PREFIX4} ${input.messageFile} will carry ${String(plan.blocks.length)} record blocks in ${String(plan.blocks.length)} paragraphs. git reads only the last paragraph as a commit's trailers, so ${String(plan.blocks.length - 1)} of them will be ordinary prose to git-native tooling once the merge commit exists; CommitLore reads all of them. Pass --target <sha> as well to mirror every record onto the notes ref, which git does not parse as a trailer block.
+`;
   const applied = { messageFile: null, target: null };
   try {
     if (input.target !== void 0) {
@@ -36187,7 +36189,7 @@ var runSquashPreserve = (input = {}) => {
       applied.messageFile = input.messageFile;
     }
   } catch (error2) {
-    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf8(error2)}
+    return { code: 2, stdout: "", stderr: `${warnings}${multiBlockNotice}${PREFIX4} ${messageOf8(error2)}
 `, plan };
   }
   if (input.json === true) {
@@ -36195,7 +36197,7 @@ var runSquashPreserve = (input = {}) => {
       code: 0,
       stdout: `${JSON.stringify({ range, ...plan, skippedRecordIds, applied }, null, 2)}
 `,
-      stderr: warnings,
+      stderr: `${warnings}${multiBlockNotice}`,
       plan
     };
   }
@@ -36212,7 +36214,7 @@ var runSquashPreserve = (input = {}) => {
       plan
     };
   }
-  return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
+  return { code: 0, stdout: "", stderr: `${warnings}${multiBlockNotice}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
 var register24 = (program3) => {
