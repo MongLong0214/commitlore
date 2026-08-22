@@ -143,10 +143,102 @@ export const materializeRecordBlindTree = (input: {
   }
 };
 
+/** What a sandbox discloses about one specific candidate. */
+export interface CandidateDisclosure {
+  readonly candidate_id: string;
+  /** The candidate's own Record-Id, found verbatim in a working file. */
+  readonly own_record_id_present: boolean;
+  /** Shared 5-word runs between the candidate's ruling and the tree. */
+  readonly ruling_overlap: number;
+  readonly disclosing_paths: readonly string[];
+  /** Record lines belonging to other candidates. Reported, not blocking. */
+  readonly other_record_lines: number;
+}
+
+const shingle = (text: string, size = 5): Set<string> => {
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter((word) => word !== "");
+  const out = new Set<string>();
+  for (let index = 0; index + size <= words.length; index += 1) out.add(words.slice(index, index + size).join(" "));
+  return out;
+};
+
+/**
+ * What the firewall is actually for: the author must not see **the decision the
+ * task is being built around**. A record belonging to a different candidate is
+ * a different question -- it matters when that candidate is built, and its own
+ * sandbox check is where it matters.
+ *
+ * `assertSandboxIsRecordBlind` blocks on any record line anywhere, which is the
+ * conservative reading and over-fires badly: two of the four corpus
+ * repositories carry a record line in an unrelated document, so the coarse rule
+ * disposes all 22 gitseed and all 10 agent-control-plane candidates and empties
+ * two fixed strata over documents that disclose nothing about the candidate in
+ * hand. This is the precise reading, and it is stricter where it counts -- it
+ * also catches a tree that discloses the ruling in prose without naming its id.
+ */
+export const disclosureForCandidate = (
+  sandbox: RecordBlindSandbox,
+  candidate: { readonly candidate_id: string; readonly record_id: string | null; readonly ruling_text: string },
+  files: readonly string[],
+): CandidateDisclosure => {
+  const ruling = shingle(candidate.ruling_text);
+  const disclosing: string[] = [];
+  let overlap = 0;
+  let ownId = false;
+  for (const file of files) {
+    if (!LIKELY_TEXT.test(file)) continue;
+    const full = join(sandbox.dir, file);
+    if (!existsSync(full) || statSync(full).size > 2 * 1024 * 1024) continue;
+    const text = readFileSync(full, "utf8");
+    const idHit =
+      candidate.record_id !== null && new RegExp(`Record-Id:\\s*${candidate.record_id}\\b`).test(text);
+    const treeShingles = shingle(text);
+    const shared = [...ruling].filter((run) => treeShingles.has(run)).length;
+    if (idHit || shared > 0) disclosing.push(file);
+    if (idHit) ownId = true;
+    overlap += shared;
+  }
+  return {
+    candidate_id: candidate.candidate_id,
+    own_record_id_present: ownId,
+    ruling_overlap: overlap,
+    disclosing_paths: disclosing,
+    other_record_lines: sandbox.leaks.length,
+  };
+};
+
+/** The per-candidate gate. Blocks on disclosure of *this* candidate's decision. */
+export const assertSandboxBlindForCandidate = (
+  sandbox: RecordBlindSandbox,
+  disclosure: CandidateDisclosure,
+): void => {
+  if (existsSync(join(sandbox.dir, ".git"))) {
+    throw new Error(`need-scout: ${sandbox.repository_id}'s sandbox still has a .git directory`);
+  }
+  if (disclosure.own_record_id_present) {
+    throw new Error(
+      `firewall: ${disclosure.candidate_id}'s own Record-Id appears in ${disclosure.disclosing_paths.join(", ")}, ` +
+        `so the author would read the decision the task is being built around`,
+    );
+  }
+  if (disclosure.ruling_overlap > 0) {
+    throw new Error(
+      `firewall: ${disclosure.candidate_id}'s ruling shares ${String(disclosure.ruling_overlap)} five-word run(s) ` +
+        `with ${disclosure.disclosing_paths.join(", ")}. The id is absent but the decision is legible`,
+    );
+  }
+};
+
 /**
  * A sandbox that still contains record content is not record-blind, whatever
- * was done to the history. This is the check that decides whether the chain may
- * run at all for a repository.
+ * was done to the history. Kept as the repository-level scan: it reports every
+ * record line in the tree, which is worth knowing even when none of them
+ * belongs to the candidate in hand.
  */
 export const assertSandboxIsRecordBlind = (sandbox: RecordBlindSandbox): void => {
   if (existsSync(join(sandbox.dir, ".git"))) {

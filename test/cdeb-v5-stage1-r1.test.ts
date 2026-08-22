@@ -102,7 +102,9 @@ import {
   selectNeed,
 } from "../bench/cdeb/freeze/task-chain-v5.ts";
 import {
+  assertSandboxBlindForCandidate,
   assertSandboxIsRecordBlind,
+  disclosureForCandidate,
   materializeRecordBlindTree,
   scanForRecordLeaks,
 } from "../bench/cdeb/freeze/need-scout-v5.ts";
@@ -1245,6 +1247,60 @@ describe("the record-blind sandbox", () => {
       ).toThrow(/not the frozen/);
     } finally {
       rmSync(source.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("separates a record that belongs to this candidate from one that does not", () => {
+    const sandbox = {
+      dir: mkdtempSync(join(tmpdir(), "cdeb-disc-")),
+      repository_id: "gitseed",
+      snapshot_commit: "0".repeat(40),
+      tree_digest: "0".repeat(64),
+      file_count: 2,
+      leaks: [{ path: "docs/adr/ADR-0008.md", marker: "Record-Id", line: "Record-Id: r-gsf501" }],
+    };
+    try {
+      // A document carrying somebody else's decision. It is reported, and it is
+      // not this candidate's; blocking on it would empty two fixed strata over
+      // documents that disclose nothing about the candidate in hand.
+      writeFileSync(join(sandbox.dir, "ADR-0008.md"), "Record-Id: r-gsf501\nthe python floor moves to 3.9\n", "utf8");
+      const clean = disclosureForCandidate(
+        sandbox,
+        { candidate_id: "v4-mine", record_id: "r-gsb108", ruling_text: "adding coverage gates or a badge" },
+        ["ADR-0008.md"],
+      );
+      expect(clean.own_record_id_present).toBe(false);
+      expect(clean.ruling_overlap).toBe(0);
+      expect(clean.other_record_lines).toBe(1);
+      expect(() => {
+        assertSandboxBlindForCandidate(sandbox, clean);
+      }).not.toThrow();
+
+      // The candidate's own id in the tree is a block.
+      writeFileSync(join(sandbox.dir, "mine.md"), "Record-Id: r-gsb108\n", "utf8");
+      const owned = disclosureForCandidate(
+        sandbox,
+        { candidate_id: "v4-mine", record_id: "r-gsb108", ruling_text: "adding coverage gates or a badge" },
+        ["ADR-0008.md", "mine.md"],
+      );
+      expect(() => {
+        assertSandboxBlindForCandidate(sandbox, owned);
+      }).toThrow(/own Record-Id appears/);
+
+      // And so is the ruling in prose without its id, which the coarse scan
+      // cannot see at all.
+      writeFileSync(join(sandbox.dir, "prose.md"), "we considered adding coverage gates or a badge and declined\n", "utf8");
+      const legible = disclosureForCandidate(
+        sandbox,
+        { candidate_id: "v4-mine", record_id: null, ruling_text: "adding coverage gates or a badge" },
+        ["prose.md"],
+      );
+      expect(legible.ruling_overlap).toBeGreaterThan(0);
+      expect(() => {
+        assertSandboxBlindForCandidate(sandbox, legible);
+      }).toThrow(/the decision is legible/);
+    } finally {
+      rmSync(sandbox.dir, { recursive: true, force: true });
     }
   });
 
