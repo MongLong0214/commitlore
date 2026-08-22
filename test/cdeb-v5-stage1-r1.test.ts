@@ -10,7 +10,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -151,9 +151,15 @@ describe("§19.3-4 the measured run stays shut", () => {
   });
 
   it("creates no directory a measured run would write outcomes into", () => {
-    for (const forbidden of ["tasks", "gold", "oracles", "pilot", "rows", "randomization", "episodes", "results"]) {
-      expect(existsSync(join(V5, forbidden))).toBe(false);
-      expect(existsSync(join(R1, forbidden))).toBe(false);
+    // The line to hold is between an instrument and an outcome. An oracle
+    // definition is an instrument and the PRD's section 17 requires it to
+    // exist before any episode; a row, an episode or a result is an outcome and
+    // must not exist at all. An earlier version of this test banned "oracles"
+    // along with the outcome directories, which would have made building the
+    // instrument look like running the study.
+    for (const forbidden of ["gold", "pilot", "rows", "randomization", "episodes", "results", "analysis-result.json"]) {
+      expect(existsSync(join(V5, forbidden)), forbidden).toBe(false);
+      expect(existsSync(join(R1, forbidden)), forbidden).toBe(false);
     }
   });
 
@@ -409,11 +415,32 @@ describe("§19.8 every BUILDABLE candidate has the required oracle controls", ()
     }).toThrow(/does not read the final tree/);
   });
 
-  it("has no oracle for any of the 62, which is why the census cannot close", () => {
-    expect(existsSync(join(R1, "oracles"))).toBe(false);
-    expect(readFileSync(join(R1, "STAGE1-PREREGISTRATION-r1.md"), "utf8")).toContain(
-      "No oracle exists for any candidate",
-    );
+  it("holds every oracle that exists to reading the final tree and nothing else", () => {
+    const dir = join(R1, "oracles");
+    if (!existsSync(dir)) return;
+    const candidates = readdirSync(dir).filter((name) => name.startsWith("v4-"));
+    expect(candidates.length).toBeGreaterThan(0);
+    for (const candidate of candidates) {
+      const source = readFileSync(join(dir, candidate, "oracle.py"), "utf8");
+      // It may read the tree. It may not read the arm, the transcript, the
+      // delivery log or a record citation -- each would let the treatment
+      // satisfy the measurement by arriving rather than by working.
+      for (const forbidden of ["arm", "transcript", "delivery_log", "record_id", "token_usage"]) {
+        expect(source.toLowerCase(), `${candidate} reads ${forbidden}`).not.toMatch(
+          new RegExp(`\\b${forbidden}\\b`),
+        );
+      }
+      // And its controls must be recorded with the acceptance each one produced.
+      const evidence = JSON.parse(
+        readFileSync(join(R1, "evidence", "first-functionally-passing-violation.json"), "utf8"),
+      ) as { controls: { kind: string; oracle_revival: boolean }[] };
+      const compliant = evidence.controls.filter((row) => row.kind === "compliant-passing");
+      const ruledOut = evidence.controls.filter((row) => row.kind === "ruled-out-passing");
+      expect(compliant.length).toBeGreaterThanOrEqual(2);
+      expect(ruledOut.length).toBeGreaterThanOrEqual(1);
+      expect(compliant.every((row) => row.oracle_revival === false)).toBe(true);
+      expect(ruledOut.every((row) => row.oracle_revival === true)).toBe(true);
+    }
   });
 });
 
