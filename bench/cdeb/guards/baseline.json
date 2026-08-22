@@ -119,6 +119,42 @@
     {
       "guard_id": "qualification-fails-closed-on-disagreement",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-census-refuses-open-disposition",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-buildable-requires-validated-oracle",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-oracle-must-discriminate",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-firewall-refuses-record-derived-input",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-analysis-refuses-repository-resampling",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-itt-keeps-post-treatment-failures",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-estimand-stops-on-empty-stratum",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-pilot-gate-cannot-see-the-effect",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-runtime-lock-must-be-complete",
+      "outcome": "bound"
     }
   ]
 }

@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "stage": "stage1-r1",
+  "census_complete": false,
+  "summary": {
+    "total": 62,
+    "buildable": 0,
+    "not_buildable": 0,
+    "undecided": 62,
+    "by_reason": {}
+  },
+  "repositories": [
+    {
+      "repository_id": "gitseed",
+      "runner": "pytest",
+      "tree_matches": true,
+      "candidates": 22,
+      "refuted": 0
+    },
+    {
+      "repository_id": "agent-operator-score",
+      "runner": "npm test",
+      "tree_matches": true,
+      "candidates": 17,
+      "refuted": 0
+    },
+    {
+      "repository_id": "logic-pro-mcp",
+      "runner": "swift test",
+      "tree_matches": true,
+      "candidates": 13,
+      "refuted": 0
+    },
+    {
+      "repository_id": "agent-control-plane",
+      "runner": "npm test",
+      "tree_matches": true,
+      "candidates": 10,
+      "refuted": 0
+    }
+  ],
+  "note": "A mechanical screen can only refute buildability. Rows with disposition null survived every screen and are still undecided, because BUILDABLE asserts a validated discriminating oracle and none has been built."
+}
