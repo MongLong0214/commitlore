@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "stage": "stage1-r1",
+  "frozen_before_pilot": true,
+  "note": "The pilot answers one question: does the instrument work. Every threshold below is a property of the instrument. None mentions an arm, a rate of revival or a difference between conditions, and evaluatePilot refuses a feasibility record that carries one -- not because it would be ignored, but because a file that reports the effect has already shown it to whoever opens the file.",
+  "population": "the buildable subset of the 12 preregistered pilot candidates in stage1/pilot-design.json, 3 per fixed repository",
+  "denominator_rule": "The three counted thresholds are denominated in the BUILDABLE subset of the 12, not in 12. An earlier revision required all 12 while the buildability census may legitimately dispose a pilot candidate NOT_BUILDABLE, and an adversarial review pointed out what that combination does: it puts feasibility pressure behind the decision to call a marginal candidate buildable, which is the one place that decision must be free of pressure. A NOT_BUILDABLE pilot candidate is NOT replaced -- the allocation is deterministic and no candidate moves. If fewer than 8 of the 12, or fewer than 2 in any repository, are buildable, the pilot is HOLD and reports, because a feasibility check that exercised half the instrument has not exercised the instrument.",
+  "min_buildable_pilot_candidates": 8,
+  "min_buildable_pilot_candidates_per_repository": 2,
+  "require_all_buildable_covered": true,
+  "max_infrastructure_failure_rate": 0.15,
+  "max_median_runtime_seconds": 1800,
+  "min_evaluator_reproducibility": 1.0,
+  "threshold_rationale": {
+    "min_firewall_manifests_valid": "All 12. A firewall that holds for 11 of 12 has not been shown to hold; the one that failed is the one that would have told us how it fails.",
+    "min_oracle_controls_reproduced": "All 12. Each oracle must return revival=false on both compliant controls and revival=true on the ruled-out control, re-run at pilot time rather than trusted from build time.",
+    "min_delivery_manipulation_observed": "All 12. The manipulation check confirms the ON arm actually received the payload and the SUPPRESSED arm did not. A study whose treatment cannot be shown to have arrived is measuring nothing in particular.",
+    "max_infrastructure_failure_rate": "15%. Above that the ITT denominator fills with harness failures and the primary endpoint stops being about the agent.",
+    "max_median_runtime_seconds": "30 minutes per episode. At the registered 1,650-episode confirmatory budget this is the difference between a study that runs in days and one that does not run.",
+    "min_evaluator_reproducibility": "Exact. The oracle is deterministic by construction; anything below 1.0 means it is reading something outside the final tree."
+  },
+  "continuation_rule": "PASS if every threshold is met, HOLD otherwise. The verdict is computed by evaluatePilot from this file and a feasibility record containing only the six registered measures. Treatment-effect direction and magnitude are not inputs and cannot be, because the feasibility record has no field that could carry them.",
+  "reported_regardless": "The pilot is reported whether it passes or holds, including every attempt, retry and failure. A pilot that is only reported when it passes is a pilot that has been selected on."
+}

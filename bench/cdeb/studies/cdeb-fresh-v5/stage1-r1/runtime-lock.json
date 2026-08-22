@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "stage": "stage1-r1",
+  "status": "NOT-FROZEN",
+  "frozen_at": null,
+  "arm_difference": "automatic-model-visible-commitlore-delivery",
+  "note": "Every field is null and assertRuntimeLockComplete throws on this file. That is the artifact's current, accurate state: the agent under test has not been chosen, so there is nothing to pin. A lock filled with plausible placeholders would be worse than an empty one -- it would read as a pinned runtime while pinning nothing. The values below are supplied by the owner at execution approval, not inferred here.",
+  "fields": {
+    "model_id": null,
+    "agent_harness": null,
+    "agent_harness_version": null,
+    "system_prompt_digest": null,
+    "tools_enabled": null,
+    "permission_mode": null,
+    "container_image_digest": null,
+    "base_commit_per_repository": null,
+    "context_policy": null,
+    "cache_policy": null,
+    "budget_wall_clock_seconds": null,
+    "budget_tokens": null,
+    "fresh_session_rule": null,
+    "worktree_rule": null,
+    "commitlore_release": null,
+    "hook_configuration_digest": null,
+    "execution_scheduler": null
+  },
+  "field_notes": {
+    "base_commit_per_repository": "Already determined and verifiable: the four sealed snapshot commits in corpus/snapshots.json. It stays null here so the lock is frozen as one object at one moment rather than accreting.",
+    "commitlore_release": "The shipping release whose hook performs the delivery. Both arms run the same release; the suppressed arm suppresses the model-visible payload, it does not run a different build.",
+    "execution_scheduler": "Block-randomized across repository, candidate and arm per randomization-plan.json, so service and load drift cannot align with an arm.",
+    "system_prompt_digest": "sha256 of the exact system prompt bytes. The digest is the locked value; the prompt itself is study material, not a value this file carries."
+  }
+}

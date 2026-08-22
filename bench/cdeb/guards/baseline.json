@@ -119,6 +119,90 @@
     {
       "guard_id": "qualification-fails-closed-on-disagreement",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-census-refuses-open-disposition",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-buildable-requires-validated-oracle",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-oracle-must-discriminate",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-firewall-refuses-record-derived-input",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-analysis-refuses-repository-resampling",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-itt-keeps-post-treatment-failures",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-estimand-stops-on-empty-stratum",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-pilot-gate-cannot-see-the-effect",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-runtime-lock-must-be-complete",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-controls-are-distinct-trees",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-exclusion-needs-evidence",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-itt-refuses-duplicate-observation",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-bootstrap-represents-repeat-noise",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-nondegradation-weights-repositories-equally",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-runtime-lock-catches-common-drift",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-envelope-holds-rather-than-lowers-the-target",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-firewall-covers-the-prose-inputs",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-nondegradation-uses-a-confidence-bound",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-repeat-rule-matches-the-ssot",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-envelope-artifacts-agree",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-sizing-takes-no-pilot-input",
+      "outcome": "bound"
     }
   ]
 }

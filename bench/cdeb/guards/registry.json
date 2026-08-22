@@ -406,6 +406,342 @@
           "test_name": "treats a missing reviewer verdict as a failure, never as a pass"
         }
       ]
+    },
+    {
+      "guard_id": "stage1-r1-census-refuses-open-disposition",
+      "claim": "A buildability census with any undecided candidate cannot fix the study population.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "throws while any disposition is still open, and tracks the census rather than a snapshot of it",
+      "mutations": [
+        {
+          "mutation_id": "undecided-candidates-are-tolerated",
+          "file": "bench/cdeb/freeze/buildability-v5.ts",
+          "find": "  const undecided = rows.filter((row) => row.disposition === null).map((row) => row.candidate_id);",
+          "replace": "  const undecided: string[] = [];",
+          "must_fail_test": true,
+          "why": "An unfinished census would read as a fixed population and a pilot could start against it."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-buildable-requires-validated-oracle",
+      "claim": "BUILDABLE cannot be claimed for a candidate whose oracle controls were never validated.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses BUILDABLE without validated oracle controls",
+      "mutations": [
+        {
+          "mutation_id": "buildable-without-controls-is-accepted",
+          "file": "bench/cdeb/freeze/buildability-v5.ts",
+          "find": "    .filter((row) => row.disposition === BUILDABLE && !validatedCandidateIds.has(row.candidate_id))",
+          "replace": "    .filter(() => false)",
+          "must_fail_test": true,
+          "why": "A candidate could enter the corpus asserting an oracle that does not exist."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-oracle-must-discriminate",
+      "claim": "An oracle that answers the same for a compliant and a ruled-out patch cannot measure revival.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses an oracle that always answers the same, in either direction",
+      "mutations": [
+        {
+          "mutation_id": "non-discriminating-oracle-passes",
+          "file": "bench/cdeb/freeze/oracle-v5.ts",
+          "find": "  const result = oracleDiscrimination(spec);\n  if (result.discriminates) return;",
+          "replace": "  const result = oracleDiscrimination(spec);\n  if (true) return;",
+          "must_fail_test": true,
+          "why": "An always-no oracle is deterministic and would score every revival as compliant."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-firewall-refuses-record-derived-input",
+      "claim": "A task author given the record, its reason or its anchor makes the task a description of the record.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a task author who was shown the record",
+      "mutations": [
+        {
+          "mutation_id": "record-derived-task-inputs-are-accepted",
+          "file": "bench/cdeb/freeze/firewall-v5.ts",
+          "find": "    if (FORBIDDEN_SET.has(key)) {",
+          "replace": "    if (false) {",
+          "must_fail_test": true,
+          "why": "The anti-circularity argument rests entirely on the task being authored off the record."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-analysis-refuses-repository-resampling",
+      "claim": "The four fixed repositories are strata, not a sample, and resampling them yields an interval about a population never sampled.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "resamples candidates within fixed repositories and never the repositories",
+      "mutations": [
+        {
+          "mutation_id": "repository-bootstrap-is-allowed",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "  if (unit === \"repository\" || unit === \"repositories\" || unit === \"stratum\" || unit === \"strata\") {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "This is the exact defect that invalidated the Stage 1 draft's interval."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-itt-keeps-post-treatment-failures",
+      "claim": "An assigned episode that did not complete stays in the denominator as a failure.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses an analysis set that dropped an assigned episode",
+      "mutations": [
+        {
+          "mutation_id": "dropped-assigned-episodes-are-tolerated",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "  const dropped = assigned.filter((row) => !analysedKeys.has(episodeKey(row)));",
+          "replace": "  const dropped: AssignedEpisode[] = [];",
+          "must_fail_test": true,
+          "why": "Removing arm-dependent failures lets a treatment that prevents completion score as preventing revival."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-estimand-stops-on-empty-stratum",
+      "claim": "An equal-weight average over four fixed strata is undefined when one is empty, and that is a stop.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "weights the four repositories equally and stops on an empty stratum",
+      "mutations": [
+        {
+          "mutation_id": "empty-stratum-is-silently-skipped",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "    if (inRepository.length === 0) {\n      throw new Error(",
+          "replace": "    if (false) {\n      throw new Error(",
+          "must_fail_test": true,
+          "why": "v3r1 failed on empty strata; silently averaging over the survivors changes the estimand without saying so."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-pilot-gate-cannot-see-the-effect",
+      "claim": "Pilot continuation cannot read treatment-effect direction or magnitude.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "gates the pilot on feasibility alone and refuses a record carrying an effect",
+      "mutations": [
+        {
+          "mutation_id": "effect-bearing-feasibility-is-accepted",
+          "file": "bench/cdeb/freeze/effect-independence-v5.ts",
+          "find": "    if (namesAnEffect(key) || key.toLowerCase().includes(\"dsfps\") || key.toLowerCase().includes(\"revival\")) {",
+          "replace": "    if (false) {",
+          "must_fail_test": true,
+          "why": "A feasibility file that reports the effect has already shown it to whoever decides to continue."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-runtime-lock-must-be-complete",
+      "claim": "An unset runtime field is an uncontrolled difference between the arms.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "accepts a fully pinned lock and refuses an unregistered field",
+      "mutations": [
+        {
+          "mutation_id": "unregistered-runtime-field-is-accepted",
+          "file": "bench/cdeb/freeze/runtime-lock-v5.ts",
+          "find": "  const extra = Object.keys(lock.fields).filter((field) => !known.has(field));",
+          "replace": "  const extra: string[] = [];",
+          "must_fail_test": true,
+          "why": "An unregistered knob is an unaudited difference the arms could carry."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-controls-are-distinct-trees",
+      "claim": "Two oracle controls cannot share a patch or a final tree, because a tree-reading oracle cannot answer differently for the same tree.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses two controls that share a patch or a tree",
+      "mutations": [
+        {
+          "mutation_id": "identical-control-trees-are-accepted",
+          "file": "bench/cdeb/freeze/oracle-v5.ts",
+          "find": "      if (ids.length > 1) {",
+          "replace": "      if (false) {",
+          "must_fail_test": true,
+          "why": "A matrix declaring contradictory verdicts for one tree reports declarations rather than a replay."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-exclusion-needs-evidence",
+      "claim": "A NOT_BUILDABLE disposition whose justification is only its label is a builder's decision to stop trying.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a NOT_BUILDABLE row whose justification is only its label",
+      "mutations": [
+        {
+          "mutation_id": "evidence-free-exclusion-is-accepted",
+          "file": "bench/cdeb/freeze/buildability-v5.ts",
+          "find": "    if (row.disposition !== null && row.disposition !== BUILDABLE && (row.evidence ?? \"\").trim() === \"\") {",
+          "replace": "    if (false) {",
+          "must_fail_test": true,
+          "why": "A builder who knows the records could stop trying on the decisions expected to show little benefit."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-itt-refuses-duplicate-observation",
+      "claim": "An assigned episode cannot carry two observations; a retry cannot overwrite the failure it followed.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a second observation of one assigned episode, and a wrong repository label",
+      "mutations": [
+        {
+          "mutation_id": "retry-overwrites-the-failure",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "    if (byKey.has(key)) {\n      throw new Error(",
+          "replace": "    if (false) {\n      throw new Error(",
+          "must_fail_test": true,
+          "why": "Last-write-wins erases treatment failures while leaving every assigned key present, invisible to the drop check."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-bootstrap-represents-repeat-noise",
+      "claim": "The interval represents within-candidate repeat noise as well as between-candidate spread, so agreeing candidates do not collapse it to zero width.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "does not collapse the interval when every candidate agrees",
+      "mutations": [
+        {
+          "mutation_id": "repeats-are-not-resampled",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "        sum += drawMean(cluster.on, random) - drawMean(cluster.suppressed, random);",
+          "replace": "        sum += mean(cluster.on) - mean(cluster.suppressed);",
+          "must_fail_test": true,
+          "why": "Resampling only candidate point estimates reported a zero-width interval and declared superiority."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-nondegradation-weights-repositories-equally",
+      "claim": "Completion and functional-pass margins are judged under the same equal-repository weighting as the primary endpoint.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "does not let three large repositories mask a completion collapse in a small one",
+      "mutations": [
+        {
+          "mutation_id": "nondegradation-pools-across-repositories",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "    const interval = stratifiedBootstrap(clusters, fixedRepositories, options);",
+          "replace": "    const interval = stratifiedBootstrap(clusters.map((cluster) => ({ ...cluster, repository_id: \"pooled\" })), [\"pooled\"], options);",
+          "must_fail_test": true,
+          "why": "Pooling lets three large repositories dilute a completion collapse confined to a small one -- measured at -1.6 points against a true -25."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-runtime-lock-catches-common-drift",
+      "claim": "An episode is compared to the freeze itself, so both arms drifting together is still caught.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "catches both arms drifting together away from the freeze",
+      "mutations": [
+        {
+          "mutation_id": "episode-is-not-compared-to-the-freeze",
+          "file": "bench/cdeb/freeze/runtime-lock-v5.ts",
+          "find": "  const drift = RUNTIME_LOCK_FIELDS.filter(\n    (field) => JSON.stringify(lock.fields[field]) !== JSON.stringify(episode[field]),\n  );",
+          "replace": "  const drift: RuntimeLockField[] = [];",
+          "must_fail_test": true,
+          "why": "A rolled-forward hosted model moves both arms together and an arm-versus-arm comparison sees two equal objects."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-envelope-holds-rather-than-lowers-the-target",
+      "claim": "An envelope that cannot detect the registered minimum important effect is a HOLD, never a reason to lower the effect.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "holds rather than lowering the important effect the envelope cannot reach",
+      "mutations": [
+        {
+          "mutation_id": "underpowered-envelope-is-certified",
+          "file": "bench/cdeb/freeze/effect-independence-v5.ts",
+          "find": "  if (detectable > input.minimum_important_effect) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "Certifying an envelope that detects 17.2 points against a 15-point target presents a positive result with power it does not have."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-firewall-covers-the-prose-inputs",
+      "claim": "The maintenance need and acceptance criteria must be produced by someone declared record-blind, not merely handed over by one.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a task whose maintenance need came from someone who read the record",
+      "mutations": [
+        {
+          "mutation_id": "prose-input-producer-is-unchecked",
+          "file": "bench/cdeb/freeze/firewall-v5.ts",
+          "find": "    if (producer === undefined) {",
+          "replace": "    if (false) {",
+          "must_fail_test": true,
+          "why": "A record-aware coordinator can paraphrase the ruled-out approach into the maintenance need and the key-name check stays clean."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-nondegradation-uses-a-confidence-bound",
+      "claim": "The noninferiority margin is judged against a confidence bound, so an imprecise estimate just above the margin does not pass.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "judges the margin on the confidence bound, not the point estimate",
+      "mutations": [
+        {
+          "mutation_id": "margin-compared-to-the-point-estimate",
+          "file": "bench/cdeb/freeze/analysis-v5.ts",
+          "find": "    return { point: interval.point, lower: interval.lower, margin, holds: interval.lower >= margin };",
+          "replace": "    return { point: interval.point, lower: interval.lower, margin, holds: interval.point >= margin };",
+          "must_fail_test": true,
+          "why": "A point estimate of -3.1 points clears a -5 margin while its bound reaches -7.8."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-repeat-rule-matches-the-ssot",
+      "claim": "Repeats follow the SSOT 9.2 table over the buildable count, and fall to HOLD outside its branches.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "runs the section 9.3 gate and the repeat rule as committed",
+      "mutations": [
+        {
+          "mutation_id": "repeat-rule-branch-widened",
+          "file": "bench/cdeb/freeze/effect-independence-v5.ts",
+          "find": "  if (buildableTotal >= 24) return 6;\n  return \"HOLD\";",
+          "replace": "  if (buildableTotal >= 24) return 6;\n  return 6;",
+          "must_fail_test": true,
+          "why": "A corpus below the registered floor would be run at the smallest branch instead of stopping."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-envelope-artifacts-agree",
+      "claim": "Every artifact that restates a registered envelope figure restates the same one.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "holds the committed artifacts to one envelope",
+      "mutations": [
+        {
+          "mutation_id": "restatement-drift-is-tolerated",
+          "file": "bench/cdeb/freeze/stage1-analysis-v5.ts",
+          "find": "      if (![4, 5, 6].includes(stated) && !narrating) {",
+          "replace": "      if (false) {",
+          "must_fail_test": true,
+          "why": "Four frozen artifacts once stated a superseded envelope while the rule stated another, leaving a reader free to quote whichever suits."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-sizing-takes-no-pilot-input",
+      "claim": "The sizing step accepts no input from the pilot at all, not merely no effect-named input.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses every sizing input, because section 9 takes none",
+      "mutations": [
+        {
+          "mutation_id": "nuisance-channel-reopened",
+          "file": "bench/cdeb/freeze/effect-independence-v5.ts",
+          "find": "    throw new Error(\n      `power-rule: sizing input \"${key}\" is not permitted. Section 9 sizes the study from the buildable count ` +\n        `alone, so the sizing step takes no input from the pilot`,\n    );",
+          "replace": "    void key;",
+          "must_fail_test": true,
+          "why": "A channel that carries a nuisance parameter is a channel that can carry the effect under a neutral name."
+        }
+      ]
     }
   ]
 }
