@@ -30,6 +30,11 @@
     "bench:m5": "node --experimental-strip-types bench/m5-analysis.ts",
     "bench:cdeb:verify": "node bench/cdeb/verify.mjs && npm run bench:cdeb:evidence-matrix",
     "bench:cdeb:evidence-matrix": "node scripts/render-evidence-matrix.mjs --check --input bench/cdeb/studies/cdeb-fresh-v3r1/literature/evidence-matrix.json --output bench/cdeb/studies/cdeb-fresh-v3r1/literature/evidence-matrix.md",
+    "bench:cdeb:v4:census": "node --experimental-strip-types bench/cdeb/freeze/census-v4.ts --study-root bench/cdeb/studies/cdeb-fresh-v4",
+    "bench:cdeb:v4:rulings": "node --experimental-strip-types bench/cdeb/freeze/rulings-v4.ts --study-root bench/cdeb/studies/cdeb-fresh-v4",
+    "bench:cdeb:v4:provenance": "node --experimental-strip-types bench/cdeb/freeze/provenance-v4.ts --study-root bench/cdeb/studies/cdeb-fresh-v4",
+    "bench:cdeb:v4:qualify": "node --experimental-strip-types bench/cdeb/freeze/qualify-v4.ts --study-root bench/cdeb/studies/cdeb-fresh-v4",
+    "bench:cdeb:v4:result": "node scripts/render-stage0-result.mjs --check --study-root bench/cdeb/studies/cdeb-fresh-v4",
     "bench:cdeb:analyze": "node --experimental-strip-types bench/cdeb/analyze.ts",
     "bench:cdeb:registry": "node --experimental-strip-types bench/cdeb/freeze/candidate-registry.ts"
   },

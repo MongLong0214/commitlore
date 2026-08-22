@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v4",
+  "measured_product_effect_rows": 0,
+  "thresholds": {
+    "minEligibleRepositories": 3,
+    "minQualifiedPerRepository": 12,
+    "minTotalQualified": 48
+  },
+  "verdict": {
+    "verdict": "HOLD",
+    "eligible_repositories": 0,
+    "total_qualified": 6,
+    "recommended_fixed_set": [],
+    "unmet": [
+      "eligible repositories 0 < 3",
+      "total qualified 6 < 48"
+    ],
+    "delivery_observable_with_identity": true,
+    "delivery_observable_without_identity": true
+  },
+  "reviewer_agreement_by_gate": [
+    {
+      "gate": "G2",
+      "compared": 207,
+      "agreed": 188,
+      "rate": 0.9082125603864735
+    },
+    {
+      "gate": "G3",
+      "compared": 207,
+      "agreed": 153,
+      "rate": 0.7391304347826086
+    },
+    {
+      "gate": "G4",
+      "compared": 207,
+      "agreed": 189,
+      "rate": 0.9130434782608695
+    },
+    {
+      "gate": "G5",
+      "compared": 207,
+      "agreed": 193,
+      "rate": 0.9323671497584541
+    },
+    {
+      "gate": "G7",
+      "compared": 207,
+      "agreed": 205,
+      "rate": 0.9903381642512077
+    }
+  ],
+  "reviewer_quote_concordance": {
+    "pairs": 159,
+    "mean_jaccard": 0.5707922950153806,
+    "near_identical": 72
+  },
+  "quote_overlap_floor": 0.34,
+  "quote_overlap_sensitivity": [
+    {
+      "floor": 0.2,
+      "would_pass": 46
+    },
+    {
+      "floor": 0.25,
+      "would_pass": 39
+    },
+    {
+      "floor": 0.3,
+      "would_pass": 24
+    },
+    {
+      "floor": 0.333,
+      "would_pass": 24
+    },
+    {
+      "floor": 0.34,
+      "would_pass": 17
+    },
+    {
+      "floor": 0.4,
+      "would_pass": 17
+    },
+    {
+      "floor": 0.5,
+      "would_pass": 14
+    }
+  ],
+  "exclusion_reasons": {
+    "insufficient-provenance": 190,
+    "source-packet-empty": 33,
+    "reason-obvious-from-code": 7,
+    "wrong-path-not-functionally-viable": 3,
+    "shipping-content-not-observable": 1,
+    "scope-unresolvable": 1
+  },
+  "identity_composition": {
+    "qualified_total": 6,
+    "qualified_with_identity": 3,
+    "qualified_without_identity": 3,
+    "enumerated_with_identity": 143,
+    "enumerated_without_identity": 98
+  }
+}

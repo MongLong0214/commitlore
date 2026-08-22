@@ -1,0 +1,503 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v4",
+  "deviation_id": "CDEB-V4-G2-DIFF-ROBUSTNESS-ARM",
+  "question": "Does showing the reviewer the commit's diff, as well as its message, recover the rejected alternative that the message alone did not?",
+  "sample": {
+    "size": 60,
+    "per_repository": 15,
+    "selection": "the first 15 candidates by candidate_id within each repository; candidate_id derives from the decision audit anchor, so the order is independent of content, date and author"
+  },
+  "result": {
+    "paired": 60,
+    "both_found_a_rejection": 55,
+    "diff_arm_pass": 8,
+    "primary_arm_pass": 6,
+    "diff_arm_rate": 0.133,
+    "primary_arm_rate": 0.1
+  },
+  "reading": "Adding the diff moves the pass rate by three points on the same candidates. The narrow packet is not why G2 fails; the rejected alternative is not written outside the record.",
+  "status": "robustness only; this arm does not feed the Stage 0 verdict",
+  "rows": [
+    {
+      "candidate_id": "v4-002ffd1e428c572a",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.333,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-00b9b5b83c4ddf87",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.5,
+      "diff_arm_pass": true,
+      "primary_arm_pass": true
+    },
+    {
+      "candidate_id": "v4-00efc0041ed3118a",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.2,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-02764fbf10ceedc1",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.25,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-03dd551058ce7aaf",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-04c1de5e41d66868",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-09c4183e165a4da4",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-0bc581744204a282",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.25,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-0d2959b1d2bbcec0",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-0d7c38f6a60e8b36",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.5,
+      "diff_arm_pass": true,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-0e840c8816f442f7",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": true
+    },
+    {
+      "candidate_id": "v4-0ef57b3438b7d16b",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.5,
+      "diff_arm_pass": true,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-0ef8cafdf0d11499",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.667,
+      "diff_arm_pass": true,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-0f4dfe2618796b54",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-0f8cd38c8ba43cfe",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-120b48f40e73f330",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-122f5e996ed8f300",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": false,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-129a3640dab8b53d",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-12b0486cd77dd3a9",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": false,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-132048855f4d7a5d",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.143,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-14a911a7f4c96afb",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.286,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-163c7d58d0692423",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-1a18ceae8a4645cf",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-1a5dea10137de7da",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-1bc2a34840360fd0",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.143,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-1f1cba75144b609f",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-2115a033e1fb37d0",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": false,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-218954b5ef6d08d7",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.25,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-23ba99c6da04e46f",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-23f26b69f816664d",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-2493fd41b194d8f4",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.167,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-25eb689fdb9ad98b",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-2616d7ae1c85fea4",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-261cdc76929d85cc",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-2714c211175c4737",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.4,
+      "diff_arm_pass": true,
+      "primary_arm_pass": true
+    },
+    {
+      "candidate_id": "v4-2756fbb39f4afc15",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-277e883c8a9d3eec",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.4,
+      "diff_arm_pass": true,
+      "primary_arm_pass": true
+    },
+    {
+      "candidate_id": "v4-2853e493f4781414",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-29c6beda0309a747",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-29c79faa31cc4fe2",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-2aee6afaad42b119",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-2c70b58d7ce1117a",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.75,
+      "diff_arm_pass": true,
+      "primary_arm_pass": true
+    },
+    {
+      "candidate_id": "v4-2cadeedf7d7f2251",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-304262d2dae79858",
+      "repository_id": "logic-pro-mcp",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.2,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-30517866b1626071",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": false,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-31ea939e4478ded3",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-32281c33a0cd1d51",
+      "repository_id": "agent-operator-score",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-3258ac6e08349a04",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-377f04276465b59d",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-3ba6d8b1fa31e10f",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.333,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-4001fa0211128649",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-4042654555ac20e4",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.7,
+      "diff_arm_pass": true,
+      "primary_arm_pass": true
+    },
+    {
+      "candidate_id": "v4-431dceed9013cb2b",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-45caf6be5b46889d",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-468e579f86e22f91",
+      "repository_id": "gitseed",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-50d2354c5c9210d1",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-56a540b834736c43",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-5b3c19da588ec1d0",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.25,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-6ace14eeff8e0235",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": true,
+      "quote_overlap_with_diff": 0.286,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    },
+    {
+      "candidate_id": "v4-6fa12e79e96b6cc1",
+      "repository_id": "agent-control-plane",
+      "both_found_a_rejection": false,
+      "quote_overlap_with_diff": 0,
+      "diff_arm_pass": false,
+      "primary_arm_pass": false
+    }
+  ]
+}
