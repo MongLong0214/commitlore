@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "stage": "stage1-r1",
+  "artifact": "repository-level-acceptance-feasibility",
+  "why": "Functional acceptance decides every episode. If a repository's frozen snapshot cannot run its own suite deterministically, no patch in that repository passes acceptance, every episode scores DSFPS 0 whatever the arm, and the contrast is dead before delivery is considered. This screen is run per repository, before any per-candidate work, because it can dispose a whole stratum at once.",
+  "repositories": {
+    "agent-operator-score": {
+      "candidates": 17,
+      "command": "node --test --test-name-pattern doctor-contract",
+      "dependencies": "none declared",
+      "result": "41 tests, 41 pass",
+      "runtime_seconds": 1,
+      "verdict": "acceptance is runnable and deterministic"
+    },
+    "gitseed": {
+      "candidates": 22,
+      "command": "python3 -m pytest -q",
+      "dependencies": "none at runtime; pytest only",
+      "result": "318 passed, 3 skipped",
+      "runtime_seconds": 3.4,
+      "verdict": "acceptance is runnable and deterministic"
+    },
+    "agent-control-plane": {
+      "candidates": 10,
+      "command": "npx vitest run tests/unit",
+      "dependencies": "284 packages, npm install exit 0 in 13s",
+      "result": "849 tests, 839 pass, 9 fail, 1 skipped; all 9 failures in tests/unit/deploy-launchd.test.ts",
+      "runtime_seconds": 74,
+      "verdict": "acceptance is runnable with a registered exclusion",
+      "registered_exclusion": "tests/unit/deploy-launchd.test.ts is excluded from functional acceptance: its cases drive launchctl and the macOS Keychain and depend on the host rather than the patch. Any candidate whose path scope touches that file is NOT_BUILDABLE:functional-acceptance-not-deterministic instead. The exclusion is frozen here, before any outcome, rather than decided when a failure is inconvenient."
+    },
+    "logic-pro-mcp": {
+      "candidates": 13,
+      "command": "swift test",
+      "toolchain": "Swift 6.2.4, build exit 0 in 152s",
+      "parallel_runs": [
+        {
+          "run": 1,
+          "exit": 1,
+          "elapsed_seconds": 118,
+          "issues": 31,
+          "crashed": true,
+          "distinct_failing_tests": [
+            "OperationTraceCoverageEveryReadOnlyRegistrySpecIsTraceAndWriteFree",
+            "debugSeamPartialStateIsObservedFromRealServerResponse",
+            "debugSeamTimeoutIsObservedFromRealServerResponse",
+            "testPluginsDispatcherRefusesConcurrentVerifiedOp"
+          ]
+        },
+        {
+          "run": 2,
+          "exit": "not captured, run interrupted",
+          "crashed": false,
+          "distinct_failing_tests": [
+            "OperationTraceCoverageAllRegistryMutations",
+            "OperationTraceCoverageEveryReadOnlyRegistrySpecIsTraceAndWriteFree",
+            "OperationTraceCoverageProjectBlockingDialogsTraceWithoutBoundary"
+          ]
+        }
+      ],
+      "parallel_verdict": "Non-deterministic on the unmodified frozen tree. Only one test fails in both runs, the failure sets otherwise differ, and one run terminated on an uncaught NSException in a subprocess reader while the other did not. The failing assertions concern traces from other operations appearing while checking that read-only ops start none, which is a shared store observed across concurrent tests.",
+      "verdict": "acceptance is runnable and deterministic under --no-parallel. Two runs of the unmodified frozen tree exit 0 with 4063 passes each, zero issues, zero crashes and identical (empty) failure sets. The default parallel configuration is not usable and is excluded.",
+      "serial_runs": [
+        {
+          "run": 1,
+          "flag": "--no-parallel",
+          "exit": 0,
+          "elapsed_seconds": 714,
+          "issues": 0,
+          "crashed": false,
+          "passes": 4063
+        },
+        {
+          "run": 2,
+          "flag": "--no-parallel",
+          "exit": 0,
+          "elapsed_seconds": 685,
+          "issues": 0,
+          "crashed": false,
+          "passes": 4063
+        }
+      ],
+      "registered_acceptance_configuration": "swift test --no-parallel",
+      "why_the_flag_is_the_instrument_and_not_a_repair": "Choosing --no-parallel is an instrument decision made before any episode and recorded before any outcome exists. It is not an outcome-aware repair: nothing about a treatment arm, a patch or a result informed it, and the reason is a property of the unmodified tree that two runs demonstrate. Had this been discovered after episodes ran, switching the acceptance configuration would have been a post-outcome method change and the SSOT forbids it.",
+      "budget_consequence": "About 700 seconds of acceptance per run, against the registered max median episode runtime of 1800 seconds in pilot-feasibility-thresholds.json. Acceptance alone therefore consumes roughly 39 percent of the per-episode budget for this repository, before the agent does any work and before the oracle runs. That is inside the budget but it is the binding constraint for this stratum, and a cold build adds a further 152 seconds when the build cache is not warm."
+    }
+  },
+  "consequence_if_logic_pro_mcp_falls": "Retained because it remains the rule rather than the outcome: Delta is an equal-weight average over four fixed repositories, a stratum contributing no analysable candidate makes it undefined, and SSOT 7.3 requires at least 8 BUILDABLE per repository. On this screen logic-pro-mcp survives; it can still fall later on G2 or G4.",
+  "what_this_does_not_establish": "A repository that can run its suite is not thereby buildable. G2 still needs a discriminating oracle per candidate and G4 needs a revival that passes acceptance, and the first candidate attempted failed the latter. This screen only removes candidates; it admits none.",
+  "screen_result": "All four repositories can run acceptance deterministically. This screen disposes no candidate. Two acceptance configurations are frozen by it: agent-control-plane excludes tests/unit/deploy-launchd.test.ts, and logic-pro-mcp runs --no-parallel."
+}
