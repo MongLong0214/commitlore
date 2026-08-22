@@ -217,7 +217,7 @@ export const equalWeightDelta = (
 };
 
 /** sfc32, seeded from the committed string. No Math.random: a replicate set must be reproducible. */
-const seededRandom = (seed: string): (() => number) => {
+export const seededRandom = (seed: string): (() => number) => {
   let h = 1779033703 ^ seed.length;
   for (let index = 0; index < seed.length; index += 1) {
     h = Math.imul(h ^ seed.charCodeAt(index), 3432918353);

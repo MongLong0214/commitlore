@@ -694,6 +694,54 @@
           "why": "A point estimate of -3.1 points clears a -5 margin while its bound reaches -7.8."
         }
       ]
+    },
+    {
+      "guard_id": "stage1-r1-repeat-rule-matches-the-ssot",
+      "claim": "Repeats follow the SSOT 9.2 table over the buildable count, and fall to HOLD outside its branches.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "runs the section 9.3 gate and the repeat rule as committed",
+      "mutations": [
+        {
+          "mutation_id": "repeat-rule-branch-widened",
+          "file": "bench/cdeb/freeze/effect-independence-v5.ts",
+          "find": "  if (buildableTotal >= 24) return 6;\n  return \"HOLD\";",
+          "replace": "  if (buildableTotal >= 24) return 6;\n  return 6;",
+          "must_fail_test": true,
+          "why": "A corpus below the registered floor would be run at the smallest branch instead of stopping."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-envelope-artifacts-agree",
+      "claim": "Every artifact that restates a registered envelope figure restates the same one.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "holds the committed artifacts to one envelope",
+      "mutations": [
+        {
+          "mutation_id": "restatement-drift-is-tolerated",
+          "file": "bench/cdeb/freeze/stage1-analysis-v5.ts",
+          "find": "      if (![4, 5, 6].includes(stated) && !narrating) {",
+          "replace": "      if (false) {",
+          "must_fail_test": true,
+          "why": "Four frozen artifacts once stated a superseded envelope while the rule stated another, leaving a reader free to quote whichever suits."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-sizing-takes-no-pilot-input",
+      "claim": "The sizing step accepts no input from the pilot at all, not merely no effect-named input.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses every sizing input, because section 9 takes none",
+      "mutations": [
+        {
+          "mutation_id": "nuisance-channel-reopened",
+          "file": "bench/cdeb/freeze/effect-independence-v5.ts",
+          "find": "    throw new Error(\n      `power-rule: sizing input \"${key}\" is not permitted. Section 9 sizes the study from the buildable count ` +\n        `alone, so the sizing step takes no input from the pilot`,\n    );",
+          "replace": "    void key;",
+          "must_fail_test": true,
+          "why": "A channel that carries a nuisance parameter is a channel that can carry the effect under a neutral name."
+        }
+      ]
     }
   ]
 }

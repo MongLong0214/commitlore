@@ -8,7 +8,8 @@
  * never been shown to fail on the thing it guards.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -84,12 +85,14 @@ import {
   evaluatePilot,
   minimumDetectableEffect,
   normalQuantile,
+  confirmatoryRepeatRule,
   repeatsRequiredForImportantEffect,
+  simulatePower,
   type PilotFeasibility,
   type PilotFeasibilityThresholds,
   type PowerAndResourceRule,
 } from "../bench/cdeb/freeze/effect-independence-v5.ts";
-import { analysisPreconditions } from "../bench/cdeb/freeze/stage1-analysis-v5.ts";
+import { analysisPreconditions, assertEnvelopeArtifactsAgree } from "../bench/cdeb/freeze/stage1-analysis-v5.ts";
 
 const HERE = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const V5 = resolve(HERE, "..", "bench", "cdeb", "studies", "cdeb-fresh-v5");
@@ -517,18 +520,22 @@ describe("§19.11 and §19.14 nothing about the effect reaches a design choice",
     }).not.toThrow();
   });
 
-  it("refuses a sizing input that carries a treatment contrast", () => {
+  it("refuses every sizing input, because section 9 takes none", () => {
+    // The empty input set is the design, not an oversight: N comes from the
+    // buildable count, so the channel that could carry the effect is shut
+    // rather than filtered.
     expect(() => {
-      assertPowerInputsEffectBlind({ per_task_completion_rate: 0.8 });
+      assertPowerInputsEffectBlind({});
     }).not.toThrow();
     for (const key of ["observed_effect", "arm_difference", "dsfps_delta", "treatment_contrast"]) {
       expect(() => {
         assertPowerInputsEffectBlind({ [key]: 0.1 });
       }).toThrow(/treatment contrast/);
     }
+    // Even a genuine nuisance parameter is refused now.
     expect(() => {
-      assertPowerInputsEffectBlind({ episodes_attempted: 40 });
-    }).toThrow(/not a registered nuisance parameter/);
+      assertPowerInputsEffectBlind({ per_task_completion_rate: 0.8 });
+    }).toThrow(/is not permitted/);
   });
 
   it("computes the detectable effect from the frozen envelope, and it is large", () => {
@@ -816,7 +823,7 @@ describe("adversarial review findings, closed", () => {
       candidate_id: "v4-0000000000000000",
       repository_id: "gitseed",
       screen: { base_tree_resolvable: true, scope_paths_present: 1, scope_paths_total: 1, acceptance_runner_present: true, acceptance_runner: "npm test" },
-      disposition: "NOT_BUILDABLE:no-neutral-record-blind-task",
+      disposition: "NOT_BUILDABLE:neutral-task-not-derivable",
       decided_at: new Date(0).toISOString(),
       evidence: null,
     };
@@ -832,7 +839,7 @@ describe("adversarial review findings, closed", () => {
     }).not.toThrow();
     // A mechanically decided reason needs evidence but no attempt log.
     expect(() => {
-      assertCensusComplete([{ ...row, disposition: "NOT_BUILDABLE:scope-cannot-be-isolated", evidence: "screen" }]);
+      assertCensusComplete([{ ...row, disposition: "NOT_BUILDABLE:scope-not-isolatable", evidence: "screen" }]);
     }).not.toThrow();
   });
 
@@ -949,6 +956,11 @@ describe("adversarial review findings, closed", () => {
     }).not.toThrow();
   });
 
+  // The analytic path below is the cross-check, not the registered gate. SSOT
+  // 9.3 registers the binary simulation; this closed-form version adds the
+  // between-candidate term the simulation only models when asked, and it is
+  // kept because it is the more pessimistic of the two and disagreement between
+  // them is worth seeing.
   it("holds rather than lowering the important effect the envelope cannot reach", () => {
     const reserve = [7, 14, 19, 10];
     const base = { candidates_per_repository: reserve, baseline_rate: 0.5, alpha_two_sided: 0.05, power_target: 0.9 };
@@ -969,13 +981,83 @@ describe("adversarial review findings, closed", () => {
     ).toBeLessThanOrEqual(0.15);
   });
 
-  it("registers that envelope in the committed rule", () => {
+  it("registers the SSOT envelope, its gate result and its sensitivity", () => {
     const rule = readJson(join(R1, "power-and-resource-rule.json"));
     const fields = rule.fields as Record<string, unknown>;
-    expect(fields.repeats_per_arm).toBe(15);
-    expect(fields.tau_squared_bound).toBe(TAU_SQUARED_BOUND);
-    expect(fields.maximum_resource_budget_episodes).toBe(1650);
-    expect(JSON.stringify(rule)).toMatch(/unreachable at ANY repeat count/);
+    expect(fields.minimum_practically_important_dsfps_effect).toBe(0.2);
+    expect(fields.maximum_resource_budget_episodes).toBe(400);
+    // Repeats are a table, not a number: the buildable count decides them.
+    expect(fields.repeats_rule).toMatchObject({
+      "M>=40 and m>=5": 4,
+      "30<=M<40 and m>=5": 5,
+      "24<=M<30 and m>=5": 6,
+      otherwise: "HOLD",
+    });
+    expect(fields.repeats_per_arm).toBeUndefined();
+    // The pilot supplies nothing at all.
+    expect(rule.permitted_pilot_inputs).toEqual([]);
+    // The gate result and the sensitivity are both registered before any episode.
+    expect((rule.section_9_3_gate as Record<string, unknown>).verdict).toMatch(/^PASS\./);
+    expect(JSON.stringify(rule)).toMatch(/registered_sensitivity_to_candidate_heterogeneity/);
+    expect(JSON.stringify(rule)).toMatch(/fragile to one it does not test/);
+  });
+
+  it("runs the section 9.3 gate and the repeat rule as committed", () => {
+    // SSOT 9.2 exactly, including both HOLD directions.
+    expect(confirmatoryRepeatRule(40, 5)).toBe(4);
+    expect(confirmatoryRepeatRule(30, 5)).toBe(5);
+    expect(confirmatoryRepeatRule(24, 5)).toBe(6);
+    expect(confirmatoryRepeatRule(23, 5)).toBe("HOLD");
+    expect(confirmatoryRepeatRule(40, 4)).toBe("HOLD");
+    // SSOT 9.3: every branch reaches the registered power at the registered effect.
+    for (const [total, repeats] of [[40, 4], [30, 5], [24, 6]] as const) {
+      const per = [Math.floor(total / 4), Math.floor(total / 4), Math.floor(total / 4), total - 3 * Math.floor(total / 4)];
+      const power = simulatePower({
+        candidates_per_repository: per,
+        repeats_per_arm: repeats,
+        baseline_rate: 0.4,
+        true_effect: 0.2,
+        replicates: 3000,
+        seed: "cdeb-v5-ssot-9.3",
+      });
+      expect(power, `M=${String(total)} repeats=${String(repeats)}`).toBeGreaterThanOrEqual(0.9);
+    }
+    // And it degrades with heterogeneity, which is the registered sensitivity.
+    const heterogeneous = simulatePower({
+      candidates_per_repository: [6, 6, 6, 6],
+      repeats_per_arm: 6,
+      baseline_rate: 0.4,
+      true_effect: 0.2,
+      tau_squared: 0.06,
+      replicates: 3000,
+      seed: "cdeb-v5-ssot-9.3",
+    });
+    expect(heterogeneous).toBeLessThan(0.9);
+  });
+
+  it("holds the committed artifacts to one envelope, and catches one that drifts", () => {
+    expect(() => {
+      assertEnvelopeArtifactsAgree(V5);
+    }).not.toThrow();
+
+    // Asserting only that the current artifacts agree proves nothing about the
+    // check -- the mutation ratchet reported this guard inert for exactly that
+    // reason. So drift one document in a copy and require the throw.
+    const scratch = mkdtempSync(join(tmpdir(), "cdeb-envelope-"));
+    try {
+      cpSync(V5, scratch, { recursive: true });
+      const prereg = join(scratch, "stage1-r1", "STAGE1-PREREGISTRATION-r1.md");
+      writeFileSync(
+        prereg,
+        `${readFileSync(prereg, "utf8")}\n\nThe confirmatory study runs 9 repeats per arm.\n`,
+        "utf8",
+      );
+      expect(() => {
+        assertEnvelopeArtifactsAgree(scratch);
+      }).toThrow(/states 9 repeats, which is not a branch of the registered rule/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it("refuses a task whose maintenance need came from someone who read the record", () => {

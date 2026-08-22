@@ -1,49 +1,59 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "study_id": "cdeb-fresh-v5",
   "stage": "stage1-r1",
+  "governing_document": "COMMITLORE_CDEB_V5_END_TO_END_EXECUTION_SSOT_FINAL_2026-08-22, sections 9.1 through 9.3",
   "frozen_before_pilot": true,
-  "note": "Every value here is fixed before the pilot runs. The pilot may supply two nuisance parameters and nothing else; it may not supply, and is never shown, the direction or magnitude of any arm contrast. The rule then reports what the frozen envelope can detect. It never solves for the N that detects what the pilot happened to show.",
+  "note": "Every value here is fixed before the pilot runs. The pilot supplies nothing to it -- not even a nuisance parameter, because SSOT section 9 sizes the study from the buildable count alone. The rule then reports what that envelope can detect. It never solves for the envelope that detects what the pilot happened to show.",
+  "supersedes": "schema_version 1 of this file, which registered a 15-percentage-point target, 15 repeats and 1,650 episodes derived by inverting a detectable-effect formula. That direction is the one section 9 forbids: it lets the target and the budget negotiate with each other. The superseded revision is in this file's git history and is not to be presented as never having existed.",
   "fields": {
     "alpha_two_sided": 0.05,
     "power_target": 0.9,
     "confidence": 0.95,
-    "minimum_practically_important_dsfps_effect": 0.15,
-    "maximum_resource_budget_episodes": 1650,
-    "repeats_per_arm": 15,
-    "infrastructure_allowance": 0.1,
-    "minimum_buildable_candidates_per_repository": 5,
-    "tau_squared_bound": 0.06,
-    "hold_rule": "HOLD if any fixed repository has fewer than 5 buildable confirmatory candidates, or if assertEnvelopeDetectsImportantEffect throws at the frozen envelope and tau_squared_bound. In the second case the study reports that it cannot detect an effect worth acting on and stops. It does not lower the minimum important effect to match what it can detect, and it does not raise N beyond maximum_resource_budget_episodes."
-  },
-  "permitted_pilot_inputs": [
-    "per_repository_baseline_dsfps_suppressed",
-    "within_repository_variance",
-    "per_task_completion_rate",
-    "per_task_runtime_seconds",
-    "infrastructure_failure_rate"
-  ],
-  "minimum_important_effect_rationale": "15 percentage points of Decision-Safe First-Pass Success. Below roughly this size a maintainer weighing whether to adopt automatic delivery would be trading a per-commit hook and a token cost against a difference they could not observe in their own repository within a quarter's work. The figure is a product judgement made before any outcome exists and it is the study author's, not the owner's; it is the one value in this file that the owner should confirm or replace before the pilot, and replacing it changes what the envelope must deliver rather than what the envelope is.",
-  "envelope_arithmetic": {
-    "computed_by": "minimumDetectableEffect in bench/cdeb/freeze/effect-independence-v5.ts",
-    "assumptions": "equal-weight Delta over four fixed strata; Var(D_r) = (tau^2 + 2p(1-p)/R) / m_r; baseline p = 0.5, the worst case; candidates per repository = the confirmatory reserve 7 / 14 / 19 / 10, which assumes every reserve candidate turns out buildable",
-    "detectable_effect_percentage_points": {
-      "repeats_1": { "episodes": 100, "tau2_0.00": 34.7, "tau2_0.01": 35.1, "tau2_0.03": 35.7, "tau2_0.06": 36.7 },
-      "repeats_3": { "episodes": 300, "tau2_0.00": 20.0, "tau2_0.01": 20.6, "tau2_0.03": 21.8, "tau2_0.06": 23.4 },
-      "repeats_5": { "episodes": 500, "tau2_0.00": 15.5, "tau2_0.01": 16.3, "tau2_0.03": 17.7, "tau2_0.06": 19.6 },
-      "repeats_8": { "episodes": 800, "tau2_0.00": 12.3, "tau2_0.01": 13.2, "tau2_0.03": 14.9, "tau2_0.06": 17.2 },
-      "repeats_12": { "episodes": 1200, "tau2_0.00": 10.0, "tau2_0.01": 11.2, "tau2_0.03": 13.1, "tau2_0.06": 15.7 },
-      "repeats_20": { "episodes": 2000, "tau2_0.00": 7.8, "tau2_0.01": 9.2, "tau2_0.03": 11.5, "tau2_0.06": 14.3 }
+    "minimum_practically_important_dsfps_effect": 0.2,
+    "repeats_rule": {
+      "description": "SSOT 9.2. M is the confirmatory buildable total, m the per-repository minimum. Repeats are not a number yet because the buildability census is not frozen; they follow from it and from nothing else.",
+      "M>=40 and m>=5": 4,
+      "30<=M<40 and m>=5": 5,
+      "24<=M<30 and m>=5": 6,
+      "otherwise": "HOLD"
     },
-    "why_repeats_is_15": "15 is the smallest repeat count whose detectable effect reaches 15 points at the frozen tau_squared_bound of 0.06, computed by repeatsRequiredForImportantEffect. It costs 1,500 episodes, and with the 10% infrastructure allowance the budget is 1,650. An earlier revision of this file registered 8 repeats, which detects 17.2 points at the same bound and therefore fails its own HOLD rule -- 8 was chosen against a mid-range tau^2 that the design had no way to obtain, which is the defect described in why_tau_squared_is_frozen.",
-    "why_tau_squared_is_frozen": "tau^2 is between-candidate variance in the ON-minus-SUPPRESSED difference, so it is a property of the arm contrast. Requiring it as a sizing input while forbidding the sizing step to read any arm comparison was internally contradictory, and the 12-candidate pilot cannot estimate a variance in any case. It is therefore fixed here, before any outcome, at the top of the bracket the design was already reporting. If true heterogeneity is lower the study detects more than it promised, which is the safe direction.",
-    "the_ceiling_this_exposes": "At tau_squared_bound = 0.06 a 10-point effect is unreachable at ANY repeat count -- the search runs to 200 repeats and never gets there. Repeats shrink only the within-candidate binomial term; the heterogeneity term shrinks only with more candidates, and the corpus is fixed at 62. No budget and no analysis choice removes this. It is registered before the pilot so that a later null result cannot be read as evidence of no effect when it is evidence of a corpus that could not have shown one."
+    "maximum_resource_budget_episodes": 400,
+    "minimum_buildable_candidates_per_repository": 5,
+    "minimum_confirmatory_reserve_total": 24,
+    "infrastructure_allowance": 0.1,
+    "hold_rule": "TERMINAL_HOLD if any fixed repository has fewer than 8 BUILDABLE candidates, or fewer than 5 in the confirmatory reserve, or if the reserve total is under 24, or if simulatePower at the registered +20pp under the frozen design falls below 0.90. In the last case the study reports that it cannot detect an effect worth acting on and stops. It does not lower the minimum important effect to match what it can detect."
+  },
+  "permitted_pilot_inputs": [],
+  "why_the_pilot_supplies_nothing": "An earlier revision let the pilot supply nuisance parameters under a blind. SSOT section 9 removes the channel entirely: N comes from the buildable count, which is frozen before any episode. A channel that carries nothing cannot carry the effect by accident, and nobody has to be trusted not to look.",
+  "section_9_3_gate": {
+    "method": "Conservative binary simulation. Each episode is a Bernoulli draw; a candidate's per-arm rate is the mean of its repeats; the estimand is the equal-weight average of within-repository mean differences; power is the fraction of simulated studies whose repository-stratified interval excludes zero at a true effect of +20 points. Implemented as simulatePower in bench/cdeb/freeze/effect-independence-v5.ts.",
+    "parameters": "baseline 0.40, true effect +0.20, alpha 0.05 two-sided, 3,000 replicates, fixed seed cdeb-v5-ssot-9.3",
+    "result_at_the_registered_design": {
+      "M=40 repeats=4 episodes=320": 0.95,
+      "M=36 repeats=5 episodes=360": 0.97,
+      "M=30 repeats=5 episodes=300": 0.94,
+      "M=28 repeats=6 episodes=336": 0.96,
+      "M=24 repeats=6 episodes=288": 0.93
+    },
+    "verdict": "PASS. Every branch of the 9.2 repeat rule reaches at least 0.93 power at the registered +20 points, above the 0.90 target."
+  },
+  "registered_sensitivity_to_candidate_heterogeneity": {
+    "why_this_is_here": "The 9.3 simulation models binary outcomes and nothing else, which is the case where every candidate benefits from delivery by the same amount. That is the optimistic end, not the conservative one. Candidates plausibly differ, and the difference does not average away with repeats -- only more candidates reduce it, and the corpus is fixed at 62. This table is registered before any episode so that a later result cannot be read against a power the study did not have.",
+    "power_at_the_registered_20pp_by_between_candidate_variance": {
+      "M=40 repeats=4": { "tau2=0.00": 0.95, "tau2=0.01": 0.93, "tau2=0.02": 0.92, "tau2=0.03": 0.9, "tau2=0.06": 0.86 },
+      "M=36 repeats=5": { "tau2=0.00": 0.97, "tau2=0.01": 0.96, "tau2=0.02": 0.94, "tau2=0.03": 0.92, "tau2=0.06": 0.87 },
+      "M=30 repeats=5": { "tau2=0.00": 0.94, "tau2=0.01": 0.92, "tau2=0.02": 0.89, "tau2=0.03": 0.88, "tau2=0.06": 0.81 },
+      "M=28 repeats=6": { "tau2=0.00": 0.96, "tau2=0.01": 0.93, "tau2=0.02": 0.91, "tau2=0.03": 0.89, "tau2=0.06": 0.83 },
+      "M=24 repeats=6": { "tau2=0.00": 0.93, "tau2=0.01": 0.9, "tau2=0.02": 0.87, "tau2=0.03": 0.85, "tau2=0.06": 0.77 }
+    },
+    "what_this_means": "The registered gate passes on its own terms. It stops passing at roughly tau^2 = 0.02 for the smaller branches and 0.03 for the larger ones, and at tau^2 = 0.06 the smallest corpus retains only 0.77 power. Nothing in this study establishes the true value, and the 12-candidate pilot cannot estimate a variance. The design is therefore adequately powered under its registered assumption and fragile to one it does not test -- stated here rather than discovered afterwards in whichever direction suits the result."
   },
   "what_this_rule_may_not_do": [
     "read the pilot's estimated treatment effect, in any form or under any name",
     "read any per-candidate arm assignment",
     "read any comparison between arms",
-    "choose repeats_per_arm or the candidate set after the pilot",
+    "choose repeats or the candidate set after the pilot",
     "lower minimum_practically_important_dsfps_effect to fit what the envelope can detect"
   ]
 }

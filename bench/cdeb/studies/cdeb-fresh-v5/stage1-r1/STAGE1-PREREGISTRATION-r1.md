@@ -124,21 +124,67 @@ against a −5 percentage-point margin.
 
 ## 6. Power
 
-Fixed before the pilot in `power-and-resource-rule.json`: alpha 0.05, power
-0.90, confidence 95%, minimum practically important effect 15 percentage
-points, 8 repeats per arm, budget 880 episodes, floor 5 buildable per
-repository.
+Fixed before the pilot in `power-and-resource-rule.json`, which is the single
+place these values live, and governed by the end-to-end execution SSOT §9:
 
-The pilot may supply only nuisance parameters — baseline rate,
-within-repository variance, completion rate, runtime, infrastructure failure
-rate. It may not supply the effect, and `assertPowerInputsEffectBlind` refuses
-a sizing input that names one.
+```text
+alpha                  0.05 two-sided
+power target           0.90
+confidence             95%
+minimum important      +20 percentage points of DSFPS
+repeats                from the buildable count alone (SSOT 9.2):
+                       M>=40 and m>=5  -> 4
+                       30<=M<40, m>=5  -> 5
+                       24<=M<30, m>=5  -> 6
+                       otherwise       -> HOLD
+budget ceiling         400 episodes
+floors                 8 BUILDABLE per repository, 5 in the reserve,
+                       24 in the reserve total
+```
 
-**Registered before the fact:** this corpus detects roughly 12–17 percentage
-points at the frozen envelope, depending on between-candidate heterogeneity. A
-10-point effect needs 12 repeats and homogeneous candidates. A null result from
-this study is therefore not evidence of no effect, and may not be reported as
-one.
+**The pilot supplies nothing to this.** Not the effect, and not a nuisance
+parameter either — N follows from the buildability census, which is frozen
+before any episode runs. An earlier revision of this document sized the study by
+inverting a detectable-effect formula against a variance the pilot was supposed
+to estimate; that direction lets the target and the budget negotiate with each
+other, and SSOT §9 replaces it. `assertPowerInputsEffectBlind` now refuses every
+input rather than a list of forbidden ones.
+
+`assertEnvelopeArtifactsAgree` reads the rule and every artifact that restates
+any of it, and throws when they disagree. It exists because they did: this
+section stated one envelope while the rule stated another, for one revision.
+
+**The §9.3 gate, run and registered before any episode.** Conservative binary
+simulation at the registered +20 points, 3,000 replicates, fixed seed:
+
+```text
+M=40 repeats 4   320 episodes   power 0.95
+M=36 repeats 5   360 episodes   power 0.97
+M=30 repeats 5   300 episodes   power 0.94
+M=28 repeats 6   336 episodes   power 0.96
+M=24 repeats 6   288 episodes   power 0.93
+```
+
+Every branch clears 0.90, so the gate passes on its own terms.
+
+**And the sensitivity that gate does not test, registered here rather than
+discovered afterwards.** The simulation models binary outcomes and nothing else,
+which is the case where delivery helps every candidate by the same amount — the
+optimistic end. Candidates plausibly differ, and that difference does not
+average away with repeats; only more candidates reduce it, and the corpus is
+fixed at 62. Power by between-candidate variance:
+
+```text
+                 tau2=0.00  0.01  0.02  0.03  0.06
+M=40 repeats 4        0.95  0.93  0.92  0.90  0.86
+M=30 repeats 5        0.94  0.92  0.89  0.88  0.81
+M=24 repeats 6        0.93  0.90  0.87  0.85  0.77
+```
+
+The design is adequately powered under its registered assumption and fragile to
+one it does not test. Nothing in this study establishes the true value, and the
+12-candidate pilot cannot estimate a variance. **A null result must be read
+against this table, not against the 0.93–0.97 row alone.**
 
 ## 7. Pilot
 

@@ -191,6 +191,18 @@
     {
       "guard_id": "stage1-r1-nondegradation-uses-a-confidence-bound",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-repeat-rule-matches-the-ssot",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-envelope-artifacts-agree",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-sizing-takes-no-pilot-input",
+      "outcome": "bound"
     }
   ]
 }

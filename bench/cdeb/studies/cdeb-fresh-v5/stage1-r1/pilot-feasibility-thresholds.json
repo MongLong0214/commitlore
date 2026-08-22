@@ -17,7 +17,7 @@
     "min_oracle_controls_reproduced": "All 12. Each oracle must return revival=false on both compliant controls and revival=true on the ruled-out control, re-run at pilot time rather than trusted from build time.",
     "min_delivery_manipulation_observed": "All 12. The manipulation check confirms the ON arm actually received the payload and the SUPPRESSED arm did not. A study whose treatment cannot be shown to have arrived is measuring nothing in particular.",
     "max_infrastructure_failure_rate": "15%. Above that the ITT denominator fills with harness failures and the primary endpoint stops being about the agent.",
-    "max_median_runtime_seconds": "30 minutes per episode. At 880 episodes this is the difference between a study that runs in days and one that does not run.",
+    "max_median_runtime_seconds": "30 minutes per episode. At the registered 1,650-episode confirmatory budget this is the difference between a study that runs in days and one that does not run.",
     "min_evaluator_reproducibility": "Exact. The oracle is deterministic by construction; anything below 1.0 means it is reading something outside the final tree."
   },
   "continuation_rule": "PASS if every threshold is met, HOLD otherwise. The verdict is computed by evaluatePilot from this file and a feasibility record containing only the six registered measures. Treatment-effect direction and magnitude are not inputs and cannot be, because the feasibility record has no field that could carry them.",

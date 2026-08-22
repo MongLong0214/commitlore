@@ -125,8 +125,13 @@ them would be reporting the corpus.
 
 ## 9. What this plan cannot fix
 
-The corpus is 50 reserve candidates over four fixed strata. At the frozen
-envelope of 8 repeats it detects about 12–17 percentage points depending on
-between-candidate heterogeneity. A smaller effect is not detectable by any
-analysis choice, and `power-and-resource-rule.json` registers that before the
-fact so a null result cannot later be read as evidence of no effect.
+The corpus is fixed at 62 decisions across four strata, and the confirmatory
+reserve is whatever survives the buildability census. At the registered design
+the study reaches 0.93–0.97 power against a +20 percentage-point effect, and a
+smaller effect is not detectable by any analysis choice.
+
+That figure assumes candidates benefit equally from delivery. They plausibly do
+not, and repeats cannot average the difference away — only more candidates can,
+and there are no more. `power-and-resource-rule.json` registers the full
+sensitivity before any episode, so a null result cannot later be read against a
+power the study did not have.

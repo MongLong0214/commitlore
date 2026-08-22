@@ -34,19 +34,23 @@ export const BUILDABLE = "BUILDABLE" as const;
  */
 export const NOT_BUILDABLE_REASONS = [
   /** No maintenance need can be stated without the record leaking into it. */
-  "no-neutral-record-blind-task",
+  "neutral-task-not-derivable",
   /** Acceptance would have to be judged, not executed. */
-  "no-deterministic-functional-acceptance",
+  "functional-acceptance-not-deterministic",
   /** The ruled-out approach cannot be made to pass acceptance, so revival is unobservable. */
-  "no-functionally-passing-violation-control",
+  "no-functionally-passing-violation",
   /** Fewer than two distinct compliant patches pass acceptance. */
-  "fewer-than-two-compliant-passing-controls",
+  "fewer-than-two-compliant-controls",
   /** The oracle returns the same verdict for a compliant and a ruled-out control. */
-  "oracle-cannot-distinguish-controls",
+  "oracle-not-discriminative",
   /** The decision's paths cannot be separated from unrelated work in the tree. */
-  "scope-cannot-be-isolated",
+  "scope-not-isolatable",
   /** No frozen base tree, or no evidence the task author was kept off the record. */
-  "firewall-provenance-cannot-be-demonstrated",
+  "firewall-provenance-not-demonstrable",
+  /** Two readers cannot agree where the decision's boundary falls. */
+  "record-semantic-boundary-ambiguous",
+  /** The task cannot be completed inside the frozen per-episode budget. */
+  "runtime-budget-infeasible",
 ] as const;
 
 export type NotBuildableReason = (typeof NOT_BUILDABLE_REASONS)[number];
@@ -96,17 +100,19 @@ export interface BuildabilityRow {
 const REASON_SET: ReadonlySet<string> = new Set(NOT_BUILDABLE_REASONS);
 
 /**
- * The five reasons that are claims about a failed attempt rather than about the
- * corpus. The other two -- `scope-cannot-be-isolated` and
- * `firewall-provenance-cannot-be-demonstrated` -- are decided by the mechanical
+ * The seven reasons that are claims about a failed attempt rather than about the
+ * corpus. The other two -- `scope-not-isolatable` and
+ * `firewall-provenance-not-demonstrable` -- are decided by the mechanical
  * screens, where the screen result is itself the evidence.
  */
 const CONSTRUCTION_ATTEMPT_REASONS: ReadonlySet<string> = new Set([
-  "NOT_BUILDABLE:no-neutral-record-blind-task",
-  "NOT_BUILDABLE:no-deterministic-functional-acceptance",
-  "NOT_BUILDABLE:no-functionally-passing-violation-control",
-  "NOT_BUILDABLE:fewer-than-two-compliant-passing-controls",
-  "NOT_BUILDABLE:oracle-cannot-distinguish-controls",
+  "NOT_BUILDABLE:neutral-task-not-derivable",
+  "NOT_BUILDABLE:functional-acceptance-not-deterministic",
+  "NOT_BUILDABLE:no-functionally-passing-violation",
+  "NOT_BUILDABLE:fewer-than-two-compliant-controls",
+  "NOT_BUILDABLE:oracle-not-discriminative",
+  "NOT_BUILDABLE:record-semantic-boundary-ambiguous",
+  "NOT_BUILDABLE:runtime-budget-infeasible",
 ]);
 
 /** Parses a disposition string, failing closed on anything off the list. */
@@ -128,9 +134,9 @@ export const parseDisposition = (raw: string): Disposition => {
 
 /** Runs the screens' refutations. Returns the reason a screen fires, or null. */
 export const screenRefutes = (screen: MechanicalScreen): NotBuildableReason | null => {
-  if (!screen.base_tree_resolvable) return "firewall-provenance-cannot-be-demonstrated";
-  if (screen.scope_paths_present === 0) return "scope-cannot-be-isolated";
-  if (!screen.acceptance_runner_present) return "no-deterministic-functional-acceptance";
+  if (!screen.base_tree_resolvable) return "firewall-provenance-not-demonstrable";
+  if (screen.scope_paths_present === 0) return "scope-not-isolatable";
+  if (!screen.acceptance_runner_present) return "functional-acceptance-not-deterministic";
   return null;
 };
 

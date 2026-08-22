@@ -20,15 +20,19 @@
  * it is not given one.
  */
 
+import { seededRandom } from "./analysis-v5.ts";
+
 export const POWER_RULE_FIELDS = [
   "alpha_two_sided",
   "power_target",
   "confidence",
   "minimum_practically_important_dsfps_effect",
+  /** SSOT 9.2: a table, not a number. Repeats follow the buildable count. */
+  "repeats_rule",
   "maximum_resource_budget_episodes",
-  "repeats_per_arm",
-  "infrastructure_allowance",
   "minimum_buildable_candidates_per_repository",
+  "minimum_confirmatory_reserve_total",
+  "infrastructure_allowance",
   "hold_rule",
 ] as const;
 
@@ -45,16 +49,15 @@ export interface PowerAndResourceRule {
 }
 
 /**
- * The only pilot outputs the sizing may read. Each describes how noisy the
- * measurement is; none describes how large the effect is.
+ * Empty, and that is the design. SSOT section 9 sizes the confirmatory study
+ * from the buildable count, which is frozen before any episode, so the pilot
+ * supplies nothing to the sizing at all -- not even a nuisance parameter.
+ *
+ * An earlier revision allowed five of them behind a blind. A channel that
+ * carries nothing cannot carry the effect by accident, and nobody has to be
+ * trusted not to look.
  */
-export const PERMITTED_PILOT_INPUTS = [
-  "per_repository_baseline_dsfps_suppressed",
-  "within_repository_variance",
-  "per_task_completion_rate",
-  "per_task_runtime_seconds",
-  "infrastructure_failure_rate",
-] as const;
+export const PERMITTED_PILOT_INPUTS = [] as const;
 
 /**
  * The frozen upper bound on between-candidate heterogeneity in the ON-minus-OFF
@@ -100,10 +103,11 @@ export const assertPowerRuleComplete = (rule: PowerAndResourceRule): void => {
   if (!rule.frozen_before_pilot) {
     throw new Error("power-rule: the rule is not marked frozen before the pilot, so its independence is unevidenced");
   }
-  for (const input of rule.permitted_pilot_inputs) {
-    if (!PERMITTED_PILOT_INPUTS.includes(input as (typeof PERMITTED_PILOT_INPUTS)[number])) {
-      throw new Error(`power-rule: "${input}" is not a registered nuisance parameter`);
-    }
+  if (rule.permitted_pilot_inputs.length > 0) {
+    throw new Error(
+      `power-rule: the rule declares ${String(rule.permitted_pilot_inputs.length)} pilot input(s). Section 9 sizes ` +
+        `the study from the buildable count alone, so the pilot supplies nothing and the channel stays shut`,
+    );
   }
 };
 
@@ -121,9 +125,10 @@ export const assertPowerInputsEffectBlind = (inputs: Readonly<Record<string, unk
           `choosing the N that reaches significance`,
       );
     }
-    if (!PERMITTED_PILOT_INPUTS.includes(key as (typeof PERMITTED_PILOT_INPUTS)[number])) {
-      throw new Error(`power-rule: sizing input "${key}" is not a registered nuisance parameter`);
-    }
+    throw new Error(
+      `power-rule: sizing input "${key}" is not permitted. Section 9 sizes the study from the buildable count ` +
+        `alone, so the sizing step takes no input from the pilot`,
+    );
   }
 };
 
@@ -218,7 +223,105 @@ export const normalQuantile = (p: number): number => {
 };
 
 /**
- * The executable HOLD calculation the power rule refers to.
+ * SSOT §9.2: repeats follow the buildable count and nothing else.
+ *
+ * This replaces an earlier design of mine that inverted the detectable-effect
+ * formula to find the smallest envelope reaching a target. That direction is
+ * the one §9 forbids -- it lets the target and the budget negotiate with each
+ * other. Here the corpus decides the repeats and the study then reports what
+ * that envelope can detect.
+ */
+export const confirmatoryRepeatRule = (
+  buildableTotal: number,
+  minimumPerRepository: number,
+): number | "HOLD" => {
+  if (minimumPerRepository < 5) return "HOLD";
+  if (buildableTotal >= 40) return 4;
+  if (buildableTotal >= 30) return 5;
+  if (buildableTotal >= 24) return 6;
+  return "HOLD";
+};
+
+/**
+ * SSOT §9.3's conservative binary simulation.
+ *
+ * Each episode is a Bernoulli draw; a candidate's per-arm rate is the mean of
+ * its repeats; the estimand is the equal-weight average of within-repository
+ * mean differences. Power is the fraction of simulated studies whose
+ * repository-stratified interval excludes zero when the true effect is the
+ * registered minimum important one.
+ *
+ * `tauSquared` is exposed rather than hidden at zero. The simulation as §9.3
+ * names it -- binary outcomes, nothing else -- is the `tauSquared = 0` case, and
+ * that is what the registered gate runs. But zero is an assumption of perfectly
+ * homogeneous candidates, and it is the optimistic end rather than the
+ * conservative one, so the sensitivity is computed alongside and registered.
+ */
+export const simulatePower = (input: {
+  readonly candidates_per_repository: readonly number[];
+  readonly repeats_per_arm: number;
+  readonly baseline_rate: number;
+  readonly true_effect: number;
+  readonly tau_squared?: number;
+  readonly replicates?: number;
+  readonly seed: string;
+}): number => {
+  const replicates = input.replicates ?? 2000;
+  const tauSquared = input.tau_squared ?? 0;
+  const random = seededRandom(input.seed);
+  const gaussian = (): number => {
+    // Box-Muller, from the same stream so the whole simulation is reproducible.
+    const u = Math.max(random(), Number.EPSILON);
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * random());
+  };
+  const clamp = (value: number): number => Math.min(0.999, Math.max(0.001, value));
+
+  let detected = 0;
+  for (let replicate = 0; replicate < replicates; replicate += 1) {
+    const perRepositoryDifferences: number[][] = [];
+    for (const count of input.candidates_per_repository) {
+      const differences: number[] = [];
+      for (let candidate = 0; candidate < count; candidate += 1) {
+        // Candidate-level heterogeneity in how much delivery helps this one.
+        const shift = tauSquared === 0 ? 0 : gaussian() * Math.sqrt(tauSquared);
+        const off = clamp(input.baseline_rate);
+        const on = clamp(input.baseline_rate + input.true_effect + shift);
+        let onHits = 0;
+        let offHits = 0;
+        for (let repeat = 0; repeat < input.repeats_per_arm; repeat += 1) {
+          if (random() < on) onHits += 1;
+          if (random() < off) offHits += 1;
+        }
+        differences.push((onHits - offHits) / input.repeats_per_arm);
+      }
+      perRepositoryDifferences.push(differences);
+    }
+    // Normal-approximation interval on the equal-weight Delta, from the
+    // between-candidate variance the simulated study would actually observe.
+    const strata = perRepositoryDifferences.length;
+    let delta = 0;
+    let variance = 0;
+    for (const differences of perRepositoryDifferences) {
+      const n = differences.length;
+      const mean = differences.reduce((total, value) => total + value, 0) / n;
+      const spread =
+        n < 2 ? 0 : differences.reduce((total, value) => total + (value - mean) ** 2, 0) / (n - 1);
+      delta += mean / strata;
+      variance += spread / n / (strata * strata);
+    }
+    const lower = delta - 1.959963984540054 * Math.sqrt(variance);
+    if (lower > 0) detected += 1;
+  }
+  return detected / replicates;
+};
+
+/**
+ * The analytic counterpart to `simulatePower`, and the cross-check rather than
+ * the registered gate: SSOT §9.3 registers the binary simulation, and §9.2
+ * fixes repeats from the buildable count, so nothing sizes the study by
+ * inverting this function any more. It is kept because it carries the
+ * between-candidate term explicitly and is the more pessimistic of the two, and
+ * a disagreement between the two is worth seeing rather than averaging.
  *
  * It is deliberately one-directional. If the envelope cannot detect the
  * registered minimum important effect at `TAU_SQUARED_BOUND`, the answer is

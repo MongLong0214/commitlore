@@ -22,6 +22,12 @@ import { fileURLToPath } from "node:url";
 import { claimGate, type AssignedEpisode, type Episode } from "./analysis-v5.ts";
 import { assertCensusComplete, type BuildabilityRow } from "./buildability-v5.ts";
 import { assertRuntimeLockComplete, type RuntimeLock } from "./runtime-lock-v5.ts";
+import {
+  assertPowerRuleComplete,
+  confirmatoryRepeatRule,
+  simulatePower,
+  type PowerAndResourceRule,
+} from "./effect-independence-v5.ts";
 
 interface RandomizationPlan {
   readonly status: string;
@@ -42,6 +48,114 @@ export interface AnalysisPreconditions {
   readonly ready: boolean;
   readonly blockers: readonly string[];
 }
+
+interface PowerRuleFile {
+  readonly frozen_before_pilot: boolean;
+  readonly fields: Record<string, unknown>;
+}
+
+/**
+ * Binds the committed power rule to the calculation, and to every other
+ * artifact that restates any part of it.
+ *
+ * Both halves were missing and a readiness review found them together. An
+ * earlier revision raised the envelope in `power-and-resource-rule.json` while
+ * `STAGE1-PREREGISTRATION-r1.md`, the randomization plan, the analysis plan and
+ * a threshold rationale went on stating the superseded figures -- four frozen
+ * artifacts disagreeing with the fifth, which leaves a reader free to quote
+ * whichever suits. And nothing loaded the JSON into the power calculation, so
+ * the committed numbers and the executable gate had never met.
+ */
+export const assertEnvelopeArtifactsAgree = (studyRoot: string): void => {
+  const root = resolve(studyRoot);
+  const r1 = join(root, "stage1-r1");
+  const rule = readJson<PowerRuleFile>(join(r1, "power-and-resource-rule.json"));
+  assertPowerRuleComplete(rule as unknown as PowerAndResourceRule);
+
+  const importantEffect = Number(rule.fields.minimum_practically_important_dsfps_effect);
+  const powerTarget = Number(rule.fields.power_target);
+  const budget = Number(rule.fields.maximum_resource_budget_episodes);
+  const table = rule.fields.repeats_rule as Record<string, unknown>;
+
+  // The repeat table must be SSOT 9.2 exactly. A branch quietly widened is a
+  // larger study registered without saying so.
+  for (const [branch, expected] of [
+    ["M>=40 and m>=5", 4],
+    ["30<=M<40 and m>=5", 5],
+    ["24<=M<30 and m>=5", 6],
+  ] as const) {
+    if (table[branch] !== expected) {
+      throw new Error(`envelope: repeats_rule["${branch}"] is ${String(table[branch])}, not ${String(expected)}`);
+    }
+    // And the code must agree with the table it is validating.
+    const total = branch.startsWith("M>=40") ? 40 : branch.startsWith("30") ? 30 : 24;
+    if (confirmatoryRepeatRule(total, 5) !== expected) {
+      throw new Error(`envelope: confirmatoryRepeatRule disagrees with the committed table at M=${String(total)}`);
+    }
+  }
+  if (table.otherwise !== "HOLD") throw new Error("envelope: the repeats rule must HOLD outside its registered branches");
+  if (confirmatoryRepeatRule(23, 5) !== "HOLD" || confirmatoryRepeatRule(40, 4) !== "HOLD") {
+    throw new Error("envelope: the repeat rule must HOLD below 24 buildable and below 5 per repository");
+  }
+
+  // SSOT 9.3: the registered design must reach the registered power at the
+  // registered effect, under the simulation the SSOT names.
+  for (const [total, repeats] of [
+    [40, 4],
+    [36, 5],
+    [30, 5],
+    [28, 6],
+    [24, 6],
+  ] as const) {
+    const per = [Math.floor(total / 4), Math.floor(total / 4), Math.floor(total / 4), total - 3 * Math.floor(total / 4)];
+    const power = simulatePower({
+      candidates_per_repository: per,
+      repeats_per_arm: repeats,
+      baseline_rate: 0.4,
+      true_effect: importantEffect,
+      replicates: 3000,
+      seed: "cdeb-v5-ssot-9.3",
+    });
+    if (power < powerTarget) {
+      throw new Error(
+        `envelope: at M=${String(total)} with ${String(repeats)} repeats the design reaches power ` +
+          `${power.toFixed(2)} at +${String(importantEffect)}, below the registered ${String(powerTarget)}. HOLD ` +
+          `and report; do not lower the important effect to match`,
+      );
+    }
+    const episodes = Math.round(total * repeats * 2 * (1 + Number(rule.fields.infrastructure_allowance)));
+    if (episodes > budget) {
+      throw new Error(
+        `envelope: M=${String(total)} at ${String(repeats)} repeats needs ${String(episodes)} episodes with the ` +
+          `allowance, above the registered budget of ${String(budget)}`,
+      );
+    }
+  }
+
+  // Every artifact that restates a registered figure must restate the same one.
+  const restatements: { readonly path: string; readonly text: string }[] = [
+    { path: "STAGE1-PREREGISTRATION-r1.md", text: readFileSync(join(r1, "STAGE1-PREREGISTRATION-r1.md"), "utf8") },
+    { path: "analysis-plan.md", text: readFileSync(join(r1, "analysis-plan.md"), "utf8") },
+    { path: "randomization-plan.json", text: readFileSync(join(r1, "randomization-plan.json"), "utf8") },
+  ];
+  for (const { path, text } of restatements) {
+    // The lookbehind matters: the registered tables read "M=28 repeats 6", where
+    // the leading number is the corpus size and only the trailing one is the
+    // repeat count. Without it the check reported the corpus size as an
+    // unregistered repeat count.
+    for (const match of text.matchAll(/(?<!M=)\b(\d+)\s+repeats\b/g)) {
+      const stated = Number(match[1]);
+      const context = text.slice(Math.max(0, (match.index ?? 0) - 260), (match.index ?? 0) + 260);
+      // A document may narrate a superseded figure, but only while saying so.
+      const narrating = /revision|earlier|superseded|no longer|used to/i.test(context);
+      if (![4, 5, 6].includes(stated) && !narrating) {
+        throw new Error(
+          `envelope: ${path} states ${String(stated)} repeats, which is not a branch of the registered rule`,
+        );
+      }
+    }
+  }
+};
 
 /**
  * Everything that must hold before an analysis is meaningful. Reported as a
