@@ -93,6 +93,11 @@ import {
   type PowerAndResourceRule,
 } from "../bench/cdeb/freeze/effect-independence-v5.ts";
 import { analysisPreconditions, assertEnvelopeArtifactsAgree } from "../bench/cdeb/freeze/stage1-analysis-v5.ts";
+import {
+  assertSandboxIsRecordBlind,
+  materializeRecordBlindTree,
+  scanForRecordLeaks,
+} from "../bench/cdeb/freeze/need-scout-v5.ts";
 
 const HERE = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const V5 = resolve(HERE, "..", "bench", "cdeb", "studies", "cdeb-fresh-v5");
@@ -1101,6 +1106,82 @@ describe("adversarial review findings, closed", () => {
     expect(joined).toMatch(/no schedule hash is committed/);
     expect(joined).toMatch(/episodes\.jsonl does not exist/);
     expect(preconditions.blockers.length).toBe(6);
+  });
+});
+
+describe("the record-blind sandbox", () => {
+  const snapshot = (): { repository_id: string; bundle_path: string; bundle_sha256: string; snapshot_commit: string } => {
+    const corpus = JSON.parse(readFileSync(join(V5, "corpus", "snapshots.json"), "utf8")) as {
+      repositories: { repository_id: string; bundle_path: string; bundle_sha256: string; snapshot_commit: string }[];
+    };
+    const found = corpus.repositories.find((row) => row.repository_id === "agent-operator-score");
+    if (found === undefined) throw new Error("agent-operator-score is not in the corpus");
+    return found;
+  };
+
+  it("hands the author a tree with no history and no notes ref", () => {
+    const entry = snapshot();
+    const sandbox = materializeRecordBlindTree({
+      bundlePath: join(V5, "corpus", entry.bundle_path),
+      bundleSha256: entry.bundle_sha256,
+      snapshotCommit: entry.snapshot_commit,
+      repositoryId: entry.repository_id,
+    });
+    try {
+      // The whole firewall rests on this: a bundle carries every record in its
+      // history and its notes ref, so leaving .git in place would make the
+      // control "the author chose not to run git log".
+      expect(existsSync(join(sandbox.dir, ".git"))).toBe(false);
+      expect(sandbox.file_count).toBeGreaterThan(100);
+      expect(sandbox.tree_digest).toMatch(/^[0-9a-f]{64}$/);
+      expect(() => {
+        assertSandboxIsRecordBlind(sandbox);
+      }).not.toThrow();
+    } finally {
+      rmSync(sandbox.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a tree whose own files quote a record", () => {
+    // Two repositories in this corpus really do carry one; the check has to
+    // fire on content, because removing the history cannot reach it.
+    const leaked = {
+      dir: mkdtempSync(join(tmpdir(), "cdeb-leak-")),
+      repository_id: "gitseed",
+      snapshot_commit: "0".repeat(40),
+      tree_digest: "0".repeat(64),
+      file_count: 1,
+      leaks: [{ path: "docs/adr/ADR-0008.md", marker: "Record-Id", line: "Record-Id: r-gsf501" }],
+    };
+    try {
+      expect(() => {
+        assertSandboxIsRecordBlind(leaked);
+      }).toThrow(/quotes 1 record line/);
+    } finally {
+      rmSync(leaked.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("finds the record markers in content and ignores prose that merely mentions them", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cdeb-scan-"));
+    try {
+      writeFileSync(join(dir, "leaks.md"), "intro\nRecord-Id: r-abc123\nmore\n", "utf8");
+      writeFileSync(join(dir, "clean.md"), "We discuss provenance and record ids in general terms.\n", "utf8");
+      writeFileSync(join(dir, "binary.png"), "Record-Id: r-abc123", "utf8");
+      const found = scanForRecordLeaks(dir, ["leaks.md", "clean.md", "binary.png"]);
+      expect(found.map((leak) => leak.path)).toEqual(["leaks.md"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("records what the screen measured, with its null control", () => {
+    const screen = readFileSync(join(R1, "firewall-leak-screen.md"), "utf8");
+    // The null is the load-bearing part: without it a shared 5-gram is just English.
+    expect(screen).toMatch(/against another repository\s+0\s+0\s+0/);
+    expect(screen).toContain("34             0");
+    expect(screen).toContain("no reviewer read the current code or ran a test");
+    expect(screen).toContain("What this does not establish");
   });
 });
 
