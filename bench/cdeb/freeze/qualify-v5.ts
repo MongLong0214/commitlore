@@ -159,11 +159,18 @@ export const mergeV5 = (inputs: MergeInputs): V5QualificationEntry[] =>
   });
 
 /**
- * The regression guard aimed at v4's gate.
+ * The regression guard aimed at v4's gate, and what it does not prove.
  *
- * It would come back as a candidate excluded while every gate it declares has
- * passed, or as an exclusion code naming provenance or corroboration. Both
- * shapes are refused here rather than left for a reader to notice.
+ * It refuses three shapes: an exclusion code that names provenance or
+ * corroboration, an exclusion where every declared gate passed, and a run in
+ * which no uncorroborated candidate qualified. Those are the ways the gate would
+ * return as a *visible* rule.
+ *
+ * It cannot detect a dependence that runs through the reviewers -- if a reader
+ * were systematically harsher on uncorroborated records at G2 or G3, every check
+ * here would still pass. An adversarial review made that objection and it is
+ * correct, so the guard's claim is stated at its actual strength here and in the
+ * result rather than as "refuses any run".
  */
 export const assertNoProvenanceGate = (entries: readonly V5QualificationEntry[]): void => {
   const banned = /provenance|corroborat|independent-source|documented-elsewhere/iu;

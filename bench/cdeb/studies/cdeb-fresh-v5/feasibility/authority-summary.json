@@ -28,6 +28,11 @@
       "inert": true
     },
     {
+      "condition": "explicit_ruled_out",
+      "failed": 0,
+      "inert": true
+    },
+    {
       "condition": "explicit_reason",
       "failed": 0,
       "inert": true
@@ -57,6 +62,8 @@
       "a0": 35,
       "a1": 11,
       "a0_only": 24,
+      "a0_no_hit_decidable": 5,
+      "a0_corroboration_undecidable": 19,
       "identified": 1,
       "id_less": 34,
       "a0_failures": {}
@@ -67,6 +74,8 @@
       "a0": 59,
       "a1": 23,
       "a0_only": 36,
+      "a0_no_hit_decidable": 22,
+      "a0_corroboration_undecidable": 14,
       "identified": 48,
       "id_less": 11,
       "a0_failures": {}
@@ -77,6 +86,8 @@
       "a0": 104,
       "a1": 27,
       "a0_only": 77,
+      "a0_no_hit_decidable": 10,
+      "a0_corroboration_undecidable": 67,
       "identified": 94,
       "id_less": 10,
       "a0_failures": {}
@@ -87,6 +98,8 @@
       "a0": 43,
       "a1": 19,
       "a0_only": 24,
+      "a0_no_hit_decidable": 3,
+      "a0_corroboration_undecidable": 21,
       "identified": 0,
       "id_less": 43,
       "a0_failures": {}

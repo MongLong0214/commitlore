@@ -25,6 +25,7 @@ export const A0_FAILURE_CODES = [
   "post-cutoff",
   "benchmark-authored",
   "backfilled-or-reconstructed",
+  "ruled-out-not-explicit",
   "reason-not-explicit",
   "scope-unresolvable",
   "lifecycle-unresolvable",
@@ -122,6 +123,9 @@ export const classifyA0 = (inputs: A0Inputs): {
   // reason both parsed, so these are true by construction and recorded as
   // evidence rather than re-derived from text this module cannot see.
   const explicitRuledOut = candidate.decision_sha256 !== "";
+  // An adversarial review found this computed and stored but never failing,
+  // while the authority policy lists "explicit ruled-out behaviour" as required.
+  if (!explicitRuledOut) failures.push("ruled-out-not-explicit");
   const explicitReason = candidate.reason_sha256 !== "" && candidate.reason_chars > 0;
   if (!explicitReason) failures.push("reason-not-explicit");
 
@@ -247,6 +251,7 @@ export const a0Discrimination = (
     { condition: "in_frozen_snapshot", failed: (entry) => !entry.in_frozen_snapshot },
     { condition: "not_benchmark_authored", failed: (entry) => entry.benchmark_authored },
     { condition: "not_reconstructed_or_backfilled", failed: (entry) => entry.reconstructed_or_backfilled },
+    { condition: "explicit_ruled_out", failed: (entry) => !entry.explicit_ruled_out },
     { condition: "explicit_reason", failed: (entry) => !entry.explicit_reason },
     { condition: "scope_recoverable", failed: (entry) => !entry.scope_recoverable },
     { condition: "lifecycle_recoverable", failed: (entry) => !entry.lifecycle_recoverable },
@@ -264,6 +269,9 @@ export interface AuthoritySummary {
   readonly a0: number;
   readonly a1: number;
   readonly a0_only: number;
+  /** Split out because "no hit" and "could not be scanned" are different facts. */
+  readonly a0_no_hit_decidable: number;
+  readonly a0_corroboration_undecidable: number;
   readonly identified: number;
   readonly id_less: number;
   readonly a0_failures: Readonly<Record<string, number>>;
@@ -290,6 +298,8 @@ export const summarizeAuthority = (entries: readonly AuthorityAuditEntry[]): Aut
         a0: a0.length,
         a1: a0.filter((entry) => entry.independent_corroboration).length,
         a0_only: a0.filter((entry) => !entry.independent_corroboration).length,
+        a0_no_hit_decidable: a0.filter((entry) => !entry.independent_corroboration && entry.corroboration_decidable).length,
+        a0_corroboration_undecidable: a0.filter((entry) => !entry.corroboration_decidable).length,
         identified: list.filter((entry) => entry.identity_present).length,
         id_less: list.filter((entry) => !entry.identity_present).length,
         a0_failures: Object.fromEntries(Object.entries(failures).sort(([, a], [, b]) => b - a)),

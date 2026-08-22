@@ -64,6 +64,20 @@
     "oracle-not-deterministic-unresolved": 2,
     "oracle-not-deterministic": 2
   },
+  "v4_comparison": {
+    "qualified_total": 62,
+    "what_v4_did": {
+      "insufficient-provenance": 47,
+      "source-packet-empty": 10,
+      "v4-qualified": 4,
+      "wrong-path-not-functionally-viable": 1
+    }
+  },
+  "corroboration_states": {
+    "a1_hit": 18,
+    "no_hit_decidable": 10,
+    "undecidable": 34
+  },
   "interpretation_coverage": {
     "reviewer_a": 240,
     "reviewer_b": 241,

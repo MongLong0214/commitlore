@@ -1,7 +1,8 @@
 # CDEB-Fresh v5 Stage 0 Result
 
 > Generated from this study's artifacts by `scripts/render-v5-stage0-result.mjs`.
-> Every number below is read from a committed file; none is typed by hand.
+> Counts and tables are read from committed artifacts. The freshness block is a
+> set of assertions about what this stage did not do, not derived figures.
 
 ## Live state
 
@@ -54,6 +55,7 @@ pre_cutoff                         failed   0   (inert here)
 in_frozen_snapshot                 failed   0   (inert here)
 not_benchmark_authored             failed   0   (inert here)
 not_reconstructed_or_backfilled    failed   0   (inert here)
+explicit_ruled_out                 failed   0   (inert here)
 explicit_reason                    failed   0   (inert here)
 scope_recoverable                  failed   0   (inert here)
 lifecycle_recoverable              failed   0   (inert here)
@@ -77,7 +79,9 @@ enumerated id-less:    98
 qualified identified:  36
 qualified id-less:     26
 missing-id exclusions: 0
-qualified with no independent corroboration: 44
+qualified with an A1 hit:              18
+qualified, scanned, no A1 hit:         10
+qualified, corroboration unscannable:  34
 ```
 
 ## Freshness
@@ -120,8 +124,30 @@ rather than an observation of a real agent.
 | G7   | 240      | 237    | 0.988 |
 
 Both reviewers are independent sessions of one model family; their agreement bounds
-reliability from above, not below. Where they split, a third blind vote decides by
-majority rather than an adjudicator who already knows how the pair voted.
+reliability from above, not below. Where they split, the rule is the one in the next
+section: two tie-breakers, and a gate resolves only when both agree.
+
+## What v4 did with these same 62
+
+Joined by candidate id against v4's committed qualification rows:
+
+```text
+insufficient-provenance                 47
+source-packet-empty                     10
+v4-qualified                             4
+wrong-path-not-functionally-viable       1
+```
+
+This is the measured version of the claim that v5 admits what v4 excluded. 47 of
+the 62 failed v4's independent-prose gate outright and 10 more failed it for an
+empty source packet, so 57 of 62 would not have survived v4's provenance family.
+Four were qualified in both studies.
+
+It is **not** the same set as the uncorroborated ones. 16 of the 18 candidates that
+do have an A1 hit also failed v4, because a window match in a document is a weaker
+thing than a blind reviewer recovering the ruling from prose. The two
+classifications overlap heavily and are not equivalent, and an earlier draft of this
+document said they were.
 
 ## How much the tie-break rule moves the answer
 
@@ -157,8 +183,14 @@ ties at all.
 | oracle-not-deterministic                      | 2     |
 
 No candidate was excluded for missing identity, missing corroboration, or a
-decision not being documented outside its record. A guard refuses any run in which
-one is, so this is checked rather than asserted.
+decision not being documented outside its record.
+
+The guard behind that sentence checks three shapes: an exclusion code naming
+provenance or corroboration, an exclusion where every declared gate passed, and a
+run in which no uncorroborated candidate qualified. **It cannot detect a
+dependence that runs through the reviewers** -- a reader systematically harsher on
+uncorroborated records at G2 or G3 would pass every check. That is a real gap and
+it is stated rather than covered by the guard's name.
 
 ## Repository set
 
@@ -168,6 +200,30 @@ qualified per eligible repository floor: 8
 total qualified:       62  (threshold 36)
 fixed-set recommendation: agent-control-plane, agent-operator-score, gitseed, logic-pro-mcp
 ```
+
+## What these gates were judged from
+
+Stage 0 is a screen. The evidence behind each gate bounds what its number means.
+
+- **G1 (A0)** admitted all 241, and seven of its conditions cannot fail on input
+  the census built. The filtering here is done by G2 through G7.
+- **G2** is two blind readings of the frozen record, asked what policy it defines.
+- **G3** and **G4** were judged from the record, its reason, the paths and the
+  commit prose. **No reviewer read the current code or ran a test.** They are
+  informed readings about a maintenance task, not demonstrations of hidden
+  rationale or of functional viability, and G3's agreement was 0.59.
+- **G5** records whether a deterministic oracle *could* be written. No oracle was
+  built and none may be at this stage, so it is a stored judgement, not a probe.
+- **G6** is the one measurement: the shipping hook ran against the frozen release
+  for every candidate and the forwarded bytes were read. Its three structural
+  bounds are named above.
+- **G8** has nothing to exercise yet. No task, gold or oracle exists, so the
+  task-author firewall is registered but unexercised.
+
+The GO condition on delivery observability is deliberately weak: it requires at
+least one qualified candidate in each identity state, not a rate. It is a presence
+check, and the delivery evidence behind it is a synthetic pre-edit event rather
+than an observation of a real agent.
 
 ## Verdict
 
@@ -187,6 +243,7 @@ None of these is executed here.
 - `CDEB-V5-COMBINED-INTERPRETATION-AND-GATES` — procedure-combined
 - `CDEB-V5-REVIEWER-MODEL-FAMILY` — reviewer-independence-limitation
 - `CDEB-V5-TWO-TIEBREAKERS-MUST-AGREE` — procedure-strengthened-after-measuring-its-own-bias
+- `CDEB-V5-CLAIMS-NARROWED-AFTER-ADVERSARIAL-REVIEW` — claim-corrected-before-publication
 
 ## Deliberately not done
 
