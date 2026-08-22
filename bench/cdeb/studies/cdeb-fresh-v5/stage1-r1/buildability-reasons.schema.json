@@ -46,7 +46,14 @@
       ]
     },
     "decided_at": { "type": ["string", "null"], "format": "date-time" },
-    "evidence": { "type": ["string", "null"] }
+    "evidence": {
+      "type": ["string", "null"],
+      "description": "Required and non-empty for every NOT_BUILDABLE disposition. An exclusion whose justification is only its label is a decision to stop trying, and a builder who knows the records can stop trying on the decisions expected to show little benefit."
+    },
+    "attempt_log_digest": {
+      "type": ["string", "null"],
+      "description": "Digest of the failed construction artifacts. Required for the five reasons that assert an attempt was made: no-neutral-record-blind-task, no-deterministic-functional-acceptance, no-functionally-passing-violation-control, fewer-than-two-compliant-passing-controls, oracle-cannot-distinguish-controls. Not required for scope-cannot-be-isolated or firewall-provenance-cannot-be-demonstrated, which the mechanical screens decide and where the screen result is the evidence."
+    }
   },
   "forbidden_properties": {
     "description": "Not expressible as JSON Schema keywords alongside additionalProperties:false, restated here for readers. A disposition row may never carry arm, dsfps, revival, functional_acceptance_pass, completed, episode_id, effect, delta or transcript. assertDispositionsOutcomeBlind enforces it.",

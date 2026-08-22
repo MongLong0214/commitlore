@@ -12,7 +12,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Ajv2020 } from "ajv/dist/2020.js";
+import type { FormatsPlugin } from "ajv-formats";
+// ajv-formats is CommonJS whose declaration ends in `export default`, so the
+// callable lives on `.default` under this module resolution -- src/core/schema.ts
+// unwraps it the same way.
+import ajvFormats from "ajv-formats";
 import { describe, expect, it } from "vitest";
+
+const addFormats: FormatsPlugin = ajvFormats.default;
 
 import {
   BUILDABLE,
@@ -178,6 +186,36 @@ describe("§19.5-6 the buildability census covers 62 and its reasons are schema-
     // The schema file and the code must list the same reasons.
     const schema = readFileSync(join(R1, "buildability-reasons.schema.json"), "utf8");
     for (const reason of NOT_BUILDABLE_REASONS) expect(schema).toContain(`NOT_BUILDABLE:${reason}`);
+  });
+
+  it("validates every committed row against the committed schema", () => {
+    // The schema is additionalProperties:false, so a field added to the row type
+    // and not to the schema makes the two disagree silently. That happened once,
+    // with attempt_log_digest, and nothing caught it until this test existed.
+    const ajv = new Ajv2020({ allErrors: true, strict: false });
+    addFormats(ajv);
+    const validate = ajv.compile(JSON.parse(readFileSync(join(R1, "buildability-reasons.schema.json"), "utf8")));
+    for (const row of censusRows()) {
+      const valid = validate(row);
+      expect(valid, `${row.candidate_id}: ${ajv.errorsText(validate.errors)}`).toBe(true);
+    }
+    // Every shape the code can emit must also validate.
+    const sample = censusRows()[0];
+    if (sample === undefined) throw new Error("census is empty");
+    for (const disposition of [BUILDABLE, ...NOT_BUILDABLE_REASONS.map((reason) => `NOT_BUILDABLE:${reason}`)]) {
+      expect(
+        validate({
+          ...sample,
+          disposition,
+          decided_at: new Date(0).toISOString(),
+          evidence: "why",
+          attempt_log_digest: "d".repeat(64),
+        }),
+        `${disposition}: ${ajv.errorsText(validate.errors)}`,
+      ).toBe(true);
+    }
+    // And a reason the code refuses must be refused here too.
+    expect(validate({ ...sample, disposition: "NOT_BUILDABLE:too-awkward-to-bother" })).toBe(false);
   });
 
   it("throws on the census as committed, because 62 dispositions are still open", () => {
