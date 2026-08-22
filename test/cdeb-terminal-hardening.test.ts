@@ -123,9 +123,12 @@ describe('CDEB terminal hardening', () => {
     const successor = readFileSync(join(STUDY, 'SUCCESSOR.md'), 'utf8');
     expect(prd).toContain('status: terminal-preserved');
     expect(prd).toContain('must not be used to resume `cdeb-fresh-v3r1`');
-    expect(active).toMatchObject({ last_terminal_study_id: 'cdeb-fresh-v3r1', successor_requires_new_study_id: true });
-    expect(active.active_study_id).not.toBe('cdeb-fresh-v3r1');
-    expect(active.active_study_id).not.toBe('cdeb-fresh-v3');
+    expect(active).toMatchObject({ successor_requires_new_study_id: true });
+    // Whichever study holds the slot, no ended one may: the declaration names a
+    // successor and the resolver refuses the rest from their own status files.
+    for (const ended of ['cdeb-fresh-v3', 'cdeb-fresh-v3r1', 'cdeb-fresh-v4']) {
+      expect(active.active_study_id).not.toBe(ended);
+    }
     expect(status).toMatchObject({ phase: 'invalidated', measured_run_allowed: false });
     expect(successor).toContain('new study id');
     expect(successor).toContain('new preregistration');

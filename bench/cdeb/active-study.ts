@@ -16,12 +16,20 @@ export interface ActiveStudyDeclaration {
 }
 
 /**
- * The phase a study writes into its own STATUS.json when it ends. A study that
+ * The phases a study writes into its own STATUS.json when it ends. A study that
  * declares itself terminal cannot be named active, however the declaration is
  * edited -- the refusal reads the study's own record rather than a list of
  * names kept somewhere else, which would drift the first time a study ended
  * without anyone remembering to update it.
+ *
+ * `stage0-hold` joins `invalidated` because a study that reached HOLD is just as
+ * finished as one that was invalidated: it holds a published verdict and a
+ * successor requirement, and running anything against it would attribute the
+ * result to a study that already ended.
  */
+export const TERMINAL_STUDY_PHASES = ["invalidated", "stage0-hold"] as const;
+
+/** Retained for callers that predate the plural form. */
 export const TERMINAL_STUDY_PHASE = "invalidated";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -84,8 +92,8 @@ export const assertStudyNotTerminal = (studyRoot: string, expectedStudyId: strin
   if (status.study_id !== expectedStudyId) {
     throw new Error(`Active study ${expectedStudyId} resolves to a directory whose STATUS.json declares ${status.study_id}`);
   }
-  if (status.phase === TERMINAL_STUDY_PHASE) {
-    throw new Error(`Refused terminal study ${expectedStudyId} as the active study: its phase is ${TERMINAL_STUDY_PHASE}`);
+  if ((TERMINAL_STUDY_PHASES as readonly string[]).includes(status.phase)) {
+    throw new Error(`Refused terminal study ${expectedStudyId} as the active study: its phase is ${status.phase}`);
   }
 };
 
