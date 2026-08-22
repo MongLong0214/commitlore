@@ -30,5 +30,37 @@
     "commitlore_release": "The shipping release whose hook performs the delivery. Both arms run the same release; the suppressed arm suppresses the model-visible payload, it does not run a different build.",
     "execution_scheduler": "Block-randomized across repository, candidate and arm per randomization-plan.json, so service and load drift cannot align with an arm.",
     "system_prompt_digest": "sha256 of the exact system prompt bytes. The digest is the locked value; the prompt itself is study material, not a value this file carries."
+  },
+  "frozen_acceptance_configuration": {
+    "note": "Per-repository acceptance commands, frozen before any episode by the feasibility screen in evidence/acceptance-feasibility.json. These are instrument decisions taken on the unmodified frozen trees; changing any of them after an outcome exists would be a post-outcome method change.",
+    "agent-operator-score": {
+      "command": "node --test --test-name-pattern doctor-contract",
+      "cwd": "packages/schema",
+      "install": "none"
+    },
+    "gitseed": {
+      "command": "python3 -m pytest -q",
+      "cwd": ".",
+      "install": "pytest only; the package declares no runtime dependencies"
+    },
+    "agent-control-plane": {
+      "command": "npx vitest run tests/unit",
+      "cwd": ".",
+      "install": "npm install",
+      "excluded": [
+        "tests/unit/deploy-launchd.test.ts"
+      ],
+      "why_excluded": "its cases drive launchctl and the macOS Keychain, so they measure the host rather than the patch"
+    },
+    "logic-pro-mcp": {
+      "command": "swift test --no-parallel",
+      "cwd": ".",
+      "install": "swift build",
+      "why_no_parallel": "the default parallel configuration is non-deterministic on the unmodified tree; two serial runs pass identically",
+      "measured_runtime_seconds": [
+        714,
+        685
+      ]
+    }
   }
 }

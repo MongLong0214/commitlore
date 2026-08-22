@@ -1254,6 +1254,34 @@ describe("the record-blind sandbox", () => {
     }
   });
 
+  it("freezes one acceptance configuration per repository, before any episode", () => {
+    const screen = JSON.parse(
+      readFileSync(join(R1, "evidence", "acceptance-feasibility.json"), "utf8"),
+    ) as Record<string, unknown>;
+    const repositories = screen.repositories as Record<string, Record<string, unknown>>;
+    expect(Object.keys(repositories).sort()).toEqual([
+      "agent-control-plane",
+      "agent-operator-score",
+      "gitseed",
+      "logic-pro-mcp",
+    ]);
+    // Every repository must have been shown to run its own suite, because a
+    // frozen tree that fails its own acceptance scores every episode zero
+    // whatever the arm.
+    for (const [name, row] of Object.entries(repositories)) {
+      expect(String(row.verdict), name).toMatch(/runnable/);
+    }
+    // The two configurations this screen had to choose are in the runtime lock,
+    // not only in the prose that discovered them.
+    const lock = readJson(join(R1, "runtime-lock.json"));
+    const frozen = lock.frozen_acceptance_configuration as Record<string, Record<string, unknown>>;
+    expect(frozen["logic-pro-mcp"]?.command).toBe("swift test --no-parallel");
+    expect(frozen["agent-control-plane"]?.excluded).toEqual(["tests/unit/deploy-launchd.test.ts"]);
+    // Both were decided on the unmodified tree; saying so is what separates an
+    // instrument decision from an outcome-aware repair.
+    expect(JSON.stringify(screen)).toMatch(/before any outcome exists/);
+  });
+
   it("records what the screen measured, with its null control", () => {
     const screen = readFileSync(join(R1, "firewall-leak-screen.md"), "utf8");
     // The null is the load-bearing part: without it a shared 5-gram is just English.
