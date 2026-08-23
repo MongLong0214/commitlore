@@ -48,8 +48,11 @@ describe('CDEB v5 Stage 0 governance', () => {
     // v4 reached a verdict rather than being invalidated. Running anything
     // against it would attribute the result to a study that already ended, so
     // the two endings are treated the same.
-    expect([...TERMINAL_STUDY_PHASES]).toEqual(['invalidated', 'stage0-hold']);
-    for (const ended of ['cdeb-fresh-v3', 'cdeb-fresh-v3r1', 'cdeb-fresh-v4']) {
+    // v5 later ended too, one stage further on, and stage1-hold joined the list
+    // for the same reason. The assertion names every ending the repository has
+    // reached rather than a count, so a new one has to be added deliberately.
+    expect([...TERMINAL_STUDY_PHASES]).toEqual(['invalidated', 'stage0-hold', 'stage1-hold']);
+    for (const ended of ['cdeb-fresh-v3', 'cdeb-fresh-v3r1', 'cdeb-fresh-v4', 'cdeb-fresh-v5']) {
       expect(() => resolveActiveStudyRoot(cdebRootNaming(ended))).toThrow(
         new RegExp(`Refused terminal study ${ended} as the active study`),
       );
@@ -73,8 +76,13 @@ describe('CDEB v5 Stage 0 governance', () => {
     expect(existsSync(join(CDEB_ROOT, 'studies', 'cdeb-fresh-v4', 'feasibility', 'adversarial-review.md'))).toBe(true);
   });
 
-  it('resolves v5 as active with the measured run still shut', () => {
-    expect(resolveActiveStudyRoot(CDEB_ROOT)).toBe(V5);
+  it('holds v5 at TERMINAL_HOLD with the measured run never opened', () => {
+    // This asserted that v5 resolved as the active study. v5 has since reached
+    // TERMINAL_HOLD -- two of its four fixed repositories cannot produce the
+    // same acceptance result twice -- so the slot is empty and the resolver
+    // refuses. What the test is for survives the change: the measured run was
+    // shut when v5 was active and is shut now that it is finished.
+    expect(() => resolveActiveStudyRoot(CDEB_ROOT)).toThrow(/No active CDEB study/);
     const study = readJson(join(V5, 'study.json'));
     const status = readJson(join(V5, 'STATUS.json'));
     expect(status).toMatchObject({ study_id: 'cdeb-fresh-v5', measured_run_allowed: false });

@@ -8,7 +8,7 @@
 
 ```text
 study:                cdeb-fresh-v5
-phase:                stage0-authority-corpus-feasibility
+phase:                stage1-hold
 measured_run_allowed: false
 predecessor v4:       stage0-hold, preserved, 0 measured rows
 measured rows:        0

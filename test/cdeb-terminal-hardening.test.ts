@@ -62,10 +62,23 @@ describe('CDEB terminal hardening', () => {
   });
 
   it('never resolves the terminal study as active and refuses the empty, unseeded measured-run path', () => {
-    expect(resolveActiveStudyRoot(CDEB_ROOT)).not.toBe(STUDY);
+    // Every study in this repository has now ended, so the resolver refuses
+    // outright rather than returning some other study. Both outcomes carry the
+    // claim -- the terminal study is not the one that resolves -- and the test
+    // accepts either instead of requiring that a live study exist.
+    let active: string | null = null;
+    try {
+      active = resolveActiveStudyRoot(CDEB_ROOT);
+    } catch (error) {
+      expect(String(error)).toMatch(/No active CDEB study/);
+    }
+    expect(active).not.toBe(STUDY);
     expect(() => assertMeasuredRunAuthorized(STUDY)).toThrow(/measured_run_allowed is not true; selection is empty; selection seed is null/);
-    // Whatever study is active, the measured-run gate stays shut for it too.
-    expect(() => assertMeasuredRunAuthorized(resolveActiveStudyRoot(CDEB_ROOT))).toThrow(/measured_run_allowed is not true/);
+    // And whichever study is active, if one is, the measured-run gate stays shut
+    // for it too.
+    if (active !== null) {
+      expect(() => assertMeasuredRunAuthorized(active as string)).toThrow(/measured_run_allowed is not true/);
+    }
   });
 
   it('refuses caller-supplied digests that do not bind the canonical artifacts', () => {
