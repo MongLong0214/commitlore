@@ -11,6 +11,13 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileS
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import {
+  ALL_OUTCOMES,
+  BASELINE_OUTCOMES,
+  REGISTRATION_DEFECTS,
+  classifyRun,
+  severestOutcome,
+} from "./guard-outcomes.mjs";
 
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..");
 const REGISTRY_PATH = resolve(ROOT, "bench/cdeb/guards/registry.json");
@@ -75,7 +82,7 @@ const readRegistry = () => {
   });
 };
 
-const OUTCOMES = new Set(["bound", "inert", "unavailable", "uncovered"]);
+const OUTCOMES = BASELINE_OUTCOMES;
 
 const readBaseline = () => {
   const parsed = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
@@ -131,18 +138,59 @@ const applyMutation = (mutation) => {
   }
 };
 
-const runTest = (testFile, testName) =>
-  spawnSync("npx", ["vitest", "run", testFile, "-t", testName], {
-    cwd: ROOT,
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-  });
+let runCounter = 0;
+
+// Returns how many tests actually executed, not just the exit code. `vitest run
+// -t <name>` exits 0 when the name matches nothing -- it skips the whole file and
+// reports success -- so the exit code alone cannot tell a mutation nothing
+// reacted to from a test name that no longer resolves. Renaming a test is
+// routine, and under the old reading that silently downgraded its guard.
+const runTest = (testFile, testName) => {
+  runCounter += 1;
+  const outputFile = resolve(backupRoot, `vitest-${String(runCounter)}.json`);
+  const args = ["vitest", "run", testFile, "--reporter=json", `--outputFile=${outputFile}`];
+  if (testName !== null) args.push("-t", testName);
+  const spawned = spawnSync("npx", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  if (spawned.error !== undefined) return { started: false, reason: spawned.error.message };
+  if (!existsSync(outputFile)) {
+    return { started: false, reason: `vitest exited ${String(spawned.status)} without writing a report` };
+  }
+  let report;
+  try {
+    report = JSON.parse(readFileSync(outputFile, "utf8"));
+  } catch (error) {
+    return { started: false, reason: `vitest report was not readable JSON: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const assertions = Array.isArray(report.testResults)
+    ? report.testResults.flatMap((file) => (Array.isArray(file.assertionResults) ? file.assertionResults : []))
+    : [];
+  const executed = assertions.filter((assertion) => assertion.status !== "skipped" && assertion.status !== "pending");
+  const failed = executed.filter((assertion) => assertion.status === "failed");
+  return {
+    started: true,
+    executed: executed.length,
+    failed: failed.length,
+    failedNames: failed.map((assertion) => assertion.fullName ?? assertion.title ?? "(unnamed test)"),
+  };
+};
+
+const describe = (outcome, mutation, property, named, filtered, whole) => {
+  if (outcome === "unavailable") {
+    return `${mutation.id}: Vitest could not start — ${filtered.reason}; ${mutation.why}`;
+  }
+  if (outcome === "unresolved") {
+    return `${mutation.id}: no test in ${property.testFile} matches "${named}", so nothing was run; the registration names a test that does not exist`;
+  }
+  if (outcome === "bound") return `${mutation.id}: mutation applied, test failed — ${mutation.why}`;
+  if (outcome === "misfiled") {
+    return `${mutation.id}: "${named}" passed, but the mutation failed ${whole.failedNames.join(", ")}; register it against the test that actually fails`;
+  }
+  return `${mutation.id}: mutation applied, no test in ${property.testFile} failed — ${mutation.why}`;
+};
 
 const measurements = [];
 let total = 0;
-let boundControls = 0;
-let inertControls = 0;
-let unavailableControls = 0;
+const controlTally = new Map(ALL_OUTCOMES.map((outcome) => [outcome, 0]));
 
 try {
   for (const property of readRegistry()) {
@@ -156,39 +204,34 @@ try {
     }
     const controlOutcomes = [];
     const details = [];
+    const record = (outcome, detail) => {
+      controlTally.set(outcome, controlTally.get(outcome) + 1);
+      controlOutcomes.push(outcome);
+      details.push(detail);
+    };
     for (const mutation of property.mutations) {
       total += 1;
       const applied = applyMutation(mutation);
       if (!applied.applied) {
-        unavailableControls += 1;
-        controlOutcomes.push("unavailable");
-        details.push(`${mutation.id}: mutation could not be applied — ${applied.reason}; ${mutation.why}`);
+        record("unavailable", `${mutation.id}: mutation could not be applied — ${applied.reason}; ${mutation.why}`);
         continue;
       }
       try {
-        const result = runTest(property.testFile, mutation.testName ?? property.testName);
-        if (result.error !== undefined) {
-          unavailableControls += 1;
-          controlOutcomes.push("unavailable");
-          details.push(`${mutation.id}: Vitest could not start — ${result.error.message}; ${mutation.why}`);
-        } else if (result.status !== 0) {
-          boundControls += 1;
-          controlOutcomes.push("bound");
-          details.push(`${mutation.id}: mutation applied, test failed — ${mutation.why}`);
-        } else {
-          inertControls += 1;
-          controlOutcomes.push("inert");
-          details.push(`${mutation.id}: mutation applied, test passed — ${mutation.why}`);
-        }
+        const named = mutation.testName ?? property.testName;
+        const filtered = runTest(property.testFile, named);
+        // The unfiltered run is only needed to tell misfiled from inert, and the
+        // clean tree is green, so a failure in it is caused by the mutation.
+        const whole =
+          filtered.started && filtered.executed > 0 && filtered.failed === 0
+            ? runTest(property.testFile, null)
+            : undefined;
+        const outcome = classifyRun(filtered, whole);
+        record(outcome, describe(outcome, mutation, property, named, filtered, whole));
       } finally {
         restoreActive();
       }
     }
-    const outcome = controlOutcomes.includes("unavailable")
-      ? "unavailable"
-      : controlOutcomes.includes("inert")
-        ? "inert"
-        : "bound";
+    const outcome = severestOutcome(controlOutcomes);
     measurements.push({ ...property, outcome, detail: details.join("; ") });
   }
 } finally {
@@ -197,24 +240,37 @@ try {
 }
 
 const baseline = readBaseline();
-const byOutcome = new Map([...OUTCOMES].map((outcome) => [outcome, []]));
+const byOutcome = new Map(ALL_OUTCOMES.map((outcome) => [outcome, []]));
 for (const measurement of measurements) byOutcome.get(measurement.outcome).push(measurement);
 
 process.stdout.write("OUTCOME TABLE:\n");
-for (const outcome of ["bound", "inert", "unavailable", "uncovered"]) {
+for (const outcome of ["bound", "misfiled", "unresolved", "inert", "unavailable", "uncovered"]) {
   const rows = byOutcome.get(outcome);
   process.stdout.write(`${outcome.toUpperCase()} (${String(rows.length)}):\n`);
   for (const row of rows) {
-    const baselineReason = baseline.get(row.guardId)?.reason;
+    // A registration defect has no legitimate baseline entry, so its own detail
+    // is the only account of it; for the recorded gaps the baseline reason is
+    // the considered one and supersedes the generated line.
+    const baselineReason = REGISTRATION_DEFECTS.has(outcome) ? undefined : baseline.get(row.guardId)?.reason;
     const suffix = baselineReason === undefined ? row.detail : baselineReason;
     process.stdout.write(`  ${row.guardId}: ${row.claim} — ${suffix}\n`);
   }
 }
-process.stdout.write(`CONTROL SUMMARY: ${String(boundControls)} bound, ${String(inertControls)} inert, ${String(unavailableControls)} unavailable, ${String(byOutcome.get("uncovered").length)} uncovered, ${String(total)} mutations run\n`);
+const tallyText = ["bound", "misfiled", "unresolved", "inert", "unavailable"]
+  .map((outcome) => `${String(controlTally.get(outcome))} ${outcome}`)
+  .join(", ");
+process.stdout.write(`CONTROL SUMMARY: ${tallyText}, ${String(byOutcome.get("uncovered").length)} uncovered, ${String(total)} mutations run\n`);
 
 const failures = [];
 const measuredIds = new Set(measurements.map((measurement) => measurement.guardId));
 for (const measurement of measurements) {
+  // A registration defect fails on sight and is never reconciled against the
+  // baseline. Recording one would ratchet in a guard whose stated coverage
+  // cannot be checked -- exactly the state the baseline exists to make visible.
+  if (REGISTRATION_DEFECTS.has(measurement.outcome)) {
+    failures.push(`REGISTRATION DEFECT: ${measurement.guardId}: ${measurement.detail}`);
+    continue;
+  }
   const expected = baseline.get(measurement.guardId);
   if (expected === undefined) {
     if (measurement.outcome === "uncovered") {
