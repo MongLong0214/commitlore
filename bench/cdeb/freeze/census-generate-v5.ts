@@ -20,6 +20,12 @@ import { join } from "node:path";
 
 import { assertAdjudicationConsistent, canonicalAdjudication, type RevivalAttempt } from "./adjudicate-v5.ts";
 import {
+  buildCensusReport,
+  descriptiveResult,
+  FLOOR_BUILDABLE_PER_REPOSITORY,
+  FLOOR_CONFIRMATORY_RESERVE_TOTAL,
+} from "./census-report-v5.ts";
+import {
   assertBaselineIsSemantic,
   validateReceipt,
   type AcceptanceBaseline,
@@ -118,6 +124,7 @@ const renderReport = (
   byRepository: Readonly<Record<string, Readonly<Record<string, number>>>>,
   census: Readonly<Record<string, number>>,
   generatedFrom: string,
+  floors: ReturnType<typeof buildCensusReport>,
 ): string => {
   const repositories = Object.keys(byRepository).sort();
   const total = Object.values(g4).reduce((sum, count) => sum + count, 0);
@@ -163,6 +170,40 @@ const renderReport = (
     ...Object.entries(census)
       .sort(([, left], [, right]) => right - left)
       .map(([key, count]) => `| \`${key ?? "null"}\` | ${String(count)} |`),
+    "",
+    "## Registered floor",
+    "",
+    `The estimand is an equal-weight average over four fixed repositories, so the floor is judged per`,
+    `stratum: **${String(FLOOR_BUILDABLE_PER_REPOSITORY)}** functionally violable candidates in each, and`,
+    `**${String(FLOOR_CONFIRMATORY_RESERVE_TOTAL)}** in the confirmatory reserve after the pilot takes three`,
+    "from each. A pooled share is the wrong number to judge feasibility by: a corpus can be mostly violable",
+    "overall and still fail, if the share is carried by the repositories with the most candidates.",
+    "",
+    `- verdict: **${floors.verdict}**`,
+    `- confirmatory reserve: **${String(floors.confirmatory_reserve_total)}**`,
+    "",
+    "| repository | candidates | adjudicated | violable | meets floor | still needed |",
+    "| --- | ---: | ---: | ---: | :-: | ---: |",
+    ...floors.repositories.map(
+      (r) =>
+        `| ${r.repository_id} | ${String(r.candidates)} | ${String(r.adjudicated)} | ` +
+        `${String(r.functionally_violable)} | ${r.meets_floor ? "yes" : "no"} | ${String(r.still_needed)} |`,
+    ),
+    "",
+    ...(floors.reasons.length === 0 ? [] : ["Why it is not met:", "", ...floors.reasons.map((r) => `- ${r}`), ""]),
+    floors.verdict === "INCOMPLETE"
+      ? "The census is unfinished, so this is a progress report and not a result. The remaining candidates are " +
+        "not a random sample of the finished ones -- the slowest repository finishes last, and it is the one " +
+        "whose floor is least certain."
+      : floors.verdict === "TERMINAL_HOLD"
+        ? "TERMINAL_HOLD. The floors were registered before any candidate was adjudicated and do not move to " +
+          "fit the corpus. Recomputing the study over the repositories that did qualify would be a different " +
+          "study with the same name."
+        : "The registered floors are met and the study may proceed to task and oracle freeze.",
+    "",
+    "## Descriptive result",
+    "",
+    descriptiveResult(floors),
     "",
     "## How to read these",
     "",
@@ -326,6 +367,12 @@ const main = (): number => {
     };
   });
 
+  const floors = buildCensusReport(
+    ledger.filter((row) => row.adjudication !== "VOID_INVALID_ACCEPTANCE"),
+    population,
+    Object.fromEntries(Object.entries(registered.repositories).map(([name, spec]) => [name, spec.command])),
+  );
+
   const summary = {
     total: nextCensus.length,
     buildable: nextCensus.filter((row) => row.disposition === "BUILDABLE").length,
@@ -356,7 +403,7 @@ const main = (): number => {
         2,
       ) + "\n",
     ],
-    [reportPath, renderReport(g4Counts, byRepository, censusCounts, ledgerLabel)],
+    [reportPath, renderReport(g4Counts, byRepository, censusCounts, ledgerLabel, floors)],
   ];
 
   if (!check) {

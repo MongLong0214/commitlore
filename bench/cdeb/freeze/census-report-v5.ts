@@ -169,9 +169,15 @@ export const descriptiveResult = (report: CensusReport): string => {
     `rate). For ${String(report.ratio.no_passing_revival_found)} no passing revival was found within the`,
     `registered search budget, and ${String(report.ratio.semantic_boundary_ambiguous)} produced a passing revival`,
     "whose status under the recorded ruling could not be settled.",
-    "A candidate with no passing revival is a bounded negative about this search, not a demonstration that the",
-    `decision cannot be violated: each required at least ${String(MIN_DISTINCT_SHAPES_FOR_A_NEGATIVE)} structurally`,
-    "distinct shapes to fail, and a shape nobody tried is not a shape that does not exist.",
+    // Phrased to survive being quoted out of context, which is how the earlier
+    // wording travelled. assertNegativeIsNotOverstated is blunt enough to reject
+    // even a negated use of the overclaim, and that bluntness is the point: a
+    // sentence that only reads correctly with its qualifier attached will
+    // eventually appear without it.
+    `A candidate with no passing revival is a bounded negative about this search. Each required at least`,
+    `${String(MIN_DISTINCT_SHAPES_FOR_A_NEGATIVE)} structurally distinct shapes to fail, and a shape nobody`,
+    "tried is not a shape that does not exist. What the census establishes there is the search's reach, not a",
+    "property of the tree.",
     `What refused the attempts that were made: ${
       Object.entries(report.ratio.by_mechanism)
         .sort(([, left], [, right]) => right - left)

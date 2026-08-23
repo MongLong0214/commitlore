@@ -6,35 +6,37 @@ Derived from `bench/cdeb/studies/cdeb-fresh-v5/stage1-r1/g4-adjudication.jsonl`.
 append-only adjudication ledger; nothing here is maintained by hand.
 
 - candidates: **62**
-- adjudicated: **23**
-- confirmed functionally violable: **21**
-- observed functional violability rate: **91%**
+- adjudicated: **29**
+- confirmed functionally violable: **24**
+- observed functional violability rate: **83%**
 
 ## G4 adjudication
 
 | disposition | candidates |
 | --- | ---: |
-| `UNDECIDED` | 39 |
-| `FUNCTIONALLY_VIOLABLE` | 21 |
-| `SEMANTIC_BOUNDARY_AMBIGUOUS` | 2 |
+| `UNDECIDED` | 33 |
+| `FUNCTIONALLY_VIOLABLE` | 24 |
+| `SEMANTIC_BOUNDARY_AMBIGUOUS` | 3 |
+| `NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET` | 2 |
 
 ## By repository
 
 ### agent-control-plane
 
-- `UNDECIDED`: 10
+- `UNDECIDED`: 8
+- `NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET`: 2
 
 ### agent-operator-score
 
-- `FUNCTIONALLY_VIOLABLE`: 11
-- `UNDECIDED`: 5
+- `FUNCTIONALLY_VIOLABLE`: 12
+- `UNDECIDED`: 4
 - `SEMANTIC_BOUNDARY_AMBIGUOUS`: 1
 
 ### gitseed
 
-- `UNDECIDED`: 11
-- `FUNCTIONALLY_VIOLABLE`: 10
-- `SEMANTIC_BOUNDARY_AMBIGUOUS`: 1
+- `FUNCTIONALLY_VIOLABLE`: 12
+- `UNDECIDED`: 8
+- `SEMANTIC_BOUNDARY_AMBIGUOUS`: 2
 
 ### logic-pro-mcp
 
@@ -44,8 +46,39 @@ append-only adjudication ledger; nothing here is maintained by hand.
 
 | disposition | candidates |
 | --- | ---: |
-| `null` | 60 |
-| `NOT_BUILDABLE:record-semantic-boundary-ambiguous` | 2 |
+| `null` | 57 |
+| `NOT_BUILDABLE:record-semantic-boundary-ambiguous` | 3 |
+| `NOT_BUILDABLE:no-functionally-passing-violation` | 2 |
+
+## Registered floor
+
+The estimand is an equal-weight average over four fixed repositories, so the floor is judged per
+stratum: **8** functionally violable candidates in each, and
+**24** in the confirmatory reserve after the pilot takes three
+from each. A pooled share is the wrong number to judge feasibility by: a corpus can be mostly violable
+overall and still fail, if the share is carried by the repositories with the most candidates.
+
+- verdict: **INCOMPLETE**
+- confirmatory reserve: **18**
+
+| repository | candidates | adjudicated | violable | meets floor | still needed |
+| --- | ---: | ---: | ---: | :-: | ---: |
+| agent-control-plane | 10 | 2 | 0 | no | 8 |
+| agent-operator-score | 17 | 13 | 12 | yes | 0 |
+| gitseed | 22 | 14 | 12 | yes | 0 |
+| logic-pro-mcp | 13 | 0 | 0 | no | 8 |
+
+Why it is not met:
+
+- agent-control-plane: 0 violable of 10, needs 8 (8 unadjudicated, so 8 of them must be violable)
+- logic-pro-mcp: 0 violable of 13, needs 8 (13 unadjudicated, so 8 of them must be violable)
+- confirmatory reserve is 18 after the pilot takes 3 per repository, needs 24
+
+The census is unfinished, so this is a progress report and not a result. The remaining candidates are not a random sample of the finished ones -- the slowest repository finishes last, and it is the one whose floor is least certain.
+
+## Descriptive result
+
+Of 29 naturally recorded decisions adjudicated across four repositories, 24 were confirmed functionally violable at the frozen snapshot (83% observed functional violability rate). For 2 no passing revival was found within the registered search budget, and 3 produced a passing revival whose status under the recorded ruling could not be settled. A candidate with no passing revival is a bounded negative about this search. Each required at least 3 structurally distinct shapes to fail, and a shape nobody tried is not a shape that does not exist. What the census establishes there is the search's reach, not a property of the tree. What refused the attempts that were made: test 6. Shapes attempted: replacement 16, additive-coexistence 14, opt-in-configurable 4, alternate-integration-boundary 1. Per-repository counts are reported beside the acceptance command that judged them and are not compared to each other: the commands differ in scope, so a lower violable rate may mean a stricter repository or a wider suite, and this design cannot separate them.
 
 ## How to read these
 
