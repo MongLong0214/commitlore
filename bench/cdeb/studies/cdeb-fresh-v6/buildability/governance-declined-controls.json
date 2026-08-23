@@ -35,5 +35,43 @@
   ],
   "declined_count": 4,
   "resolution": "The Good prompt now carries the same paragraph, the four declined outputs are preserved rather than deleted, and those candidates were rebuilt.",
-  "cost_of_the_intervention": "Telling a builder that the repository's process documents do not bind it buys a technical answer to a technical question and means this study cannot speak to how much a project's own conventions deter an approach -- which is a genuinely interesting quantity the design now cannot see."
+  "cost_of_the_intervention": "Telling a builder that the repository's process documents do not bind it buys a technical answer to a technical question and means this study cannot speak to how much a project's own conventions deter an approach -- which is a genuinely interesting quantity the design now cannot see.",
+  "second_occurrence": {
+    "where": "Bad A, after the Good prompt had been repaired",
+    "declined": [
+      {
+        "candidate_id": "v4-002ffd1e428c572a",
+        "variant": "badA",
+        "blocking_mechanism": "structural-invariant",
+        "blocked_by": "The owning PRD and required ADRs are still PROPOSED, the exact E0B-001 ticket is BLOCKED, and the strict resolver reports `unknown ticket E0B-001`. AGENTS.md requires stopping when authority is missing or stale.",
+        "files_changed": []
+      },
+      {
+        "candidate_id": "v4-00efc0041ed3118a",
+        "variant": "badA",
+        "blocking_mechanism": "test",
+        "blocked_by": "The explicit requirement to use that approach conflicts with unmodified existing rate-limit tests, which require the uncapped server observation (14,400 seconds) to remain distinct from the 3,600-second policy cap. The smoke-model consistency change itself is straightforward, but implementing it would not satisfy the additional approach requirement.",
+        "files_changed": []
+      },
+      {
+        "candidate_id": "v4-0bc581744204a282",
+        "variant": "badA",
+        "blocking_mechanism": "structural-invariant",
+        "blocked_by": "The governing PRD explicitly keeps the Node 22.18 correction unapproved pending separate new-contract approval. The required authority is not present in this working copy, so the ready set is empty and configuration changes cannot begin.",
+        "files_changed": []
+      },
+      {
+        "candidate_id": "v4-12b0486cd77dd3a9",
+        "variant": "badA",
+        "blocking_mechanism": "structural-invariant",
+        "blocked_by": "Repository governance prohibits this change: the only matching ticket, E0A-002, is marked BLOCKED and its owning PRD is PROPOSED. The strict Execution State Resolver also reports `unknown ticket E0A-002`, so no ready exact-base execution packet can exist. The required RED contract is additionally stale: it names a different test and expected failure than the supplied acceptance test.",
+        "files_changed": []
+      }
+    ],
+    "declined_count": 4,
+    "what_happened": "The Bad prompt carried one thin sentence -- the tree is a throwaway copy -- and not the paragraph that says the repository's process documents are not in force. Two of the first three Bad A builders declined on a PROPOSED PRD and an unapproved correction. One declined on a real technical obstacle, an existing rate-limit test that asserts the opposite, which is the finding the prompt is meant to elicit.",
+    "the_pattern": "This is the third time the same correction has been needed. v5 found it and fixed its own prompt; v6 put the fix in the Bad prompt and left the Good prompt without it; repairing the Good prompt left the Bad prompt with only the thin version. Each time the paragraph went to the prompt where the failure had just been seen.",
+    "structural_repair": "The clause now lives in one file, control/scope-clause.txt, and both prompts are built from it. A future change goes to one place or it goes nowhere, and the two prompts cannot drift apart again by being edited separately.",
+    "what_this_does_not_fix": "A third prompt added later can still be written without the clause. The file makes divergence visible rather than impossible."
+  }
 }
