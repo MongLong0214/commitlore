@@ -1,0 +1,59 @@
+{
+  "candidate_id": "v4-c15e92a3b1a755d4",
+  "need_rank_1": {
+    "rank_key": "59b0c6f9f6839d0f3e7b4b881cfd367664b2808bdca7b87547afa572998ef51b",
+    "need_hash": "934d2d0a423c7283298acadb6d315bb6b2b9b34ba3791e8e07dc1a6e01e02a11",
+    "need": {
+      "title": "Create and accept the missing D0-010 contract for the Node runtime authority conflict",
+      "what_is_missing_or_wrong": "The tree says D0-010 / issue #167 has no exact ticket contract, so it cannot enter a ready set. The same issue tracks an unresolved conflict between the Node 22.18 runtime actually used by package/CI and the Node 20 floor in higher-authority documents.",
+      "what_done_would_look_like": "An accepted D0-010 atomic ticket defines the authorized resolution, owned paths, RED failure, acceptance-to-test mapping, and verification evidence; the catalog/board can then include it consistently and S0 can evaluate it as an executable record.",
+      "tree_evidence": [
+        "docs/planning/AOS-EXECUTION-ROADMAP.md:39-41",
+        "docs/planning/AOS-EXECUTION-ROADMAP.md:73-75",
+        "docs/planning/AOS-EXECUTION-ROADMAP.md:158-160",
+        "tests/planning/workspace-skeleton.test.mjs:758-772",
+        "package.json:7-9"
+      ],
+      "distinct_from_others_because": "This is an authority and ticket-completeness gap, not an error in the existing dependency parser or CI workflow."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Create D0-010 for issue #167 as the S0 atomic contract that resolves the Node runtime-authority conflict.\n\nThe contract must make Node.js `>=22.18 <25` the single intended runtime range, with Node 22 and 24 as the supported CI lanes. Node 20 must not remain represented as a supported execution lane, because the repository's TypeScript test paths cannot execute there without producing a trustworthy result.\n\nRegister D0-010 consistently in the public planning catalog, issue map, traceability graph, rendered Board, and S0 roadmap so the execution-state resolver can classify it as an executable D0 record rather than dropping it as an unknown ticket. Bind it to issue #167, the D0 PRD, ADR-0001/0003/0012, and D0-002. The contract must explicitly identify its owned paths and symbols, its pre-GREEN RED failure, acceptance-to-test mapping, focused/full/build/manual verification, stop conditions, completion evidence, and invalidation conditions.\n\nThe contract must authorize reconciliation of every active runtime declaration with that range, including higher-authority documents. It must not claim that a ticket or local registry overrides those documents: any changed SSOT, ADR, or PRD requires its own exact-digest maintainer acceptance before implementation proceeds. Likewise, acceptance must be backed by the required authenticated exact-head evidence; do not manufacture approval from local prose or a mutable registry. Until those external facts exist, D0-010 may be classified as blocked, but it must be a complete resolver-evaluable record.\n\nDo not claim that the runtime reconciliation or D0 execution is already complete merely because this planning contract has been authored.",
+  "acceptance_test_path": "tests/planning/d0-010-runtime-contract.acceptance.test.mjs",
+  "acceptance_test_source": "import assert from \"node:assert/strict\";\nimport { spawnSync } from \"node:child_process\";\nimport { createHash } from \"node:crypto\";\nimport { readFileSync } from \"node:fs\";\nimport { resolve } from \"node:path\";\nimport test from \"node:test\";\nimport {\n  buildTicketAuthorityIndex,\n  parseTicketOwnershipAndRed,\n  resolveExecutionState\n} from \"../../scripts/resolve-execution-state.mjs\";\nimport {\n  SUPPORTED_NODE_RANGE,\n  isSupportedNodeVersion\n} from \"../../scripts/schema-conformance.mjs\";\n\nconst root = resolve(new URL(\"../..\", import.meta.url).pathname);\nconst read = (path) => readFileSync(resolve(root, path), \"utf8\");\nconst digest = (text) => createHash(\"sha256\").update(text, \"utf8\").digest(\"hex\");\n\ntest(\"D0-010 is a resolver-evaluable Node 22.18 runtime contract\", () => {\n  assert.equal(SUPPORTED_NODE_RANGE, \">=22.18 <25\");\n  assert.equal(isSupportedNodeVersion(\"22.18.0\"), true);\n  assert.equal(isSupportedNodeVersion(\"20.19.0\"), false);\n\n  const catalog = JSON.parse(read(\"docs/issues.json\"));\n  const records = catalog.tickets.filter((record) => record.id === \"D0-010\");\n  assert.equal(records.length, 1, \"D0-010 must have one canonical catalog record\");\n\n  const record = records[0];\n  assert.equal(record.issue, 167);\n  assert.equal(record.epic, \"D0\");\n  assert.equal(record.milestone, \"S0 \u00b7 Name & Contracts\");\n  assert.deepEqual(record.dependencies, [\"D0-002\"]);\n\n  const authorityIndex = buildTicketAuthorityIndex(read(\"docs/TRACEABILITY.md\"));\n  assert.equal(authorityIndex.ok, true, authorityIndex.reason);\n  const authority = authorityIndex.index[\"D0-010\"];\n  assert.ok(authority, \"the authority graph must expose D0-010\");\n  assert.equal(authority.prd_path, \"docs/prd/PRD-D0-name-migration-and-repository-skeleton.md\");\n  assert.deepEqual(authority.adr_ids, [\"ADR-0001\", \"ADR-0003\", \"ADR-0012\"]);\n\n  const ticketText = read(record.ticket_path);\n  const contract = parseTicketOwnershipAndRed(ticketText, { ticketId: \"D0-010\" });\n  assert.equal(contract.ok, true, contract.reason);\n  assert.ok(contract.owned_paths.length > 0, \"the resolver needs declared owned paths\");\n  assert.ok(contract.owned_symbols.length > 0, \"the resolver needs declared owned symbols\");\n  assert.ok(contract.red_command, \"the resolver needs a RED command\");\n\n  const facts = JSON.parse(read(\"fixtures/operational-state/current-baseline/facts.json\"));\n  const ticketDigest = digest(ticketText);\n  const prdDigest = digest(read(authority.prd_path));\n  facts.liveDigests[record.ticket_path] = ticketDigest;\n  facts.liveDigests[authority.prd_path] = prdDigest;\n  facts.tickets[\"D0-010\"] = {\n    kind: \"executable\",\n    dependencies: record.dependencies,\n    owned_paths: contract.owned_paths,\n    owned_symbols: contract.owned_symbols,\n    red_command: contract.red_command,\n    prd_path: authority.prd_path,\n    adr_paths: {},\n    digests: {\n      ticket: ticketDigest,\n      prd: prdDigest,\n      prd_path: authority.prd_path,\n      adrs: {},\n      adr_paths: {}\n    }\n  };\n\n  const state = resolveExecutionState({\n    mode: \"offline\",\n    facts,\n    now: \"2026-08-23T00:00:00.000Z\",\n    runtimeIdentity: {\n      repository: facts.repository,\n      branch: facts.defaultBranch,\n      head: facts.currentHead\n    }\n  });\n  const evaluation = state.tickets[\"D0-010\"];\n  assert.ok(evaluation, \"the resolver must classify D0-010\");\n  assert.doesNotInclude(\n    evaluation.blockers.map(({ code }) => code),\n    \"TICKET_CONTRACT_INCOMPLETE\",\n    \"a complete contract must not be rejected as incomplete\"\n  );\n  assert.doesNotInclude(\n    evaluation.blockers.map(({ code }) => code),\n    \"RED_CONTRACT_INVALID\",\n    \"a complete contract must provide an executable RED command\"\n  );\n\n  const rendered = spawnSync(process.execPath, [\"scripts/render-execution-views.mjs\", \"--check\"], {\n    cwd: root,\n    encoding: \"utf8\"\n  });\n  assert.equal(rendered.status, 0, rendered.stderr);\n  assert.match(rendered.stdout, /EXECUTION_VIEWS_CHECK surfaces=2 drift=0 conflicts=0/);\n});\n",
+  "how_to_run": "node --test tests/planning/d0-010-runtime-contract.acceptance.test.mjs",
+  "why_it_fails_on_the_current_tree": "The canonical catalog has no D0-010 record, so the test fails at the required single-record assertion. The resolver CLI also reports `unknown ticket D0-010` when asked for it.",
+  "two_different_implementations_that_would_both_pass": [
+    "Author the contract and all catalog projections directly, then regenerate the Board from the updated catalog.",
+    "Generate the catalog/projection updates through repository tooling while producing the same public catalog, rendered Board, and resolver-evaluable contract."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "package.json",
+    ".github/workflows/ci.yml",
+    "docs/north-star/agent-operator-score-ssot-v1.0.md",
+    "docs/adr/ADR-0001-product-identity-and-legacy-boundary.md",
+    "docs/adr/ADR-0003-runtime-repository-and-distribution.md",
+    "docs/adr/ADR-0012-planning-tdd-and-exact-head-governance.md",
+    "docs/prd/PRD-D0-name-migration-and-repository-skeleton.md",
+    "docs/prd/PRD-D0-GOV-authenticated-governance-repair.md",
+    "docs/planning/AOS-EXECUTION-ROADMAP.md",
+    "docs/GITHUB-ISSUE-MAP.md",
+    "docs/issues.json",
+    "docs/TRACEABILITY.md",
+    "docs/tickets/BOARD.md",
+    "docs/tickets/D0/D0-002-repository-and-npm-workspace-skeleton.md",
+    "docs/tickets/D0/D0-004-planning-contract-validator-and-governance-gate.md",
+    "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md",
+    "docs/tickets/D0/D0-012-ticket-owned-census-rederivation.md",
+    "docs/tickets/D0/D0-013-restore-execution-view-regression-coverage.md",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning-contract.test.mjs",
+    "tests/execution-state.test.mjs",
+    "scripts/validate-planning.mjs",
+    "scripts/resolve-execution-state.mjs",
+    "scripts/render-execution-views.mjs",
+    "scripts/schema-conformance.mjs",
+    "fixtures/operational-state/current-baseline/facts.json"
+  ]
+}

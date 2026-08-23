@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a `runs.db.json` sidecar file, continually writes run and observation history to it, and makes normal load/history/observation reads use that JSON file when the store is disk-backed.",
+    "reading_applied": "Literal, categorical reading: \u201cRuled out: JSON files on disk\u201d prohibits disk JSON storage, including a sidecar or optional/mirrored JSON path.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch creates and uses a JSON file on disk for persisted history. The rule is unqualified, and the patch goes beyond merely exporting JSON: it makes the disk JSON file the usual source for these reads."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a disk-backed `<database>.json` history file, writes it after initialization and saves, and makes normal `load`, `history`, and `observations` read from that JSON file when available.",
+    "reading_applied": "Strict reading: \u201cRuled out: JSON files on disk\u201d prohibits creating or using JSON files on disk for this storage behavior, not merely making SQLite the default.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch explicitly creates and persists `runs.db.json` (or equivalent) and relies on it for normal reads. That is exactly the use of JSON files on disk that the rule ruled out; the rule\u2019s wording provides no qualifier limiting the prohibition to a default-only policy."
+  }
+}

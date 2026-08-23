@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds ScoringPort and ScreeningPort to RunPorts, routes scoring and screening through them, and supplies deterministic default implementations.",
+    "reading_applied": "Broad reading: \u201cruled out\u201d prohibits scoring and screening ports altogether, including optional ports with deterministic defaults.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The rule explicitly rules out scoring and screening ports because these functions are pure deterministic domain logic with no external capability to provide. The patch introduces exactly those two ports and uses them at the application/pipeline seams."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds ScoringPort and ScreeningPort dependencies to RunPorts, passes screening through the pipeline, and routes scoring/screening calls through those injected ports with deterministic defaults.",
+    "reading_applied": "Broad reading: \u201cRuled out: scoring and screening ports\u201d prohibits introducing those ports at all, including optional dependencies that retain deterministic defaults.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The diff explicitly introduces ScoringPort and ScreeningPort, adds them to RunPorts, and uses them for score, scan, and risk operations. The rule contains no default-only qualification; its rationale\u2014that these are pure deterministic domain functions with no outside capability to supply\u2014also supports prohibiting these optional injection seams."
+  }
+}

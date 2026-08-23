@@ -1,0 +1,36 @@
+{
+  "candidate_id": "v4-77e1745655a235ce",
+  "need_rank_1": {
+    "rank_key": "4ee260c8b806d8cd8c4db4e3ca5f2892acaf36ffc037d9c1f898caa12a142230",
+    "need_hash": "75f2cd37cd9c77dc295de4bd29e5a93c2c33e41f4bc5d08b6c093b9352857dfc",
+    "need": {
+      "title": "Parse manifest data instead of substring-scanning it",
+      "what_is_missing_or_wrong": "MCP and Ollama detection treats any occurrence of the words in raw manifest text as a positive signal, so comments, descriptions, or unrelated names containing those substrings can misclassify a repository.",
+      "what_done_would_look_like": "Extract relevant dependency/configuration names from supported manifests and match exact normalized entries; add integration tests for legitimate entries and near-miss text such as comments or package names containing \"mcp\" or \"ollama\".",
+      "tree_evidence": [
+        "gitseed/category.py:55-67 derive both manifest signals with `\"mcp\" in self._manifest(files)` and `\"ollama\" in self._manifest(files)`.",
+        "gitseed/category.py:78-83 concatenates raw text from several manifest formats rather than parsing their dependency/configuration structures.",
+        "tests/test_category.py:140-145 only asserts the built-in pack names; no test exercises manifest contents through `FileEvidenceReader`."
+      ],
+      "distinct_from_others_because": "This concerns false positives in manifest-derived MCP/local-AI categories, independent of source scanning or incomplete fetch handling."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make manifest-based category evidence precise. For the supported manifest files (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, and `requirements.txt`), detect the MCP and local-AI signals from declared dependency or configuration entry names. A normalized entry named exactly `mcp` must produce the `manifest_entries` value `mcp`; one named exactly `ollama` must produce the `dependencies` value `ollama`.\n\nDo not produce either signal merely because those words appear elsewhere in a manifest, including comments, descriptive metadata, or longer dependency names such as `mcp-tools` and `ollama-client`. Preserve the existing evidence basis and category-pack behavior.",
+  "acceptance_test_path": "tests/test_category_manifest_evidence.py",
+  "acceptance_test_source": "from __future__ import annotations\n\nimport pytest\n\nfrom gitseed.category import FileEvidenceReader\nfrom gitseed.collect.search import Candidate\nfrom gitseed.pipeline.run import FetchedFiles\n\n\nCANDIDATE = Candidate(\"owner/repo\", \"owner\", \"\", 0, \"\")\n\n\nVALID_MANIFESTS = (\n    (\"package.json\", '{\"dependencies\": {\"mcp\": \"1.0\", \"ollama\": \"1.0\"}}'),\n    (\"pyproject.toml\", '[project]\\ndependencies = [\"mcp>=1\", \"ollama>=1\"]\\n'),\n    (\"Cargo.toml\", '[dependencies]\\nmcp = \"1\"\\nollama = \"1\"\\n'),\n    (\n        \"go.mod\",\n        \"module example.invalid/project\\n\\nrequire (\\n    example.invalid/mcp v1.0.0\\n    example.invalid/ollama v1.0.0\\n)\\n\",\n    ),\n    (\"requirements.txt\", \"mcp==1.0\\nollama==1.0\\n\"),\n)\n\n\nNEAR_MISS_MANIFESTS = (\n    (\n        \"package.json\",\n        '{\"description\": \"MCP and Ollama are mentioned only in prose\", '\n        '\"dependencies\": {\"mcp-tools\": \"1.0\", \"ollama-client\": \"1.0\"}}',\n    ),\n    (\n        \"pyproject.toml\",\n        \"# MCP and Ollama are not dependencies here\\n\"\n        \"[project]\\n\"\n        'dependencies = [\"mcp-tools>=1\", \"ollama-client>=1\"]\\n',\n    ),\n    (\n        \"Cargo.toml\",\n        \"# MCP and Ollama are not dependencies here\\n\"\n        \"[dependencies]\\n\"\n        'mcp-tools = \"1\"\\n'\n        'ollama-client = \"1\"\\n',\n    ),\n    (\n        \"go.mod\",\n        \"// MCP and Ollama are not dependencies here\\n\"\n        \"module example.invalid/project\\n\\n\"\n        \"require (\\n\"\n        \"    example.invalid/mcp-tools v1.0.0\\n\"\n        \"    example.invalid/ollama-client v1.0.0\\n\"\n        \")\\n\",\n    ),\n    (\n        \"requirements.txt\",\n        \"# MCP and Ollama are not dependencies here\\n\"\n        \"mcp-tools==1.0\\n\"\n        \"ollama-client==1.0\\n\",\n    ),\n)\n\n\ndef _evidence_values(path: str, text: str) -> dict[str, frozenset[str]]:\n    evidence = FileEvidenceReader().read_evidence(\n        CANDIDATE,\n        FetchedFiles(((path, text),)),\n        None,\n    )\n    return {item.evidence: item.values for item in evidence}\n\n\n@pytest.mark.parametrize((\"path\", \"text\"), VALID_MANIFESTS)\ndef test_declared_manifest_dependencies_produce_category_evidence(\n    path: str, text: str\n) -> None:\n    values = _evidence_values(path, text)\n\n    assert values[\"manifest_entries\"] == frozenset({\"mcp\"})\n    assert values[\"dependencies\"] == frozenset({\"ollama\"})\n\n\n@pytest.mark.parametrize((\"path\", \"text\"), NEAR_MISS_MANIFESTS)\ndef test_manifest_prose_comments_and_longer_package_names_do_not_produce_category_evidence(\n    path: str, text: str\n) -> None:\n    values = _evidence_values(path, text)\n\n    assert values[\"manifest_entries\"] == frozenset()\n    assert values[\"dependencies\"] == frozenset()\n",
+  "how_to_run": "python3 -m pytest tests/test_category_manifest_evidence.py -q",
+  "why_it_fails_on_the_current_tree": "`FileEvidenceReader` concatenates each supported manifest's raw lowercase text and uses substring containment. Every near-miss fixture therefore incorrectly emits both signals because its comments, prose, or longer package names contain `mcp` and `ollama`.",
+  "two_different_implementations_that_would_both_pass": [
+    "Use format-aware readers to obtain dependency/configuration names, canonicalize those names, and compare them to the two signal names.",
+    "Use independent extractors for each supported manifest syntax that expose only declared dependency/configuration identifiers before applying the same exact-name checks."
+  ],
+  "files_read_by_author": [
+    "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/v4-77e1745655a235ce/blind-tree/AGENTS.md",
+    "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/v4-77e1745655a235ce/blind-tree/gitseed/category.py",
+    "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/v4-77e1745655a235ce/blind-tree/tests/test_category.py",
+    "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/v4-77e1745655a235ce/blind-tree/pyproject.toml",
+    "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/v4-77e1745655a235ce/blind-tree/README.md",
+    "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/v4-77e1745655a235ce/blind-tree/gitseed/pipeline/run.py"
+  ]
+}

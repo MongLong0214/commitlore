@@ -1,0 +1,40 @@
+{
+  "candidate_id": "v4-cc76268ad4bb9a3e",
+  "need_rank_1": {
+    "rank_key": "6698e8e651789542487fa9f63a0aff93f731aed49204a0cfca9a107f2933a3fc",
+    "need_hash": "367cd27a6fc30b9310a2afbf7b4cb955b42cbf04877167093b29be5f3d061e65",
+    "need": {
+      "title": "Define canonical ordering for the derived census and admitted files",
+      "what_is_missing_or_wrong": "The ticket requires a deterministic census and evidence listing derived directories and files, but never states the ordering for catalog paths, declarations, diagnostics, or admitted files. Filesystem traversal order could make otherwise correct implementations produce different observable results.",
+      "what_done_would_look_like": "Specify a canonical sort order for ticket paths, extracted declarations, diagnostics, and admitted repository-relative files; add assertions that the returned census uses that order across the relevant multi-declaration cases.",
+      "tree_evidence": [
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:107 and :109 require deterministic behavior but define no ordering rule.",
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:132 requires every repeated declaration to be admitted, making result ordering observable.",
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:158 requires a census showing captured directories and admitted files."
+      ],
+      "distinct_from_others_because": "This addresses reproducible successful output, not parsing classification or malformed-input diagnostics."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Define a filesystem-independent canonical order for the ticket-derived fixture-admission census.\n\nThe returned census must expose these public lists:\n- `catalogTicketPaths`: every catalog ticket path considered.\n- `declarations`: every extracted fixture declaration as `{ ticketPath, declaration }`.\n- `directories`: every distinct, safely materialized declared fixture directory considered for admission.\n- `malformed`: malformed-ticket diagnostics as `{ path, reason }`.\n- `admitted`: admitted repository-relative regular-file paths.\n\nUse ascending Unicode code-point lexicographic order for paths and strings; do not depend on catalog input order, declaration source order, locale collation, or filesystem traversal order. Sort declarations by `ticketPath` and then `declaration`; sort malformed diagnostics by `path` and then `reason`; sort directories and admitted paths by their repository-relative path. Preserve repeated extracted declarations as separate declaration entries, while `directories` and `admitted` list each resulting path once.\n\nReordering the same catalog input must produce the same census in every listed field. Preserve all existing admission, rejection, malformed-ticket, glob-predicate, and symlink-safety behavior.",
+  "acceptance_test_path": "tests/planning/fixture-directory-census-ordering.acceptance.test.mjs",
+  "acceptance_test_source": "import assert from \"node:assert/strict\";\nimport { mkdirSync, mkdtempSync, rmSync, writeFileSync } from \"node:fs\";\nimport { tmpdir } from \"node:os\";\nimport { dirname, join, resolve } from \"node:path\";\nimport test from \"node:test\";\nimport { ticketDeclaredFixtureDirectories } from \"./workspace-skeleton.test.mjs\";\n\nconst ticket = (...declarations) => [\n  \"# Fixture declaration\",\n  \"\",\n  \"## Exact ownership\",\n  ...declarations.map((declaration) => `- ${declaration}`),\n  \"\",\n  \"## Preconditions\",\n  \"\"\n].join(\"\\n\");\n\nconst writeFixture = (root, path) => {\n  const absolutePath = resolve(root, path);\n  mkdirSync(dirname(absolutePath), { recursive: true });\n  writeFileSync(absolutePath, \"fixture\\n\");\n};\n\ntest(\"fixture admission census has canonical ordering independent of catalog and traversal order\", () => {\n  const root = mkdtempSync(join(tmpdir(), \"aos-fixture-census-ordering-\"));\n  try {\n    writeFixture(root, \"fixtures/alpha/z-last.json\");\n    writeFixture(root, \"fixtures/alpha/nested/a-first.json\");\n    writeFixture(root, \"fixtures/bravo/allowed.json\");\n    writeFixture(root, \"fixtures/bravo/refused.txt\");\n    writeFixture(root, \"fixtures/zulu/child/one.json\");\n\n    const unreadable = \"docs/tickets/D0/a-unreadable.md\";\n    const first = \"docs/tickets/D0/b-multiple-declarations.md\";\n    const missingOwnership = \"docs/tickets/D0/m-missing-ownership.md\";\n    const second = \"docs/tickets/D0/z-multiple-declarations.md\";\n    const texts = new Map([\n      [first, ticket(\"fixtures/bravo/*.json; fixtures/alpha/**\")],\n      [missingOwnership, \"# Missing ownership section\\n\"],\n      [second, ticket(\"fixtures/zulu/**; fixtures/alpha/**\")]\n    ]);\n    const readTicket = (path) => texts.get(path);\n    const expected = {\n      catalogTicketPaths: [unreadable, first, missingOwnership, second],\n      declarations: [\n        { ticketPath: first, declaration: \"fixtures/alpha/**\" },\n        { ticketPath: first, declaration: \"fixtures/bravo/*.json\" },\n        { ticketPath: second, declaration: \"fixtures/alpha/**\" },\n        { ticketPath: second, declaration: \"fixtures/zulu/**\" }\n      ],\n      directories: [\"fixtures/alpha\", \"fixtures/bravo\", \"fixtures/zulu\"],\n      malformed: [\n        { path: unreadable, reason: \"unreadable\" },\n        { path: missingOwnership, reason: \"ownership-section-missing\" }\n      ],\n      admitted: [\n        \"fixtures/alpha/nested/a-first.json\",\n        \"fixtures/alpha/z-last.json\",\n        \"fixtures/bravo/allowed.json\",\n        \"fixtures/zulu/child/one.json\"\n      ]\n    };\n\n    const census = (catalogTicketPaths) => ticketDeclaredFixtureDirectories({\n      root,\n      catalogTicketPaths,\n      readTicket\n    });\n    const shuffled = census([missingOwnership, second, first, unreadable]);\n    const reordered = census([unreadable, first, missingOwnership, second]);\n\n    for (const [field, value] of Object.entries(expected)) {\n      assert.deepEqual(shuffled[field], value, `${field} is not canonically ordered`);\n      assert.deepEqual(reordered[field], value, `${field} changes when catalog order changes`);\n    }\n  } finally {\n    rmSync(root, { recursive: true, force: true });\n  }\n});\n",
+  "how_to_run": "node --test tests/planning/fixture-directory-census-ordering.acceptance.test.mjs",
+  "why_it_fails_on_the_current_tree": "The current census returns only `admitted` and `malformed`; it exposes no catalog-path, declaration, or captured-directory lists. It also processes `catalogTicketPaths` in caller order and appends malformed diagnostics in that order. Although admitted files are currently sorted, the proposed test fails because the complete ordered census contract is absent.",
+  "two_different_implementations_that_would_both_pass": [
+    "An implementation may collect all census records first and sort each public list immediately before returning it.",
+    "An implementation may maintain ordered collections during collection, provided the returned lists obey the specified canonical order and are independent of input and filesystem traversal order."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "docs/north-star/agent-operator-score-ssot-v1.0.md",
+    "docs/adr/ADR-0001-product-identity-and-legacy-boundary.md",
+    "docs/adr/ADR-0003-runtime-repository-and-distribution.md",
+    "docs/adr/ADR-0012-planning-tdd-and-exact-head-governance.md",
+    "docs/prd/PRD-D0-name-migration-and-repository-skeleton.md",
+    "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md",
+    "package.json",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning/fixture-directory-admission.test.mjs"
+  ]
+}

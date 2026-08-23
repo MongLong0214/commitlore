@@ -1,0 +1,101 @@
+{
+  "candidate_id": "v4-77e1745655a235ce",
+  "scout_files_read": [
+    "gitseed/category.py",
+    "tests/test_category.py"
+  ],
+  "needs": [
+    {
+      "title": "Parse manifest data instead of substring-scanning it",
+      "what_is_missing_or_wrong": "MCP and Ollama detection treats any occurrence of the words in raw manifest text as a positive signal, so comments, descriptions, or unrelated names containing those substrings can misclassify a repository.",
+      "what_done_would_look_like": "Extract relevant dependency/configuration names from supported manifests and match exact normalized entries; add integration tests for legitimate entries and near-miss text such as comments or package names containing \"mcp\" or \"ollama\".",
+      "tree_evidence": [
+        "gitseed/category.py:55-67 derive both manifest signals with `\"mcp\" in self._manifest(files)` and `\"ollama\" in self._manifest(files)`.",
+        "gitseed/category.py:78-83 concatenates raw text from several manifest formats rather than parsing their dependency/configuration structures.",
+        "tests/test_category.py:140-145 only asserts the built-in pack names; no test exercises manifest contents through `FileEvidenceReader`."
+      ],
+      "distinct_from_others_because": "This concerns false positives in manifest-derived MCP/local-AI categories, independent of source scanning or incomplete fetch handling."
+    },
+    {
+      "title": "Restrict the coding-agent source signal to actual source material",
+      "what_is_missing_or_wrong": "The source signal combines every fetched non-AGENTS file and classifies on a generic `agent` plus `tool`, `planner`, or `executor` word match. Documentation, manifests, generated files, or unrelated prose can therefore satisfy the coding-agents pack.",
+      "what_done_would_look_like": "Define which fetched paths count as source for this heuristic, apply the signal only to those contents, and cover both a prose-only false-positive fixture and a genuine agent-runtime source fixture.",
+      "tree_evidence": [
+        "gitseed/category.py:69-75 joins text from every file except `AGENTS.md` and uses a broad regex for the signal.",
+        "gitseed/category.py:176-179 makes that signal a required condition for the `coding-agents` category.",
+        "tests/test_category.py:148-165 supplies prebuilt `Evidence` values, so it does not verify how real file contents produce the source signal."
+      ],
+      "distinct_from_others_because": "This targets the independent source-based coding-agent heuristic, not manifest interpretation or availability semantics."
+    },
+    {
+      "title": "Preserve confirmed evidence when a fetch is only partially complete",
+      "what_is_missing_or_wrong": "A single global `files.complete` flag marks every produced evidence item absent, even when the partial fetch contains a readable manifest or source file that positively establishes a category. This collapses confirmed signals and unavailable signals into the same result.",
+      "what_done_would_look_like": "Represent availability at the evidence-source/path level, so confirmed positive evidence can remain deterministic while only evidence affected by unavailable files is reported absent; add partial-fetch tests for both cases.",
+      "tree_evidence": [
+        "gitseed/category.py:39-46 assigns one basis from `files.complete` to all producers.",
+        "gitseed/category.py:192-200 returns an absent result as soon as any required evidence is unavailable.",
+        "tests/test_category.py:21-49 tests manually supplied absent evidence, but no test covers `FileEvidenceReader.read_evidence` with partially fetched files."
+      ],
+      "distinct_from_others_because": "This is about accurately representing partial collection results across all evidence producers, rather than improving either detection heuristic."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-77e1745655a235ce",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "4ee260c8b806d8cd8c4db4e3ca5f2892acaf36ffc037d9c1f898caa12a142230",
+        "need_hash": "75f2cd37cd9c77dc295de4bd29e5a93c2c33e41f4bc5d08b6c093b9352857dfc",
+        "need": {
+          "title": "Parse manifest data instead of substring-scanning it",
+          "what_is_missing_or_wrong": "MCP and Ollama detection treats any occurrence of the words in raw manifest text as a positive signal, so comments, descriptions, or unrelated names containing those substrings can misclassify a repository.",
+          "what_done_would_look_like": "Extract relevant dependency/configuration names from supported manifests and match exact normalized entries; add integration tests for legitimate entries and near-miss text such as comments or package names containing \"mcp\" or \"ollama\".",
+          "tree_evidence": [
+            "gitseed/category.py:55-67 derive both manifest signals with `\"mcp\" in self._manifest(files)` and `\"ollama\" in self._manifest(files)`.",
+            "gitseed/category.py:78-83 concatenates raw text from several manifest formats rather than parsing their dependency/configuration structures.",
+            "tests/test_category.py:140-145 only asserts the built-in pack names; no test exercises manifest contents through `FileEvidenceReader`."
+          ],
+          "distinct_from_others_because": "This concerns false positives in manifest-derived MCP/local-AI categories, independent of source scanning or incomplete fetch handling."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "818cf1c913b3f8ea64a712b5a94740bd42e33f744d20b1aa448c73a04751def9",
+        "need_hash": "a81a39568c10bdaa00f9ba5873e5e5ed872b610ca92bd0baefc3db8997ddd12e",
+        "need": {
+          "title": "Preserve confirmed evidence when a fetch is only partially complete",
+          "what_is_missing_or_wrong": "A single global `files.complete` flag marks every produced evidence item absent, even when the partial fetch contains a readable manifest or source file that positively establishes a category. This collapses confirmed signals and unavailable signals into the same result.",
+          "what_done_would_look_like": "Represent availability at the evidence-source/path level, so confirmed positive evidence can remain deterministic while only evidence affected by unavailable files is reported absent; add partial-fetch tests for both cases.",
+          "tree_evidence": [
+            "gitseed/category.py:39-46 assigns one basis from `files.complete` to all producers.",
+            "gitseed/category.py:192-200 returns an absent result as soon as any required evidence is unavailable.",
+            "tests/test_category.py:21-49 tests manually supplied absent evidence, but no test covers `FileEvidenceReader.read_evidence` with partially fetched files."
+          ],
+          "distinct_from_others_because": "This is about accurately representing partial collection results across all evidence producers, rather than improving either detection heuristic."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "b5886a4fd26049e0033538afc4d88e2f4dedaed32b1a580f80e4f5eded409f6a",
+        "need_hash": "bf53f056e443474b42dec19409921b607a1946bf1b669d244ecb6563a016f4c4",
+        "need": {
+          "title": "Restrict the coding-agent source signal to actual source material",
+          "what_is_missing_or_wrong": "The source signal combines every fetched non-AGENTS file and classifies on a generic `agent` plus `tool`, `planner`, or `executor` word match. Documentation, manifests, generated files, or unrelated prose can therefore satisfy the coding-agents pack.",
+          "what_done_would_look_like": "Define which fetched paths count as source for this heuristic, apply the signal only to those contents, and cover both a prose-only false-positive fixture and a genuine agent-runtime source fixture.",
+          "tree_evidence": [
+            "gitseed/category.py:69-75 joins text from every file except `AGENTS.md` and uses a broad regex for the signal.",
+            "gitseed/category.py:176-179 makes that signal a required condition for the `coding-agents` category.",
+            "tests/test_category.py:148-165 supplies prebuilt `Evidence` values, so it does not verify how real file contents produce the source signal."
+          ],
+          "distinct_from_others_because": "This targets the independent source-based coding-agent heuristic, not manifest interpretation or availability semantics."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

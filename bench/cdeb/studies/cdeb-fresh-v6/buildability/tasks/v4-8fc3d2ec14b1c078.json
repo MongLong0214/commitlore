@@ -1,0 +1,37 @@
+{
+  "candidate_id": "v4-8fc3d2ec14b1c078",
+  "need_rank_1": {
+    "rank_key": "86f6a15f1439843c1fc3a31db909a2c740374d3fedcd19c6cb877cf6d63076a6",
+    "need_hash": "e92ac981f49c59407e9a03dbcdbb2d3d06b3bae83929a8d8c4898d6c0b9c2e94",
+    "need": {
+      "title": "Validate paging arguments before issuing a search",
+      "what_is_missing_or_wrong": "`collect` accepts zero or negative page counts and invalid `per_page` values without an explicit error. For example, `pages=0` returns a successful empty result without contacting GitHub, while GitHub\u2019s request limits are left to fail later and less clearly.",
+      "what_done_would_look_like": "Reject invalid `pages` and `per_page` values at the public `collect` boundary (including GitHub\u2019s supported per-page range), and add tests covering zero, negative, and oversized inputs.",
+      "tree_evidence": [
+        "gitseed/collect/search.py:134-145 exposes `pages` and `per_page` but performs no validation.",
+        "gitseed/collect/search.py:161 starts `range(1, pages + 1)`, so `pages=0` silently produces a complete empty result.",
+        "gitseed/collect/search.py:212 uses `per_page` for termination logic.",
+        "tests/test_collect.py:310-357 covers normal paging but has no invalid-argument cases."
+      ],
+      "distinct_from_others_because": "This concerns the public request contract before any network response is processed."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make the public `gitseed.collect.search.collect` API reject invalid paging arguments before it issues any request through its supplied transport.\n\n`pages` must be at least 1. `per_page` must be within GitHub's supported inclusive range of 1 through 100. For an invalid value, `collect` must raise `ValueError` and must not contact the transport. Valid boundary values (`per_page=1` and `per_page=100`) must remain accepted.\n\nAdd automated coverage for zero, negative, and oversized values.",
+  "acceptance_test_path": "tests/test_collect_paging_validation_acceptance.py",
+  "acceptance_test_source": "\"\"\"Acceptance coverage for public collection paging validation.\"\"\"\n\nimport pytest\n\nfrom gitseed.collect.search import collect\n\n\nclass RecordingTransport:\n    def __init__(self) -> None:\n        self.urls: list[str] = []\n\n    def get(self, url: str) -> tuple[int, dict[str, str], bytes]:\n        self.urls.append(url)\n        return 200, {}, b'{\"items\": []}'\n\n\n@pytest.mark.parametrize(\n    (\"argument\", \"value\"),\n    [\n        (\"pages\", 0),\n        (\"pages\", -1),\n        (\"per_page\", 0),\n        (\"per_page\", -1),\n        (\"per_page\", 101),\n    ],\n)\ndef test_collect_rejects_invalid_paging_before_request(\n    argument: str, value: int\n) -> None:\n    transport = RecordingTransport()\n\n    with pytest.raises(ValueError):\n        collect(\"topic\", transport=transport, **{argument: value})\n\n    assert transport.urls == []\n\n\n@pytest.mark.parametrize(\"per_page\", [1, 100])\ndef test_collect_accepts_github_per_page_boundaries(per_page: int) -> None:\n    transport = RecordingTransport()\n\n    collect(\"topic\", transport=transport, pages=1, per_page=per_page)\n\n    assert len(transport.urls) == 1\n",
+  "how_to_run": "python3 -m pytest tests/test_collect_paging_validation_acceptance.py -q",
+  "why_it_fails_on_the_current_tree": "Currently `pages=0` and negative page counts return a successful empty result without calling the transport. Invalid `per_page` values, including `101`, issue a request instead of raising `ValueError`, so the first parametrized test fails.",
+  "two_different_implementations_that_would_both_pass": [
+    "Perform the argument checks directly when `collect` is called, before any search state or request processing begins.",
+    "Use a separately maintained public-input validation helper invoked by `collect` before it delegates to request handling."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "/Users/isaac/.codex/plugins/cache/commitlore/commitlore/1.2.0/skills/commitlore-codex/SKILL.md",
+    "gitseed/collect/search.py",
+    "tests/test_collect.py",
+    "pyproject.toml",
+    "README.md"
+  ]
+}

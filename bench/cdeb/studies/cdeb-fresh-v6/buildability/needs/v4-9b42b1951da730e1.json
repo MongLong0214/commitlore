@@ -1,0 +1,114 @@
+{
+  "candidate_id": "v4-9b42b1951da730e1",
+  "scout_files_read": [
+    "packages/schema/package.json",
+    "packages/schema/src/metric-registry.ts",
+    "packages/schema/test/metric-registry.test.ts",
+    "scripts/validate-planning.mjs",
+    "specs/metrics.v0.json",
+    "tests/planning-contract.test.mjs",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "needs": [
+    {
+      "title": "Require and validate all registry-level contract fields",
+      "what_is_missing_or_wrong": "The validator rejects unknown top-level fields but does not require or validate registry_id or source_contract, and silently substitutes empty objects for route_tables and frontiers. A registry missing its declared identity/provenance can therefore validate if its vectors otherwise resolve.",
+      "what_done_would_look_like": "Require every contract-v1 registry field; validate registry_id and source_contract against their frozen values and reject missing/malformed route_tables or frontiers. Add deletion/type-tamper tests for each root field.",
+      "tree_evidence": [
+        "specs/metrics.v0.json:2-4 \u2014 the shipped registry declares registry_id, contract_version, and source_contract.",
+        "packages/schema/src/metric-registry.ts:138-153 \u2014 only metrics, consumers, and contract_version are checked; registry_id and source_contract are never read.",
+        "packages/schema/src/metric-registry.ts:146-147 \u2014 malformed route_tables/frontiers are replaced with empty objects rather than diagnosed at the root.",
+        "packages/schema/test/metric-registry.test.ts:500-537 \u2014 tamper coverage includes contract_version and consumers but no missing registry_id or source_contract case."
+      ],
+      "distinct_from_others_because": "This concerns the registry document\u2019s identity and required top-level schema, rather than individual vector input validation or developer test execution."
+    },
+    {
+      "title": "Make M10 and M20 vector inputs exact, typed schemas",
+      "what_is_missing_or_wrong": "M10 and M20 reject caller-supplied derived fields but otherwise accept undeclared input keys; M20 also treats any non-true quality or safety value as a scored zero instead of rejecting an invalid type. That lets malformed or smuggled vector inputs be accepted.",
+      "what_done_would_look_like": "For eligible M10 vectors, require exactly eligible, route_table_id, and selected_route_id with the correct primitive types. For M20, require exactly eligible, quality, safety, frontier_id, and candidate_cost_vector, with boolean gates and no extra keys. Add rejection tests for extra fields and incorrect gate/identifier types.",
+      "tree_evidence": [
+        "specs/metrics.v0.json:1361-1367 \u2014 M10\u2019s canonical eligible input shape has exactly three fields.",
+        "specs/metrics.v0.json:2715-2726 \u2014 M20\u2019s canonical eligible input shape has the two boolean gates and its frontier vector.",
+        "packages/schema/src/metric-registry.ts:335-344 \u2014 only the two derived-field names are forbidden before derivation.",
+        "packages/schema/src/metric-registry.ts:503-510 \u2014 M10 coerces identifiers with String() and never compares input keys to an allowed schema.",
+        "packages/schema/src/metric-registry.ts:546-554,597-599 \u2014 M20 checks the nested vector but not its outer keys/types, and non-true gates become a zero score.",
+        "packages/schema/test/metric-registry.test.ts:353-376 \u2014 M10 coverage tests unknown/foreign routes, not extra or mistyped input fields."
+      ],
+      "distinct_from_others_because": "This is runtime validation of individual derived-metric vectors, not completeness of the registry document itself."
+    },
+    {
+      "title": "Restore a usable default schema test command",
+      "what_is_missing_or_wrong": "The package test script ends with --test-name-pattern but supplies no pattern, so a contributor running the normal npm test command has no complete-suite default. Existing planning coverage only invokes it with an appended focused pattern.",
+      "what_done_would_look_like": "Make npm test -w @aos/schema run the entire schema suite successfully, while retaining a documented focused-test command or argument path. Add a regression that invokes the zero-argument workspace test command and verifies it runs nonzero test cases.",
+      "tree_evidence": [
+        "packages/schema/package.json:5-7 \u2014 test is defined as node --test --test-name-pattern without an argument.",
+        "tests/planning/workspace-skeleton.test.mjs:723-745 \u2014 every exercised schema test invocation appends a pattern, masking the zero-argument path.",
+        "packages/schema/test/metric-registry.test.ts:1-8 \u2014 the package contains TypeScript tests that a default test command should discover."
+      ],
+      "distinct_from_others_because": "This is a contributor-facing package workflow issue, independent of the registry validator\u2019s data-contract rules."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-9b42b1951da730e1",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "2dbc8986801c8fb5f96347a29400bc05b36ab6de4a1e58ecf71228230f8811c3",
+        "need_hash": "ebe4052d227813ac55a8dda794450c3f19c34e20960c20aab0e5a53be372f5b4",
+        "need": {
+          "title": "Require and validate all registry-level contract fields",
+          "what_is_missing_or_wrong": "The validator rejects unknown top-level fields but does not require or validate registry_id or source_contract, and silently substitutes empty objects for route_tables and frontiers. A registry missing its declared identity/provenance can therefore validate if its vectors otherwise resolve.",
+          "what_done_would_look_like": "Require every contract-v1 registry field; validate registry_id and source_contract against their frozen values and reject missing/malformed route_tables or frontiers. Add deletion/type-tamper tests for each root field.",
+          "tree_evidence": [
+            "specs/metrics.v0.json:2-4 \u2014 the shipped registry declares registry_id, contract_version, and source_contract.",
+            "packages/schema/src/metric-registry.ts:138-153 \u2014 only metrics, consumers, and contract_version are checked; registry_id and source_contract are never read.",
+            "packages/schema/src/metric-registry.ts:146-147 \u2014 malformed route_tables/frontiers are replaced with empty objects rather than diagnosed at the root.",
+            "packages/schema/test/metric-registry.test.ts:500-537 \u2014 tamper coverage includes contract_version and consumers but no missing registry_id or source_contract case."
+          ],
+          "distinct_from_others_because": "This concerns the registry document\u2019s identity and required top-level schema, rather than individual vector input validation or developer test execution."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "a8279631674948d0731a49f2fe6c906daa36a4f8f6ab568e38793e77e16316fa",
+        "need_hash": "41666b0f58d3a2652678d6a798d35e0fd41b0d3b41d56cc3702e017e832783bd",
+        "need": {
+          "title": "Restore a usable default schema test command",
+          "what_is_missing_or_wrong": "The package test script ends with --test-name-pattern but supplies no pattern, so a contributor running the normal npm test command has no complete-suite default. Existing planning coverage only invokes it with an appended focused pattern.",
+          "what_done_would_look_like": "Make npm test -w @aos/schema run the entire schema suite successfully, while retaining a documented focused-test command or argument path. Add a regression that invokes the zero-argument workspace test command and verifies it runs nonzero test cases.",
+          "tree_evidence": [
+            "packages/schema/package.json:5-7 \u2014 test is defined as node --test --test-name-pattern without an argument.",
+            "tests/planning/workspace-skeleton.test.mjs:723-745 \u2014 every exercised schema test invocation appends a pattern, masking the zero-argument path.",
+            "packages/schema/test/metric-registry.test.ts:1-8 \u2014 the package contains TypeScript tests that a default test command should discover."
+          ],
+          "distinct_from_others_because": "This is a contributor-facing package workflow issue, independent of the registry validator\u2019s data-contract rules."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "e498be10bd5993ff15138e806be0df4f4a88d21896e306a68b47d192c9d3fb98",
+        "need_hash": "50d9b0ef7a28e20abba943be8e6af477614b375206c8d028fc18c62cae021235",
+        "need": {
+          "title": "Make M10 and M20 vector inputs exact, typed schemas",
+          "what_is_missing_or_wrong": "M10 and M20 reject caller-supplied derived fields but otherwise accept undeclared input keys; M20 also treats any non-true quality or safety value as a scored zero instead of rejecting an invalid type. That lets malformed or smuggled vector inputs be accepted.",
+          "what_done_would_look_like": "For eligible M10 vectors, require exactly eligible, route_table_id, and selected_route_id with the correct primitive types. For M20, require exactly eligible, quality, safety, frontier_id, and candidate_cost_vector, with boolean gates and no extra keys. Add rejection tests for extra fields and incorrect gate/identifier types.",
+          "tree_evidence": [
+            "specs/metrics.v0.json:1361-1367 \u2014 M10\u2019s canonical eligible input shape has exactly three fields.",
+            "specs/metrics.v0.json:2715-2726 \u2014 M20\u2019s canonical eligible input shape has the two boolean gates and its frontier vector.",
+            "packages/schema/src/metric-registry.ts:335-344 \u2014 only the two derived-field names are forbidden before derivation.",
+            "packages/schema/src/metric-registry.ts:503-510 \u2014 M10 coerces identifiers with String() and never compares input keys to an allowed schema.",
+            "packages/schema/src/metric-registry.ts:546-554,597-599 \u2014 M20 checks the nested vector but not its outer keys/types, and non-true gates become a zero score.",
+            "packages/schema/test/metric-registry.test.ts:353-376 \u2014 M10 coverage tests unknown/foreign routes, not extra or mistyped input fields."
+          ],
+          "distinct_from_others_because": "This is runtime validation of individual derived-metric vectors, not completeness of the registry document itself."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

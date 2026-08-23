@@ -1,0 +1,112 @@
+{
+  "candidate_id": "v4-cadfb63755c3f504",
+  "scout_files_read": [
+    "gitseed/pipeline/__init__.py",
+    "gitseed/pipeline/run.py",
+    "tests/test_pipeline.py"
+  ],
+  "needs": [
+    {
+      "title": "Contain screening-stage failures per candidate",
+      "what_is_missing_or_wrong": "`scan_files` and `risk_of` can raise outside any exception boundary, aborting the entire pipeline. That conflicts with the module\u2019s stated guarantee that an unfinished stage is represented in the result and with the existing per-candidate handling for fetch and grading failures.",
+      "what_done_would_look_like": "Catch screening/evaluation failures, append an ungraded `Reviewed` entry with absent/unknown screening evidence, mark the run incomplete with the candidate-specific reason, and continue processing later candidates. Add a test where scanning one candidate raises while another is still graded.",
+      "tree_evidence": [
+        "gitseed/pipeline/run.py:1-12",
+        "gitseed/pipeline/run.py:172-203",
+        "gitseed/pipeline/run.py:239-241",
+        "gitseed/pipeline/run.py:278-295",
+        "tests/test_pipeline.py:228-277"
+      ],
+      "distinct_from_others_because": "This improves failure isolation during deterministic screening, rather than rate-limit reporting or the package import interface."
+    },
+    {
+      "title": "Report collection rate limits through `PipelineResult.rate_limited`",
+      "what_is_missing_or_wrong": "A collection stopped for a rate limit makes the run incomplete but leaves `rate_limited` false. The flag is only updated for file-fetch failures, while the test supplies a collection stop reason of `rate limit` without asserting the flag.",
+      "what_done_would_look_like": "Propagate explicit collection rate-limit status (or consistently classify the existing collection stop condition) into `PipelineResult.rate_limited`, and add a regression assertion for a collection truncated by rate limiting.",
+      "tree_evidence": [
+        "gitseed/pipeline/run.py:73-78",
+        "gitseed/pipeline/run.py:160-170",
+        "gitseed/pipeline/run.py:176-177",
+        "gitseed/pipeline/run.py:216-218",
+        "tests/test_pipeline.py:209-217"
+      ],
+      "distinct_from_others_because": "This corrects run-level operational status for collection exhaustion, not candidate processing or imports."
+    },
+    {
+      "title": "Define a supported `gitseed.pipeline` public API",
+      "what_is_missing_or_wrong": "The package initializer is empty, so pipeline consumers must know the internal `gitseed.pipeline.run` module and its layout. The tests demonstrate this internal-path import pattern for every pipeline symbol.",
+      "what_done_would_look_like": "Re-export the intended pipeline entry points and result types from `gitseed.pipeline` with an explicit `__all__`, then add a test covering the supported package-level imports.",
+      "tree_evidence": [
+        "gitseed/pipeline/__init__.py:1",
+        "tests/test_pipeline.py:16-23",
+        "gitseed/pipeline/run.py:144-150",
+        "gitseed/pipeline/run.py:427-445"
+      ],
+      "distinct_from_others_because": "This establishes a stable consumer-facing interface rather than changing execution behavior."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-cadfb63755c3f504",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "994336246a165b6311a84425804f11d1a9dbb4d1d8b3670b81702dcd56065d2b",
+        "need_hash": "b59ebab5ecf74c1f24112d58a79c1e2d8b4ab7456007d85f4c6c502f5e58c858",
+        "need": {
+          "title": "Report collection rate limits through `PipelineResult.rate_limited`",
+          "what_is_missing_or_wrong": "A collection stopped for a rate limit makes the run incomplete but leaves `rate_limited` false. The flag is only updated for file-fetch failures, while the test supplies a collection stop reason of `rate limit` without asserting the flag.",
+          "what_done_would_look_like": "Propagate explicit collection rate-limit status (or consistently classify the existing collection stop condition) into `PipelineResult.rate_limited`, and add a regression assertion for a collection truncated by rate limiting.",
+          "tree_evidence": [
+            "gitseed/pipeline/run.py:73-78",
+            "gitseed/pipeline/run.py:160-170",
+            "gitseed/pipeline/run.py:176-177",
+            "gitseed/pipeline/run.py:216-218",
+            "tests/test_pipeline.py:209-217"
+          ],
+          "distinct_from_others_because": "This corrects run-level operational status for collection exhaustion, not candidate processing or imports."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "e17dfed6a1171543759222d46ea5f1eb41914d0789dcfa34d639630355a65cd5",
+        "need_hash": "519c2026dd93611bb4660fe6ab6897d424d5ea9702be85676a5e1ef8f6f76803",
+        "need": {
+          "title": "Define a supported `gitseed.pipeline` public API",
+          "what_is_missing_or_wrong": "The package initializer is empty, so pipeline consumers must know the internal `gitseed.pipeline.run` module and its layout. The tests demonstrate this internal-path import pattern for every pipeline symbol.",
+          "what_done_would_look_like": "Re-export the intended pipeline entry points and result types from `gitseed.pipeline` with an explicit `__all__`, then add a test covering the supported package-level imports.",
+          "tree_evidence": [
+            "gitseed/pipeline/__init__.py:1",
+            "tests/test_pipeline.py:16-23",
+            "gitseed/pipeline/run.py:144-150",
+            "gitseed/pipeline/run.py:427-445"
+          ],
+          "distinct_from_others_because": "This establishes a stable consumer-facing interface rather than changing execution behavior."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "fe6280e9c10acce52c6f56aac75029bf1e6aa9d2841243d8247f15e873b99674",
+        "need_hash": "0a07ebc2233cb67c724ac7c02479713c00622518b76c385d9a7ed1b16c42e3c1",
+        "need": {
+          "title": "Contain screening-stage failures per candidate",
+          "what_is_missing_or_wrong": "`scan_files` and `risk_of` can raise outside any exception boundary, aborting the entire pipeline. That conflicts with the module\u2019s stated guarantee that an unfinished stage is represented in the result and with the existing per-candidate handling for fetch and grading failures.",
+          "what_done_would_look_like": "Catch screening/evaluation failures, append an ungraded `Reviewed` entry with absent/unknown screening evidence, mark the run incomplete with the candidate-specific reason, and continue processing later candidates. Add a test where scanning one candidate raises while another is still graded.",
+          "tree_evidence": [
+            "gitseed/pipeline/run.py:1-12",
+            "gitseed/pipeline/run.py:172-203",
+            "gitseed/pipeline/run.py:239-241",
+            "gitseed/pipeline/run.py:278-295",
+            "tests/test_pipeline.py:228-277"
+          ],
+          "distinct_from_others_because": "This improves failure isolation during deterministic screening, rather than rate-limit reporting or the package import interface."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

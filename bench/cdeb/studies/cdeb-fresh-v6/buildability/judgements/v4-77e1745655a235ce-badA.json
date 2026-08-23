@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds EVIDENCE_KIND_ALLOWLIST as an independent evidence-kind set and makes FileEvidenceReader.evidence_names return it instead of deriving names from _producers.",
+    "reading_applied": "Direct reading: the rule prohibits any separate evidence-kind allowlist detached from producer methods.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch adds exactly such an allowlist and explicitly says it is kept independently from FileEvidenceReader._producers. This reintroduces the ruled-out risk that the accepted kinds can diverge from evidence kinds emitted by collectors."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds EVIDENCE_KIND_ALLOWLIST as a standalone set of evidence kinds and makes FileEvidenceReader.evidence_names return it instead of deriving names from _producers.",
+    "reading_applied": "Broad/direct reading: the rule rules out any separate evidence-kind allowlist, especially one detached from producer methods.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch introduces exactly the ruled-out construct. Its own comment says the allowlist is kept independently from FileEvidenceReader._producers, which creates the detached source of truth the rule warns can silently accept kinds no collector emits."
+  }
+}

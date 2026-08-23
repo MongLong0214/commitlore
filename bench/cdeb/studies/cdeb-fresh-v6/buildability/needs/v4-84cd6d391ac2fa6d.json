@@ -1,0 +1,103 @@
+{
+  "candidate_id": "v4-84cd6d391ac2fa6d",
+  "scout_files_read": [
+    "gitseed/storage.py",
+    "tests/test_storage.py"
+  ],
+  "needs": [
+    {
+      "title": "Add a repair path for observations that fail after a run is saved",
+      "what_is_missing_or_wrong": "`save` commits the immutable artifact before attempting the derived observation insert. If the latter fails, it raises an error but a retry via `save` will conflict on the existing run ID, leaving no supported way to restore the missing observations.",
+      "what_done_would_look_like": "Expose a safe retry/backfill operation for a stored run that derives and inserts its observations exactly once, with a test that forces the observation write to fail and then verifies repair succeeds without replacing the artifact.",
+      "tree_evidence": [
+        "gitseed/storage.py:59-64 commits `run_artifacts` in its own transaction.",
+        "gitseed/storage.py:66-77 performs observation insertion in a later transaction and raises `ObservationWriteError` on failure.",
+        "tests/test_storage.py:173-188 covers successful appends only."
+      ],
+      "distinct_from_others_because": "This addresses partial-write recovery and data completeness, rather than record lookup or replay behavior."
+    },
+    {
+      "title": "Provide point lookup for correction metadata",
+      "what_is_missing_or_wrong": "Although `StoredRun` carries `corrects_run_id`, `load` returns only the artifact. A caller investigating a specific correction must load and deserialize every row through `history` just to find that run's relationship.",
+      "what_done_would_look_like": "Add a point-lookup API returning `StoredRun` (while preserving `load` if desired), and test that it returns both a corrected artifact and its `corrects_run_id`, including the missing-run case.",
+      "tree_evidence": [
+        "gitseed/storage.py:14-18 defines `StoredRun` with correction metadata.",
+        "gitseed/storage.py:79-85 discards that metadata in the single-run lookup.",
+        "gitseed/storage.py:87-93 exposes it only through a full-history scan.",
+        "tests/test_storage.py:154-170 stores a correction but does not verify that its link can be retrieved."
+      ],
+      "distinct_from_others_because": "This is an interface gap for navigating correction chains, independent of observation persistence and replay execution."
+    },
+    {
+      "title": "Cover the store-level replay API with an end-to-end test",
+      "what_is_missing_or_wrong": "`SQLiteRunStore.replay` is public behavior but no storage test invokes it. The existing replay-oriented test calls the application-level `re_evaluate` function after manually loading bytes, so it cannot catch a regression in the store wrapper's load-and-replay path.",
+      "what_done_would_look_like": "Save a replayable artifact, call `store.replay(run_id)`, and assert the expected replayed artifact; also assert the missing-ID behavior matches `load`'s `KeyError` contract.",
+      "tree_evidence": [
+        "gitseed/storage.py:108-109 defines `SQLiteRunStore.replay`.",
+        "tests/test_storage.py:232-245 exercises `re_evaluate(store.load(...).to_bytes())` instead of `store.replay(...)`.",
+        "gitseed/storage.py:79-85 establishes the missing-ID behavior replay currently inherits."
+      ],
+      "distinct_from_others_because": "This is test coverage for the store's replay API, not a change to correction metadata or observation recovery."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-84cd6d391ac2fa6d",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "0ec8a91dd198c1d4af87a32a35a4f2fe7a14870c02364d2ccdceffd2efc662a5",
+        "need_hash": "ae897fe4883ff50d92e629b068e7731ac803b18184cae890dcb068cf17f0a708",
+        "need": {
+          "title": "Provide point lookup for correction metadata",
+          "what_is_missing_or_wrong": "Although `StoredRun` carries `corrects_run_id`, `load` returns only the artifact. A caller investigating a specific correction must load and deserialize every row through `history` just to find that run's relationship.",
+          "what_done_would_look_like": "Add a point-lookup API returning `StoredRun` (while preserving `load` if desired), and test that it returns both a corrected artifact and its `corrects_run_id`, including the missing-run case.",
+          "tree_evidence": [
+            "gitseed/storage.py:14-18 defines `StoredRun` with correction metadata.",
+            "gitseed/storage.py:79-85 discards that metadata in the single-run lookup.",
+            "gitseed/storage.py:87-93 exposes it only through a full-history scan.",
+            "tests/test_storage.py:154-170 stores a correction but does not verify that its link can be retrieved."
+          ],
+          "distinct_from_others_because": "This is an interface gap for navigating correction chains, independent of observation persistence and replay execution."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "4971a99175683c35a0c18673ff6c552d82a6ef6e21d1e08ddc9336b235071d85",
+        "need_hash": "62236ea9cbc82dec8a57232bf04626bb0a418261d01fc6b325df38d7d75f8a16",
+        "need": {
+          "title": "Add a repair path for observations that fail after a run is saved",
+          "what_is_missing_or_wrong": "`save` commits the immutable artifact before attempting the derived observation insert. If the latter fails, it raises an error but a retry via `save` will conflict on the existing run ID, leaving no supported way to restore the missing observations.",
+          "what_done_would_look_like": "Expose a safe retry/backfill operation for a stored run that derives and inserts its observations exactly once, with a test that forces the observation write to fail and then verifies repair succeeds without replacing the artifact.",
+          "tree_evidence": [
+            "gitseed/storage.py:59-64 commits `run_artifacts` in its own transaction.",
+            "gitseed/storage.py:66-77 performs observation insertion in a later transaction and raises `ObservationWriteError` on failure.",
+            "tests/test_storage.py:173-188 covers successful appends only."
+          ],
+          "distinct_from_others_because": "This addresses partial-write recovery and data completeness, rather than record lookup or replay behavior."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "f80d30d7165b4093eecb915466d2e0e6436f06784ad2492d254218db3cea4936",
+        "need_hash": "e1160355b661fbfebe153d68eb6bb9e6ff1bad6be3c3a316df5a69c44055071d",
+        "need": {
+          "title": "Cover the store-level replay API with an end-to-end test",
+          "what_is_missing_or_wrong": "`SQLiteRunStore.replay` is public behavior but no storage test invokes it. The existing replay-oriented test calls the application-level `re_evaluate` function after manually loading bytes, so it cannot catch a regression in the store wrapper's load-and-replay path.",
+          "what_done_would_look_like": "Save a replayable artifact, call `store.replay(run_id)`, and assert the expected replayed artifact; also assert the missing-ID behavior matches `load`'s `KeyError` contract.",
+          "tree_evidence": [
+            "gitseed/storage.py:108-109 defines `SQLiteRunStore.replay`.",
+            "tests/test_storage.py:232-245 exercises `re_evaluate(store.load(...).to_bytes())` instead of `store.replay(...)`.",
+            "gitseed/storage.py:79-85 establishes the missing-ID behavior replay currently inherits."
+          ],
+          "distinct_from_others_because": "This is test coverage for the store's replay API, not a change to correction metadata or observation recovery."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

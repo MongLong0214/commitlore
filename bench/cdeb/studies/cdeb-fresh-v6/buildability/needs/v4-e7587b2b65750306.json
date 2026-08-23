@@ -1,0 +1,109 @@
+{
+  "candidate_id": "v4-e7587b2b65750306",
+  "scout_files_read": [
+    "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+    "packages/schema/src/metric-registry.ts",
+    "packages/schema/test/metric-registry.test.ts",
+    "scripts/validate-planning.mjs",
+    "specs/metrics.v0.json",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "needs": [
+    {
+      "title": "Fail closed on non-finite numeric registry input",
+      "what_is_missing_or_wrong": "The public validator accepts arbitrary unknown input but treats Infinity and NaN as ordinary numbers. In particular, an infinite rational numerator reaches recursive gcd calculation and throws a RangeError instead of returning an INVALID validation result.",
+      "what_done_would_look_like": "Require finite numeric values before rational comparison/normalization and in derived M10/M20 inputs and tables. Add regression tests showing NaN/Infinity inputs are rejected with validation errors and never throw.",
+      "tree_evidence": [
+        "packages/schema/src/metric-registry.ts:102-119 \u2014 gcd and isRational accept all JavaScript numbers; finite values are not required.",
+        "packages/schema/src/metric-registry.ts:465-470 \u2014 count derivation only checks typeof number and denominator zero.",
+        "packages/schema/test/metric-registry.test.ts:497-550 \u2014 extensive tamper coverage has no non-finite-number case."
+      ],
+      "distinct_from_others_because": "This is runtime fail-closed handling for malformed caller input, rather than a contract-field or TypeScript API issue."
+    },
+    {
+      "title": "Validate M19 issuance-hard-fail semantics",
+      "what_is_missing_or_wrong": "issuance_hard_fail is allowed as an expected-vector field but never checked for scored vectors. A registry can change or remove M19\u2019s hard-fail flag while still validating, weakening the frozen safety-gate contract.",
+      "what_done_would_look_like": "Derive the flag from M19\u2019s worst safety state and require it to be true for S2/S3 and absent or false for non-hard-fail vectors, with tamper tests for removal and falsification.",
+      "tree_evidence": [
+        "specs/metrics.v0.json:2574-2575 defines S2/S3 as issuance hard fails; specs/metrics.v0.json:2633-2653 records true for the S2 canonical vector.",
+        "packages/schema/src/metric-registry.ts:71 permits issuance_hard_fail, while packages/schema/src/metric-registry.ts:323-448 only rejects it on NOT_OBSERVED vectors and never verifies its scored-vector value.",
+        "packages/schema/src/metric-registry.ts:488-495 derives M19\u2019s score and grader output but not the hard-fail result.",
+        "packages/schema/test/metric-registry.test.ts:297-303 checks the frozen fixture contains true, but does not mutate the flag and assert validator rejection."
+      ],
+      "distinct_from_others_because": "This protects the safety/issuance outcome encoded by M19, independent of generic input validation."
+    },
+    {
+      "title": "Bring MetricDefinition\u2019s public type in line with the required registry schema",
+      "what_is_missing_or_wrong": "observation_key is mandatory at runtime and drives vector derivation, but is absent from the exported MetricDefinition interface. Typed consumers therefore cannot safely access a required registry property.",
+      "what_done_would_look_like": "Add observation_key to MetricDefinition, preferably with an appropriate constrained type, and add a type-level or compile-checked usage proving the exported interface exposes the complete required contract.",
+      "tree_evidence": [
+        "packages/schema/src/metric-registry.ts:26-52 \u2014 exported MetricDefinition omits observation_key.",
+        "packages/schema/src/metric-registry.ts:61-67 \u2014 REQUIRED_FIELDS requires observation_key.",
+        "packages/schema/src/metric-registry.ts:240 and packages/schema/src/metric-registry.ts:350 \u2014 validator logic depends on metric.observation_key.",
+        "specs/metrics.v0.json:142-147 \u2014 the frozen metric record supplies observation_key."
+      ],
+      "distinct_from_others_because": "This is an exported TypeScript interface consistency issue, separate from runtime validation behavior and M19 safety semantics."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-e7587b2b65750306",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "24e1a8b5f468ec47b73ecf5558f0ffa29d4f98d46f2455f4ad6bc8d775706780",
+        "need_hash": "749d9a0b84af38da8aa8e4cfaa810fe28c6660f7f8de38ed4c70ba466779dbb8",
+        "need": {
+          "title": "Bring MetricDefinition\u2019s public type in line with the required registry schema",
+          "what_is_missing_or_wrong": "observation_key is mandatory at runtime and drives vector derivation, but is absent from the exported MetricDefinition interface. Typed consumers therefore cannot safely access a required registry property.",
+          "what_done_would_look_like": "Add observation_key to MetricDefinition, preferably with an appropriate constrained type, and add a type-level or compile-checked usage proving the exported interface exposes the complete required contract.",
+          "tree_evidence": [
+            "packages/schema/src/metric-registry.ts:26-52 \u2014 exported MetricDefinition omits observation_key.",
+            "packages/schema/src/metric-registry.ts:61-67 \u2014 REQUIRED_FIELDS requires observation_key.",
+            "packages/schema/src/metric-registry.ts:240 and packages/schema/src/metric-registry.ts:350 \u2014 validator logic depends on metric.observation_key.",
+            "specs/metrics.v0.json:142-147 \u2014 the frozen metric record supplies observation_key."
+          ],
+          "distinct_from_others_because": "This is an exported TypeScript interface consistency issue, separate from runtime validation behavior and M19 safety semantics."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "33d9388c03c935c24b3fce12496fd877476ffb334ba2ad4d880d715869e83fcb",
+        "need_hash": "60d185c0d8bc28f264d583db566420aa1672939cbb5f44631f898b90eb62961e",
+        "need": {
+          "title": "Fail closed on non-finite numeric registry input",
+          "what_is_missing_or_wrong": "The public validator accepts arbitrary unknown input but treats Infinity and NaN as ordinary numbers. In particular, an infinite rational numerator reaches recursive gcd calculation and throws a RangeError instead of returning an INVALID validation result.",
+          "what_done_would_look_like": "Require finite numeric values before rational comparison/normalization and in derived M10/M20 inputs and tables. Add regression tests showing NaN/Infinity inputs are rejected with validation errors and never throw.",
+          "tree_evidence": [
+            "packages/schema/src/metric-registry.ts:102-119 \u2014 gcd and isRational accept all JavaScript numbers; finite values are not required.",
+            "packages/schema/src/metric-registry.ts:465-470 \u2014 count derivation only checks typeof number and denominator zero.",
+            "packages/schema/test/metric-registry.test.ts:497-550 \u2014 extensive tamper coverage has no non-finite-number case."
+          ],
+          "distinct_from_others_because": "This is runtime fail-closed handling for malformed caller input, rather than a contract-field or TypeScript API issue."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "9157e117fab4c4323f893009db991535461b63c029f9ffb0dcb54b70013eef43",
+        "need_hash": "f46398be9e98d3ae38d0a9fc0e6fb318d825fbe05630f56574dacd5065902046",
+        "need": {
+          "title": "Validate M19 issuance-hard-fail semantics",
+          "what_is_missing_or_wrong": "issuance_hard_fail is allowed as an expected-vector field but never checked for scored vectors. A registry can change or remove M19\u2019s hard-fail flag while still validating, weakening the frozen safety-gate contract.",
+          "what_done_would_look_like": "Derive the flag from M19\u2019s worst safety state and require it to be true for S2/S3 and absent or false for non-hard-fail vectors, with tamper tests for removal and falsification.",
+          "tree_evidence": [
+            "specs/metrics.v0.json:2574-2575 defines S2/S3 as issuance hard fails; specs/metrics.v0.json:2633-2653 records true for the S2 canonical vector.",
+            "packages/schema/src/metric-registry.ts:71 permits issuance_hard_fail, while packages/schema/src/metric-registry.ts:323-448 only rejects it on NOT_OBSERVED vectors and never verifies its scored-vector value.",
+            "packages/schema/src/metric-registry.ts:488-495 derives M19\u2019s score and grader output but not the hard-fail result.",
+            "packages/schema/test/metric-registry.test.ts:297-303 checks the frozen fixture contains true, but does not mutate the flag and assert validator rejection."
+          ],
+          "distinct_from_others_because": "This protects the safety/issuance outcome encoded by M19, independent of generic input validation."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

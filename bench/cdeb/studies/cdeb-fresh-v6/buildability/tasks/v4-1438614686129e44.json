@@ -1,0 +1,40 @@
+{
+  "candidate_id": "v4-1438614686129e44",
+  "need_rank_1": {
+    "rank_key": "9b2b01aee63b2cfaf48ca60d7be7f0a23ee46546b8343f00cb2fbc7ff3ad962c",
+    "need_hash": "80e07f2a837e9ae7358ee70922df2c0d3dff509e7f239a3579c10b062e38d1e5",
+    "need": {
+      "title": "Specify and test the SQLite store replay contract",
+      "what_is_missing_or_wrong": "`SQLiteRunStore.replay()` is a public convenience method, but the storage tests do not call it. The closest test calls `re_evaluate` directly, bypassing `replay`'s engine-version check and leaving source-mode/error behavior at the store boundary unverified.",
+      "what_done_would_look_like": "Add storage-level tests showing that a stored full-source artifact replays successfully, while unsupported source modes and engine-version mismatches raise the documented errors without modifying the stored record.",
+      "tree_evidence": [
+        "gitseed/storage.py:108-109 exposes `SQLiteRunStore.replay()` and delegates to `application.replay`.",
+        "gitseed/application.py:234-240 shows replay first checks engine versions, unlike `re_evaluate`.",
+        "tests/test_storage.py:232-245 validates `re_evaluate(store.load(...))`, not `store.replay(...)`."
+      ],
+      "distinct_from_others_because": "This is coverage and contract definition for replaying persisted artifacts, not write recovery or correction-linkage validation."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Add pytest coverage for the public `SQLiteRunStore.replay(run_id)` contract. At the storage boundary, verify that a stored full-source artifact is recomputed successfully, that stored `digest` and `metadata-only` artifacts raise the documented source-mode `ValueError`, and that an artifact with a mismatched recorded engine raises `EngineVersionMismatch`. For each rejected replay, verify loading the same run afterward returns the unchanged stored artifact.",
+  "acceptance_test_path": "tests/test_storage_replay_contract.py",
+  "acceptance_test_source": "from __future__ import annotations\n\nimport json\nfrom datetime import datetime, timezone\n\nimport pytest\n\nfrom gitseed.application import execute\nfrom gitseed.artifact import EngineVersionMismatch, RunArtifact\nfrom gitseed.collect.search import Candidate, CollectResult\nfrom gitseed.grade.types import GradeResult\nfrom gitseed.pipeline.run import FetchedFiles\nfrom gitseed.ports import RepositoryMetadata, RunPorts, RunRequest\nfrom gitseed.scoring import ScoreInputs\nfrom gitseed.storage import SQLiteRunStore\n\n\nAT = datetime(2026, 7, 27, 12, 0, tzinfo=timezone.utc)\nCANDIDATE = Candidate(\"org/repo\", \"org\", \"https://github.com/org/repo\", 4, \"2026-07-27T00:00:00Z\")\n\n\nclass Repository:\n    def search(self, query: str, limit: int) -> CollectResult:\n        return CollectResult(candidates=[CANDIDATE], pages_fetched=1)\n\n    def metadata(self, candidate: Candidate, at: datetime) -> RepositoryMetadata:\n        return RepositoryMetadata(ScoreInputs(True, True, True))\n\n\nclass Files:\n    def read(self, candidate: Candidate) -> FetchedFiles:\n        return FetchedFiles(((\"main.py\", \"def add(a, b):\\n    return a + b\\n\"),))\n\n\nclass Model:\n    def evaluate(self, digest: str) -> GradeResult:\n        return GradeResult(8, 7, \"small utility\", \"fixture\", 0.0, \"fixture-v1\")\n\n    def flags_malicious(self, digest: str) -> bool:\n        return False\n\n\nclass Clock:\n    def now(self) -> datetime:\n        return AT\n\n\ndef artifact(source_mode: str) -> RunArtifact:\n    return execute(\n        RunRequest(\"small tools\", 1),\n        RunPorts(Repository(), Files(), Model(), Clock()),\n        source_mode=source_mode,\n    )\n\n\ndef changed_artifact(recorded: RunArtifact, change) -> RunArtifact:\n    payload = json.loads(recorded.to_bytes())\n    change(payload)\n    return RunArtifact.from_bytes(json.dumps(payload).encode())\n\n\ndef test_store_replay_recomputes_a_full_source_record_without_replacing_it(tmp_path) -> None:\n    expected = artifact(\"full-source\")\n    stored = changed_artifact(\n        expected,\n        lambda payload: payload[\"output\"][\"scores\"][0][\"score\"].__setitem__(\"value\", \"999\"),\n    )\n\n    with SQLiteRunStore(tmp_path / \"runs.db\") as store:\n        store.save(\"run-1\", stored)\n        before = store.load(\"run-1\").to_bytes()\n\n        replayed = store.replay(\"run-1\")\n\n        assert replayed.to_bytes() == expected.to_bytes()\n        assert store.load(\"run-1\").to_bytes() == before\n\n\n@pytest.mark.parametrize(\"source_mode\", (\"metadata-only\", \"digest\"))\ndef test_store_replay_rejects_non_full_source_records_without_changing_them(tmp_path, source_mode: str) -> None:\n    recorded = artifact(source_mode)\n\n    with SQLiteRunStore(tmp_path / \"runs.db\") as store:\n        store.save(\"run-1\", recorded)\n        before = store.load(\"run-1\").to_bytes()\n\n        with pytest.raises(ValueError, match=rf\"cannot re-evaluate a {source_mode} artifact\"):\n            store.replay(\"run-1\")\n\n        assert store.load(\"run-1\").to_bytes() == before\n\n\ndef test_store_replay_rejects_an_engine_mismatch_without_changing_the_record(tmp_path) -> None:\n    recorded = changed_artifact(\n        artifact(\"full-source\"),\n        lambda payload: payload[\"engines\"].__setitem__(\"pipeline\", \"pipeline-v0\"),\n    )\n\n    with SQLiteRunStore(tmp_path / \"runs.db\") as store:\n        store.save(\"run-1\", recorded)\n        before = store.load(\"run-1\").to_bytes()\n\n        with pytest.raises(EngineVersionMismatch, match=\"pipeline engine changed\"):\n            store.replay(\"run-1\")\n\n        assert store.load(\"run-1\").to_bytes() == before\n",
+  "how_to_run": "pytest -q tests/test_storage_replay_contract.py",
+  "why_it_fails_on_the_current_tree": "No behavior-only acceptance test can truthfully fail on the current tree for this maintenance need. `SQLiteRunStore.replay()` already delegates to `application.replay()`, which already performs the engine check and full-source validation without writing the stored row. The supplied functional test would pass immediately if added. Making it fail solely because equivalent storage tests are absent would require inspecting test files or coverage, which violates the required behavior-not-structure constraint.",
+  "two_different_implementations_that_would_both_pass": [
+    "A store implementation that delegates replay to the application-level public replay operation.",
+    "A store implementation that validates the stored artifact and recomputes it within the store layer while preserving the same returned values, exceptions, and stored-record immutability."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "pyproject.toml",
+    "README.md",
+    "gitseed/application.py",
+    "gitseed/artifact.py",
+    "gitseed/storage.py",
+    "gitseed/storage_schema.py",
+    "tests/test_storage.py",
+    "tests/test_seam.py",
+    "tests/test_cli.py"
+  ]
+}

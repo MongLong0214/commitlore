@@ -1,0 +1,44 @@
+{
+  "candidate_id": "v4-9b42b1951da730e1",
+  "need_rank_1": {
+    "rank_key": "2dbc8986801c8fb5f96347a29400bc05b36ab6de4a1e58ecf71228230f8811c3",
+    "need_hash": "ebe4052d227813ac55a8dda794450c3f19c34e20960c20aab0e5a53be372f5b4",
+    "need": {
+      "title": "Require and validate all registry-level contract fields",
+      "what_is_missing_or_wrong": "The validator rejects unknown top-level fields but does not require or validate registry_id or source_contract, and silently substitutes empty objects for route_tables and frontiers. A registry missing its declared identity/provenance can therefore validate if its vectors otherwise resolve.",
+      "what_done_would_look_like": "Require every contract-v1 registry field; validate registry_id and source_contract against their frozen values and reject missing/malformed route_tables or frontiers. Add deletion/type-tamper tests for each root field.",
+      "tree_evidence": [
+        "specs/metrics.v0.json:2-4 \u2014 the shipped registry declares registry_id, contract_version, and source_contract.",
+        "packages/schema/src/metric-registry.ts:138-153 \u2014 only metrics, consumers, and contract_version are checked; registry_id and source_contract are never read.",
+        "packages/schema/src/metric-registry.ts:146-147 \u2014 malformed route_tables/frontiers are replaced with empty objects rather than diagnosed at the root.",
+        "packages/schema/test/metric-registry.test.ts:500-537 \u2014 tamper coverage includes contract_version and consumers but no missing registry_id or source_contract case."
+      ],
+      "distinct_from_others_because": "This concerns the registry document\u2019s identity and required top-level schema, rather than individual vector input validation or developer test execution."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make contract-v1 registry validation treat the registry root as a complete, required contract.\n\nA valid registry must contain all and only these root fields: `registry_id`, `contract_version`, `source_contract`, `consumers`, `route_tables`, `frontiers`, and `metrics`. Missing or malformed root fields must invalidate the registry and produce a diagnostic that identifies the affected root field.\n\nValidate the frozen identity and provenance values: `registry_id` must be `metrics.v0`, `contract_version` must be `metric-scoring-contract-v1`, and `source_contract` must be `docs/contracts/metric-scoring-contract-v1.md`. The existing shipped registry must remain valid.\n\n`route_tables` and `frontiers` must be present as valid root-level contract values. Do not treat an absent or malformed value as an empty value; reject it as a root-contract violation. Preserve the existing validation of their referenced route and frontier contents.\n\nAdd coverage that deletes and type-tampers every root field, and that changes the registry identity and source-contract strings. Each altered registry must be rejected with a diagnostic tied to the affected root field.",
+  "acceptance_test_path": "packages/schema/test/metric-registry.contract-fields.acceptance.test.ts",
+  "acceptance_test_source": "import { test } from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { readFileSync } from \"node:fs\";\nimport { dirname, resolve } from \"node:path\";\nimport { fileURLToPath } from \"node:url\";\n\nimport { validateMetricRegistry } from \"../src/metric-registry.ts\";\n\nconst here = dirname(fileURLToPath(import.meta.url));\nconst registryPath = resolve(here, \"../../../specs/metrics.v0.json\");\n\nconst frozen = (): Record<string, unknown> =>\n  JSON.parse(readFileSync(registryPath, \"utf8\"));\n\nconst normalized = (value: string): string =>\n  value.toLowerCase().replace(/[^a-z0-9]/g, \"\");\n\nconst diagnoses = (\n  result: ReturnType<typeof validateMetricRegistry>,\n  field: string\n): boolean =>\n  result.errors.some((message) =>\n    normalized(message).includes(normalized(field))\n  );\n\nconst mustRejectAtRoot = (\n  label: string,\n  registry: Record<string, unknown>,\n  field: string\n): void => {\n  const result = validateMetricRegistry(registry);\n  assert.equal(result.ok, false, `${label} was accepted`);\n  assert.ok(\n    diagnoses(result, field),\n    `${label} was not diagnosed as a ${field} root-contract violation: ${result.errors.join(\"; \")}`\n  );\n};\n\ntest(\"registry-level-contract-fields\", () => {\n  assert.equal(\n    validateMetricRegistry(frozen()).ok,\n    true,\n    \"the shipped contract-v1 registry must remain valid\"\n  );\n\n  const rootFields = [\n    \"registry_id\",\n    \"contract_version\",\n    \"source_contract\",\n    \"consumers\",\n    \"route_tables\",\n    \"frontiers\",\n    \"metrics\"\n  ];\n\n  const wrongTypes: Record<string, unknown> = {\n    registry_id: null,\n    contract_version: null,\n    source_contract: null,\n    consumers: {},\n    route_tables: [],\n    frontiers: [],\n    metrics: {}\n  };\n\n  for (const field of rootFields) {\n    const missing = frozen();\n    delete missing[field];\n    mustRejectAtRoot(`registry without ${field}`, missing, field);\n\n    const malformed = frozen();\n    malformed[field] = wrongTypes[field];\n    mustRejectAtRoot(`registry with malformed ${field}`, malformed, field);\n  }\n\n  const wrongRegistryId = frozen();\n  wrongRegistryId.registry_id = \"metrics.v1\";\n  mustRejectAtRoot(\"registry with a changed registry_id\", wrongRegistryId, \"registry_id\");\n\n  const wrongSourceContract = frozen();\n  wrongSourceContract.source_contract = \"docs/contracts/metric-scoring-contract-v2.md\";\n  mustRejectAtRoot(\n    \"registry with a changed source_contract\",\n    wrongSourceContract,\n    \"source_contract\"\n  );\n});\n",
+  "how_to_run": "npm test -w @aos/schema -- registry-level-contract-fields",
+  "why_it_fails_on_the_current_tree": "The current validator accepts registries with missing, malformed, or changed `registry_id` and `source_contract`. It also turns malformed `route_tables` and `frontiers` into empty objects, so resulting errors describe missing referenced routes/frontiers rather than the malformed root field. The acceptance test requires a root-field diagnostic for each case.",
+  "two_different_implementations_that_would_both_pass": [
+    "Validate the root contract directly before validating metrics and vectors, returning field-specific failures for absent, mistyped, or mismatched values.",
+    "Use a separate contract-definition-driven validation step that checks every root field and its frozen values, then run the existing metric/vector validation only after that step succeeds."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "docs/north-star/agent-operator-score-ssot-v1.0.md",
+    "docs/adr/ADR-0004-construct-opportunity-and-comparison.md",
+    "docs/adr/ADR-0005-metric-opportunity-and-issuance.md",
+    "docs/adr/ADR-0006-trace-result-and-deterministic-scoring.md",
+    "docs/contracts/metric-scoring-contract-v1.md",
+    "docs/prd/PRD-E0A-metric-and-score-issuance-contract.md",
+    "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+    "specs/metrics.v0.json",
+    "packages/schema/src/metric-registry.ts",
+    "packages/schema/test/metric-registry.test.ts",
+    "package.json",
+    "packages/schema/package.json"
+  ]
+}

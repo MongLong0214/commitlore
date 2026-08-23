@@ -1,0 +1,38 @@
+{
+  "candidate_id": "v4-002ffd1e428c572a",
+  "need_rank_1": {
+    "rank_key": "496fabd9bcf215b66744bc7e6f0a6e794dadf84db5f46fdde26716db56d1d4e3",
+    "need_hash": "eb17b74a071fa5abe7d5a59a96842298b79ce217d21c7e573b717d456629b6e2",
+    "need": {
+      "title": "Reject unapproved evidence locators, not just blank or named-forbidden ones",
+      "what_is_missing_or_wrong": "A cell can claim any nonempty locator as long as it omits a few forbidden substrings. This permits a capability to be accepted using an unapproved external or undocumented source despite the frozen per-runtime source inventories.",
+      "what_done_would_look_like": "Validate each locator against the allowed source surface appropriate to its runtime and frozen source class, with regression tests proving arbitrary unapproved locators fail while the declared locators pass.",
+      "tree_evidence": [
+        "packages/schema/src/capability.ts:550-562 only rejects blank locators and locators containing a forbidden phrase.",
+        "packages/schema/src/capability.ts:102-115 defines the allowed primary and secondary source inventories.",
+        "packages/schema/test/capability.test.ts:257-307 tests absent, blank, and explicitly forbidden locators, but not an otherwise non-forbidden unapproved locator."
+      ],
+      "distinct_from_others_because": "This protects runtime evidence provenance rather than the schema shape or status-definition wording."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make capability-matrix validation fail closed for evidence locators. For every capability cell, accept an evidence locator only when it is an approved source for that cell\u2019s runtime and its frozen source class. This applies to Codex and Claude Code, including PRIMARY, SECONDARY, and RUNNER_DERIVED cells. A nonempty locator from an arbitrary external, undocumented, or otherwise unapproved source must invalidate the matrix even when it contains none of the explicitly forbidden source phrases. Preserve acceptance of every locator declared in the frozen capability matrix, as well as the existing rejection of missing, blank, and explicitly forbidden locators. Add regression coverage for both accepted declared locators and rejected non-forbidden unapproved locators.",
+  "acceptance_test_path": "packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+  "acceptance_test_source": "import { test } from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { readFileSync } from \"node:fs\";\nimport { dirname, resolve } from \"node:path\";\nimport { fileURLToPath } from \"node:url\";\n\nimport { validateCapabilityMatrix } from \"../src/capability.ts\";\n\nconst here = dirname(fileURLToPath(import.meta.url));\nconst matrixPath = resolve(here, \"../../../specs/adapter-capabilities.v0.json\");\nconst unapprovedLocator = \"https://evidence.example.invalid/trace/42\";\n\nconst frozen = () => JSON.parse(readFileSync(matrixPath, \"utf8\"));\nconst clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));\n\ntest(\"capability matrices reject non-forbidden locators outside approved source surfaces\", () => {\n  const declared = frozen();\n  const declaredResult = validateCapabilityMatrix(declared);\n  assert.equal(\n    declaredResult.ok,\n    true,\n    `declared capability locators must remain valid: ${declaredResult.errors.join(\"; \")}`\n  );\n\n  for (const row of declared.rows) {\n    for (const [runtimeId, cell] of Object.entries(row.runtimes) as [string, any][]) {\n      const candidate = clone(declared);\n      const candidateRow = candidate.rows.find((entry: any) => entry.event_group === row.event_group);\n      candidateRow.runtimes[runtimeId].evidence_locator = unapprovedLocator;\n\n      const result = validateCapabilityMatrix(candidate);\n      assert.equal(\n        result.ok,\n        false,\n        `${row.event_group}/${runtimeId}/${cell.source_class} accepted an unapproved, non-forbidden locator`\n      );\n    }\n  }\n});\n",
+  "how_to_run": "node --test packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+  "why_it_fails_on_the_current_tree": "The current validator accepts every filled locator unless it contains one of the runtime\u2019s forbidden phrases. The test locator is nonempty and contains none of those phrases, so each mutated matrix is currently accepted.",
+  "two_different_implementations_that_would_both_pass": [
+    "Validate locators against a frozen per-runtime, per-source-class set of declared approved locators.",
+    "Validate locators against an independently maintained approved-source rule set that recognizes the same declared source surfaces and rejects all other sources."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "docs/north-star/agent-operator-score-ssot-v1.0.md (\u00a79.2)",
+    "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+    "package.json",
+    "packages/schema/package.json",
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts",
+    "specs/adapter-capabilities.v0.json"
+  ]
+}

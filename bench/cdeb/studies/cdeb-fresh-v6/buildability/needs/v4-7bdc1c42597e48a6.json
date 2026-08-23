@@ -1,0 +1,99 @@
+{
+  "candidate_id": "v4-7bdc1c42597e48a6",
+  "scout_files_read": [
+    "gitseed/storage_schema.py",
+    "tests/test_storage.py"
+  ],
+  "needs": [
+    {
+      "title": "Make schema migrations atomic across all version steps",
+      "what_is_missing_or_wrong": "`migrate()` intends to wrap upgrades in a transaction, but each migration uses `Connection.executescript()`, whose SQLite/Python behavior can commit pending work before running the script. A failed multi-step upgrade can therefore leave tables created without the corresponding `user_version` update.",
+      "what_done_would_look_like": "Run each migration step inside an explicitly controlled transaction without `executescript()` breaking it, and add a test that forces a later migration failure and verifies neither partial schema objects nor an intermediate version remain.",
+      "tree_evidence": [
+        "gitseed/storage_schema.py:29-33 wraps the version loop in `with connection:` and updates `user_version` after each migration.",
+        "gitseed/storage_schema.py:53-70 and 74-95 implement the migration steps with `connection.executescript()`.",
+        "tests/test_storage.py:86-98 and 191-229 cover successful migrations, but no test verifies rollback when an upgrade fails."
+      ],
+      "distinct_from_others_because": "This concerns crash/failure safety of the migration mechanism, rather than schema admission rules or correction-record validity."
+    },
+    {
+      "title": "Refuse version-zero databases containing any user-defined schema object",
+      "what_is_missing_or_wrong": "The safety check for an unversioned existing database only detects tables. A database containing a user view, trigger, or index but no table is treated as empty and migration proceeds, even though it is not a known fresh run store.",
+      "what_done_would_look_like": "Broaden the version-zero compatibility check to detect all relevant non-`sqlite_%` objects in `sqlite_master`, then add parameterized tests showing that unversioned user views and triggers are refused without changing `user_version`.",
+      "tree_evidence": [
+        "gitseed/storage_schema.py:26 rejects version-zero databases only when `_has_user_tables()` is true.",
+        "gitseed/storage_schema.py:42-48 queries `sqlite_master` with `type = 'table'`, excluding other user-defined object types.",
+        "tests/test_storage.py:100-110 verifies refusal for a legacy table only."
+      ],
+      "distinct_from_others_because": "This is about preventing migration from adopting an unrelated database, not transactional execution or correction semantics."
+    },
+    {
+      "title": "Reject self-referential correction records",
+      "what_is_missing_or_wrong": "A correction can point its `corrects_run_id` at its own `run_id`. SQLite accepts this because the self-referential foreign key is satisfied by the row being inserted, but a run cannot meaningfully correct itself and it corrupts the correction-history model.",
+      "what_done_would_look_like": "Add a schema constraint or store-level validation that rejects `corrects_run_id == run_id`, plus a test asserting the attempted save fails and no artifact is persisted.",
+      "tree_evidence": [
+        "gitseed/storage_schema.py:55-59 defines `corrects_run_id` solely as a self-referential foreign key, with no inequality constraint.",
+        "tests/test_storage.py:154-170 tests a valid correction and a missing predecessor, but not self-correction."
+      ],
+      "distinct_from_others_because": "This preserves the business meaning of the immutable correction chain, independent of how schemas are migrated or recognized."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-7bdc1c42597e48a6",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "366d7152823c1cf1b2cbc02380d06c235f9ce0704c88109a7cee08d242817cfd",
+        "need_hash": "d29d5067f78cb177aa855b56efeaec1614220b457fe2cb8af73a716b4d6e8d7f",
+        "need": {
+          "title": "Make schema migrations atomic across all version steps",
+          "what_is_missing_or_wrong": "`migrate()` intends to wrap upgrades in a transaction, but each migration uses `Connection.executescript()`, whose SQLite/Python behavior can commit pending work before running the script. A failed multi-step upgrade can therefore leave tables created without the corresponding `user_version` update.",
+          "what_done_would_look_like": "Run each migration step inside an explicitly controlled transaction without `executescript()` breaking it, and add a test that forces a later migration failure and verifies neither partial schema objects nor an intermediate version remain.",
+          "tree_evidence": [
+            "gitseed/storage_schema.py:29-33 wraps the version loop in `with connection:` and updates `user_version` after each migration.",
+            "gitseed/storage_schema.py:53-70 and 74-95 implement the migration steps with `connection.executescript()`.",
+            "tests/test_storage.py:86-98 and 191-229 cover successful migrations, but no test verifies rollback when an upgrade fails."
+          ],
+          "distinct_from_others_because": "This concerns crash/failure safety of the migration mechanism, rather than schema admission rules or correction-record validity."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "430ed36d988ea026340bf83442242aa11f81953ecb930d6290d48f7794164997",
+        "need_hash": "f3e45182f883d9411446aa1da7efff2ec69eb6c2e6fcc4e9a111490bc8adc885",
+        "need": {
+          "title": "Refuse version-zero databases containing any user-defined schema object",
+          "what_is_missing_or_wrong": "The safety check for an unversioned existing database only detects tables. A database containing a user view, trigger, or index but no table is treated as empty and migration proceeds, even though it is not a known fresh run store.",
+          "what_done_would_look_like": "Broaden the version-zero compatibility check to detect all relevant non-`sqlite_%` objects in `sqlite_master`, then add parameterized tests showing that unversioned user views and triggers are refused without changing `user_version`.",
+          "tree_evidence": [
+            "gitseed/storage_schema.py:26 rejects version-zero databases only when `_has_user_tables()` is true.",
+            "gitseed/storage_schema.py:42-48 queries `sqlite_master` with `type = 'table'`, excluding other user-defined object types.",
+            "tests/test_storage.py:100-110 verifies refusal for a legacy table only."
+          ],
+          "distinct_from_others_because": "This is about preventing migration from adopting an unrelated database, not transactional execution or correction semantics."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "468d686c6edcbad1a8ad431be4dac509d651c829d6d07d41dd5471dc191e5ba9",
+        "need_hash": "9f2aa9c1b0d66291fd8898bdf3d953f0869a063d130b45859e70d5b7b2e32b77",
+        "need": {
+          "title": "Reject self-referential correction records",
+          "what_is_missing_or_wrong": "A correction can point its `corrects_run_id` at its own `run_id`. SQLite accepts this because the self-referential foreign key is satisfied by the row being inserted, but a run cannot meaningfully correct itself and it corrupts the correction-history model.",
+          "what_done_would_look_like": "Add a schema constraint or store-level validation that rejects `corrects_run_id == run_id`, plus a test asserting the attempted save fails and no artifact is persisted.",
+          "tree_evidence": [
+            "gitseed/storage_schema.py:55-59 defines `corrects_run_id` solely as a self-referential foreign key, with no inequality constraint.",
+            "tests/test_storage.py:154-170 tests a valid correction and a missing predecessor, but not self-correction."
+          ],
+          "distinct_from_others_because": "This preserves the business meaning of the immutable correction chain, independent of how schemas are migrated or recognized."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

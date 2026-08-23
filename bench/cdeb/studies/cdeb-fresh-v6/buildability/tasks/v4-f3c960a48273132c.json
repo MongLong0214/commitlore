@@ -1,0 +1,44 @@
+{
+  "candidate_id": "v4-f3c960a48273132c",
+  "need_rank_1": {
+    "rank_key": "58998b52a46f680962431c0267e492b524511b4108b80b73a73b2b0881174ff2",
+    "need_hash": "71acf0ee209505a5463958409a51a19459cb8579b148d3073a186633d5612044",
+    "need": {
+      "title": "Use the injected evidence reader\u2019s vocabulary when evidence extraction fails",
+      "what_is_missing_or_wrong": "`EvidenceReader` advertises its own `evidence_names`, but a read failure falls back to evidence generated from the default reader. A custom reader with a different vocabulary will therefore produce misleading absent-evidence/category results.",
+      "what_done_would_look_like": "Derive fallback absent evidence from the active `RunPorts.evidence` reader (or make the reader provide its fallback), and add a test using a failing reader with non-default evidence names.",
+      "tree_evidence": [
+        "gitseed/ports.py:41-49 declares `evidence_names` as part of the reader contract.",
+        "gitseed/ports.py:57-62 allows callers to inject a non-default evidence reader.",
+        "gitseed/application.py:158 invokes the injected reader, but line 164 calls `absent_evidence()` with no reader.",
+        "gitseed/category.py:92-97 makes that no-argument fallback use `DEFAULT_EVIDENCE_READER`."
+      ],
+      "distinct_from_others_because": "This fixes incorrect category evidence after a port failure, rather than request validation or timestamp semantics."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Ensure evidence-extraction failures preserve the vocabulary of the evidence reader supplied for the run. When that reader fails, the returned run artifact must contain one absent, valueless evidence item for each of that reader\u2019s advertised evidence names, rather than evidence names belonging to a different reader. Continue recording the category-read failure and keep the run safely degraded.",
+  "acceptance_test_path": "tests/test_evidence_reader_fallback.py",
+  "acceptance_test_source": "from __future__ import annotations\n\nfrom datetime import datetime, timezone\n\nfrom gitseed.application import execute\nfrom gitseed.collect.search import Candidate, CollectResult\nfrom gitseed.evidence import ClaimBasis\nfrom gitseed.grade.smoke import SmokeResult\nfrom gitseed.grade.types import GradeResult\nfrom gitseed.pipeline.run import FetchedFiles\nfrom gitseed.ports import RepositoryMetadata, RunPorts, RunRequest\nfrom gitseed.scoring import ScoreInputs\n\n\nCANDIDATE = Candidate(\n    \"org/repo\",\n    \"org\",\n    \"https://example.test/org/repo\",\n    1,\n    \"2026-01-01T00:00:00Z\",\n)\n\n\nclass Repository:\n    def search(self, query: str, limit: int) -> CollectResult:\n        return CollectResult(candidates=[CANDIDATE])\n\n    def metadata(self, candidate: Candidate, at: datetime) -> RepositoryMetadata:\n        return RepositoryMetadata(ScoreInputs(None, None, None))\n\n\nclass Files:\n    def read(self, candidate: Candidate) -> FetchedFiles:\n        return FetchedFiles(((\"main.py\", \"pass\\n\"),))\n\n\nclass Model:\n    def evaluate(self, digest: str) -> GradeResult:\n        return GradeResult(1, 1, \"ok\", \"fixture\", 0.0, \"v1\")\n\n    def flags_malicious(self, digest: str) -> bool:\n        return False\n\n\nclass Clock:\n    def now(self) -> datetime:\n        return datetime(2026, 1, 1, tzinfo=timezone.utc)\n\n\nclass BrokenEvidenceReader:\n    evidence_names = frozenset({\"domain_status\", \"dependency_graph\"})\n\n    def read_evidence(\n        self,\n        candidate: Candidate,\n        files: FetchedFiles,\n        metadata: RepositoryMetadata | None,\n    ):\n        raise RuntimeError(\"evidence source unavailable\")\n\n\ndef test_failed_custom_evidence_reader_preserves_its_vocabulary() -> None:\n    artifact = execute(\n        RunRequest(\"anything\", 1),\n        RunPorts(Repository(), Files(), Model(), Clock(), BrokenEvidenceReader()),\n        model_smoke=SmokeResult(True, \"fixture\"),\n    )\n\n    evidence = artifact.repositories[0].category_evidence\n\n    assert {item.evidence for item in evidence} == {\n        \"domain_status\",\n        \"dependency_graph\",\n    }\n    assert all(item.values == frozenset() for item in evidence)\n    assert all(item.basis is ClaimBasis.ABSENT for item in evidence)\n    assert any(failure.port == \"category\" and failure.operation == \"read\" for failure in artifact.failures)\n",
+  "how_to_run": "python3 -m pytest -q tests/test_evidence_reader_fallback.py",
+  "why_it_fails_on_the_current_tree": "On extraction failure, `execute()` calls `absent_evidence()` without reference to the injected reader. That function uses the default reader, so the artifact contains `files`, `manifest_entries`, `dependencies`, and `source` instead of `domain_status` and `dependency_graph`.",
+  "two_different_implementations_that_would_both_pass": [
+    "Make the existing absent-evidence construction accept an evidence reader and use the active run reader at each fallback point.",
+    "Provide the fallback evidence through the injected reader\u2019s runtime integration, so a failed read returns its advertised names as absent evidence."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "pyproject.toml",
+    "gitseed/ports.py",
+    "gitseed/application.py",
+    "gitseed/category.py",
+    "gitseed/evidence.py",
+    "gitseed/artifact.py",
+    "gitseed/grade/smoke.py",
+    "gitseed/pipeline/run.py",
+    "tests/conftest.py",
+    "tests/test_seam.py",
+    "tests/test_category.py",
+    "tests/test_pipeline.py"
+  ]
+}

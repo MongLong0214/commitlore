@@ -1,0 +1,41 @@
+{
+  "candidate_id": "v4-00efc0041ed3118a",
+  "need_rank_1": {
+    "rank_key": "10a3085d73cde14cd3b9fec5f460c9178961270b98f6bb48da1278dfcaae71c5",
+    "need_hash": "e726c794ea2746a3e1286c449b805682ab9f8a4c02b9c02ace795a0eee3d5a89",
+    "need": {
+      "title": "Fail smoke validation when the grading backend changes model during sampled runs",
+      "what_is_missing_or_wrong": "The smoke gate records the first sampled model but only checks score drift. A client that silently serves different models across repeated identical evaluations can pass and be reported as trusted under the first model name, undermining reproducibility and provenance.",
+      "what_done_would_look_like": "Compare `GradeResult.model` across all repeated evaluations (and fail with an explanatory message when it changes); add a fake client whose model changes between calls and assert the smoke result fails.",
+      "tree_evidence": [
+        "gitseed/grade/smoke.py:135-136 takes the displayed model solely from `repeats[0]`.",
+        "gitseed/grade/smoke.py:117-125 defines determinism only in terms of `idea` and `skill`.",
+        "gitseed/grade/smoke.py:121-124 states that reproducible rankings are the rationale for the determinism gate.",
+        "tests/test_smoke.py:19-59 provides score-drifting behavior, and tests/test_smoke.py:94-97 tests it, but none vary the returned model identifier."
+      ],
+      "distinct_from_others_because": "This is a grading provenance and reproducibility gap, independent of collection HTTP failure handling."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make the grading smoke validation reject a backend that changes its reported `GradeResult.model` while it is performing the repeated evaluations of the same smoke input. Model identity is provenance required for reproducible grading, so a smoke result must not pass merely because its scores stay the same while the serving model changes.\n\nWhen model identifiers differ among the repeated evaluation results, return a failed smoke result with a human-readable failure reason that identifies the model change. Preserve the existing smoke behavior for a backend that consistently reports one model. Add coverage using a fake grading client whose returned model changes between otherwise identical evaluations.",
+  "acceptance_test_path": "tests/test_smoke_model_consistency_acceptance.py",
+  "acceptance_test_source": "from __future__ import annotations\n\nfrom gitseed.grade.smoke import CLEAN_DIGEST, MALICIOUS_DIGEST, run_smoke\nfrom gitseed.grade.types import GradeResult\n\n\nclass ModelSwitchingClient:\n    \"\"\"Returns stable grades but switches the serving model on the last sample.\"\"\"\n\n    def __init__(self) -> None:\n        self._evaluations = 0\n\n    def evaluate(self, digest: str) -> GradeResult:\n        self._evaluations += 1\n        model = \"stable-grader:1\" if self._evaluations < 5 else \"replacement-grader:2\"\n        return GradeResult(\n            idea=7,\n            skill=8,\n            description=\"A harmless structured logger.\",\n            model=model,\n            temperature=0.0,\n            prompt_version=\"smoke-v1\",\n        )\n\n    def flags_malicious(self, digest: str) -> bool:\n        if digest == CLEAN_DIGEST:\n            return False\n        if digest == MALICIOUS_DIGEST:\n            return True\n        raise AssertionError(\"unexpected smoke digest\")\n\n\ndef test_smoke_rejects_a_backend_that_changes_models_between_samples() -> None:\n    result = run_smoke(ModelSwitchingClient())\n\n    assert result.passed is False\n    assert any(\n        \"model\" in failure.lower()\n        and \"stable-grader:1\" in failure\n        and \"replacement-grader:2\" in failure\n        for failure in result.failures\n    )\n",
+  "how_to_run": "python -m pytest -q tests/test_smoke_model_consistency_acceptance.py",
+  "why_it_fails_on_the_current_tree": "`run_smoke()` records `repeats[0].model`, while `_check_determinism()` compares only `idea` and `skill`. The acceptance client keeps those scores stable, so the current tree returns a passing result despite the fifth repeated evaluation reporting `replacement-grader:2`.",
+  "two_different_implementations_that_would_both_pass": [
+    "Extend the existing determinism validation so that differing model identifiers produce an additional failure alongside score drift.",
+    "Add a separate smoke-validation rule that inspects the models in all sampled evaluation results and reports a provenance failure when more than one identifier is observed."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "/Users/isaac/.codex/plugins/cache/commitlore/commitlore/1.2.0/skills/commitlore-codex/SKILL.md",
+    "gitseed/grade/smoke.py",
+    "gitseed/grade/types.py",
+    "tests/test_smoke.py",
+    "pyproject.toml",
+    "docs/tickets/F3-grade.md",
+    "docs/prd/PRD-F3-grade.md",
+    "gitseed/application.py",
+    "gitseed/artifact.py"
+  ]
+}

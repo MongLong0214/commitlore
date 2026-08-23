@@ -1,0 +1,99 @@
+{
+  "candidate_id": "v4-c61d7c943edd8cff",
+  "scout_files_read": [
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts",
+    "tests/planning-contract.test.mjs",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "needs": [
+    {
+      "title": "Make planning-contract tests runnable from a history-less working copy",
+      "what_is_missing_or_wrong": "Two planning tests require repository history and an origin/dev ref, so the suite cannot run in the stated history-less checkout.",
+      "what_done_would_look_like": "Use a copied fixture for digest invalidation and a self-contained synthetic Git fixture for commit-message scanning, retaining the fail-closed assertions without requiring Git metadata in the working copy.",
+      "tree_evidence": [
+        "tests/planning-contract.test.mjs:596-603 uses `git clone --no-local` of the repository.",
+        "tests/planning-contract.test.mjs:1349-1366 requires `git merge-base origin/dev HEAD`, `rev-parse`, `rev-list`, and `log` to succeed."
+      ],
+      "distinct_from_others_because": "This is test-environment portability, rather than capability-schema validation or runtime-policy governance."
+    },
+    {
+      "title": "Reject non-string derivation proofs in capability matrices",
+      "what_is_missing_or_wrong": "The public cell shape declares `derivation_proof` as `string | null`, but runtime validation only checks whether it is a filled string. A number, object, or array can therefore be treated as an unavailable derived cell and pass once its status and coverage are updated.",
+      "what_done_would_look_like": "Validate `derivation_proof` as either null or a string, and add mutation tests for invalid scalar and container values on derived cells.",
+      "tree_evidence": [
+        "packages/schema/src/capability.ts:36-44 declares `derivation_proof: string | null`.",
+        "packages/schema/src/capability.ts:587-598 has no type check before `isFilledString` determines UNAVAILABLE.",
+        "packages/schema/test/capability.test.ts:374-409 covers null and blank strings but not non-string proof values."
+      ],
+      "distinct_from_others_because": "This corrects malformed-input acceptance in the capability validator, independent of planning-test execution or Node-version policy."
+    },
+    {
+      "title": "Resolve the Node engine authority conflict",
+      "what_is_missing_or_wrong": "The active package and CI test require Node 22.18+, while the test documents that the ADR, SSOT, PRD, and ticket still declare Node 20. The tree explicitly says the correction is unapproved.",
+      "what_done_would_look_like": "Obtain the required new-contract approval, then reconcile the authoritative documents and assertions to one supported Node range; retain a test that prevents the discrepancy returning.",
+      "tree_evidence": [
+        "tests/planning/workspace-skeleton.test.mjs:758-772 pins `>=22.18 <25` and CI Node 22/24.",
+        "tests/planning/workspace-skeleton.test.mjs:763-768 states that ADR-0003, the SSOT, PRD-D0, and D0-002 still specify Node 20 and that approval is pending."
+      ],
+      "distinct_from_others_because": "This is an unresolved governance and toolchain contract mismatch, not an implementation-level validator defect or test-fixture dependency."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-c61d7c943edd8cff",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "03aa6af53dcb29cc244d2d4cf0aa00b338ac88f58aaa65cb215517ffbcdb9fc5",
+        "need_hash": "412c956106ea2bd33cd26b6f24bc863f5bcc98ed30ae3dfc6f50c9c8683d1717",
+        "need": {
+          "title": "Reject non-string derivation proofs in capability matrices",
+          "what_is_missing_or_wrong": "The public cell shape declares `derivation_proof` as `string | null`, but runtime validation only checks whether it is a filled string. A number, object, or array can therefore be treated as an unavailable derived cell and pass once its status and coverage are updated.",
+          "what_done_would_look_like": "Validate `derivation_proof` as either null or a string, and add mutation tests for invalid scalar and container values on derived cells.",
+          "tree_evidence": [
+            "packages/schema/src/capability.ts:36-44 declares `derivation_proof: string | null`.",
+            "packages/schema/src/capability.ts:587-598 has no type check before `isFilledString` determines UNAVAILABLE.",
+            "packages/schema/test/capability.test.ts:374-409 covers null and blank strings but not non-string proof values."
+          ],
+          "distinct_from_others_because": "This corrects malformed-input acceptance in the capability validator, independent of planning-test execution or Node-version policy."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "76503ef77da7760cfe9ef7d427db5f8cde52c5e95b5a266f3ebbb39e64f76c05",
+        "need_hash": "eebde610485954e67e327b7b329ea5dd9fa76c73d0cb5a4140a30822cf11d1a0",
+        "need": {
+          "title": "Make planning-contract tests runnable from a history-less working copy",
+          "what_is_missing_or_wrong": "Two planning tests require repository history and an origin/dev ref, so the suite cannot run in the stated history-less checkout.",
+          "what_done_would_look_like": "Use a copied fixture for digest invalidation and a self-contained synthetic Git fixture for commit-message scanning, retaining the fail-closed assertions without requiring Git metadata in the working copy.",
+          "tree_evidence": [
+            "tests/planning-contract.test.mjs:596-603 uses `git clone --no-local` of the repository.",
+            "tests/planning-contract.test.mjs:1349-1366 requires `git merge-base origin/dev HEAD`, `rev-parse`, `rev-list`, and `log` to succeed."
+          ],
+          "distinct_from_others_because": "This is test-environment portability, rather than capability-schema validation or runtime-policy governance."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "e9ac328225ebe983c47c4c5c39a1298e282ae26d467fbe3c8758c36a98d94e28",
+        "need_hash": "f8af390c271bc83ae033f3fb7112b78093248c536a01cff9acad9aa841db9e1f",
+        "need": {
+          "title": "Resolve the Node engine authority conflict",
+          "what_is_missing_or_wrong": "The active package and CI test require Node 22.18+, while the test documents that the ADR, SSOT, PRD, and ticket still declare Node 20. The tree explicitly says the correction is unapproved.",
+          "what_done_would_look_like": "Obtain the required new-contract approval, then reconcile the authoritative documents and assertions to one supported Node range; retain a test that prevents the discrepancy returning.",
+          "tree_evidence": [
+            "tests/planning/workspace-skeleton.test.mjs:758-772 pins `>=22.18 <25` and CI Node 22/24.",
+            "tests/planning/workspace-skeleton.test.mjs:763-768 states that ADR-0003, the SSOT, PRD-D0, and D0-002 still specify Node 20 and that approval is pending."
+          ],
+          "distinct_from_others_because": "This is an unresolved governance and toolchain contract mismatch, not an implementation-level validator defect or test-fixture dependency."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

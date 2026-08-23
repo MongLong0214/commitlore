@@ -1,0 +1,100 @@
+{
+  "candidate_id": "v4-cc76268ad4bb9a3e",
+  "scout_files_read": [
+    "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md"
+  ],
+  "needs": [
+    {
+      "title": "Make the declaration-discovery rule distinguish references from declarations",
+      "what_is_missing_or_wrong": "The supplied corpus command matches any fixture glob anywhere in an `Exact ownership` section, but D0-011 itself contains a non-declaration reference to `fixtures/operational-state/**` in that section. This contradicts the claim that the command yields only five quoted declaration paths and risks admitting references.",
+      "what_done_would_look_like": "Define an unambiguous declaration grammar or scoped marker, update the discovery command and corpus count to use it, and add a case proving an in-scope prose reference cannot be classified as a declaration.",
+      "tree_evidence": [
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:20 contains the referenced glob within `Exact ownership`.",
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:25-37 defines a broad regex-based corpus command yet says D0-011's mention is not a declaration.",
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:110 requires reference-only text not to become an admission."
+      ],
+      "distinct_from_others_because": "This fixes source classification, rather than diagnostics or output reproducibility."
+    },
+    {
+      "title": "Specify the malformed-ticket diagnostic contract",
+      "what_is_missing_or_wrong": "Malformed catalog-listed tickets must report their path and a stable reason code, but the ticket defines neither the report shape nor the allowed reason-code values. Independent implementations and tests therefore cannot tell whether the required observable behavior is met.",
+      "what_done_would_look_like": "Document a canonical diagnostic record (including ticket path, reason-code enum, and ordering), pin it in the malformed-ticket test, and require malformed-ticket failures to be reported using that contract while the census continues.",
+      "tree_evidence": [
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:49 requires a path and stable reason code but does not name a schema or codes.",
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:94 requires an assertion of malformed-ticket handling without specifying the expected diagnostic.",
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:125 repeats the observable malformed-ticket requirement."
+      ],
+      "distinct_from_others_because": "This concerns the error-reporting interface after a malformed input is found."
+    },
+    {
+      "title": "Define canonical ordering for the derived census and admitted files",
+      "what_is_missing_or_wrong": "The ticket requires a deterministic census and evidence listing derived directories and files, but never states the ordering for catalog paths, declarations, diagnostics, or admitted files. Filesystem traversal order could make otherwise correct implementations produce different observable results.",
+      "what_done_would_look_like": "Specify a canonical sort order for ticket paths, extracted declarations, diagnostics, and admitted repository-relative files; add assertions that the returned census uses that order across the relevant multi-declaration cases.",
+      "tree_evidence": [
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:107 and :109 require deterministic behavior but define no ordering rule.",
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:132 requires every repeated declaration to be admitted, making result ordering observable.",
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:158 requires a census showing captured directories and admitted files."
+      ],
+      "distinct_from_others_because": "This addresses reproducible successful output, not parsing classification or malformed-input diagnostics."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-cc76268ad4bb9a3e",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "6698e8e651789542487fa9f63a0aff93f731aed49204a0cfca9a107f2933a3fc",
+        "need_hash": "367cd27a6fc30b9310a2afbf7b4cb955b42cbf04877167093b29be5f3d061e65",
+        "need": {
+          "title": "Define canonical ordering for the derived census and admitted files",
+          "what_is_missing_or_wrong": "The ticket requires a deterministic census and evidence listing derived directories and files, but never states the ordering for catalog paths, declarations, diagnostics, or admitted files. Filesystem traversal order could make otherwise correct implementations produce different observable results.",
+          "what_done_would_look_like": "Specify a canonical sort order for ticket paths, extracted declarations, diagnostics, and admitted repository-relative files; add assertions that the returned census uses that order across the relevant multi-declaration cases.",
+          "tree_evidence": [
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:107 and :109 require deterministic behavior but define no ordering rule.",
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:132 requires every repeated declaration to be admitted, making result ordering observable.",
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:158 requires a census showing captured directories and admitted files."
+          ],
+          "distinct_from_others_because": "This addresses reproducible successful output, not parsing classification or malformed-input diagnostics."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "6d51b198fc356df2556eaa94f0049068c41d83f34cb6e34f762b8383bef4ef9b",
+        "need_hash": "6d93d1f514eeb6df4c50ad04209d590117bf76f4dfe1190ed008cee6777a6be3",
+        "need": {
+          "title": "Make the declaration-discovery rule distinguish references from declarations",
+          "what_is_missing_or_wrong": "The supplied corpus command matches any fixture glob anywhere in an `Exact ownership` section, but D0-011 itself contains a non-declaration reference to `fixtures/operational-state/**` in that section. This contradicts the claim that the command yields only five quoted declaration paths and risks admitting references.",
+          "what_done_would_look_like": "Define an unambiguous declaration grammar or scoped marker, update the discovery command and corpus count to use it, and add a case proving an in-scope prose reference cannot be classified as a declaration.",
+          "tree_evidence": [
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:20 contains the referenced glob within `Exact ownership`.",
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:25-37 defines a broad regex-based corpus command yet says D0-011's mention is not a declaration.",
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:110 requires reference-only text not to become an admission."
+          ],
+          "distinct_from_others_because": "This fixes source classification, rather than diagnostics or output reproducibility."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "a719e2a731ad0243624ea2588a86b567f997bfc574926f86164b9b6ee8489f32",
+        "need_hash": "f35aa406ba0bb18490e621f9446a59406e4dd6041852d685e4c5f929c628f331",
+        "need": {
+          "title": "Specify the malformed-ticket diagnostic contract",
+          "what_is_missing_or_wrong": "Malformed catalog-listed tickets must report their path and a stable reason code, but the ticket defines neither the report shape nor the allowed reason-code values. Independent implementations and tests therefore cannot tell whether the required observable behavior is met.",
+          "what_done_would_look_like": "Document a canonical diagnostic record (including ticket path, reason-code enum, and ordering), pin it in the malformed-ticket test, and require malformed-ticket failures to be reported using that contract while the census continues.",
+          "tree_evidence": [
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:49 requires a path and stable reason code but does not name a schema or codes.",
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:94 requires an assertion of malformed-ticket handling without specifying the expected diagnostic.",
+            "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md:125 repeats the observable malformed-ticket requirement."
+          ],
+          "distinct_from_others_because": "This concerns the error-reporting interface after a malformed input is found."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}
