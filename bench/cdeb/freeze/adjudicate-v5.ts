@@ -500,8 +500,7 @@ export const censusRatio = (rows: readonly CandidateAdjudication[]): CensusRatio
  * the difference between a finding and an overclaim.
  */
 export const CLAIM_POPULATION =
-  "historical repository decisions that remained functionally violable at the frozen snapshot and passed the " +
-  "preregistered task and oracle gates" as const;
+  "historical repository decisions that remained functionally violable at the frozen snapshot and passed the preregistered task and oracle gates" as const;
 
 export const assertClaimPopulationScoped = (claimText: string): void => {
   if (/\ball (?:repository )?decisions\b/i.test(claimText)) {
