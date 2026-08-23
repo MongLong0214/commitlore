@@ -2072,6 +2072,71 @@ describe("the census is derived from an append-only ledger", () => {
   });
 });
 
+describe("the census artifacts are generated, not maintained", () => {
+  it("recomputes them from the ledger and finds no drift", () => {
+    // buildability-summary.json once carried three overturned negatives for
+    // days, because it was written by hand from what a pull request had said. A
+    // stale number looks exactly like a fresh one, so the check is arithmetic
+    // rather than attention.
+    const result = execFileSync(
+      process.execPath,
+      [
+        "--experimental-strip-types",
+        "--no-warnings=ExperimentalWarning",
+        resolve(HERE, "..", "bench", "cdeb", "freeze", "census-generate-v5.ts"),
+        "--study-root",
+        V5,
+        "--check",
+      ],
+      { encoding: "utf8" },
+    );
+    expect(result).toContain("artifacts match the ledger");
+  });
+
+  it("refuses a ledger row whose acceptance cannot be verified", () => {
+    // The negative control for the check above: a receipt naming a command
+    // other than the registered one must stop the artifacts being written at
+    // all, which is the shape the seven voided verdicts had.
+    const scratch = mkdtempSync(join(tmpdir(), "cdeb-census-"));
+    try {
+      cpSync(R1, join(scratch, "stage1-r1"), { recursive: true });
+      const ledgerPath = join(scratch, "stage1-r1", "g4-adjudication.jsonl");
+      const rows = readFileSync(ledgerPath, "utf8").split("\n").filter((line) => line.trim() !== "");
+      const tampered = rows.map((line) => {
+        const row = JSON.parse(line) as { attempts: { receipt: Record<string, unknown> }[] };
+        if (row.attempts.length > 0 && row.attempts[0] !== undefined) {
+          row.attempts[0].receipt.executed_command_sha256 = "d".repeat(64);
+        }
+        return JSON.stringify(row);
+      });
+      writeFileSync(ledgerPath, tampered.join("\n") + "\n");
+      let failed = false;
+      let output = "";
+      try {
+        execFileSync(
+          process.execPath,
+          [
+            "--experimental-strip-types",
+            "--no-warnings=ExperimentalWarning",
+            resolve(HERE, "..", "bench", "cdeb", "freeze", "census-generate-v5.ts"),
+            "--study-root",
+            scratch,
+            "--check",
+          ],
+          { encoding: "utf8", stdio: "pipe" },
+        );
+      } catch (error) {
+        failed = true;
+        output = String((error as { stderr?: string }).stderr ?? "");
+      }
+      expect(failed).toBe(true);
+      expect(output).toMatch(/no revival attempt carries a valid acceptance receipt/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("§19.15 the implementation executes no episode", () => {
   it("declares the state plainly and leaves the randomization schedule uncomputable", () => {
     const randomization = readJson(join(R1, "randomization-plan.json"));
