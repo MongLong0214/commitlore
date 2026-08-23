@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v6",
+  "document_id": "cdeb-fresh-v6-regression-baseline-defect",
+  "status": "measured",
+  "measured_run_allowed": false,
+  "defect": "The regression baseline was measured on the untouched frozen tree. A control tree additionally contains its candidate's acceptance test file, and agent-operator-score has tests that check the repository's own file census, so the new file makes them fail before any implementation exists.",
+  "how_it_surfaced": "Five Good A controls returned functional_pass=false with regression failures unrelated to what the builder had changed -- encoded-path-root-resolution, markdown-crlf-normalized-equivalent, issue-map-and-manifest-agreement -- and the same tests failed across different candidates, which is not what a builder's mistake looks like.",
+  "null_control": {
+    "method": "Copy the frozen tree, write only the acceptance test file into it, implement nothing, run the registered regression command.",
+    "repository_baseline": "604 total / 595 pass / 9 fail",
+    "with_acceptance_file_only": "605 total / 588 pass / 17 fail",
+    "new_failures": 8,
+    "reading": "Eight failures attributable to the presence of one test file and to nothing a builder did."
+  },
+  "measured_across_candidates": {
+    "candidates": 13,
+    "tests_added_by_the_acceptance_file": [
+      1,
+      2,
+      7,
+      10
+    ],
+    "new_failures_vs_repository_baseline": {
+      "8": 2,
+      "1": 5,
+      "4": 4,
+      "5": 2
+    },
+    "candidates_with_zero_new_failures": 0
+  },
+  "why_a_shared_baseline_cannot_work": "The count differs by candidate -- one, four, five and eight were all observed -- because it depends on which file the acceptance was written to and what the census tests check. A single repository-wide expected-failure list cannot represent that, so every control would have been misjudged in a direction that looks like a builder failure.",
+  "repair": "The baseline a control is judged against is now measured per candidate, on a tree that already contains that candidate's acceptance file and nothing else. What remains different between that tree and the control tree is exactly what the builder did.",
+  "discarded": {
+    "verdicts": 14,
+    "note": "The verdicts taken against the wrong baseline are discarded rather than reinterpreted. A number computed against the wrong reference is not a number that can be adjusted."
+  },
+  "what_this_does_not_fix": "gitseed shows the same shape at smaller magnitude, so this is not an agent-operator-score quirk -- it is what happens whenever an acceptance file is added to a repository that inspects itself. A repository with no self-inspecting tests would have hidden the defect entirely."
+}
