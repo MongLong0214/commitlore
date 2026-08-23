@@ -26,8 +26,13 @@ export interface ActiveStudyDeclaration {
  * finished as one that was invalidated: it holds a published verdict and a
  * successor requirement, and running anything against it would attribute the
  * result to a study that already ended.
+ *
+ * `stage1-hold` joins them for the same reason at a later stage. v5 reached
+ * TERMINAL_HOLD after its buildability census, not during Stage 0 feasibility,
+ * and a phase list that only knew where v4 stopped would have let v5 keep
+ * resolving as active with a published verdict already in its tree.
  */
-export const TERMINAL_STUDY_PHASES = ["invalidated", "stage0-hold"] as const;
+export const TERMINAL_STUDY_PHASES = ["invalidated", "stage0-hold", "stage1-hold"] as const;
 
 /** Retained for callers that predate the plural form. */
 export const TERMINAL_STUDY_PHASE = "invalidated";

@@ -367,8 +367,11 @@ const main = (): number => {
     };
   });
 
+  // Current verdicts only. Passing the raw ledger counted every superseded row
+  // as another candidate, so a candidate adjudicated twice arrived in the ratio
+  // twice and the denominator drifted above the corpus size.
   const floors = buildCensusReport(
-    ledger.filter((row) => row.adjudication !== "VOID_INVALID_ACCEPTANCE"),
+    reduced.map((candidate) => candidate.current).filter((row) => row !== null),
     population,
     Object.fromEntries(Object.entries(registered.repositories).map(([name, spec]) => [name, spec.command])),
   );

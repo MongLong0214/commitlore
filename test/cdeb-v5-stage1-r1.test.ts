@@ -131,6 +131,11 @@ import {
 } from "../bench/cdeb/freeze/acceptance-receipt-v5.ts";
 import { assertFloorsUnchanged, buildCensusReport } from "../bench/cdeb/freeze/census-report-v5.ts";
 import {
+  TERMINAL_STUDY_PHASES,
+  assertStudyNotTerminal,
+  resolveActiveStudyRoot,
+} from "../bench/cdeb/active-study.ts";
+import {
   MIN_NEEDS,
   assertNeedScoutAnswer,
   needScoutPrompt,
@@ -2246,6 +2251,42 @@ describe("the census artifacts are generated, not maintained", () => {
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the study is finished and cannot be named active again", () => {
+  it("refuses stage1-hold as an active study", () => {
+    // v4 stopped at stage0-hold and the phase list learned that word. v5 stopped
+    // one stage later, and a list that only knew where v4 stopped would have let
+    // v5 keep resolving as active with a published verdict already in its tree.
+    expect(TERMINAL_STUDY_PHASES).toContain("stage1-hold");
+    expect(() => {
+      assertStudyNotTerminal(V5, "cdeb-fresh-v5");
+    }).toThrow(/its phase is stage1-hold/);
+  });
+
+  it("declares no active study rather than naming a successor that does not exist", () => {
+    const declaration = readJson(join(V5, "..", "..", "ACTIVE-STUDY.json"));
+    expect(declaration.status).toBe("no-active-study");
+    expect(declaration.active_study_id).toBe(null);
+    expect(declaration.last_terminal_study_id).toBe("cdeb-fresh-v5");
+    // The status word and the id have to agree, and the resolver refuses a
+    // declaration where they do not.
+    expect(() => {
+      resolveActiveStudyRoot(join(V5, "..", ".."));
+    }).toThrow(/No active CDEB study/);
+  });
+
+  it("carries the verdict and its basis in the study's own status", () => {
+    const status = readJson(join(V5, "STATUS.json"));
+    expect(status).toMatchObject({
+      study_id: "cdeb-fresh-v5",
+      phase: "stage1-hold",
+      measured_run_allowed: false,
+      verdict: "TERMINAL_HOLD",
+      successor_required: true,
+    });
+    expect(String(status.verdict_basis)).toMatch(/two of the four fixed repositories/);
   });
 });
 

@@ -251,6 +251,10 @@
     {
       "guard_id": "stage1-r1-violability-has-two-denominators",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-hold-is-a-terminal-study-phase",
+      "outcome": "bound"
     }
   ]
 }

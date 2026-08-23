@@ -77,10 +77,21 @@ describe('CDEB v4 Stage 0 governance', () => {
   });
 
   it('has handed the active slot on and cannot take it back', () => {
-    // v4 reached HOLD and a successor now holds the slot. What has to stay true
-    // is not that v4 is active -- it is that v4 can never be active again while
-    // its own status says it ended.
-    expect(resolveActiveStudyRoot(CDEB_ROOT)).not.toBe(V4);
+    // v4 reached HOLD and a successor took the slot. What has to stay true is
+    // not that v4 is active -- it is that v4 can never be active again while its
+    // own status says it ended.
+    //
+    // The successor has since reached TERMINAL_HOLD too, so the slot is now
+    // empty and the resolver refuses outright. Both outcomes satisfy the claim,
+    // and the test accepts either rather than asserting that some other study
+    // must exist: which study holds the slot is not what this guards.
+    let active: string | null = null;
+    try {
+      active = resolveActiveStudyRoot(CDEB_ROOT);
+    } catch (error) {
+      expect(String(error)).toMatch(/No active CDEB study/);
+    }
+    expect(active).not.toBe(V4);
     const status = readJson(join(V4, 'STATUS.json'));
     const study = readJson(join(V4, 'study.json'));
     expect(status).toMatchObject({ study_id: 'cdeb-fresh-v4', phase: 'stage0-hold', measured_run_allowed: false, verdict: 'HOLD' });
