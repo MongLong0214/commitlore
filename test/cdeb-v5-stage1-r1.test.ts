@@ -2030,6 +2030,44 @@ describe("G4 adjudication: an existential claim and a bounded negative", () => {
     expect(report.repositories[0]?.undecided).toBe(1);
   });
 
+  it("settles the study when a fixed stratum can no longer reach its floor", () => {
+    // agent-control-plane's acceptance was found nondeterministic, so all ten of
+    // its candidates are excluded and none can be violable. The estimand
+    // averages over four fixed repositories, so no result from the other three
+    // repairs that -- and waiting for the remaining rows would delay the answer
+    // rather than change it.
+    const population = [
+      ...Array.from({ length: 10 }, (_, i) => ({ candidate_id: `a${String(i)}`, repository_id: "empty" })),
+      ...Array.from({ length: 20 }, (_, i) => ({ candidate_id: `b${String(i)}`, repository_id: "fine" })),
+    ];
+    const decided = population
+      .filter((member) => member.repository_id === "empty")
+      .map((member) => ({
+        ...row(),
+        candidate_id: member.candidate_id,
+        repository_id: "empty",
+        adjudication: "FUNCTIONAL_ACCEPTANCE_NONDETERMINISTIC" as const,
+        attempts: [],
+      }));
+    const report = buildCensusReport(decided, population, { empty: "npx vitest run", fine: "python3 -m pytest -q" });
+    // Twenty candidates in the other repository are still unadjudicated, so the
+    // census is nowhere near complete -- and the verdict is settled anyway.
+    expect(report.complete).toBe(false);
+    expect(report.verdict).toBe("TERMINAL_HOLD");
+    expect(report.floor_unreachable_in).toEqual(["empty"]);
+    expect(report.reasons.join(" ")).toMatch(/No result from the other repositories can repair a fixed stratum/);
+  });
+
+  it("does not call a floor unreachable while candidates remain", () => {
+    // The same repository with its candidates unadjudicated is INCOMPLETE, not
+    // TERMINAL_HOLD. The difference is arithmetic on the registered floor, and
+    // reading an unfinished census as a result is the error this guards.
+    const population = Array.from({ length: 10 }, (_, i) => ({ candidate_id: `a${String(i)}`, repository_id: "empty" }));
+    const report = buildCensusReport([], population, { empty: "npx vitest run" });
+    expect(report.floor_unreachable_in).toEqual([]);
+    expect(report.verdict).toBe("INCOMPLETE");
+  });
+
   it("keeps the floors where they were registered", () => {
     expect(() => {
       assertFloorsUnchanged(8, 24);

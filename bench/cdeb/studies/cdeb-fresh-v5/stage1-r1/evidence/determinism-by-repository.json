@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "stage": "stage1-r1",
+  "document_id": "cdeb-fresh-v5-stage1-r1-determinism-by-repository",
+  "status": "measured",
+  "measured_run_allowed": false,
+  "why": "agent-control-plane's suite was found to rotate its failures. That finding puts every other verdict in the census under the same doubt until the other repositories are checked the same way, and it is cheap to check: their suites run in one and three seconds.",
+  "repositories": {
+    "agent-operator-score": {
+      "runs": 20,
+      "distinct_failure_sets": 1,
+      "distinct_totals": [
+        41
+      ],
+      "failure_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "seconds_range": [
+        1,
+        1
+      ],
+      "loadavg_range": [
+        3.39,
+        3.6
+      ],
+      "verdict": "DETERMINISTIC"
+    },
+    "gitseed": {
+      "runs": 20,
+      "distinct_failure_sets": 1,
+      "distinct_totals": [
+        321
+      ],
+      "failure_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "seconds_range": [
+        3,
+        21
+      ],
+      "loadavg_range": [
+        7.01,
+        11.86
+      ],
+      "verdict": "DETERMINISTIC"
+    },
+    "agent-control-plane": {
+      "runs": 20,
+      "distinct_failure_sets": 7,
+      "distinct_totals": [
+        849
+      ],
+      "failure_counts": [
+        10,
+        10,
+        10,
+        9,
+        9,
+        9,
+        9,
+        11,
+        10,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        10,
+        9,
+        9,
+        9
+      ],
+      "verdict": "NOT DETERMINISTIC",
+      "detail": "evidence/acceptance-load-sensitivity-result.json"
+    },
+    "logic-pro-mcp": {
+      "runs": 0,
+      "verdict": "NOT MEASURED",
+      "why": "its suite takes roughly 700 seconds a run, so twenty runs is about four hours. Its stratum cannot change the TERMINAL_HOLD, and its candidates remain undecided."
+    }
+  },
+  "the_negative_control_this_provides": "Two of the three measured repositories produced an identical result in all twenty runs, on the same host, on the same day, through the same harness. So the rotation in agent-control-plane is not a property of the machine, of the load, or of the way this study runs acceptance -- it is a property of that suite. Had all three rotated, the honest reading would have been that the instrument was mine.",
+  "what_it_does_not_settle": "Twenty identical runs do not establish determinism at the registered hundred. They establish that these two suites did not rotate in twenty attempts, which is what makes the agent-control-plane contrast interpretable rather than what licenses the confirmatory design."
+}

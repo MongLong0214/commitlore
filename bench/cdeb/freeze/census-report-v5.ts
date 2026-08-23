@@ -49,6 +49,8 @@ export interface CensusReport {
   readonly ratio: CensusRatio;
   readonly repositories: readonly RepositoryOutcome[];
   readonly confirmatory_reserve_total: number;
+  /** Repositories that can no longer reach the floor whatever the remaining candidates do. */
+  readonly floor_unreachable_in: readonly string[];
   readonly verdict: "FLOORS_MET" | "TERMINAL_HOLD" | "INCOMPLETE";
   readonly reasons: readonly string[];
 }
@@ -103,6 +105,22 @@ export const buildCensusReport = (
   // counted from decided rows rather than from rows present.
   const decided = outcomes.reduce((total, outcome) => total + outcome.adjudicated - outcome.void_invalid_acceptance, 0);
   const complete = decided === population.length;
+
+  /**
+   * A stratum whose floor is out of reach decides the study before the census
+   * finishes.
+   *
+   * The estimand averages over four *fixed* repositories. If one of them has
+   * fewer candidates left than it needs, no result from the other three can
+   * repair it -- so waiting for the remaining rows would not change the answer,
+   * it would only delay it. This is arithmetic on the registered floor, not a
+   * new threshold: the floor is untouched and what is computed is whether it is
+   * still reachable.
+   */
+  const unreachable = outcomes.filter(
+    (outcome) => outcome.functionally_violable + (outcome.candidates - outcome.adjudicated) < FLOOR_BUILDABLE_PER_REPOSITORY,
+  );
+
   const reasons: string[] = [];
   for (const outcome of outcomes) {
     if (outcome.meets_floor) continue;
@@ -122,12 +140,30 @@ export const buildCensusReport = (
     );
   }
 
+  for (const outcome of unreachable) {
+    reasons.push(
+      `${outcome.repository_id}: the floor is out of reach -- ${String(outcome.functionally_violable)} violable ` +
+        `and ${String(outcome.candidates - outcome.adjudicated)} candidate(s) left, against a floor of ` +
+        `${String(FLOOR_BUILDABLE_PER_REPOSITORY)}. No result from the other repositories can repair a fixed stratum`,
+    );
+  }
+
   return {
     complete,
     ratio: censusRatio(rows),
     repositories: outcomes,
     confirmatory_reserve_total: reserveTotal,
-    verdict: !complete ? "INCOMPLETE" : reasons.length === 0 ? "FLOORS_MET" : "TERMINAL_HOLD",
+    floor_unreachable_in: unreachable.map((outcome) => outcome.repository_id),
+    // An unreachable floor settles the study before the census finishes.
+    // Waiting for the remaining rows would not change the answer.
+    verdict:
+      unreachable.length > 0
+        ? "TERMINAL_HOLD"
+        : !complete
+          ? "INCOMPLETE"
+          : reasons.length === 0
+            ? "FLOORS_MET"
+            : "TERMINAL_HOLD",
     reasons,
   };
 };

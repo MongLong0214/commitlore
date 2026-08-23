@@ -6,25 +6,24 @@ Derived from `bench/cdeb/studies/cdeb-fresh-v5/stage1-r1/g4-adjudication.jsonl`.
 append-only adjudication ledger; nothing here is maintained by hand.
 
 - candidates: **62**
-- adjudicated: **29**
+- adjudicated: **37**
 - confirmed functionally violable: **24**
-- observed functional violability rate: **83%**
+- observed functional violability rate: **65%**
 
 ## G4 adjudication
 
 | disposition | candidates |
 | --- | ---: |
-| `UNDECIDED` | 33 |
+| `UNDECIDED` | 25 |
 | `FUNCTIONALLY_VIOLABLE` | 24 |
+| `FUNCTIONAL_ACCEPTANCE_NONDETERMINISTIC` | 10 |
 | `SEMANTIC_BOUNDARY_AMBIGUOUS` | 3 |
-| `NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET` | 2 |
 
 ## By repository
 
 ### agent-control-plane
 
-- `UNDECIDED`: 8
-- `NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET`: 2
+- `FUNCTIONAL_ACCEPTANCE_NONDETERMINISTIC`: 10
 
 ### agent-operator-score
 
@@ -46,9 +45,9 @@ append-only adjudication ledger; nothing here is maintained by hand.
 
 | disposition | candidates |
 | --- | ---: |
-| `null` | 57 |
+| `null` | 49 |
+| `NOT_BUILDABLE:functional-acceptance-not-deterministic` | 10 |
 | `NOT_BUILDABLE:record-semantic-boundary-ambiguous` | 3 |
-| `NOT_BUILDABLE:no-functionally-passing-violation` | 2 |
 
 ## Registered floor
 
@@ -58,27 +57,28 @@ stratum: **8** functionally violable candidates in each, and
 from each. A pooled share is the wrong number to judge feasibility by: a corpus can be mostly violable
 overall and still fail, if the share is carried by the repositories with the most candidates.
 
-- verdict: **INCOMPLETE**
+- verdict: **TERMINAL_HOLD**
 - confirmatory reserve: **18**
 
 | repository | candidates | adjudicated | violable | meets floor | still needed |
 | --- | ---: | ---: | ---: | :-: | ---: |
-| agent-control-plane | 10 | 2 | 0 | no | 8 |
+| agent-control-plane | 10 | 10 | 0 | no | 8 |
 | agent-operator-score | 17 | 13 | 12 | yes | 0 |
 | gitseed | 22 | 14 | 12 | yes | 0 |
 | logic-pro-mcp | 13 | 0 | 0 | no | 8 |
 
 Why it is not met:
 
-- agent-control-plane: 0 violable of 10, needs 8 (8 unadjudicated, so 8 of them must be violable)
+- agent-control-plane: 0 violable of 10, needs 8 and cannot reach it
 - logic-pro-mcp: 0 violable of 13, needs 8 (13 unadjudicated, so 8 of them must be violable)
 - confirmatory reserve is 18 after the pilot takes 3 per repository, needs 24
+- agent-control-plane: the floor is out of reach -- 0 violable and 0 candidate(s) left, against a floor of 8. No result from the other repositories can repair a fixed stratum
 
-The census is unfinished, so this is a progress report and not a result. The remaining candidates are not a random sample of the finished ones -- the slowest repository finishes last, and it is the one whose floor is least certain.
+TERMINAL_HOLD. The floors were registered before any candidate was adjudicated and do not move to fit the corpus. Recomputing the study over the repositories that did qualify would be a different study with the same name.
 
 ## Descriptive result
 
-Of 29 naturally recorded decisions adjudicated across four repositories, 24 were confirmed functionally violable at the frozen snapshot (83% observed functional violability rate). For 2 no passing revival was found within the registered search budget, and 3 produced a passing revival whose status under the recorded ruling could not be settled. A candidate with no passing revival is a bounded negative about this search. Each required at least 3 structurally distinct shapes to fail, and a shape nobody tried is not a shape that does not exist. What the census establishes there is the search's reach, not a property of the tree. What refused the attempts that were made: test 6. Shapes attempted: replacement 16, additive-coexistence 14, opt-in-configurable 4, alternate-integration-boundary 1. Per-repository counts are reported beside the acceptance command that judged them and are not compared to each other: the commands differ in scope, so a lower violable rate may mean a stricter repository or a wider suite, and this design cannot separate them.
+Of 39 naturally recorded decisions adjudicated across four repositories, 24 were confirmed functionally violable at the frozen snapshot (62% observed functional violability rate). For 2 no passing revival was found within the registered search budget, and 3 produced a passing revival whose status under the recorded ruling could not be settled. A candidate with no passing revival is a bounded negative about this search. Each required at least 3 structurally distinct shapes to fail, and a shape nobody tried is not a shape that does not exist. What the census establishes there is the search's reach, not a property of the tree. What refused the attempts that were made: test 6. Shapes attempted: replacement 16, additive-coexistence 14, opt-in-configurable 4, alternate-integration-boundary 1. Per-repository counts are reported beside the acceptance command that judged them and are not compared to each other: the commands differ in scope, so a lower violable rate may mean a stricter repository or a wider suite, and this design cannot separate them.
 
 ## How to read these
 

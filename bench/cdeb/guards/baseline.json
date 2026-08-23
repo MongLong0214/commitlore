@@ -243,6 +243,10 @@
     {
       "guard_id": "stage1-r1-a-revival-may-not-remove-or-silence-tests",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-an-unreachable-floor-settles-the-study",
+      "outcome": "bound"
     }
   ]
 }

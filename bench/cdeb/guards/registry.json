@@ -910,6 +910,22 @@
           "why": "Marking a failing test skipped keeps the total and removes the failure, which is deletion by another name."
         }
       ]
+    },
+    {
+      "guard_id": "stage1-r1-an-unreachable-floor-settles-the-study",
+      "claim": "A fixed stratum that can no longer reach its registered floor produces TERMINAL_HOLD immediately, without waiting for the rest of the census.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "settles the study when a fixed stratum can no longer reach its floor",
+      "mutations": [
+        {
+          "mutation_id": "unreachable-floor-waits-for-completeness",
+          "file": "bench/cdeb/freeze/census-report-v5.ts",
+          "find": "      unreachable.length > 0\n        ? \"TERMINAL_HOLD\"\n        : !complete",
+          "replace": "      false\n        ? \"TERMINAL_HOLD\"\n        : !complete",
+          "must_fail_test": true,
+          "why": "agent-control-plane is exhausted at zero violable against a floor of eight. Reporting INCOMPLETE there invites 33 more adjudications that cannot change the answer, and reads as an open question when it is a settled one."
+        }
+      ]
     }
   ]
 }
