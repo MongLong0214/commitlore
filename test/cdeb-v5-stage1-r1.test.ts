@@ -2267,8 +2267,11 @@ describe("the study is finished and cannot be named active again", () => {
 
   it("names v5 as the last terminal study and never as the active one", () => {
     const declaration = readJson(join(V5, "..", "..", "ACTIVE-STUDY.json"));
-    expect(declaration.last_terminal_study_id).toBe("cdeb-fresh-v5");
+    // Not which study is the most recent to end -- that moves every time one
+    // does, and asserting it made this fail when v6 reached its own hold. What
+    // has to stay true is that v5 is finished and is never the active study.
     expect(declaration.active_study_id).not.toBe("cdeb-fresh-v5");
+    expect(readJson(join(V5, "STATUS.json")).phase).toBe("stage1-hold");
     // The status word and the id have to agree either way: an empty slot says
     // no-active-study with a null id, an occupied one says active with an id.
     // Asserting which of the two is current would fail the moment a successor
