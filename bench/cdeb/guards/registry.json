@@ -942,6 +942,22 @@
           "why": "agent-control-plane's ten candidates were disposed because its suite rotates its failures. Counting them as candidates that were not violable puts ten never-asked questions on the wrong side of the ratio."
         }
       ]
+    },
+    {
+      "guard_id": "stage1-hold-is-a-terminal-study-phase",
+      "claim": "A study that stopped at stage1-hold cannot be resolved as the active study, the same way stage0-hold and invalidated cannot.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses stage1-hold as an active study",
+      "mutations": [
+        {
+          "mutation_id": "stage1-hold-not-terminal",
+          "file": "bench/cdeb/active-study.ts",
+          "find": "export const TERMINAL_STUDY_PHASES = [\"invalidated\", \"stage0-hold\", \"stage1-hold\"] as const;",
+          "replace": "export const TERMINAL_STUDY_PHASES = [\"invalidated\", \"stage0-hold\"] as const;",
+          "must_fail_test": true,
+          "why": "v4 stopped at stage0-hold and the list learned that word. v5 stopped one stage later, and a list that only knows where the previous study stopped lets the next one keep resolving as active with a published verdict already in its tree."
+        }
+      ]
     }
   ]
 }

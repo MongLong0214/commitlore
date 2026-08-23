@@ -1,7 +1,7 @@
 {
-  "active_study_id": "cdeb-fresh-v5",
-  "last_terminal_study_id": "cdeb-fresh-v4",
-  "status": "active",
-  "reason": "cdeb-fresh-v5 is a Stage 0 authority-and-corpus-feasibility study under a new study id, a new preregistration and a new admission model. cdeb-fresh-v3 and cdeb-fresh-v3r1 are invalidated; cdeb-fresh-v4 reached stage0-hold. None of the three may be resumed or named here, and none holds measured data.",
+  "active_study_id": null,
+  "last_terminal_study_id": "cdeb-fresh-v5",
+  "status": "no-active-study",
+  "reason": "cdeb-fresh-v5 reached TERMINAL_HOLD after its Stage 1-r1 buildability census: two of its four fixed repositories cannot produce the same acceptance result twice on their unmodified trees, so two strata of an equal-weight four-stratum estimand are empty. Its descriptive result stands and is published in stage1-r1/CENSUS-REPORT.md; it holds no measured product-effect data. cdeb-fresh-v3 and v3r1 are invalidated and v4 reached stage0-hold. None may be resumed or named here. A successor needs a new study id, a new preregistration, and repositories whose acceptance is established as deterministic before any candidate is adjudicated.",
   "successor_requires_new_study_id": true
 }
