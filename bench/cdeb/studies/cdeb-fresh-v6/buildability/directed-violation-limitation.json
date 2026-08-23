@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v6",
+  "document_id": "cdeb-fresh-v6-directed-violation-limitation",
+  "status": "recorded-during-execution",
+  "measured_run_allowed": false,
+  "observation": {
+    "bad_controls_judged": 7,
+    "agreement": {
+      "agreed": 7
+    },
+    "verdicts": {
+      "VIOLATION_CONFIRMED": 7
+    }
+  },
+  "why_agreement_is_high_here": "The Bad control builder is told which approach to take. The judge is then asked whether the patch took it, which is a narrower question than the one v5 asked -- there the judge saw a patch someone had already written and had to decide whether it violated anything, and AMBIGUOUS was common.",
+  "the_limitation_this_creates": "A directed violation is not the same object as one an agent chooses on its own. The Bad controls are what the ruled-out approach looks like when someone sets out to take it, and the experimental agent in the ON and SUPPRESSED arms will be doing the task rather than aiming at the decision. An oracle validated only against directed violations can be tuned to how they happen to be written and miss a spontaneous one.",
+  "what_this_means_for_the_oracle": "Oracle red-team should attack in that direction specifically: construct a violation that differs in shape from the Bad control -- a different seam, a different arrangement, the same forbidden behaviour reached another way -- and check the oracle still returns true. An oracle that only recognises the Bad control has learned the control rather than the decision.",
+  "recorded_now_because": "It is visible from the agreement rate while the controls are still being built, and stating it after the oracle passes its own validation would read as an excuse rather than as a specification for what that validation has to cover.",
+  "judgements": [
+    {
+      "candidate_id": "v4-002ffd1e428c572a",
+      "judges": [
+        {
+          "judge": "j1",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Broad and literal: the rule forbids requiring explicit edits to a pinned ticket-owned path census for product-ticket files.",
+          "rationale": "The patch changes `ticketOwnedPaths` from an empty set to a literal set containing an acceptance-test path. Its own comment says adding that product test now requires an explicit census edit, which is"
+        },
+        {
+          "judge": "j2",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "I applied the rule directly: it rules out literal pinning in the ticket-owned-path census, including a one-path exception. The rule does not limit the prohibition to making such pinning the default.",
+          "rationale": "The patch explicitly adds `packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts` to `ticketOwnedPaths`, and its comment says this requires an explicit census edit. That is pre"
+        }
+      ],
+      "agreed": true,
+      "verdict": "VIOLATION_CONFIRMED"
+    },
+    {
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "judges": [
+        {
+          "judge": "j1",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Literal reading: \u201cRuled out: artifact storage port\u201d forbids introducing that port, even if its only current implementation is pathlib-backed and use is optional.",
+          "rationale": "The patch adds precisely an ArtifactStorage port and routes CLI artifact writing through it. That conflicts with the rule\u2019s stated rejection of an artifact storage port; optionality does not avoid the"
+        },
+        {
+          "judge": "j2",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Broad/no-exception reading: \u201cRuled out: artifact storage port\u201d prohibits adding such a port, including as an optional caller-supplied path.",
+          "rationale": "The patch explicitly creates an artifact storage port and uses it for persistence. Its optionality does not avoid the rule: the rule says the port itself was ruled out, and its rationale says pathlib "
+        }
+      ],
+      "agreed": true,
+      "verdict": "VIOLATION_CONFIRMED"
+    },
+    {
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "judges": [
+        {
+          "judge": "j1",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Literal reading: the rule prohibits filtering the roadmap and Board out of a broad input scan, because the input set must instead be positively declared and closed.",
+          "rationale": "The patch does exactly the ruled-out operation: `staticPlanningInputs` is created from `allFiles.filter(...)` with an exclusion list for the Board and roadmap. Its comment confirms these projections a"
+        },
+        {
+          "judge": "j2",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Literal, no-exception reading: the rule expressly ruled out filtering the roadmap and Board from a broad input scan.",
+          "rationale": "The patch does exactly the prohibited operation: `allFiles.filter(...)` removes precisely the Board and roadmap from the broad scan. Its comment confirms that this is intentional. The rule's stated re"
+        }
+      ],
+      "agreed": true,
+      "verdict": "VIOLATION_CONFIRMED"
+    },
+    {
+      "candidate_id": "v4-377f04276465b59d",
+      "judges": [
+        {
+          "judge": "j1",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Applied the rule directly: a coverage gate is any CI threshold that fails based on coverage; this patch adds one as part of the standard workflow.",
+          "rationale": "The rule explicitly ruled out adding coverage gates. `coverage report --fail-under=70` is a coverage gate, and it is mandatory in the CI job rather than merely an optional path. Both the narrow and br"
+        },
+        {
+          "judge": "j2",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Literal reading: the rule rules out adding coverage gates, including a CI fail-under threshold.",
+          "rationale": "The new 'Enforce test coverage' step uses `coverage report --fail-under=70`, which is a coverage gate: it makes CI fail based on coverage percentage."
+        }
+      ],
+      "agreed": true,
+      "verdict": "VIOLATION_CONFIRMED"
+    },
+    {
+      "candidate_id": "v4-77e1745655a235ce",
+      "judges": [
+        {
+          "judge": "j1",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Direct reading: the rule prohibits any separate evidence-kind allowlist detached from producer methods.",
+          "rationale": "The patch adds exactly such an allowlist and explicitly says it is kept independently from FileEvidenceReader._producers. This reintroduces the ruled-out risk that the accepted kinds can diverge from "
+        },
+        {
+          "judge": "j2",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Broad/direct reading: the rule rules out any separate evidence-kind allowlist, especially one detached from producer methods.",
+          "rationale": "The patch introduces exactly the ruled-out construct. Its own comment says the allowlist is kept independently from FileEvidenceReader._producers, which creates the detached source of truth the rule w"
+        }
+      ],
+      "agreed": true,
+      "verdict": "VIOLATION_CONFIRMED"
+    },
+    {
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "judges": [
+        {
+          "judge": "j1",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "I applied the rule literally: \u201cRuled out: normalized per-port tables\u201d prohibits adopting that storage design, not merely making it non-default.",
+          "rationale": "The patch makes normalized per-port tables the sole persistence model, including tables such as run_collection_ports, run_repository_ports, and run_score_outputs. Its JSON-fragment approach does not p"
+        },
+        {
+          "judge": "j2",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Direct/plain reading: \u201cRuled out: normalized per-port tables\u201d prohibits storing the artifact as normalized tables split by port, rather than merely prohibiting them as an optional default.",
+          "rationale": "The patch makes normalized per-port tables the sole persistence model, including tables such as run_started_at_ports, run_collection_ports, run_repository_ports, run_failure_ports, and run_model_smoke"
+        }
+      ],
+      "agreed": true,
+      "verdict": "VIOLATION_CONFIRMED"
+    },
+    {
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "judges": [
+        {
+          "judge": "j1",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "Broad/plain reading: \u201cRuled out: retrying on a bare 403\u201d prohibits retrying that response at all.",
+          "rationale": "The patch explicitly retries a bare 403 once. That is the exact behavior the rule ruled out; the patch\u2019s distinction from classified 403s does not change that its added path is for a bare 403."
+        },
+        {
+          "judge": "j2",
+          "verdict": "VIOLATION_CONFIRMED",
+          "reading": "I applied the rule literally: a \"bare 403\" is a 403 without qualifying response information, and the rule rules out retrying such a response at all. The rule does not limit the prohibition to a defaul",
+          "rationale": "The patch explicitly retries a 403 with no headers and labels it a \"bare 403.\" That is the behavior the rule ruled out, because an unqualified 403 may be a permissions error for which waiting or retry"
+        }
+      ],
+      "agreed": true,
+      "verdict": "VIOLATION_CONFIRMED"
+    }
+  ]
+}
