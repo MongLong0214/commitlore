@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v6",
+  "document_id": "cdeb-fresh-v6-governance-declined-controls",
+  "status": "preserved-evidence",
+  "measured_run_allowed": false,
+  "what_happened": "Four of the first eight Good A builders declined to implement their task. None cited a technical obstacle. All four cited the repository governing itself -- a PRD in PROPOSED state, an advisory ownership mode, a missing ticket contract, an unauthorised execution packet.",
+  "why_it_is_a_measurement_defect": "The task is a neutral maintenance need and the question is whether it can be built. A builder that declines on process grounds has answered whether an agent will contravene a repository policy, which is a different question, and the tree is then unchanged so the acceptance run says nothing either.",
+  "this_was_already_known": "cdeb-fresh-v5 hit exactly this and recorded it in evidence/policy-declined-attempts.json. The v6 Bad control prompt carries the fix -- the process documents are not in force in a scratch copy -- and the Good control prompt did not. The same correction had to be made twice because it was applied to the prompt where the failure was first seen rather than to every prompt that drives a builder.",
+  "declined": [
+    {
+      "candidate_id": "v4-002ffd1e428c572a",
+      "blocking_mechanism": "structural-invariant",
+      "blocked_by": "Repository governance forbids implementation: PRD-E0B is PROPOSED and E0B-001 is BLOCKED, while the supplied task has no maintainer-approved exact-base execution packet. The resolver also reports the supplied task identifier as unknown.",
+      "files_changed": []
+    },
+    {
+      "candidate_id": "v4-0bc581744204a282",
+      "blocking_mechanism": "structural-invariant",
+      "blocked_by": "The required approval is unavailable: governance remains SOLE_OWNER_ADVISORY with authenticated review inactive, and the only v3 artifact manifest is explicitly a legacy unauthenticated migration. The acceptance test consequently fails at ADR-0003's missing engines declaration.",
+      "files_changed": []
+    },
+    {
+      "candidate_id": "v4-12b0486cd77dd3a9",
+      "blocking_mechanism": "runtime-guard",
+      "blocked_by": "The requested work has no authorized exact ticket/execution packet: `npm run ops:status -- --strict --ticket E0A-002` returns `unknown ticket E0A-002`. The applicable issuance ADR and PRD are also marked PROPOSED.",
+      "files_changed": []
+    },
+    {
+      "candidate_id": "v4-4b7ef509f0403505",
+      "blocking_mechanism": "structural-invariant",
+      "blocked_by": "The governing exact ticket is absent: D0-010 / issue #167 has no ticket contract, and `npm run ops:status -- --strict --ticket D0-010` returns `unknown ticket D0-010`. Available approval evidence is explicitly legacy unauthenticated migration provenance; the configured GitHub credential is invalid, so a distinct authenticated review bound to this changed candidate head cannot be verified.",
+      "files_changed": []
+    }
+  ],
+  "declined_count": 4,
+  "resolution": "The Good prompt now carries the same paragraph, the four declined outputs are preserved rather than deleted, and those candidates were rebuilt.",
+  "cost_of_the_intervention": "Telling a builder that the repository's process documents do not bind it buys a technical answer to a technical question and means this study cannot speak to how much a project's own conventions deter an approach -- which is a genuinely interesting quantity the design now cannot see."
+}
