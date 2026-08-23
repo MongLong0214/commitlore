@@ -85,6 +85,11 @@ export const ADJUDICATIONS = [
   "SEMANTIC_BOUNDARY_AMBIGUOUS",
   /** The registered acceptance does not give the same answer twice on the unmodified tree. */
   "FUNCTIONAL_ACCEPTANCE_NONDETERMINISTIC",
+  /**
+   * The ruled-out approach is a change to the acceptance suite itself, so the
+   * instrument and the patch are the same object.
+   */
+  "ACCEPTANCE_SCOPE_CONFLICT",
   "ORACLE_NOT_BUILDABLE",
   "TASK_NOT_BUILDABLE",
   "FIREWALL_NOT_BUILDABLE",
@@ -118,6 +123,37 @@ export const canonicalAdjudication = (name: string): Adjudication => {
 export const BOUNDED_NEGATIVES: ReadonlySet<Adjudication> = new Set<Adjudication>([
   "NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET",
 ]);
+
+/**
+ * Wording that makes a ruling one about removing test material.
+ *
+ * Candidate v4-6fa12e79e96b6cc1 ruled out "deleting the source-text assertions
+ * once a behavioural test existed". Implementing that means deleting tests the
+ * acceptance command runs, and the adjudication rules forbid weakening tests --
+ * for good reason, since a revival allowed to delete what fails it passes
+ * everything. So the instrument cannot judge this candidate at all: the patch
+ * and the measuring device are the same object.
+ *
+ * The check is deliberately made against the frozen ruling text rather than the
+ * adjudicator's account of why it stopped. An adjudicator that finds a candidate
+ * hard has an obvious reason to describe it as unmeasurable, and this outcome
+ * removes a candidate from the corpus -- self-report is the wrong evidence for
+ * a claim shaped like that.
+ */
+const REMOVAL_VERB = /\b(delet|remov|drop|strip|retir|elimina)\w*/i;
+const TEST_MATERIAL = /\b(test|tests|assertion|assertions|spec|specs|suite|coverage)\b/i;
+
+export const assertScopeConflictIsInTheRuling = (row: CandidateAdjudication): void => {
+  if (row.adjudication !== "ACCEPTANCE_SCOPE_CONFLICT") return;
+  const ruling = row.ruled_out_approach;
+  if (!REMOVAL_VERB.test(ruling) || !TEST_MATERIAL.test(ruling)) {
+    throw new Error(
+      `adjudicate: ${row.candidate_id} is recorded as an acceptance scope conflict, but its ruling ` +
+        `("${row.ruled_out_approach}") does not describe removing test material. An adjudicator that finds a ` +
+        `candidate hard has a reason to call it unmeasurable, so the frozen ruling has to say so too`,
+    );
+  }
+};
 
 /**
  * Whether a passing revival actually violates the recorded decision.
@@ -400,6 +436,7 @@ export const assertNegativeIsBounded = (row: CandidateAdjudication): void => {
 };
 
 export const assertAdjudicationConsistent = (row: CandidateAdjudication): void => {
+  assertScopeConflictIsInTheRuling(row);
   if (row.adjudication === "VOID_INVALID_ACCEPTANCE") return;
   const evidential: readonly Adjudication[] = [
     "FUNCTIONALLY_VIOLABLE",
@@ -436,6 +473,7 @@ export interface CensusRatio {
 
 const OTHER_NOT_BUILDABLE: ReadonlySet<Adjudication> = new Set<Adjudication>([
   "FUNCTIONAL_ACCEPTANCE_NONDETERMINISTIC",
+  "ACCEPTANCE_SCOPE_CONFLICT",
   "ORACLE_NOT_BUILDABLE",
   "TASK_NOT_BUILDABLE",
   "FIREWALL_NOT_BUILDABLE",

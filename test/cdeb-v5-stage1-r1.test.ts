@@ -105,6 +105,7 @@ import {
   assertNegativeIsEvidenced,
   assertNegativeIsNotOverstated,
   assertPassingRevivalsAreSemanticallyJudged,
+  assertScopeConflictIsInTheRuling,
   MIN_SEMANTIC_JUDGEMENTS,
   reduceSemanticJudgements,
   assertViolableIsEvidenced,
@@ -1569,6 +1570,27 @@ describe("acceptance receipts are the evidence, and prose is not", () => {
     expect(improvised.defects.join(" ")).toMatch(/chosen during a run are chosen/);
   });
 
+  it("refuses a run that removed or silenced tests", () => {
+    // Acceptance is the instrument. A patch that deletes the test failing it,
+    // or marks it skipped, passes while having done the opposite of what the
+    // instrument is for -- and the unexpected-failures check cannot see either,
+    // because neither produces a failure.
+    const deleted = validateReceipt(
+      receipt({ test_total: 300, test_pass: 300, test_fail: 0, test_skip: 0 }),
+      registered,
+      { ...baseline, total: 318, passed: 318 },
+    );
+    expect(deleted.receipt_valid).toBe(false);
+    expect(deleted.defects.join(" ")).toMatch(/may add coverage and may not remove it/);
+    const silenced = validateReceipt(
+      receipt({ test_total: 318, test_pass: 300, test_fail: 0, test_skip: 18 }),
+      registered,
+      { ...baseline, total: 318, passed: 318 },
+    );
+    expect(silenced.receipt_valid).toBe(false);
+    expect(silenced.defects.join(" ")).toMatch(/Silencing a test that fails is the same move/);
+  });
+
   it("refuses a run on a tree nothing changed", () => {
     // Four adjudicators declined to implement their approach, changed nothing,
     // and their acceptance runs passed -- because an unmodified tree passes its
@@ -1839,6 +1861,29 @@ describe("G4 adjudication: an existential claim and a bounded negative", () => {
         row({ adjudication: "FUNCTIONALLY_VIOLABLE", attempts: [passing({ semantic: undefined })] }),
       );
     }).toThrow(/never judged against the ruling/);
+  });
+
+  it("takes a scope conflict from the frozen ruling, not from the adjudicator", () => {
+    // The ruled-out approach for v4-6fa12e79e96b6cc1 is "deleting the
+    // source-text assertions once a behavioural test existed". Implementing it
+    // means deleting tests the acceptance command runs, so the instrument and
+    // the patch are the same object and nothing here can judge it.
+    expect(() => {
+      assertScopeConflictIsInTheRuling(
+        row({
+          adjudication: "ACCEPTANCE_SCOPE_CONFLICT",
+          ruled_out_approach: "deleting the source-text assertions once a behavioural test existed",
+        }),
+      );
+    }).not.toThrow();
+    // This outcome removes a candidate from the corpus, and an adjudicator that
+    // finds a candidate hard has an obvious reason to call it unmeasurable. So
+    // the frozen ruling has to say so too.
+    expect(() => {
+      assertScopeConflictIsInTheRuling(
+        row({ adjudication: "ACCEPTANCE_SCOPE_CONFLICT", ruled_out_approach: "JSON files instead of SQLite" }),
+      );
+    }).toThrow(/does not describe removing test material/);
   });
 
   it("refuses a negative whose only failures the adjudicator caused", () => {

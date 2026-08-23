@@ -210,6 +210,25 @@ export const validateReceipt = (
     }
   }
 
+  // A revival may add tests. It may not remove them or silence them: a patch
+  // that deletes the test failing it, or marks it skipped, passes acceptance
+  // while having done the opposite of what acceptance is for. Neither shape has
+  // appeared in the census so far -- 42 receipts, every one at or above the
+  // baseline's total and none with a higher skip count -- which is why the check
+  // costs nothing to add and is worth having before it does.
+  if (receipt.test_total < baseline.total) {
+    defects.push(
+      `the run has ${String(receipt.test_total)} tests where the baseline has ${String(baseline.total)}. ` +
+        `A revival may add coverage and may not remove it`,
+    );
+  }
+  if (receipt.test_skip > baseline.skipped) {
+    defects.push(
+      `the run skips ${String(receipt.test_skip)} tests where the baseline skips ${String(baseline.skipped)}. ` +
+        `Silencing a test that fails is the same move as deleting it`,
+    );
+  }
+
   if (receipt.changed_files.length === 0) {
     defects.push(
       "the tree is unchanged, so this run measured the baseline rather than a revival. An unmodified tree " +

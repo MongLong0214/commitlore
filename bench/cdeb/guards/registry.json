@@ -870,6 +870,46 @@
           "why": "Observed live: four adjudicators declined their approach, changed nothing, and the unmodified tree passed acceptance. Without this the census gains four fabricated passing revivals."
         }
       ]
+    },
+    {
+      "guard_id": "stage1-r1-scope-conflict-comes-from-the-ruling",
+      "claim": "An ACCEPTANCE_SCOPE_CONFLICT is established from the frozen ruling text, not from an adjudicator's account of why it stopped.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "takes a scope conflict from the frozen ruling, not from the adjudicator",
+      "mutations": [
+        {
+          "mutation_id": "scope-conflict-accepted-on-self-report",
+          "file": "bench/cdeb/freeze/adjudicate-v5.ts",
+          "find": "  if (!REMOVAL_VERB.test(ruling) || !TEST_MATERIAL.test(ruling)) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "This disposition removes a candidate from the corpus. An adjudicator that finds a candidate hard has a reason to describe it as unmeasurable, so self-report is the wrong evidence for it."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-a-revival-may-not-remove-or-silence-tests",
+      "claim": "A receipt whose run has fewer tests than the baseline, or more skipped ones, is invalid: a patch that deletes or silences the test failing it passes acceptance while defeating it.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a run that removed or silenced tests",
+      "mutations": [
+        {
+          "mutation_id": "deleted-tests-still-pass",
+          "file": "bench/cdeb/freeze/acceptance-receipt-v5.ts",
+          "find": "  if (receipt.test_total < baseline.total) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "The unexpected-failures check cannot see a deleted test, because a deleted test produces no failure."
+        },
+        {
+          "mutation_id": "silenced-tests-still-pass",
+          "file": "bench/cdeb/freeze/acceptance-receipt-v5.ts",
+          "find": "  if (receipt.test_skip > baseline.skipped) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "Marking a failing test skipped keeps the total and removes the failure, which is deletion by another name."
+        }
+      ]
     }
   ]
 }

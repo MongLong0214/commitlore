@@ -90,6 +90,7 @@ const CENSUS_EXCLUSION: Readonly<Record<string, string | null>> = {
   NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET: "NOT_BUILDABLE:no-functionally-passing-violation",
   SEMANTIC_BOUNDARY_AMBIGUOUS: "NOT_BUILDABLE:record-semantic-boundary-ambiguous",
   FUNCTIONAL_ACCEPTANCE_NONDETERMINISTIC: "NOT_BUILDABLE:functional-acceptance-not-deterministic",
+  ACCEPTANCE_SCOPE_CONFLICT: "NOT_BUILDABLE:scope-not-isolatable",
   ORACLE_NOT_BUILDABLE: "NOT_BUILDABLE:oracle-not-discriminative",
   TASK_NOT_BUILDABLE: "NOT_BUILDABLE:neutral-task-not-derivable",
   FIREWALL_NOT_BUILDABLE: "NOT_BUILDABLE:firewall-provenance-not-demonstrable",
