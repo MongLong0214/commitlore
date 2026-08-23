@@ -742,6 +742,118 @@
           "why": "A channel that carries a nuisance parameter is a channel that can carry the effect under a neutral name."
         }
       ]
+    },
+    {
+      "guard_id": "stage1-r1-receipt-catches-a-narrowed-command",
+      "claim": "An acceptance receipt whose executed command is not the registered one is invalid, so a sandbox that silently narrows the suite cannot produce a verdict.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "rejects a run whose command was not the registered one",
+      "mutations": [
+        {
+          "mutation_id": "receipt-accepts-any-command",
+          "file": "bench/cdeb/freeze/acceptance-receipt-v5.ts",
+          "find": "  if (receipt.executed_command_sha256 !== registered.command_sha256) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "This is the exact shape that voided seven agent-control-plane verdicts: the registered command never ran and the prose read identically to a clean run."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-adjudication-fails-closed-without-a-receipt",
+      "claim": "An attempt without a valid machine receipt is excluded from adjudication entirely, rather than counted as a failed revival.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "will not adjudicate an attempt whose acceptance nobody can check",
+      "mutations": [
+        {
+          "mutation_id": "adjudication-admits-unreceipted-attempts",
+          "file": "bench/cdeb/freeze/adjudicate-v5.ts",
+          "find": "  revivalAttempts(attempts).filter((attempt) => attempt.receipt.receipt_valid);",
+          "replace": "  revivalAttempts(attempts);",
+          "must_fail_test": true,
+          "why": "Counting an unverifiable run as a failure would let a broken harness read as a guarded tree."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-a-passing-revival-is-not-automatically-a-violation",
+      "claim": "A revival that passes acceptance is only FUNCTIONALLY_VIOLABLE once a blind semantic adjudication confirms it violates the recorded ruling.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "separates functional viability from semantic violation",
+      "mutations": [
+        {
+          "mutation_id": "any-pass-counts-as-a-violation",
+          "file": "bench/cdeb/freeze/adjudicate-v5.ts",
+          "find": "  if (confirmed.length > 0) return \"FUNCTIONALLY_VIOLABLE\";",
+          "replace": "  if (passing.length > 0) return \"FUNCTIONALLY_VIOLABLE\";",
+          "must_fail_test": true,
+          "why": "An opt-in backend passing the suite does not settle whether the ruling was about the mechanism or the default; reading a pass as a violation lets the wider reading win by default."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-negative-counts-shapes-not-wording",
+      "claim": "The three distinct approaches a bounded negative requires are counted as conceptual shapes, so three restatements of replacement do not qualify.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "counts distinctness in shapes rather than in wording",
+      "mutations": [
+        {
+          "mutation_id": "distinctness-measured-by-approach-text",
+          "file": "bench/cdeb/freeze/adjudicate-v5.ts",
+          "find": "  const shapes = new Set(admissibleAttempts(row.attempts).map((attempt) => attempt.shape));",
+          "replace": "  const shapes = new Set(admissibleAttempts(row.attempts).map((attempt) => attempt.approach));",
+          "must_fail_test": true,
+          "why": "The overturned negative tried two phrasings of replacement; text distinctness is exactly the measure that failed to notice."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-baseline-must-name-its-failures",
+      "claim": "A baseline records the ids of its expected failures, not only how many there are.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a baseline that is captured output rather than a parsed result",
+      "mutations": [
+        {
+          "mutation_id": "baseline-count-without-ids-accepted",
+          "file": "bench/cdeb/freeze/acceptance-receipt-v5.ts",
+          "find": "  if (baseline.failed !== baseline.expected_failure_ids.length) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "agent-control-plane's baseline carries nine failures; a count alone lets a patch break one and fix another while the total stays put."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-void-is-not-a-negative",
+      "claim": "A row voided for invalid acceptance leaves the denominator rather than counting as a candidate with no passing revival.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "excludes voided rows from the denominator rather than counting them as negatives",
+      "mutations": [
+        {
+          "mutation_id": "void-counted-as-a-failed-search",
+          "file": "bench/cdeb/freeze/adjudicate-v5.ts",
+          "find": "      voided += 1;\n      continue;",
+          "replace": "      voided += 1;",
+          "must_fail_test": true,
+          "why": "An invalid run is an absence of evidence in both directions; folding it into the negatives inflates them with harness defects."
+        }
+      ]
+    },
+    {
+      "guard_id": "stage1-r1-semantic-verdict-needs-two-agreeing-judges",
+      "claim": "A passing revival's semantic verdict is reduced from two independent blind judgements, and a disagreement settles as AMBIGUOUS rather than as whichever run was kept.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "settles a disagreement between the blind judges as AMBIGUOUS",
+      "mutations": [
+        {
+          "mutation_id": "first-judgement-wins",
+          "file": "bench/cdeb/freeze/adjudicate-v5.ts",
+          "find": "  if (verdicts.size > 1) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "Observed on real data: the same model, rule and diff gave NOT_A_VIOLATION on one run and AMBIGUOUS on the next. Taking the first would record whichever run happened to be kept."
+        }
+      ]
     }
   ]
 }

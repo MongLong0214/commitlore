@@ -16,7 +16,9 @@
 
 import {
   assertAdjudicationConsistent,
+  assertNegativeIsNotOverstated,
   censusRatio,
+  MIN_DISTINCT_SHAPES_FOR_A_NEGATIVE,
   type CandidateAdjudication,
   type CensusRatio,
 } from "./adjudicate-v5.ts";
@@ -30,8 +32,11 @@ export interface RepositoryOutcome {
   readonly candidates: number;
   readonly adjudicated: number;
   readonly functionally_violable: number;
-  readonly tree_enforced: number;
+  readonly no_passing_revival_found: number;
+  readonly semantic_boundary_ambiguous: number;
   readonly not_buildable_other: number;
+  readonly void_invalid_acceptance: number;
+  readonly undecided: number;
   /** What acceptance judged this repository, kept beside its counts. */
   readonly acceptance_command: string;
   readonly meets_floor: boolean;
@@ -70,8 +75,12 @@ export const buildCensusReport = (
     const members = population.filter((row) => row.repository_id === repository);
     const judged = members.map((row) => byCandidate.get(row.candidate_id)).filter((row) => row !== undefined);
     const violable = judged.filter((row) => row.adjudication === "FUNCTIONALLY_VIOLABLE").length;
-    const enforced = judged.filter((row) => row.adjudication === "TREE_ENFORCED").length;
-    const other = judged.filter((row) => row.adjudication === "NOT_BUILDABLE_OTHER").length;
+    const negative = judged.filter(
+      (row) => row.adjudication === "NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET",
+    ).length;
+    const ambiguous = judged.filter((row) => row.adjudication === "SEMANTIC_BOUNDARY_AMBIGUOUS").length;
+    const voided = judged.filter((row) => row.adjudication === "VOID_INVALID_ACCEPTANCE").length;
+    const other = judged.length - violable - negative - ambiguous - voided;
     // The pilot takes three per repository off the top; the reserve is what is left.
     reserveTotal += Math.max(0, violable - PILOT_PER_REPOSITORY);
     outcomes.push({
@@ -79,15 +88,21 @@ export const buildCensusReport = (
       candidates: members.length,
       adjudicated: judged.length,
       functionally_violable: violable,
-      tree_enforced: enforced,
+      no_passing_revival_found: negative,
+      semantic_boundary_ambiguous: ambiguous,
       not_buildable_other: other,
+      void_invalid_acceptance: voided,
+      undecided: members.length - judged.length + voided,
       acceptance_command: acceptanceCommands[repository] ?? "unrecorded",
       meets_floor: violable >= FLOOR_BUILDABLE_PER_REPOSITORY,
       still_needed: Math.max(0, FLOOR_BUILDABLE_PER_REPOSITORY - violable),
     });
   }
 
-  const complete = rows.length === population.length;
+  // A voided row occupies a candidate without deciding it, so completeness is
+  // counted from decided rows rather than from rows present.
+  const decided = outcomes.reduce((total, outcome) => total + outcome.adjudicated - outcome.void_invalid_acceptance, 0);
+  const complete = decided === population.length;
   const reasons: string[] = [];
   for (const outcome of outcomes) {
     if (outcome.meets_floor) continue;
@@ -135,20 +150,44 @@ export const assertFloorsUnchanged = (perRepository: number, reserveTotal: numbe
   }
 };
 
-/** The descriptive result, published whichever way the confirmatory study lands. */
-export const descriptiveResult = (report: CensusReport): string =>
-  [
+/**
+ * The descriptive result, published whichever way the confirmatory study lands.
+ *
+ * The wording of the negative is load-bearing and was corrected once already.
+ * An earlier revision of this function said the remaining decisions "were
+ * already enforced by the tree itself", which is a universal claim about every
+ * possible implementation, drawn from a handful of failed attempts. What the
+ * census can say is that its search did not find one. The sentence now says
+ * that, and `assertNegativeIsNotOverstated` refuses the stronger phrasing if it
+ * ever comes back.
+ */
+export const descriptiveResult = (report: CensusReport): string => {
+  const text = [
     `Of ${String(report.ratio.adjudicated)} naturally recorded decisions adjudicated across four repositories,`,
-    `${String(report.ratio.functionally_violable)} remained functionally violable at the frozen snapshot and`,
-    `${String(report.ratio.tree_enforced)} were already enforced by the tree itself`,
-    `(${(report.ratio.tree_enforced_share * 100).toFixed(0)}%).`,
-    `Enforcement mechanisms observed: ${
+    `${String(report.ratio.functionally_violable)} were confirmed functionally violable at the frozen snapshot`,
+    `(${(report.ratio.observed_functional_violability_rate * 100).toFixed(0)}% observed functional violability`,
+    `rate). For ${String(report.ratio.no_passing_revival_found)} no passing revival was found within the`,
+    `registered search budget, and ${String(report.ratio.semantic_boundary_ambiguous)} produced a passing revival`,
+    "whose status under the recorded ruling could not be settled.",
+    "A candidate with no passing revival is a bounded negative about this search, not a demonstration that the",
+    `decision cannot be violated: each required at least ${String(MIN_DISTINCT_SHAPES_FOR_A_NEGATIVE)} structurally`,
+    "distinct shapes to fail, and a shape nobody tried is not a shape that does not exist.",
+    `What refused the attempts that were made: ${
       Object.entries(report.ratio.by_mechanism)
         .sort(([, left], [, right]) => right - left)
         .map(([mechanism, count]) => `${mechanism} ${String(count)}`)
+        .join(", ") || "none recorded"
+    }.`,
+    `Shapes attempted: ${
+      Object.entries(report.ratio.by_shape_attempted)
+        .sort(([, left], [, right]) => right - left)
+        .map(([shape, count]) => `${shape} ${String(count)}`)
         .join(", ") || "none recorded"
     }.`,
     "Per-repository counts are reported beside the acceptance command that judged them and are not compared",
     "to each other: the commands differ in scope, so a lower violable rate may mean a stricter repository or",
     "a wider suite, and this design cannot separate them.",
   ].join(" ");
+  assertNegativeIsNotOverstated(text);
+  return text;
+};

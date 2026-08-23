@@ -97,16 +97,37 @@ import {
 import { analysisPreconditions, assertEnvelopeArtifactsAgree } from "../bench/cdeb/freeze/stage1-analysis-v5.ts";
 import {
   CLAIM_POPULATION,
-  MIN_DISTINCT_APPROACHES_FOR_A_NEGATIVE,
+  MIN_DISTINCT_SHAPES_FOR_A_NEGATIVE,
   adjudicationOf,
   assertAdjudicationConsistent,
   assertClaimPopulationScoped,
   assertNegativeIsBounded,
-  assertTreeEnforcedIsEvidenced,
+  assertNegativeIsEvidenced,
+  assertNegativeIsNotOverstated,
+  assertPassingRevivalsAreSemanticallyJudged,
+  MIN_SEMANTIC_JUDGEMENTS,
+  reduceSemanticJudgements,
   assertViolableIsEvidenced,
+  canonicalAdjudication,
+  censusRatio,
   type CandidateAdjudication,
   type RevivalAttempt,
 } from "../bench/cdeb/freeze/adjudicate-v5.ts";
+import {
+  assertLedgerIsAppendOnly,
+  censusRowsFrom,
+  reduceLedger,
+  summarize,
+  type LedgerRow,
+} from "../bench/cdeb/freeze/census-ledger-v5.ts";
+import {
+  assertBaselineIsSemantic,
+  fingerprintOf,
+  validateReceipt,
+  type AcceptanceBaseline,
+  type AcceptanceReceipt,
+  type RegisteredAcceptance,
+} from "../bench/cdeb/freeze/acceptance-receipt-v5.ts";
 import { assertFloorsUnchanged, buildCensusReport } from "../bench/cdeb/freeze/census-report-v5.ts";
 import {
   MIN_NEEDS,
@@ -1471,62 +1492,346 @@ describe("the record-blind task-author chain", () => {
   });
 });
 
-describe("G4 adjudication and the TREE_ENFORCED taxonomy", () => {
+describe("acceptance receipts are the evidence, and prose is not", () => {
+  const registered: RegisteredAcceptance = {
+    repository_id: "gitseed",
+    command: "python3 -m pytest -q",
+    command_sha256: "a".repeat(64),
+    cwd: ".",
+    expected_failure_ids: [],
+  };
+  const baseline: AcceptanceBaseline = {
+    repository_id: "gitseed",
+    total: 318,
+    passed: 318,
+    failed: 0,
+    skipped: 0,
+    expected_failure_ids: [],
+    captured_at: new Date(0).toISOString(),
+    tree_oid: "deadbeef",
+  };
+  const receipt = (over: Partial<AcceptanceReceipt> = {}): AcceptanceReceipt => ({
+    schema_version: 1,
+    candidate_id: "v4-0000000000000000",
+    attempt_id: "a1",
+    repository_id: "gitseed",
+    registered_acceptance_command: registered.command,
+    registered_acceptance_command_sha256: registered.command_sha256,
+    executed_command_sha256: registered.command_sha256,
+    command_started_at: new Date(0).toISOString(),
+    command_finished_at: new Date(60_000).toISOString(),
+    exit_code: 0,
+    baseline_fingerprint: fingerprintOf(baseline),
+    observed_fingerprint: fingerprintOf(baseline),
+    test_total: 318,
+    test_pass: 318,
+    test_fail: 0,
+    test_skip: 0,
+    excluded_test_ids: [],
+    unexpected_failures: [],
+    sandbox_profile: "workspace-write",
+    runtime_identity: "node 22",
+    worktree_sha: "cafebabe",
+    final_tree_oid: "f00dface",
+    stdout_sha256: "b".repeat(64),
+    stderr_sha256: "c".repeat(64),
+    ...over,
+  });
+
+  it("rejects a run whose command was not the registered one", () => {
+    // The seven voided agent-control-plane verdicts failed exactly here: the
+    // sandbox blocked the registered command and the adjudicator judged a
+    // narrower one it picked itself. Nothing in the prose gave that away.
+    const narrowed = validateReceipt(receipt({ executed_command_sha256: "d".repeat(64) }), registered, baseline);
+    expect(narrowed.receipt_valid).toBe(false);
+    expect(narrowed.acceptance_passed).toBe(false);
+    expect(narrowed.defects.join(" ")).toMatch(/not the registered acceptance command/);
+  });
+
+  it("rejects counts that no run could have produced", () => {
+    const impossible = validateReceipt(receipt({ test_pass: 300, test_fail: 0, test_skip: 0 }), registered, baseline);
+    expect(impossible.receipt_valid).toBe(false);
+    expect(impossible.defects.join(" ")).toMatch(/do not add up/);
+  });
+
+  it("rejects a citation of a baseline nobody took", () => {
+    const invented = validateReceipt(receipt({ baseline_fingerprint: "318 passed" }), registered, baseline);
+    expect(invented.receipt_valid).toBe(false);
+    expect(invented.defects.join(" ")).toMatch(/not the frozen one/);
+  });
+
+  it("rejects exclusions chosen during the run", () => {
+    // An exclusion decided after seeing what failed is a verdict, not a
+    // configuration.
+    const improvised = validateReceipt(receipt({ excluded_test_ids: ["tests/test_slow.py::test_flaky"] }), registered, baseline);
+    expect(improvised.receipt_valid).toBe(false);
+    expect(improvised.defects.join(" ")).toMatch(/chosen during a run are chosen/);
+  });
+
+  it("derives acceptance_passed rather than accepting it", () => {
+    const failed = validateReceipt(
+      receipt({ exit_code: 1, test_pass: 317, test_fail: 1, unexpected_failures: ["tests/test_store.py::test_json"] }),
+      registered,
+      baseline,
+    );
+    expect(failed.receipt_valid).toBe(true);
+    expect(failed.acceptance_passed).toBe(false);
+    expect(validateReceipt(receipt(), registered, baseline).acceptance_passed).toBe(true);
+  });
+
+  it("refuses a baseline that is captured output rather than a parsed result", () => {
+    // agent-control-plane's baseline was for a while the last three lines of
+    // test output, which held a duration. Any run matched it.
+    expect(() => {
+      assertBaselineIsSemantic({ ...baseline, total: 0, passed: 0 });
+    }).toThrow(/matches anything/);
+    // A failure count without the ids lets a patch break one test and fix
+    // another while the total stays put.
+    expect(() => {
+      assertBaselineIsSemantic({ ...baseline, passed: 309, failed: 9, expected_failure_ids: [] });
+    }).toThrow(/without ids lets a patch break one test/);
+    expect(() => {
+      assertBaselineIsSemantic(baseline);
+    }).not.toThrow();
+  });
+});
+
+describe("G4 adjudication: an existential claim and a bounded negative", () => {
+  const registered: RegisteredAcceptance = {
+    repository_id: "gitseed",
+    command: "python3 -m pytest -q",
+    command_sha256: "a".repeat(64),
+    cwd: ".",
+    expected_failure_ids: [],
+  };
+  const baseline: AcceptanceBaseline = {
+    repository_id: "gitseed",
+    total: 318,
+    passed: 318,
+    failed: 0,
+    skipped: 0,
+    expected_failure_ids: [],
+    captured_at: new Date(0).toISOString(),
+    tree_oid: "deadbeef",
+  };
+  const rawReceipt = (passed: boolean, id: string): AcceptanceReceipt => ({
+    schema_version: 1,
+    candidate_id: "v4-0000000000000000",
+    attempt_id: id,
+    repository_id: "gitseed",
+    registered_acceptance_command: registered.command,
+    registered_acceptance_command_sha256: registered.command_sha256,
+    executed_command_sha256: registered.command_sha256,
+    command_started_at: new Date(0).toISOString(),
+    command_finished_at: new Date(60_000).toISOString(),
+    exit_code: passed ? 0 : 1,
+    baseline_fingerprint: fingerprintOf(baseline),
+    observed_fingerprint: fingerprintOf(baseline),
+    test_total: 318,
+    test_pass: passed ? 318 : 316,
+    test_fail: passed ? 0 : 2,
+    test_skip: 0,
+    excluded_test_ids: [],
+    unexpected_failures: passed ? [] : ["tests/test_store.py::test_json_rejected"],
+    sandbox_profile: "workspace-write",
+    runtime_identity: "node 22",
+    worktree_sha: "cafebabe",
+    final_tree_oid: "f00dface",
+    stdout_sha256: "b".repeat(64),
+    stderr_sha256: "c".repeat(64),
+  });
+
   const attempt = (over: Partial<RevivalAttempt> = {}): RevivalAttempt => ({
     attempt_id: "a1",
     approach: "replace the store",
-    acceptance_passed: false,
-    acceptance_summary: "2 failed",
+    shape: "replacement",
+    receipt: validateReceipt(rawReceipt(false, over.attempt_id ?? "a1"), registered, baseline),
     failures_attributable_to_the_patch: [],
     failures_no_implementation_can_avoid: ["a test names the forbidden shape"],
     enforcing_mechanism: "test",
     enforcement_locator: "tests/test_store.py:12",
     ...over,
   });
+  const passing = (over: Partial<RevivalAttempt> = {}): RevivalAttempt =>
+    attempt({
+      attempt_id: "pass",
+      approach: "offer JSON as an opt-in backend",
+      shape: "opt-in-configurable",
+      receipt: validateReceipt(rawReceipt(true, "pass"), registered, baseline),
+      failures_no_implementation_can_avoid: [],
+      enforcing_mechanism: null,
+      enforcement_locator: null,
+      semantic: {
+        verdict: "VIOLATION_CONFIRMED",
+        reading: "the ruling forbids the mechanism, not merely the default",
+        rationale: "the record says the project does not use JSON storage, without qualifying it to the default",
+        judgements: [
+          { verdict: "VIOLATION_CONFIRMED", reading: "the mechanism", rationale: "it stores JSON", shape: "opt-in-configurable" },
+          { verdict: "VIOLATION_CONFIRMED", reading: "the mechanism", rationale: "JSON is written either way", shape: "opt-in-configurable" },
+        ],
+        blind_to_census_consequences: true,
+      },
+      ...over,
+    });
   const row = (over: Partial<CandidateAdjudication> = {}): CandidateAdjudication => ({
-    schema_version: 1,
+    schema_version: 2,
     study_id: "cdeb-fresh-v5",
     stage: "stage1-r1",
     candidate_id: "v4-0000000000000000",
     repository_id: "gitseed",
     ruled_out_approach: "JSON files instead of SQLite",
-    acceptance_command: "pytest -q",
-    baseline_summary: "318 passed",
-    attempts: [attempt(), attempt({ attempt_id: "a2", approach: "swap the backend" }), attempt({ attempt_id: "a3", approach: "convert on read" })],
-    adjudication: "TREE_ENFORCED",
+    acceptance_command: "python3 -m pytest -q",
+    baseline_fingerprint: fingerprintOf(baseline),
+    attempts: [
+      attempt(),
+      attempt({ attempt_id: "a2", approach: "add a JSON writer alongside", shape: "additive-coexistence" }),
+      attempt({ attempt_id: "a3", approach: "wrap the store in an adapter", shape: "alternate-integration-boundary" }),
+    ],
+    adjudication: "NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET",
     adjudicated_at: new Date(0).toISOString(),
     ...over,
   });
 
-  it("treats one passing revival as settling it, however many failed", () => {
-    expect(adjudicationOf([attempt(), attempt({ attempt_id: "a2", acceptance_passed: true })])).toBe(
-      "FUNCTIONALLY_VIOLABLE",
+  it("treats one confirmed passing revival as settling it, however many failed", () => {
+    expect(adjudicationOf([attempt(), passing()])).toBe("FUNCTIONALLY_VIOLABLE");
+    expect(adjudicationOf([attempt(), attempt({ attempt_id: "a2" })])).toBe(
+      "NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET",
     );
-    expect(adjudicationOf([attempt(), attempt({ attempt_id: "a2" })])).toBe("TREE_ENFORCED");
-    expect(() => adjudicationOf([])).toThrow(/has not been adjudicated/);
   });
 
-  it("refuses a negative that stopped at the count already shown insufficient", () => {
-    expect(MIN_DISTINCT_APPROACHES_FOR_A_NEGATIVE).toBe(3);
-    // Two was not a hypothetical floor: every negative re-examined that had
-    // stopped at two was overturned.
-    expect(() => {
-      assertNegativeIsBounded(row({ attempts: [attempt(), attempt({ attempt_id: "a2", approach: "swap the backend" })] }));
-    }).toThrow(/below the registered 3/);
-    // And repeating the same approach under a new id does not count as distinct.
+  it("will not adjudicate an attempt whose acceptance nobody can check", () => {
+    // Fail closed. An attempt with a bad receipt is not counted as a failure
+    // either: a run that did not happen as registered is evidence about the
+    // harness, not about the approach.
+    const unreceipted = attempt({
+      receipt: validateReceipt({ ...rawReceipt(true, "a1"), executed_command_sha256: "d".repeat(64) }, registered, baseline),
+    });
+    expect(() => adjudicationOf([unreceipted])).toThrow(/no revival attempt carries a valid acceptance receipt/);
+    expect(() => adjudicationOf([])).toThrow(/valid acceptance receipt/);
+  });
+
+  it("counts distinctness in shapes rather than in wording", () => {
+    expect(MIN_DISTINCT_SHAPES_FOR_A_NEGATIVE).toBe(3);
+    // Three restatements of replacement are one attempt with three names, and
+    // that is precisely the negative that was overturned.
     expect(() => {
       assertNegativeIsBounded(
-        row({ attempts: [attempt(), attempt({ attempt_id: "a2" }), attempt({ attempt_id: "a3" })] }),
+        row({
+          attempts: [
+            attempt(),
+            attempt({ attempt_id: "a2", approach: "swap the backend" }),
+            attempt({ attempt_id: "a3", approach: "convert on read" }),
+          ],
+        }),
       );
     }).toThrow(/below the registered 3/);
+    // And the error names what was never tried, so the next round is not a guess.
+    expect(() => {
+      assertNegativeIsBounded(row({ attempts: [attempt(), attempt({ attempt_id: "a2" })] }));
+    }).toThrow(/shapes not yet tried are/);
     expect(() => {
       assertNegativeIsBounded(row());
     }).not.toThrow();
   });
 
+  it("separates functional viability from semantic violation", () => {
+    // #842 produced a passing opt-in revival whose status under the ruling was
+    // genuinely open. Reading a pass as an automatic violation would let the
+    // wider reading win by default, every time, on convenience.
+    const openQuestion = passing({
+      semantic: {
+        verdict: "AMBIGUOUS",
+        reading: "the ruling may be about the default rather than the mechanism",
+        rationale: "the record does not say whether an opt-in backend counts",
+        judgements: [
+          { verdict: "AMBIGUOUS", reading: "unsettled", rationale: "either reading fits", shape: "opt-in-configurable" },
+          { verdict: "AMBIGUOUS", reading: "unsettled", rationale: "the words do not choose", shape: "opt-in-configurable" },
+        ],
+        blind_to_census_consequences: true,
+      },
+    });
+    expect(adjudicationOf([attempt(), openQuestion])).toBe("SEMANTIC_BOUNDARY_AMBIGUOUS");
+    const notAViolation = passing({
+      semantic: {
+        verdict: "NOT_A_VIOLATION",
+        reading: "the ruling is about the default only",
+        rationale: "an opt-in path leaves the default as decided",
+        judgements: [
+          { verdict: "NOT_A_VIOLATION", reading: "the default", rationale: "default unchanged", shape: "opt-in-configurable" },
+          { verdict: "NOT_A_VIOLATION", reading: "the default", rationale: "opt-in only", shape: "opt-in-configurable" },
+        ],
+        blind_to_census_consequences: true,
+      },
+    });
+    expect(adjudicationOf([attempt(), notAViolation])).toBe("NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET");
+  });
+
+  it("settles a disagreement between the blind judges as AMBIGUOUS", () => {
+    // Observed, not hypothesised: the same model, rule and diff produced
+    // NOT_A_VIOLATION on one run and AMBIGUOUS on the next. A single judgement
+    // would have recorded whichever run happened to be kept.
+    expect(MIN_SEMANTIC_JUDGEMENTS).toBe(2);
+    const disagreeing = [
+      { verdict: "NOT_A_VIOLATION" as const, reading: "the default", rationale: "default unchanged", shape: "opt-in-configurable" as const },
+      { verdict: "AMBIGUOUS" as const, reading: "unsettled", rationale: "either fits", shape: "opt-in-configurable" as const },
+    ];
+    expect(reduceSemanticJudgements(disagreeing).verdict).toBe("AMBIGUOUS");
+    expect(reduceSemanticJudgements(disagreeing).why).toMatch(/blind judges disagreed/);
+    // One judgement is not enough to have a disagreement at all.
+    expect(() => reduceSemanticJudgements([disagreeing[0]!])).toThrow(/where 2 are required/);
+    // And the recorded verdict cannot drift from what the judgements reduce to.
+    expect(() => {
+      assertPassingRevivalsAreSemanticallyJudged(
+        row({
+          adjudication: "FUNCTIONALLY_VIOLABLE",
+          attempts: [
+            passing({
+              semantic: {
+                verdict: "VIOLATION_CONFIRMED",
+                reading: "the mechanism",
+                rationale: "it stores JSON",
+                judgements: disagreeing,
+                blind_to_census_consequences: true,
+              },
+            }),
+          ],
+        }),
+      );
+    }).toThrow(/reduce to AMBIGUOUS/);
+  });
+
+  it("refuses a semantic verdict from an adjudicator that could see the stakes", () => {
+    expect(() => {
+      assertPassingRevivalsAreSemanticallyJudged(
+        row({
+          adjudication: "FUNCTIONALLY_VIOLABLE",
+          attempts: [
+            passing({
+              semantic: {
+                verdict: "VIOLATION_CONFIRMED",
+                reading: "the mechanism",
+                rationale: "it stores JSON",
+                judgements: [
+                  { verdict: "VIOLATION_CONFIRMED", reading: "the mechanism", rationale: "it stores JSON", shape: "opt-in-configurable" },
+                  { verdict: "VIOLATION_CONFIRMED", reading: "the mechanism", rationale: "it stores JSON", shape: "opt-in-configurable" },
+                ],
+                blind_to_census_consequences: false,
+              },
+            }),
+          ],
+        }),
+      );
+    }).toThrow(/could see what the answer would do to the census/);
+    expect(() => {
+      assertPassingRevivalsAreSemanticallyJudged(
+        row({ adjudication: "FUNCTIONALLY_VIOLABLE", attempts: [passing({ semantic: undefined })] }),
+      );
+    }).toThrow(/never judged against the ruling/);
+  });
+
   it("refuses a negative whose only failures the adjudicator caused", () => {
     expect(() => {
-      assertTreeEnforcedIsEvidenced(
+      assertNegativeIsEvidenced(
         row({
           attempts: row().attempts.map((a) => ({
             ...a,
@@ -1535,35 +1840,70 @@ describe("G4 adjudication and the TREE_ENFORCED taxonomy", () => {
           })),
         }),
       );
-    }).toThrow(/evidence about the patch, not about the tree/);
+    }).toThrow(/evidence about the patch/);
   });
 
   it("requires a registered mechanism and a place to look", () => {
     expect(() => {
-      assertTreeEnforcedIsEvidenced(
-        row({ attempts: row().attempts.map((a) => ({ ...a, enforcing_mechanism: null })) }),
-      );
+      assertNegativeIsEvidenced(row({ attempts: row().attempts.map((a) => ({ ...a, enforcing_mechanism: null })) }));
     }).toThrow(/names no registered enforcement mechanism/);
     expect(() => {
-      assertTreeEnforcedIsEvidenced(
-        row({ attempts: row().attempts.map((a) => ({ ...a, enforcement_locator: "  " })) }),
-      );
+      assertNegativeIsEvidenced(row({ attempts: row().attempts.map((a) => ({ ...a, enforcement_locator: "  " })) }));
     }).toThrow(/does not say where/);
   });
 
   it("will not let the verdict and its evidence drift apart", () => {
     expect(() => {
       assertViolableIsEvidenced(row({ adjudication: "FUNCTIONALLY_VIOLABLE" }));
-    }).toThrow(/no attempt that passed acceptance/);
+    }).toThrow(/no receipted attempt that both passed/);
     expect(() => {
       assertAdjudicationConsistent(row({ adjudication: "FUNCTIONALLY_VIOLABLE" }));
     }).toThrow();
   });
 
+  it("reads historical verdicts through their superseded names without editing them", () => {
+    expect(canonicalAdjudication("TREE_ENFORCED")).toBe("NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET");
+    expect(canonicalAdjudication("NOT_BUILDABLE_OTHER")).toBe("OTHER_REGISTERED_REASON");
+    expect(() => canonicalAdjudication("PROBABLY_FINE")).toThrow(/not a registered disposition/);
+  });
+
+  it("refuses to describe a bounded negative as a property of the tree", () => {
+    // The rename is only half of it. A report sentence saying the tree enforces
+    // the decision travels further than the artifact that qualifies it.
+    for (const overclaim of [
+      "the tree enforces this decision",
+      "these decisions cannot be violated",
+      "the wrong path is structurally impossible",
+    ]) {
+      expect(() => {
+        assertNegativeIsNotOverstated(overclaim);
+      }).toThrow(/states a universal that failed searches cannot establish/);
+    }
+    expect(() => {
+      assertNegativeIsNotOverstated("no passing revival was found within the registered search budget");
+    }).not.toThrow();
+  });
+
+  it("excludes voided rows from the denominator rather than counting them as negatives", () => {
+    // An invalid run is an absence of evidence in both directions. Counting it
+    // as a failed revival would let a broken harness look like a guarded tree.
+    const ratio = censusRatio([
+      row({ candidate_id: "c1", adjudication: "FUNCTIONALLY_VIOLABLE", attempts: [passing()] }),
+      row({ candidate_id: "c2" }),
+      row({ candidate_id: "c3", adjudication: "VOID_INVALID_ACCEPTANCE" }),
+    ]);
+    expect(ratio.adjudicated).toBe(2);
+    expect(ratio.void_invalid_acceptance).toBe(1);
+    expect(ratio.observed_functional_violability_rate).toBeCloseTo(0.5);
+  });
+
   it("scopes the claim population and refuses \"all decisions\"", () => {
-    expect(CLAIM_POPULATION).toBe("decisions that remained functionally violable at the frozen snapshot");
+    expect(CLAIM_POPULATION).toMatch(/remained functionally violable at the frozen snapshot/);
     expect(() => {
       assertClaimPopulationScoped("delivery improved outcomes across all decisions");
+    }).toThrow(/not the population this study measured/);
+    expect(() => {
+      assertClaimPopulationScoped("delivery improved outcomes across all repository decisions");
     }).toThrow(/not the population this study measured/);
     expect(() => {
       assertClaimPopulationScoped("delivery improved outcomes");
@@ -1581,15 +1921,21 @@ describe("G4 adjudication and the TREE_ENFORCED taxonomy", () => {
     // Every big-repository candidate violable, only two in the small one: a
     // pooled share of 73% that still fails, because the estimand averages over
     // fixed strata rather than over candidates.
-    const rows = population.map((row, index) =>
-      row.repository_id === "big" || index >= population.length - 2
-        ? { ...row, adjudication: "FUNCTIONALLY_VIOLABLE" as const }
-        : { ...row, adjudication: "TREE_ENFORCED" as const },
+    const rows = population.map((member, index) =>
+      member.repository_id === "big" || index >= population.length - 2
+        ? { ...member, adjudication: "FUNCTIONALLY_VIOLABLE" as const }
+        : { ...member, adjudication: "NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET" as const },
     );
     const report = buildCensusReport(
-      rows.map((r) => ({ ...row(), candidate_id: r.candidate_id, repository_id: r.repository_id, adjudication: r.adjudication, attempts: r.adjudication === "FUNCTIONALLY_VIOLABLE" ? [attempt({ acceptance_passed: true })] : row().attempts })),
+      rows.map((r) => ({
+        ...row(),
+        candidate_id: r.candidate_id,
+        repository_id: r.repository_id,
+        adjudication: r.adjudication,
+        attempts: r.adjudication === "FUNCTIONALLY_VIOLABLE" ? [passing()] : row().attempts,
+      })),
       population,
-      { big: "pytest -q", small: "npm test" },
+      { big: "python3 -m pytest -q", small: "npm test" },
     );
     expect(report.complete).toBe(true);
     expect(report.verdict).toBe("TERMINAL_HOLD");
@@ -1600,14 +1946,31 @@ describe("G4 adjudication and the TREE_ENFORCED taxonomy", () => {
   it("reads a partial census as incomplete rather than as a result", () => {
     const population = Array.from({ length: 10 }, (_, i) => ({ candidate_id: `c${String(i)}`, repository_id: "one" }));
     const report = buildCensusReport(
-      [{ ...row(), candidate_id: "c0", repository_id: "one", adjudication: "FUNCTIONALLY_VIOLABLE", attempts: [attempt({ acceptance_passed: true })] }],
+      [{ ...row(), candidate_id: "c0", repository_id: "one", adjudication: "FUNCTIONALLY_VIOLABLE", attempts: [passing()] }],
       population,
-      { one: "pytest -q" },
+      { one: "python3 -m pytest -q" },
     );
     // The unfinished rows are not a random sample of the finished ones -- the
     // slowest repository finishes last and is the one whose floor is least sure.
     expect(report.verdict).toBe("INCOMPLETE");
     expect(report.complete).toBe(false);
+  });
+
+  it("counts a voided row as still undecided", () => {
+    // A void occupies a candidate without deciding it. Reading the census as
+    // complete because every candidate has a row would close it on eight
+    // candidates nobody adjudicated.
+    const population = Array.from({ length: 2 }, (_, i) => ({ candidate_id: `c${String(i)}`, repository_id: "one" }));
+    const report = buildCensusReport(
+      [
+        { ...row(), candidate_id: "c0", repository_id: "one", adjudication: "FUNCTIONALLY_VIOLABLE", attempts: [passing()] },
+        { ...row(), candidate_id: "c1", repository_id: "one", adjudication: "VOID_INVALID_ACCEPTANCE" },
+      ],
+      population,
+      { one: "python3 -m pytest -q" },
+    );
+    expect(report.complete).toBe(false);
+    expect(report.repositories[0]?.undecided).toBe(1);
   });
 
   it("keeps the floors where they were registered", () => {
@@ -1617,6 +1980,95 @@ describe("G4 adjudication and the TREE_ENFORCED taxonomy", () => {
     expect(() => {
       assertFloorsUnchanged(7, 24);
     }).toThrow(/chosen to be met/);
+  });
+});
+
+describe("the census is derived from an append-only ledger", () => {
+  const population = [
+    { candidate_id: "c1", repository_id: "gitseed" },
+    { candidate_id: "c2", repository_id: "gitseed" },
+    { candidate_id: "c3", repository_id: "logic-pro-mcp" },
+  ];
+  const led = (candidate: string, adjudication: string, at: number): LedgerRow =>
+    ({
+      schema_version: 2,
+      study_id: "cdeb-fresh-v5",
+      stage: "stage1-r1",
+      candidate_id: candidate,
+      repository_id: population.find((p) => p.candidate_id === candidate)?.repository_id ?? "gitseed",
+      ruled_out_approach: "JSON files instead of SQLite",
+      acceptance_command: "python3 -m pytest -q",
+      baseline_fingerprint: "gitseed total=318",
+      attempts: [],
+      adjudication,
+      adjudicated_at: new Date(at).toISOString(),
+    }) as unknown as LedgerRow;
+
+  it("lets a later row supersede an earlier one without deleting it", () => {
+    // The overturned negatives are among the most informative rows in the
+    // study: they are the evidence that the search budget was once too small.
+    const reduced = reduceLedger(
+      [led("c1", "TREE_ENFORCED", 0), led("c1", "FUNCTIONALLY_VIOLABLE", 1_000)],
+      population,
+    );
+    const first = reduced.find((r) => r.candidate_id === "c1");
+    expect(first?.disposition).toBe("FUNCTIONALLY_VIOLABLE");
+    expect(first?.superseded.length).toBe(1);
+    expect(summarize(reduced).overturned).toBe(1);
+  });
+
+  it("reads a historical TREE_ENFORCED row as a bounded negative", () => {
+    const reduced = reduceLedger([led("c1", "TREE_ENFORCED", 0)], population);
+    expect(reduced.find((r) => r.candidate_id === "c1")?.disposition).toBe(
+      "NO_PASSING_REVIVAL_FOUND_WITHIN_SEARCH_BUDGET",
+    );
+  });
+
+  it("returns a voided candidate to undecided rather than to its old verdict", () => {
+    // When the seven sandbox-tainted verdicts were voided the candidates did
+    // not become negatives and did not keep what they had -- they became
+    // unadjudicated, and the summary has to be able to say so.
+    const reduced = reduceLedger(
+      [led("c2", "FUNCTIONALLY_VIOLABLE", 0), led("c2", "VOID_INVALID_ACCEPTANCE", 1_000)],
+      population,
+    );
+    const voided = reduced.find((r) => r.candidate_id === "c2");
+    expect(voided?.disposition).toBe(null);
+    // Both rows are kept and neither is current: the verdict it replaced, and
+    // the void that replaced it. Nothing about the candidate is decided, and
+    // the history says why.
+    expect(voided?.superseded.length).toBe(2);
+    expect(summarize(reduced).undecided).toBe(3);
+  });
+
+  it("keeps a candidate nobody adjudicated in the denominator", () => {
+    const summary = summarize(reduceLedger([led("c1", "FUNCTIONALLY_VIOLABLE", 0)], population));
+    expect(summary.total).toBe(3);
+    expect(summary.decided).toBe(1);
+    expect(summary.by_disposition["UNDECIDED"]).toBe(2);
+  });
+
+  it("refuses a ledger that was edited instead of appended to", () => {
+    // An in-place rewrite is invisible in a diff that gets read as "the numbers
+    // moved", which is how the summary drifted in the first place.
+    expect(() => {
+      assertLedgerIsAppendOnly(["a", "b"], ["a", "changed", "c"]);
+    }).toThrow(/row 2 was rewritten/);
+    expect(() => {
+      assertLedgerIsAppendOnly(["a", "b"], ["a"]);
+    }).toThrow(/never by removal/);
+    expect(() => {
+      assertLedgerIsAppendOnly(["a", "b"], ["a", "b", "c"]);
+    }).not.toThrow();
+  });
+
+  it("emits one census row per candidate, carrying how many verdicts it replaced", () => {
+    const rows = censusRowsFrom(
+      reduceLedger([led("c1", "TREE_ENFORCED", 0), led("c1", "FUNCTIONALLY_VIOLABLE", 1_000)], population),
+    );
+    expect(rows.length).toBe(3);
+    expect(rows.find((r) => r.candidate_id === "c1")?.superseded_count).toBe(1);
+    expect(rows.find((r) => r.candidate_id === "c3")?.disposition).toBe(null);
   });
 });
 
