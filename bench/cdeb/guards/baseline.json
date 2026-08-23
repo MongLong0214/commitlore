@@ -231,6 +231,10 @@
     {
       "guard_id": "stage1-r1-semantic-verdict-needs-two-agreeing-judges",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-an-unchanged-tree-is-not-a-revival",
+      "outcome": "bound"
     }
   ]
 }

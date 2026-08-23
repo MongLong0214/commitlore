@@ -854,6 +854,22 @@
           "why": "Observed on real data: the same model, rule and diff gave NOT_A_VIOLATION on one run and AMBIGUOUS on the next. Taking the first would record whichever run happened to be kept."
         }
       ]
+    },
+    {
+      "guard_id": "stage1-r1-an-unchanged-tree-is-not-a-revival",
+      "claim": "An acceptance run on a tree the attempt did not change is not admissible evidence, however cleanly it passed.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "refuses a run on a tree nothing changed",
+      "mutations": [
+        {
+          "mutation_id": "unchanged-tree-counts-as-a-passing-revival",
+          "file": "bench/cdeb/freeze/acceptance-receipt-v5.ts",
+          "find": "  if (receipt.changed_files.length === 0) {",
+          "replace": "  if (false) {",
+          "must_fail_test": true,
+          "why": "Observed live: four adjudicators declined their approach, changed nothing, and the unmodified tree passed acceptance. Without this the census gains four fabricated passing revivals."
+        }
+      ]
     }
   ]
 }

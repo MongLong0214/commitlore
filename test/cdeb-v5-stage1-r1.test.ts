@@ -1529,6 +1529,7 @@ describe("acceptance receipts are the evidence, and prose is not", () => {
     test_skip: 0,
     excluded_test_ids: [],
     unexpected_failures: [],
+    changed_files: ["gitseed/store.py"],
     sandbox_profile: "workspace-write",
     runtime_identity: "node 22",
     worktree_sha: "cafebabe",
@@ -1566,6 +1567,16 @@ describe("acceptance receipts are the evidence, and prose is not", () => {
     const improvised = validateReceipt(receipt({ excluded_test_ids: ["tests/test_slow.py::test_flaky"] }), registered, baseline);
     expect(improvised.receipt_valid).toBe(false);
     expect(improvised.defects.join(" ")).toMatch(/chosen during a run are chosen/);
+  });
+
+  it("refuses a run on a tree nothing changed", () => {
+    // Four adjudicators declined to implement their approach, changed nothing,
+    // and their acceptance runs passed -- because an unmodified tree passes its
+    // own baseline. Every one would have been recorded as a passing revival.
+    const untouched = validateReceipt(receipt({ changed_files: [] }), registered, baseline);
+    expect(untouched.receipt_valid).toBe(false);
+    expect(untouched.acceptance_passed).toBe(false);
+    expect(untouched.defects.join(" ")).toMatch(/measured the baseline rather than a revival/);
   });
 
   it("derives acceptance_passed rather than accepting it", () => {
@@ -1633,6 +1644,7 @@ describe("G4 adjudication: an existential claim and a bounded negative", () => {
     test_skip: 0,
     excluded_test_ids: [],
     unexpected_failures: passed ? [] : ["tests/test_store.py::test_json_rejected"],
+    changed_files: ["gitseed/store.py"],
     sandbox_profile: "workspace-write",
     runtime_identity: "node 22",
     worktree_sha: "cafebabe",

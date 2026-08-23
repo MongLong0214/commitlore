@@ -77,6 +77,17 @@ export interface AcceptanceReceipt {
   /** Observed failures that the baseline did not already have. */
   readonly unexpected_failures: readonly string[];
 
+  /**
+   * What the attempt changed in the tree, from `git status --porcelain`.
+   *
+   * Load-bearing, and it took a live failure to notice. Four adjudicators
+   * declined to implement their approach, changed nothing, and the acceptance
+   * run passed -- because an unmodified tree passes its own baseline. Every one
+   * of those would have been recorded as a passing revival, which is the
+   * `is_baseline` mistake wearing different clothes.
+   */
+  readonly changed_files: readonly string[];
+
   readonly sandbox_profile: string;
   readonly runtime_identity: string;
   readonly worktree_sha: string;
@@ -197,6 +208,14 @@ export const validateReceipt = (
     if (expected.has(id)) {
       defects.push(`${id} is counted as an unexpected failure but the baseline already has it`);
     }
+  }
+
+  if (receipt.changed_files.length === 0) {
+    defects.push(
+      "the tree is unchanged, so this run measured the baseline rather than a revival. An unmodified tree " +
+        "passes its own acceptance by construction, and reading that as a passing revival records the tree " +
+        "working as the ruled-out approach working",
+    );
   }
 
   return {
