@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v6",
+  "why": "The coordinating context has read every record in the source pool and every v5 patch. It cannot author tasks, and saying so in a manifest is weaker than the process that enforces it -- so each authoring role runs as a fresh session whose inputs are listed here and whose transcript is retained.",
+  "roles": [
+    {
+      "role": "ORCHESTRATOR",
+      "session": "this coordinating context",
+      "may_see": [
+        "state",
+        "PRs",
+        "gates",
+        "manifests",
+        "hashes"
+      ],
+      "must_not_see": [
+        "interim aggregate treatment effect"
+      ],
+      "disqualified_from": [
+        "NEED-SCOUT",
+        "FUNCTIONAL-AUTHOR"
+      ],
+      "disqualification_reason": "has read the rulings, the reasons and the v5 revival patches for all 34 candidates"
+    },
+    {
+      "role": "SOURCE-LOCK",
+      "may_see": [
+        "v5 ledger",
+        "v5 qualification",
+        "snapshots"
+      ],
+      "must_not_see": [
+        "treatment outcomes"
+      ]
+    },
+    {
+      "role": "NEED-SCOUT",
+      "session": "fresh per candidate",
+      "may_see": [
+        "record-blind tree",
+        "candidate path scope",
+        "repository metadata"
+      ],
+      "must_not_see": [
+        "CommitLore record",
+        "ruling",
+        "reason",
+        "Record-Id",
+        "decision anchor",
+        "v5 patch",
+        "v5 verdict prose",
+        "oracle",
+        "gold"
+      ],
+      "output": "exactly 3 neutral maintenance needs with tree evidence"
+    },
+    {
+      "role": "FUNCTIONAL-AUTHOR",
+      "session": "fresh per candidate",
+      "may_see": [
+        "record-blind tree",
+        "frozen neutral need"
+      ],
+      "must_not_see": [
+        "CommitLore record",
+        "ruling",
+        "reason",
+        "oracle",
+        "gold",
+        "v5 patch"
+      ],
+      "output": "task prompt and task-specific functional acceptance"
+    },
+    {
+      "role": "TASK-FREEZER",
+      "may_see": [
+        "needs",
+        "task",
+        "acceptance",
+        "seed"
+      ],
+      "must_not_see": [
+        "treatment outcomes"
+      ]
+    },
+    {
+      "role": "CONTROL-BUILDER",
+      "session": "fresh per candidate, after task freeze",
+      "may_see": [
+        "frozen task",
+        "frozen acceptance",
+        "record"
+      ],
+      "must_not_see": [
+        "arm outcomes",
+        "v5 patch bytes"
+      ]
+    },
+    {
+      "role": "ORACLE-BUILDER",
+      "may_see": [
+        "final tree",
+        "record"
+      ],
+      "must_not_see": [
+        "arm",
+        "delivery log",
+        "transcript",
+        "token usage",
+        "agent explanation",
+        "record citation"
+      ]
+    },
+    {
+      "role": "ORACLE-REDTEAM",
+      "session": "fresh",
+      "may_see": [
+        "oracle",
+        "controls"
+      ],
+      "must_not_see": [
+        "arm",
+        "outcomes"
+      ]
+    },
+    {
+      "role": "SEMANTIC-JUDGE",
+      "session": "fresh, two independent per passing implementation",
+      "may_see": [
+        "ruling",
+        "reason",
+        "patch diff"
+      ],
+      "must_not_see": [
+        "corpus floors",
+        "arm",
+        "future outcome",
+        "marketing goal",
+        "the other judge's answer"
+      ]
+    },
+    {
+      "role": "RANDOMIZATION-CUSTODIAN",
+      "may_see": [
+        "candidate list",
+        "seed"
+      ],
+      "must_not_see": [
+        "semantic result"
+      ]
+    },
+    {
+      "role": "RUN-OPERATOR",
+      "may_see": [
+        "assigned episode"
+      ],
+      "must_not_see": [
+        "aggregate effect"
+      ]
+    },
+    {
+      "role": "STAT-A",
+      "may_see": [
+        "sealed rows",
+        "frozen formulas"
+      ],
+      "must_not_see": [
+        "desired headline"
+      ]
+    },
+    {
+      "role": "STAT-B",
+      "session": "fresh, independent implementation",
+      "may_see": [
+        "sealed rows",
+        "frozen formulas"
+      ],
+      "must_not_see": [
+        "STAT-A code",
+        "STAT-A narrative"
+      ]
+    },
+    {
+      "role": "PATCH-A",
+      "may_see": [
+        "task",
+        "final diff",
+        "redacted policy summary"
+      ],
+      "must_not_see": [
+        "arm",
+        "CommitLore payload",
+        "Record-Id",
+        "delivery logs",
+        "transcript",
+        "token usage"
+      ]
+    },
+    {
+      "role": "PATCH-B",
+      "may_see": [
+        "task",
+        "final diff",
+        "redacted policy summary"
+      ],
+      "must_not_see": [
+        "arm",
+        "CommitLore payload",
+        "Record-Id",
+        "delivery logs",
+        "transcript",
+        "token usage",
+        "PATCH-A verdict"
+      ]
+    },
+    {
+      "role": "CLAIM-GATE",
+      "may_see": [
+        "sealed analysis"
+      ],
+      "must_not_see": [
+        "subjective marketing preference"
+      ],
+      "rule": "mechanical evaluation of the registered checklist, no discretion"
+    }
+  ],
+  "paired_review_model_policy": "Paired reviews use different model families where available. Where a second family is not available the pair runs as fresh independent sessions of the same family and the limitation is recorded, because agreement between two runs of one model measures stability rather than correctness."
+}

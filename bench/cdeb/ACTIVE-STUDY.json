@@ -1,7 +1,7 @@
 {
-  "active_study_id": null,
+  "active_study_id": "cdeb-fresh-v6",
   "last_terminal_study_id": "cdeb-fresh-v5",
-  "status": "no-active-study",
-  "reason": "cdeb-fresh-v5 reached TERMINAL_HOLD after its Stage 1-r1 buildability census: two of its four fixed repositories cannot produce the same acceptance result twice on their unmodified trees, so two strata of an equal-weight four-stratum estimand are empty. Its descriptive result stands and is published in stage1-r1/CENSUS-REPORT.md; it holds no measured product-effect data. cdeb-fresh-v3 and v3r1 are invalidated and v4 reached stage0-hold. None may be resumed or named here. A successor needs a new study id, a new preregistration, and repositories whose acceptance is established as deterministic before any candidate is adjudicated.",
+  "status": "active",
+  "reason": "cdeb-fresh-v6 is the final planned study of this research line. It measures the product effect on the exact population cdeb-fresh-v5 made measurable: 34 functionally violable historical decisions in the two repositories whose acceptance instruments were deterministic under the frozen configuration. v5 reached TERMINAL_HOLD with zero product-effect rows and is preserved as history; v3, v3r1 and v4 are terminal and none may be resumed or named here. v6 reuses v5 evidence only as planning input -- decision identity, audit anchor, frozen snapshot, and the pre-treatment violability classification -- and no v5 task, patch, oracle, randomization or row. A successor after v6 requires a separate owner decision and is not generated automatically.",
   "successor_requires_new_study_id": true
 }

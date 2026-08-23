@@ -77,12 +77,19 @@ describe('CDEB v5 Stage 0 governance', () => {
   });
 
   it('holds v5 at TERMINAL_HOLD with the measured run never opened', () => {
-    // This asserted that v5 resolved as the active study. v5 has since reached
-    // TERMINAL_HOLD -- two of its four fixed repositories cannot produce the
-    // same acceptance result twice -- so the slot is empty and the resolver
-    // refuses. What the test is for survives the change: the measured run was
-    // shut when v5 was active and is shut now that it is finished.
-    expect(() => resolveActiveStudyRoot(CDEB_ROOT)).toThrow(/No active CDEB study/);
+    // This asserted that v5 resolved as the active study, then that the slot was
+    // empty, and both were true when written. Neither is what the test is for.
+    // The durable claim is that v5's measured run is shut and v5 is not the
+    // study that resolves -- true while it ran, true when the slot was empty,
+    // and true now that a successor holds it. Asserting the current occupant
+    // makes this fail at every transition and teaches nothing when it does.
+    let active: string | null = null;
+    try {
+      active = resolveActiveStudyRoot(CDEB_ROOT);
+    } catch (error) {
+      expect(String(error)).toMatch(/No active CDEB study/);
+    }
+    expect(active).not.toBe(V5);
     const study = readJson(join(V5, 'study.json'));
     const status = readJson(join(V5, 'STATUS.json'));
     expect(status).toMatchObject({ study_id: 'cdeb-fresh-v5', measured_run_allowed: false });

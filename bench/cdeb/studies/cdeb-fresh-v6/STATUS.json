@@ -1,0 +1,10 @@
+{
+  "study_id": "cdeb-fresh-v6",
+  "phase": "v6-draft",
+  "measured_run_allowed": false,
+  "updated_at": "2026-08-23T10:00:00Z",
+  "successor_required": false,
+  "verdict": null,
+  "state_machine_position": "SOURCE_POOL_LOCKED",
+  "product_effect_rows": 0
+}
