@@ -42,14 +42,37 @@
       "ruling": "pin the census ticket-owned path list literally",
       "reason": "every remaining product ticket then needs a census edit, and the deletion it was meant to catch is already caught by the focused-lane count guard",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 6,
-        "scope_paths_total": 6,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 6,
+          "scope_paths_total": 6,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+          "packages/schema/src/capability.ts",
+          "packages/schema/test/capability.test.ts",
+          "specs/adapter-capabilities.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 6
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:42:45Z"
+      "v5_adjudicated_at": "2026-08-23T00:42:45Z",
+      "path_scope": [
+        "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+        "packages/schema/src/capability.ts",
+        "packages/schema/test/capability.test.ts",
+        "specs/adapter-capabilities.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "27a027adf42115f097ae82fd18901e25a62df539",
+      "storage_locator": "commit:27a027adf42115f097ae82fd18901e25a62df539",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-00efc0041ed3118a",
@@ -66,14 +89,35 @@
       "ruling": "keeping one accessor and capping inside it",
       "reason": "it cannot distinguish an observation from a policy, and the version that tried recorded a reset time the server never stated",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 5,
-        "scope_paths_total": 5,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 5,
+          "scope_paths_total": 5,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/collect/ratelimit.py",
+          "gitseed/collect/search.py",
+          "gitseed/grade/smoke.py",
+          "tests/test_collect.py",
+          "tests/test_smoke.py"
+        ],
+        "path_count": 5
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:46:45Z"
+      "v5_adjudicated_at": "2026-08-23T06:46:45Z",
+      "path_scope": [
+        "gitseed/collect/ratelimit.py",
+        "gitseed/collect/search.py",
+        "gitseed/grade/smoke.py",
+        "tests/test_collect.py",
+        "tests/test_smoke.py"
+      ],
+      "source_commit_sha": "13b51f0cef3785cd33f3863fb74d33264b09e189",
+      "storage_locator": "commit:13b51f0cef3785cd33f3863fb74d33264b09e189",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-04c1de5e41d66868",
@@ -90,14 +134,47 @@
       "ruling": "keep the unreachable secondary sort key in reasonsOf",
       "reason": "only two cells can reach UNAVAILABLE in v0 and they carry different reason codes, so the tiebreaker could not be reached and four mutants of it survived",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 11,
-        "scope_paths_total": 11,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 11,
+          "scope_paths_total": 11,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "fixtures/doctor/blocked-and-imported.json",
+          "fixtures/doctor/blocked.json",
+          "fixtures/doctor/complete.json",
+          "fixtures/doctor/degraded.json",
+          "fixtures/doctor/imported-and-degraded.json",
+          "fixtures/doctor/imported-only.json",
+          "packages/schema/src/doctor-contract.ts",
+          "packages/schema/test/doctor-contract.test.ts",
+          "specs/doctor-output.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 11
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T01:38:13Z"
+      "v5_adjudicated_at": "2026-08-23T01:38:13Z",
+      "path_scope": [
+        "fixtures/doctor/blocked-and-imported.json",
+        "fixtures/doctor/blocked.json",
+        "fixtures/doctor/complete.json",
+        "fixtures/doctor/degraded.json",
+        "fixtures/doctor/imported-and-degraded.json",
+        "fixtures/doctor/imported-only.json",
+        "packages/schema/src/doctor-contract.ts",
+        "packages/schema/test/doctor-contract.test.ts",
+        "specs/doctor-output.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "c1d8b6630e66a9dc6033567d7f7d3704e5c7ca22",
+      "storage_locator": "commit:c1d8b6630e66a9dc6033567d7f7d3704e5c7ca22",
+      "decision_ordinal": 2,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-0bc581744204a282",
@@ -114,14 +191,37 @@
       "ruling": "verify a wrapper attestation signature",
       "reason": "the SSOT requires none, the signing key had no custody or rotation story, and freezing signatures over fixture content would have made every canonical session permanently unamendable",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 6,
-        "scope_paths_total": 6,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 6,
+          "scope_paths_total": 6,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "docs/tickets/E0-B/E0B-002-define-controlled-and-imported-session-classification.md",
+          "packages/schema/src/session-class.ts",
+          "packages/schema/test/session-class.test.ts",
+          "specs/session-class.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 6
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:42:50Z"
+      "v5_adjudicated_at": "2026-08-23T00:42:50Z",
+      "path_scope": [
+        "docs/tickets/E0-B/E0B-002-define-controlled-and-imported-session-classification.md",
+        "packages/schema/src/session-class.ts",
+        "packages/schema/test/session-class.test.ts",
+        "specs/session-class.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "3a3d47e632dbe45272adab9b2c0eb00b03d32de2",
+      "storage_locator": "commit:3a3d47e632dbe45272adab9b2c0eb00b03d32de2",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-0ecd7426eebc1cab",
@@ -138,14 +238,27 @@
       "ruling": "artifact storage port",
       "reason": "pathlib is the only current storage shape and replay does not need another",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 1,
-        "scope_paths_total": 1,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 1,
+          "scope_paths_total": 1,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/ports.py"
+        ],
+        "path_count": 1
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:44:42Z"
+      "v5_adjudicated_at": "2026-08-23T00:44:42Z",
+      "path_scope": [
+        "gitseed/ports.py"
+      ],
+      "source_commit_sha": "fe69ce9d153a1f198252e945b6656679b8930f05",
+      "storage_locator": "commit:fe69ce9d153a1f198252e945b6656679b8930f05",
+      "decision_ordinal": 2,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-12b0486cd77dd3a9",
@@ -162,14 +275,37 @@
       "ruling": "derive factor opportunities from scored observations only",
       "reason": "gate 4 and gate 5 would collapse into each other, since a factor with no scored metric would also have no opportunities, and neither could be tested in isolation",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 6,
-        "scope_paths_total": 6,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 6,
+          "scope_paths_total": 6,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "docs/tickets/E0-A/E0A-002-freeze-eligibility-and-score-issuance-predicate.md",
+          "packages/schema/src/issuance-contract.ts",
+          "packages/schema/test/issuance-contract.test.ts",
+          "specs/issuance.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 6
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:42:55Z"
+      "v5_adjudicated_at": "2026-08-23T00:42:55Z",
+      "path_scope": [
+        "docs/tickets/E0-A/E0A-002-freeze-eligibility-and-score-issuance-predicate.md",
+        "packages/schema/src/issuance-contract.ts",
+        "packages/schema/test/issuance-contract.test.ts",
+        "specs/issuance.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "1fdd0c88b37ec3adaafa6c28251092b782c3d589",
+      "storage_locator": "commit:1fdd0c88b37ec3adaafa6c28251092b782c3d589",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-1438614686129e44",
@@ -186,14 +322,29 @@
       "ruling": "JSON files on disk",
       "reason": "SQLite keeps a single durable, constrained run history",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/storage.py",
+          "tests/test_storage.py"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T01:39:06Z"
+      "v5_adjudicated_at": "2026-08-23T01:39:06Z",
+      "path_scope": [
+        "gitseed/storage.py",
+        "tests/test_storage.py"
+      ],
+      "source_commit_sha": "3c7f566053805c56aa946e1035de217b4b64d71b",
+      "storage_locator": "commit:3c7f566053805c56aa946e1035de217b4b64d71b",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 2
     },
     {
       "candidate_id": "v4-34aef026d81c2f6b",
@@ -210,14 +361,47 @@
       "ruling": "filtering the roadmap and Board out of a broad input scan",
       "reason": "an exclusion list silently readmits any projection added later, so the input set is declared positively and closed",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 11,
-        "scope_paths_total": 11,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 11,
+          "scope_paths_total": 11,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          ".github/workflows/operational-state.yml",
+          "AGENTS.md",
+          "docs/planning/AOS-EXECUTION-ROADMAP.md",
+          "docs/planning/issue-resolution-ledger-2026-08-06.md",
+          "docs/tickets/BOARD.md",
+          "package.json",
+          "scripts/render-execution-views.mjs",
+          "scripts/validate-planning.mjs",
+          "tests/execution-views.test.mjs",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 11
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:43:04Z"
+      "v5_adjudicated_at": "2026-08-23T00:43:04Z",
+      "path_scope": [
+        ".github/workflows/operational-state.yml",
+        "AGENTS.md",
+        "docs/planning/AOS-EXECUTION-ROADMAP.md",
+        "docs/planning/issue-resolution-ledger-2026-08-06.md",
+        "docs/tickets/BOARD.md",
+        "package.json",
+        "scripts/render-execution-views.mjs",
+        "scripts/validate-planning.mjs",
+        "tests/execution-views.test.mjs",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "f9a62917a0964ba95e23e8a89b868caae28db356",
+      "storage_locator": "commit:f9a62917a0964ba95e23e8a89b868caae28db356",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 2
     },
     {
       "candidate_id": "v4-377f04276465b59d",
@@ -234,14 +418,31 @@
       "ruling": "adding coverage gates or a badge",
       "reason": "one workflow that tells the truth is worth more than five nobody reads",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 3,
-        "scope_paths_total": 3,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 3,
+          "scope_paths_total": 3,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          ".github/workflows/ci.yml",
+          "pyproject.toml",
+          "tests/conftest.py"
+        ],
+        "path_count": 3
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:45:28Z"
+      "v5_adjudicated_at": "2026-08-23T00:45:28Z",
+      "path_scope": [
+        ".github/workflows/ci.yml",
+        "pyproject.toml",
+        "tests/conftest.py"
+      ],
+      "source_commit_sha": "4d99a4858e1b459306c8fe3d2626746a5a720224",
+      "storage_locator": "commit:4d99a4858e1b459306c8fe3d2626746a5a720224",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-4b7ef509f0403505",
@@ -258,14 +459,33 @@
       "ruling": "compile TypeScript to JavaScript before testing so Node 20 can run it",
       "reason": "adds a build step, a devDependency and an emitted-artifact surface to a workspace whose manifest is pinned to name, version and private",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 4,
-        "scope_paths_total": 4,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 4,
+          "scope_paths_total": 4,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          ".github/workflows/ci.yml",
+          "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+          "package.json",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 4
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:43:08Z"
+      "v5_adjudicated_at": "2026-08-23T00:43:08Z",
+      "path_scope": [
+        ".github/workflows/ci.yml",
+        "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+        "package.json",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "6a56f76ea36e32d99f24e84295517dfdd3ecfb23",
+      "storage_locator": "commit:6a56f76ea36e32d99f24e84295517dfdd3ecfb23",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 2
     },
     {
       "candidate_id": "v4-77e1745655a235ce",
@@ -282,14 +502,29 @@
       "ruling": "a separate evidence-kind allowlist",
       "reason": "a literal detached from the producer methods can silently accept evidence no collector emits",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/category.py",
+          "tests/test_category.py"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:47:35Z"
+      "v5_adjudicated_at": "2026-08-23T00:47:35Z",
+      "path_scope": [
+        "gitseed/category.py",
+        "tests/test_category.py"
+      ],
+      "source_commit_sha": "ee15d86253bec1fac944e0d4e71d803dd1092e2d",
+      "storage_locator": "commit:ee15d86253bec1fac944e0d4e71d803dd1092e2d",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-7bdc1c42597e48a6",
@@ -306,14 +541,29 @@
       "ruling": "JSON files on disk",
       "reason": "SQLite provides atomic constraints, version gating, and immutable correction lineage",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/storage_schema.py",
+          "tests/test_storage.py"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:48:10Z"
+      "v5_adjudicated_at": "2026-08-23T00:48:10Z",
+      "path_scope": [
+        "gitseed/storage_schema.py",
+        "tests/test_storage.py"
+      ],
+      "source_commit_sha": "fe24b37e43e2c1871041461c3a9de54710c0bfbb",
+      "storage_locator": "commit:fe24b37e43e2c1871041461c3a9de54710c0bfbb",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-84cd6d391ac2fa6d",
@@ -330,14 +580,29 @@
       "ruling": "normalized per-port tables",
       "reason": "canonical artifact bytes already preserve the replay contract without duplicating serializers",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/storage.py",
+          "tests/test_storage.py"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:48:45Z"
+      "v5_adjudicated_at": "2026-08-23T00:48:45Z",
+      "path_scope": [
+        "gitseed/storage.py",
+        "tests/test_storage.py"
+      ],
+      "source_commit_sha": "d2a3431840b234959bddf008ad8bbfdc2fb0da95",
+      "storage_locator": "commit:d2a3431840b234959bddf008ad8bbfdc2fb0da95",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 2
     },
     {
       "candidate_id": "v4-8ab61d73c22d675b",
@@ -354,14 +619,37 @@
       "ruling": "falling back to a zero or midpoint grade when the model misbehaves",
       "reason": "the number would rank a repository on evidence that does not exist, and nothing downstream could tell it from a real grade",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 6,
-        "scope_paths_total": 6,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 6,
+          "scope_paths_total": 6,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/application.py",
+          "gitseed/cli.py",
+          "gitseed/pipeline/run.py",
+          "tests/test_cli.py",
+          "tests/test_model_choice.py",
+          "tests/test_seam.py"
+        ],
+        "path_count": 6
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T01:39:27Z"
+      "v5_adjudicated_at": "2026-08-23T01:39:27Z",
+      "path_scope": [
+        "gitseed/application.py",
+        "gitseed/cli.py",
+        "gitseed/pipeline/run.py",
+        "tests/test_cli.py",
+        "tests/test_model_choice.py",
+        "tests/test_seam.py"
+      ],
+      "source_commit_sha": "959e6b3d6ee4195f55d41f65e9037d48332132a6",
+      "storage_locator": "commit:959e6b3d6ee4195f55d41f65e9037d48332132a6",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-8f24735524874167",
@@ -378,14 +666,47 @@
       "ruling": "embed the canonical reports in specs/doctor-output.v0.json",
       "reason": "the ticket grants fixtures/doctor/*.json, and sibling precedent does not override a path the ticket names",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 11,
-        "scope_paths_total": 11,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 11,
+          "scope_paths_total": 11,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "fixtures/doctor/blocked-and-imported.json",
+          "fixtures/doctor/blocked.json",
+          "fixtures/doctor/complete.json",
+          "fixtures/doctor/degraded.json",
+          "fixtures/doctor/imported-and-degraded.json",
+          "fixtures/doctor/imported-only.json",
+          "packages/schema/src/doctor-contract.ts",
+          "packages/schema/test/doctor-contract.test.ts",
+          "specs/doctor-output.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 11
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:43:13Z"
+      "v5_adjudicated_at": "2026-08-23T00:43:13Z",
+      "path_scope": [
+        "fixtures/doctor/blocked-and-imported.json",
+        "fixtures/doctor/blocked.json",
+        "fixtures/doctor/complete.json",
+        "fixtures/doctor/degraded.json",
+        "fixtures/doctor/imported-and-degraded.json",
+        "fixtures/doctor/imported-only.json",
+        "packages/schema/src/doctor-contract.ts",
+        "packages/schema/test/doctor-contract.test.ts",
+        "specs/doctor-output.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "c1d8b6630e66a9dc6033567d7f7d3704e5c7ca22",
+      "storage_locator": "commit:c1d8b6630e66a9dc6033567d7f7d3704e5c7ca22",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-8fc3d2ec14b1c078",
@@ -402,14 +723,33 @@
       "ruling": "retrying on a bare 403",
       "reason": "half of them are permissions errors and no amount of waiting fixes those",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 4,
-        "scope_paths_total": 4,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 4,
+          "scope_paths_total": 4,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/collect/__init__.py",
+          "gitseed/collect/ratelimit.py",
+          "gitseed/collect/search.py",
+          "tests/test_collect.py"
+        ],
+        "path_count": 4
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:02:39Z"
+      "v5_adjudicated_at": "2026-08-23T06:02:39Z",
+      "path_scope": [
+        "gitseed/collect/__init__.py",
+        "gitseed/collect/ratelimit.py",
+        "gitseed/collect/search.py",
+        "tests/test_collect.py"
+      ],
+      "source_commit_sha": "976ccfac8c0e3343504a6233abf98f67f2628dfa",
+      "storage_locator": "commit:976ccfac8c0e3343504a6233abf98f67f2628dfa",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-9b42b1951da730e1",
@@ -426,14 +766,39 @@
       "ruling": "add the two paths to controlPlaneAllowlist",
       "reason": "mislabels product code as control plane and drives control_plane_code_files up as a disguise for a growing product surface",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 7,
-        "scope_paths_total": 7,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 7,
+          "scope_paths_total": 7,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "packages/schema/package.json",
+          "packages/schema/src/metric-registry.ts",
+          "packages/schema/test/metric-registry.test.ts",
+          "scripts/validate-planning.mjs",
+          "specs/metrics.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 7
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:02:22Z"
+      "v5_adjudicated_at": "2026-08-23T06:02:22Z",
+      "path_scope": [
+        "packages/schema/package.json",
+        "packages/schema/src/metric-registry.ts",
+        "packages/schema/test/metric-registry.test.ts",
+        "scripts/validate-planning.mjs",
+        "specs/metrics.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "cc67b62673392d764f257422ee313b2853aa7ed2",
+      "storage_locator": "commit:cc67b62673392d764f257422ee313b2853aa7ed2",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-a7b04c5208e493e4",
@@ -450,14 +815,29 @@
       "ruling": "every PRD \u00a714 scoring component except commit_cadence_30d, contributor_count, and has_license (the thirty-seven-component remainder across Quality, Momentum, Risk, Novelty, Awareness, Potential, bonuses, penalties, Relevance, and RadarRank)",
       "reason": "M0 measured material contribution only for these three features, so building the remainder would discard the backtest",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/scoring.py",
+          "tests/test_scoring.py"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:14:13Z"
+      "v5_adjudicated_at": "2026-08-23T06:14:13Z",
+      "path_scope": [
+        "gitseed/scoring.py",
+        "tests/test_scoring.py"
+      ],
+      "source_commit_sha": "733ce35d324395551ec7eb40cba72733d0e32813",
+      "storage_locator": "commit:733ce35d324395551ec7eb40cba72733d0e32813",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-b291655fbfd2003b",
@@ -474,14 +854,29 @@
       "ruling": "model-assigned categories",
       "reason": "a model opinion cannot manufacture a category assignment",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/category.py",
+          "tests/test_category.py"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:49:34Z"
+      "v5_adjudicated_at": "2026-08-23T00:49:34Z",
+      "path_scope": [
+        "gitseed/category.py",
+        "tests/test_category.py"
+      ],
+      "source_commit_sha": "43921d4cc89645061b68f316fbe72ba2ded9473d",
+      "storage_locator": "commit:43921d4cc89645061b68f316fbe72ba2ded9473d",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-bed5fc386048e412",
@@ -498,14 +893,29 @@
       "ruling": "remove operational-state-offline in the same edit",
       "reason": "it is legitimately required once its workflow lands, and its absence is a sequencing fact rather than an error in the authority",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "docs/issues.json",
+          "docs/tickets/D0/D0-004-planning-contract-validator-and-governance-gate.md"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:43:22Z"
+      "v5_adjudicated_at": "2026-08-23T00:43:22Z",
+      "path_scope": [
+        "docs/issues.json",
+        "docs/tickets/D0/D0-004-planning-contract-validator-and-governance-gate.md"
+      ],
+      "source_commit_sha": "c94d29d35a927fc699de4a8704512fa53e6e1915",
+      "storage_locator": "commit:c94d29d35a927fc699de4a8704512fa53e6e1915",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-c15e92a3b1a755d4",
@@ -522,14 +932,47 @@
       "ruling": "adding a YAML parser to assert workflow shape",
       "reason": "a runtime dependency is forbidden scope for this ticket, so the workflow assertions read the declared shape with anchored matches",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 11,
-        "scope_paths_total": 11,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 11,
+          "scope_paths_total": 11,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          ".github/workflows/operational-state.yml",
+          "AGENTS.md",
+          "docs/planning/AOS-EXECUTION-ROADMAP.md",
+          "docs/planning/issue-resolution-ledger-2026-08-06.md",
+          "docs/tickets/BOARD.md",
+          "package.json",
+          "scripts/render-execution-views.mjs",
+          "scripts/validate-planning.mjs",
+          "tests/execution-views.test.mjs",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 11
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:43:28Z"
+      "v5_adjudicated_at": "2026-08-23T00:43:28Z",
+      "path_scope": [
+        ".github/workflows/operational-state.yml",
+        "AGENTS.md",
+        "docs/planning/AOS-EXECUTION-ROADMAP.md",
+        "docs/planning/issue-resolution-ledger-2026-08-06.md",
+        "docs/tickets/BOARD.md",
+        "package.json",
+        "scripts/render-execution-views.mjs",
+        "scripts/validate-planning.mjs",
+        "tests/execution-views.test.mjs",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "f9a62917a0964ba95e23e8a89b868caae28db356",
+      "storage_locator": "commit:f9a62917a0964ba95e23e8a89b868caae28db356",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 2
     },
     {
       "candidate_id": "v4-c20a082f262f21c8",
@@ -546,14 +989,47 @@
       "ruling": "add a second hardcoded fixture directory beside fixtures/operational-state",
       "reason": "the next ticket needs a third, and a derived rule costs the same once",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 11,
-        "scope_paths_total": 11,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 11,
+          "scope_paths_total": 11,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "fixtures/doctor/blocked-and-imported.json",
+          "fixtures/doctor/blocked.json",
+          "fixtures/doctor/complete.json",
+          "fixtures/doctor/degraded.json",
+          "fixtures/doctor/imported-and-degraded.json",
+          "fixtures/doctor/imported-only.json",
+          "packages/schema/src/doctor-contract.ts",
+          "packages/schema/test/doctor-contract.test.ts",
+          "specs/doctor-output.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 11
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:03:36Z"
+      "v5_adjudicated_at": "2026-08-23T06:03:36Z",
+      "path_scope": [
+        "fixtures/doctor/blocked-and-imported.json",
+        "fixtures/doctor/blocked.json",
+        "fixtures/doctor/complete.json",
+        "fixtures/doctor/degraded.json",
+        "fixtures/doctor/imported-and-degraded.json",
+        "fixtures/doctor/imported-only.json",
+        "packages/schema/src/doctor-contract.ts",
+        "packages/schema/test/doctor-contract.test.ts",
+        "specs/doctor-output.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "c1d8b6630e66a9dc6033567d7f7d3704e5c7ca22",
+      "storage_locator": "commit:c1d8b6630e66a9dc6033567d7f7d3704e5c7ca22",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-c61d7c943edd8cff",
@@ -570,14 +1046,33 @@
       "ruling": "keep the lane counts as a floor",
       "reason": "two cases of slack let whole test cases and five allowlists be removed without a failure",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 4,
-        "scope_paths_total": 4,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 4,
+          "scope_paths_total": 4,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "packages/schema/src/capability.ts",
+          "packages/schema/test/capability.test.ts",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 4
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:43:37Z"
+      "v5_adjudicated_at": "2026-08-23T00:43:37Z",
+      "path_scope": [
+        "packages/schema/src/capability.ts",
+        "packages/schema/test/capability.test.ts",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "40ed33efa0b693a9fbc683837b653fc26c5157bd",
+      "storage_locator": "commit:40ed33efa0b693a9fbc683837b653fc26c5157bd",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-c976dc2332d4adab",
@@ -594,14 +1089,37 @@
       "ruling": "a --non-interactive flag for CI",
       "reason": "it would be switched on in CI, and a CI that stars repositories is the automation the AUP forbids",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 6,
-        "scope_paths_total": 6,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 6,
+          "scope_paths_total": 6,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "docs/tickets/F4-review.md",
+          "gitseed/review/__init__.py",
+          "gitseed/review/actions.py",
+          "gitseed/review/approval.py",
+          "gitseed/review/trailers.py",
+          "tests/test_review.py"
+        ],
+        "path_count": 6
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:49:40Z"
+      "v5_adjudicated_at": "2026-08-23T00:49:40Z",
+      "path_scope": [
+        "docs/tickets/F4-review.md",
+        "gitseed/review/__init__.py",
+        "gitseed/review/actions.py",
+        "gitseed/review/approval.py",
+        "gitseed/review/trailers.py",
+        "tests/test_review.py"
+      ],
+      "source_commit_sha": "ec9ecb5a97a43a20475255f602082f427ca0808e",
+      "storage_locator": "commit:ec9ecb5a97a43a20475255f602082f427ca0808e",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-cadfb63755c3f504",
@@ -618,14 +1136,31 @@
       "ruling": "letting a grading failure end the run",
       "reason": "it makes one flaky model call discard every candidate already screened",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 3,
-        "scope_paths_total": 3,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 3,
+          "scope_paths_total": 3,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/pipeline/__init__.py",
+          "gitseed/pipeline/run.py",
+          "tests/test_pipeline.py"
+        ],
+        "path_count": 3
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:12:22Z"
+      "v5_adjudicated_at": "2026-08-23T06:12:22Z",
+      "path_scope": [
+        "gitseed/pipeline/__init__.py",
+        "gitseed/pipeline/run.py",
+        "tests/test_pipeline.py"
+      ],
+      "source_commit_sha": "c8ce4385e6222dae3f30847a83037ea7e9919b1f",
+      "storage_locator": "commit:c8ce4385e6222dae3f30847a83037ea7e9919b1f",
+      "decision_ordinal": 2,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-cc76268ad4bb9a3e",
@@ -642,14 +1177,27 @@
       "ruling": "leaving the numbers and correcting them during the rebuild",
       "reason": "RED would then fail differently from the ticket contract, which is a hard stop",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 1,
-        "scope_paths_total": 1,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 1,
+          "scope_paths_total": 1,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md"
+        ],
+        "path_count": 1
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:06:08Z"
+      "v5_adjudicated_at": "2026-08-23T06:06:08Z",
+      "path_scope": [
+        "docs/tickets/D0/D0-011-ticket-derived-fixture-directory-admission.md"
+      ],
+      "source_commit_sha": "6a9c2c5248bf58d98274b1514bbff2121083e68c",
+      "storage_locator": "commit:6a9c2c5248bf58d98274b1514bbff2121083e68c",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-ce2adee3c134ab03",
@@ -666,14 +1214,33 @@
       "ruling": "keep the wildcard census and rely on the focused-lane guard",
       "reason": "the guard catches deletion only, and the review demonstrated growth passing 230/230 with an unreviewed product file present",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 4,
-        "scope_paths_total": 4,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 4,
+          "scope_paths_total": 4,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "packages/schema/src/capability.ts",
+          "packages/schema/test/capability.test.ts",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 4
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:43:47Z"
+      "v5_adjudicated_at": "2026-08-23T00:43:47Z",
+      "path_scope": [
+        "packages/schema/src/capability.ts",
+        "packages/schema/test/capability.test.ts",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "40ed33efa0b693a9fbc683837b653fc26c5157bd",
+      "storage_locator": "commit:40ed33efa0b693a9fbc683837b653fc26c5157bd",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-dd4a74ba2b628991",
@@ -690,14 +1257,39 @@
       "ruling": "hand-maintained product-code allowlist per ticket",
       "reason": "each of the 60 remaining tickets would need a coordinated census amendment, and the list drifts from the tickets it mirrors",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 7,
-        "scope_paths_total": 7,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 7,
+          "scope_paths_total": 7,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "packages/schema/package.json",
+          "packages/schema/src/metric-registry.ts",
+          "packages/schema/test/metric-registry.test.ts",
+          "scripts/validate-planning.mjs",
+          "specs/metrics.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 7
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:06:49Z"
+      "v5_adjudicated_at": "2026-08-23T06:06:49Z",
+      "path_scope": [
+        "packages/schema/package.json",
+        "packages/schema/src/metric-registry.ts",
+        "packages/schema/test/metric-registry.test.ts",
+        "scripts/validate-planning.mjs",
+        "specs/metrics.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "cc67b62673392d764f257422ee313b2853aa7ed2",
+      "storage_locator": "commit:cc67b62673392d764f257422ee313b2853aa7ed2",
+      "decision_ordinal": 2,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-df6bfd03300910e2",
@@ -714,14 +1306,45 @@
       "ruling": "a pack digest without embedded definitions",
       "reason": "a digest detects change but cannot re-derive a past categorization from its artifact alone",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 10,
-        "scope_paths_total": 10,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 10,
+          "scope_paths_total": 10,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/application.py",
+          "gitseed/artifact.py",
+          "gitseed/category.py",
+          "gitseed/cli.py",
+          "gitseed/ports.py",
+          "tests/test_category.py",
+          "tests/test_cli.py",
+          "tests/test_scoring.py",
+          "tests/test_seam.py",
+          "tests/test_storage.py"
+        ],
+        "path_count": 10
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:49:52Z"
+      "v5_adjudicated_at": "2026-08-23T00:49:52Z",
+      "path_scope": [
+        "gitseed/application.py",
+        "gitseed/artifact.py",
+        "gitseed/category.py",
+        "gitseed/cli.py",
+        "gitseed/ports.py",
+        "tests/test_category.py",
+        "tests/test_cli.py",
+        "tests/test_scoring.py",
+        "tests/test_seam.py",
+        "tests/test_storage.py"
+      ],
+      "source_commit_sha": "0eedc8f210cda14d29ee1dcb5bb3e43f783706e0",
+      "storage_locator": "commit:0eedc8f210cda14d29ee1dcb5bb3e43f783706e0",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 1
     },
     {
       "candidate_id": "v4-e7587b2b65750306",
@@ -738,14 +1361,37 @@
       "ruling": "pin every prose field by literal digest",
       "reason": "freezing the full text duplicates the contract into the validator and makes any editorial fix a false failure, so only fields the contract derives or fixes numerically are pinned",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 6,
-        "scope_paths_total": 6,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "npm test"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 6,
+          "scope_paths_total": 6,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "npm test"
+        },
+        "paths": [
+          "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+          "packages/schema/src/metric-registry.ts",
+          "packages/schema/test/metric-registry.test.ts",
+          "scripts/validate-planning.mjs",
+          "specs/metrics.v0.json",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "path_count": 6
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:43:59Z"
+      "v5_adjudicated_at": "2026-08-23T00:43:59Z",
+      "path_scope": [
+        "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+        "packages/schema/src/metric-registry.ts",
+        "packages/schema/test/metric-registry.test.ts",
+        "scripts/validate-planning.mjs",
+        "specs/metrics.v0.json",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "source_commit_sha": "e18a8b9156260b04c66eaacb91a1d607a277b77c",
+      "storage_locator": "commit:e18a8b9156260b04c66eaacb91a1d607a277b77c",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-ed4039b8a411ee62",
@@ -762,14 +1408,41 @@
       "ruling": "Add features to raise AUC",
       "reason": "Interpretability of the 7 preregistered features comes first",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 8,
-        "scope_paths_total": 8,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 8,
+          "scope_paths_total": 8,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "docs/M0-VERDICT.md",
+          "gitseed/m0.py",
+          "scripts/m0_analyze.py",
+          "scripts/m0_collect.py",
+          "tests/fixtures/m0/analysis.json",
+          "tests/fixtures/m0/samples.json",
+          "tests/fixtures/m0/search-responses.json",
+          "tests/test_m0.py"
+        ],
+        "path_count": 8
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:50:02Z"
+      "v5_adjudicated_at": "2026-08-23T00:50:02Z",
+      "path_scope": [
+        "docs/M0-VERDICT.md",
+        "gitseed/m0.py",
+        "scripts/m0_analyze.py",
+        "scripts/m0_collect.py",
+        "tests/fixtures/m0/analysis.json",
+        "tests/fixtures/m0/samples.json",
+        "tests/fixtures/m0/search-responses.json",
+        "tests/test_m0.py"
+      ],
+      "source_commit_sha": "5ae484abc3e54d3fff689c98986666c320d98e12",
+      "storage_locator": "commit:5ae484abc3e54d3fff689c98986666c320d98e12",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 2
     },
     {
       "candidate_id": "v4-ed878960135ff45a",
@@ -786,14 +1459,29 @@
       "ruling": "storage replay as deserialization",
       "reason": "replay must recompute output from recorded port responses",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/storage.py",
+          "tests/test_storage.py"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:18:18Z"
+      "v5_adjudicated_at": "2026-08-23T06:18:18Z",
+      "path_scope": [
+        "gitseed/storage.py",
+        "tests/test_storage.py"
+      ],
+      "source_commit_sha": "3c7f566053805c56aa946e1035de217b4b64d71b",
+      "storage_locator": "commit:3c7f566053805c56aa946e1035de217b4b64d71b",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 2
     },
     {
       "candidate_id": "v4-f3c960a48273132c",
@@ -810,14 +1498,27 @@
       "ruling": "scoring and screening ports",
       "reason": "both are pure deterministic domain functions with no outside capability to supply",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 1,
-        "scope_paths_total": 1,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 1,
+          "scope_paths_total": 1,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/ports.py"
+        ],
+        "path_count": 1
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T00:50:18Z"
+      "v5_adjudicated_at": "2026-08-23T00:50:18Z",
+      "path_scope": [
+        "gitseed/ports.py"
+      ],
+      "source_commit_sha": "fe69ce9d153a1f198252e945b6656679b8930f05",
+      "storage_locator": "commit:fe69ce9d153a1f198252e945b6656679b8930f05",
+      "decision_ordinal": 1,
+      "sibling_decision_count": 3
     },
     {
       "candidate_id": "v4-f901052615fa3aee",
@@ -834,14 +1535,31 @@
       "ruling": "JSON files on disk",
       "reason": "SQLite keeps each artifact atomically constrained with its correction lineage",
       "scope": {
-        "base_tree_resolvable": true,
-        "scope_paths_present": 2,
-        "scope_paths_total": 2,
-        "acceptance_runner_present": true,
-        "acceptance_runner": "pytest"
+        "screen": {
+          "base_tree_resolvable": true,
+          "scope_paths_present": 2,
+          "scope_paths_total": 2,
+          "acceptance_runner_present": true,
+          "acceptance_runner": "pytest"
+        },
+        "paths": [
+          "gitseed/storage.py",
+          "tests/test_storage.py"
+        ],
+        "path_count": 2
       },
       "v5_current_adjudication": "FUNCTIONALLY_VIOLABLE",
-      "v5_adjudicated_at": "2026-08-23T06:27:47Z"
+      "v5_adjudicated_at": "2026-08-23T06:27:47Z",
+      "path_scope": [
+        "gitseed/storage.py",
+        "tests/test_storage.py"
+      ],
+      "source_commit_sha": "d2a3431840b234959bddf008ad8bbfdc2fb0da95",
+      "storage_locator": "commit:d2a3431840b234959bddf008ad8bbfdc2fb0da95",
+      "decision_ordinal": 0,
+      "sibling_decision_count": 2
     }
-  ]
+  ],
+  "candidates_missing_census_row": [],
+  "path_scope_source": "bench/cdeb/studies/cdeb-fresh-v4/feasibility/candidate-census.jsonl"
 }

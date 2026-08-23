@@ -5,6 +5,6 @@
   "updated_at": "2026-08-23T10:00:00Z",
   "successor_required": false,
   "verdict": null,
-  "state_machine_position": "REPOSITORY_INSTRUMENT_QUALIFIED",
+  "state_machine_position": "TASK_BUILDABILITY_RUNNING",
   "product_effect_rows": 0
 }
