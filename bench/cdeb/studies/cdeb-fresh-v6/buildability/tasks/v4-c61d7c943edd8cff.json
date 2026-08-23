@@ -1,0 +1,40 @@
+{
+  "candidate_id": "v4-c61d7c943edd8cff",
+  "need_rank_1": {
+    "rank_key": "03aa6af53dcb29cc244d2d4cf0aa00b338ac88f58aaa65cb215517ffbcdb9fc5",
+    "need_hash": "412c956106ea2bd33cd26b6f24bc863f5bcc98ed30ae3dfc6f50c9c8683d1717",
+    "need": {
+      "title": "Reject non-string derivation proofs in capability matrices",
+      "what_is_missing_or_wrong": "The public cell shape declares `derivation_proof` as `string | null`, but runtime validation only checks whether it is a filled string. A number, object, or array can therefore be treated as an unavailable derived cell and pass once its status and coverage are updated.",
+      "what_done_would_look_like": "Validate `derivation_proof` as either null or a string, and add mutation tests for invalid scalar and container values on derived cells.",
+      "tree_evidence": [
+        "packages/schema/src/capability.ts:36-44 declares `derivation_proof: string | null`.",
+        "packages/schema/src/capability.ts:587-598 has no type check before `isFilledString` determines UNAVAILABLE.",
+        "packages/schema/test/capability.test.ts:374-409 covers null and blank strings but not non-string proof values."
+      ],
+      "distinct_from_others_because": "This corrects malformed-input acceptance in the capability validator, independent of planning-test execution or Node-version policy."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make capability-matrix validation reject every capability cell whose `derivation_proof` is neither `null` nor a string. This must hold for derived cells even when the cell is otherwise declared consistently as `UNAVAILABLE` and the runtime coverage lists accurately report that event group as missing. Add mutation coverage for invalid scalar and container proof values on each derived event group and runtime.",
+  "acceptance_test_path": "packages/schema/test/capability-derivation-proof.acceptance.test.ts",
+  "acceptance_test_source": "import { test } from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { readFileSync } from \"node:fs\";\nimport { dirname, resolve } from \"node:path\";\nimport { fileURLToPath } from \"node:url\";\n\nimport { validateCapabilityMatrix } from \"../src/capability.ts\";\n\nconst here = dirname(fileURLToPath(import.meta.url));\nconst matrixPath = resolve(here, \"../../../specs/adapter-capabilities.v0.json\");\nconst frozen = () => JSON.parse(readFileSync(matrixPath, \"utf8\"));\n\nconst derivedEventGroups = [\"workspace_diff\", \"plan_state\"];\nconst runtimeIds = [\"codex\", \"claude-code\"];\nconst invalidProofs: [string, unknown][] = [\n  [\"number\", 123],\n  [\"object\", { source: \"runner filesystem\" }],\n  [\"array\", [\"runner filesystem\"]]\n];\n\ntest(\"rejects non-string derivation proofs on otherwise honest unavailable derived cells\", () => {\n  const accepted: string[] = [];\n\n  for (const eventGroup of derivedEventGroups) {\n    for (const runtimeId of runtimeIds) {\n      for (const [kind, proof] of invalidProofs) {\n        const matrix = frozen();\n        const cell = matrix.rows.find((row: any) => row.event_group === eventGroup).runtimes[runtimeId];\n        const runtime = matrix.runtimes.find((entry: any) => entry.runtime_id === runtimeId);\n\n        // Make the cell otherwise internally consistent with an unavailable derived capability.\n        cell.derivation_proof = proof;\n        cell.status = \"UNAVAILABLE\";\n        runtime.supported_event_groups = runtime.supported_event_groups.filter(\n          (entry: string) => entry !== eventGroup\n        );\n        runtime.known_missing_events = [eventGroup];\n\n        if (validateCapabilityMatrix(matrix).ok) {\n          accepted.push(`${eventGroup}/${runtimeId} accepted ${kind} derivation_proof`);\n        }\n      }\n    }\n  }\n\n  assert.deepEqual(accepted, []);\n});\n",
+  "how_to_run": "From the repository root: `node --test packages/schema/test/capability-derivation-proof.acceptance.test.ts`",
+  "why_it_fails_on_the_current_tree": "The current validator treats every non-filled value as an unavailable derived proof. Once the test honestly changes the cell status and coverage to `UNAVAILABLE`, numbers, objects, and arrays produce no validation error, so the matrix is accepted.",
+  "two_different_implementations_that_would_both_pass": [
+    "Reject invalid `derivation_proof` values during capability-cell validation.",
+    "Reject malformed capability-cell field types in a separate input-validation stage before derived status and coverage are calculated."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "package.json",
+    "packages/schema/package.json",
+    "docs/north-star/agent-operator-score-ssot-v1.0.md",
+    "docs/adr/ADR-0007-adapter-observability-and-session-class.md",
+    "docs/prd/PRD-E0B-adapter-observability-contract.md",
+    "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+    "specs/adapter-capabilities.v0.json",
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts"
+  ]
+}

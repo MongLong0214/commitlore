@@ -1,0 +1,39 @@
+{
+  "candidate_id": "v4-dd4a74ba2b628991",
+  "need_rank_1": {
+    "rank_key": "443c6e000efbb1ccb00927750758021a1d6a03c409f325e60fcb877e4c0f579a",
+    "need_hash": "e7b2b97896c1117e0abe02f25b2117211217824168cbd8f9f9dbced6f94d89d2",
+    "need": {
+      "title": "Validate the complete frozen registry envelope, not just metric rows",
+      "what_is_missing_or_wrong": "The validator allowlists top-level `registry_id` and `source_contract` but never requires or validates either. It also calls `consumers` a closed set but only rejects an empty array, allowing added, duplicate, or non-string consumers to pass unnoticed.",
+      "what_done_would_look_like": "Reject a registry missing or changing its canonical identity/provenance fields, and require the consumer array to be the exact canonical string set with no duplicates. Add tamper tests for deleting `registry_id`/`source_contract` and for adding or duplicating a consumer.",
+      "tree_evidence": [
+        "specs/metrics.v0.json:2-15 \u2014 the frozen envelope declares `registry_id`, `source_contract`, and nine named consumers.",
+        "packages/schema/src/metric-registry.ts:69 \u2014 all three are merely allowlisted as legal root fields.",
+        "packages/schema/src/metric-registry.ts:144-145 \u2014 consumers are only checked for being a non-empty array.",
+        "packages/schema/src/metric-registry.ts:149-154 \u2014 only `contract_version` is value-checked at the registry level.",
+        "packages/schema/test/metric-registry.test.ts:500-538 \u2014 tamper coverage tests an empty consumer set but not envelope-field removal or consumer-set expansion."
+      ],
+      "distinct_from_others_because": "This concerns top-level registry identity and routing governance, rather than the validity of individual vector inputs."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make the metric-registry validator enforce the complete frozen registry envelope.\n\nA registry is valid only when `registry_id` is present and exactly `metrics.v0`, and `source_contract` is present and exactly `docs/contracts/metric-scoring-contract-v1.md`.\n\nIts `consumers` value must contain each of these strings exactly once, contain no other values, and contain only strings:\n\n- `factor.F1`\n- `factor.F2`\n- `factor.F3`\n- `factor.F4`\n- `factor.F5`\n- `factor.F6`\n- `outcome_index.O`\n- `process_index.P`\n- `safety_gate.M19`\n\nThe validator must reject registries with either identity/provenance field removed or changed, and registries whose consumer collection has a missing, added, duplicate, or non-string member. The unchanged frozen registry must remain valid. Consumer ordering is not significant.",
+  "acceptance_test_path": "packages/schema/test/metric-registry-envelope.acceptance.test.ts",
+  "acceptance_test_source": "import { test } from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { readFileSync } from \"node:fs\";\nimport { dirname, resolve } from \"node:path\";\nimport { fileURLToPath } from \"node:url\";\n\nimport { validateMetricRegistry } from \"../src/metric-registry.ts\";\n\nconst here = dirname(fileURLToPath(import.meta.url));\nconst registryPath = resolve(here, \"../../../specs/metrics.v0.json\");\nconst frozenRegistry = () => JSON.parse(readFileSync(registryPath, \"utf8\"));\n\nconst assertRejected = (label: string, tamper: (registry: any) => void) => {\n  const registry = frozenRegistry();\n  tamper(registry);\n  const result = validateMetricRegistry(registry);\n  assert.equal(result.ok, false, `${label} was accepted: ${result.errors.join(\"; \")}`);\n};\n\ntest(\"metric-registry-envelope accepts the unchanged frozen registry\", () => {\n  const result = validateMetricRegistry(frozenRegistry());\n  assert.equal(result.ok, true, result.errors.join(\"; \"));\n});\n\nfor (const [label, tamper] of [\n  [\"a missing registry identity\", (registry: any) => { delete registry.registry_id; }],\n  [\"a changed registry identity\", (registry: any) => { registry.registry_id = \"metrics.v1\"; }],\n  [\"missing source provenance\", (registry: any) => { delete registry.source_contract; }],\n  [\"changed source provenance\", (registry: any) => { registry.source_contract = \"docs/contracts/other.md\"; }],\n  [\"an added consumer\", (registry: any) => { registry.consumers.push(\"factor.F7\"); }],\n  [\"a duplicate consumer\", (registry: any) => { registry.consumers.push(\"factor.F1\"); }],\n  [\"a non-string consumer\", (registry: any) => { registry.consumers.push(7); }],\n  [\"a missing canonical consumer\", (registry: any) => {\n    registry.consumers = registry.consumers.filter((consumer: unknown) => consumer !== \"factor.F1\");\n  }]\n] as const) {\n  test(`metric-registry-envelope rejects ${label}`, () => {\n    assertRejected(label, tamper);\n  });\n}\n",
+  "how_to_run": "npm test -w @aos/schema -- metric-registry-envelope",
+  "why_it_fails_on_the_current_tree": "The current validator returns `ok: true` after deleting or changing `registry_id` or `source_contract`, and after adding, duplicating, or making a consumer non-string. It only rejects an empty consumer array; downstream route checks happen to reject a removed required consumer.",
+  "two_different_implementations_that_would_both_pass": [
+    "Validate the three envelope values directly against the frozen contract values.",
+    "Validate an incoming envelope by comparing its normalized identity, provenance, and consumer membership with an independently maintained canonical registry definition."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "package.json",
+    "packages/schema/package.json",
+    "specs/metrics.v0.json",
+    "packages/schema/src/metric-registry.ts",
+    "packages/schema/test/metric-registry.test.ts",
+    "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md"
+  ]
+}

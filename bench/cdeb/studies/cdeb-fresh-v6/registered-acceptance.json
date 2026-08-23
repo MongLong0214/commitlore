@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v6",
+  "status": "FROZEN",
+  "measured_run_allowed": false,
+  "layer": "regression acceptance \u2014 the frozen repository suite that answers whether a change introduced a new regression. Task-specific acceptance is registered per candidate and is a separate layer; functional_pass requires both.",
+  "command_digest_rule": "sha256(\"{cwd}\\n{command}\")",
+  "repositories": {
+    "agent-operator-score": {
+      "command": "node --test",
+      "cwd": ".",
+      "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+      "baseline": {
+        "total": 604,
+        "passed": 595,
+        "failed": 9,
+        "skipped": 0,
+        "expected_failures_ordered": [
+          "current registry invalidates the stale D0-001 batch and requires renewed external review",
+          "ADR-0003 correction invalidates the D0-001 bounded-RED planning acceptance",
+          "D0-002 RED census correction invalidates the prior acceptance and renews exact prerequisites",
+          "planning contract validator reports the truthful structural census",
+          "D0 identity control-plane paths are allowed while unrelated source is rejected",
+          "banned-wording-guard-is-load-bearing",
+          "banned-wording-guard-covers-commit-messages",
+          "skeleton-source-requires-an-owning-ticket",
+          "skeleton-source-requires-an-owning-ticket"
+        ],
+        "expected_failure_ids": [
+          "ADR-0003 correction invalidates the D0-001 bounded-RED planning acceptance",
+          "D0 identity control-plane paths are allowed while unrelated source is rejected",
+          "D0-002 RED census correction invalidates the prior acceptance and renews exact prerequisites",
+          "banned-wording-guard-covers-commit-messages",
+          "banned-wording-guard-is-load-bearing",
+          "current registry invalidates the stale D0-001 batch and requires renewed external review",
+          "planning contract validator reports the truthful structural census",
+          "skeleton-source-requires-an-owning-ticket"
+        ]
+      },
+      "widened_from_v5": {
+        "v5_command": "node --test --test-name-pattern doctor-contract (packages/schema)",
+        "v5_tests": 41,
+        "v6_tests": 604,
+        "why": "SSOT 9.2 asks for the broadest practical deterministic suite and forbids anything narrower than the v5 subset. The repository root script runs the whole suite and it is stable, so there is no reason to judge a patch on 41 tests when 604 are available."
+      },
+      "expected_failures_are_not_exclusions": "All nine still run. They fail on the unmodified tree because the code and the test disagree there, which is a property of the sealed snapshot rather than a snapshot-horizon impossibility, so excluding them under SSOT 9.2.3 would be the wrong instrument. A patch is judged on failures the baseline does not already have, and if one of these starts passing the fingerprint changes.",
+      "ordered_not_set": "node --test interleaves a child process's TAP into the parent's, so workspace-skeleton.test.mjs reports its own name twice. Nine failures, eight distinct names. The fingerprint uses the ordered list, because a set would not notice one of the two starting to pass.",
+      "stability": {
+        "runs": 10,
+        "distinct_structured_results": 1,
+        "deterministic": true,
+        "seconds_range": [
+          38,
+          44
+        ],
+        "loadavg_range": [
+          8.77,
+          12.81
+        ]
+      },
+      "sabotage_negative_control": {
+        "file": "packages/schema/src/capability.ts",
+        "injection": "a module-level throw before the first export",
+        "baseline": "604 total / 595 pass / 9 fail",
+        "sabotaged": "549 total / 535 pass / 14 fail",
+        "acceptance_detects_sabotage": true,
+        "first_attempt_was_void": "An earlier attempt failed to find an injection site, changed nothing, and produced a result identical to the baseline. That is a control that did not run, not a control that passed."
+      }
+    },
+    "gitseed": {
+      "command": "python3 -m pytest -q",
+      "cwd": ".",
+      "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+      "baseline": {
+        "total": 321,
+        "passed": 318,
+        "failed": 0,
+        "skipped": 3,
+        "expected_failures_ordered": [],
+        "expected_failure_ids": []
+      },
+      "unchanged_from_v5": true,
+      "stability": {
+        "runs": 10,
+        "distinct_structured_results": 1,
+        "deterministic": true,
+        "seconds_range": [
+          3,
+          42
+        ],
+        "loadavg_range": [
+          7.82,
+          14.56
+        ]
+      },
+      "sabotage_negative_control": {
+        "file": "gitseed/application.py",
+        "injection": "a module-level raise before the first class",
+        "baseline": "321 total / 318 pass / 0 fail / 3 skip",
+        "sabotaged": "collection error, exit 2, 6 errors",
+        "acceptance_detects_sabotage": true,
+        "first_attempt_was_void": "An earlier attempt sabotaged gitseed/__main__.py, which the suite never imports, and the run passed unchanged. That is a control that did not run."
+      }
+    }
+  },
+  "ten_run_rule": "SSOT 9.4 requires ten consecutive identical structured runs when the command differs from the v5 evidence. agent-operator-score's does, so ten were run; gitseed's does not, and ten were run anyway because the cost was three seconds a run and an unshared assumption is the thing this study keeps paying for."
+}

@@ -1,0 +1,100 @@
+{
+  "candidate_id": "v4-377f04276465b59d",
+  "scout_files_read": [
+    ".github/workflows/ci.yml",
+    "pyproject.toml",
+    "tests/conftest.py"
+  ],
+  "needs": [
+    {
+      "title": "Pin the test-job GitHub Actions to immutable commit SHAs",
+      "what_is_missing_or_wrong": "The test job uses mutable action tags, so its execution can change without a repository change; the adjacent CommitLore job already follows immutable pinning.",
+      "what_done_would_look_like": "Replace `actions/checkout@v4` and `actions/setup-python@v5` with reviewed full commit SHAs and version comments, matching the pattern used by the CommitLore job.",
+      "tree_evidence": [
+        ".github/workflows/ci.yml:17 uses a full SHA for checkout.",
+        " .github/workflows/ci.yml:20 uses a full SHA for setup-node.",
+        " .github/workflows/ci.yml:38-39 use mutable `@v4` and `@v5` tags in the test job."
+      ],
+      "distinct_from_others_because": "This addresses CI supply-chain reproducibility, not Python dependency compatibility or test isolation."
+    },
+    {
+      "title": "Make the development pytest requirement match CI's supported range",
+      "what_is_missing_or_wrong": "Contributors installing the declared `dev` extra can receive a newer pytest major version than CI exercises, because the project allows all pytest versions from 8 onward while CI deliberately caps below 9.",
+      "what_done_would_look_like": "Use one compatible pytest constraint for both the `dev` extra and CI\u2014either by bounding `dev` to the CI range or by updating CI and verifying the newer major version.",
+      "tree_evidence": [
+        "pyproject.toml:10-11 declares `dev = [\"pytest>=8\"]`.",
+        " .github/workflows/ci.yml:46-47 installs `pytest>=8,<9`."
+      ],
+      "distinct_from_others_because": "This keeps contributor and CI test environments compatible; it does not concern action integrity or outbound-network enforcement."
+    },
+    {
+      "title": "Close the test suite's network-isolation bypasses",
+      "what_is_missing_or_wrong": "The autouse fixture claims tests must not reach the network, but it blocks only `urllib.request.urlopen`. A future use of another HTTP client or raw sockets would make real outbound requests without failing the suite.",
+      "what_done_would_look_like": "Extend the fixture to block an appropriate lower-level connection path (while preserving legitimate local test behavior) and add tests proving direct-socket and non-`urlopen` access are rejected.",
+      "tree_evidence": [
+        "tests/conftest.py:6-12 makes network blocking session-wide.",
+        "tests/conftest.py:8-10 patches only `urllib.request.urlopen`.",
+        "tests/conftest.py:10 states the intended invariant: `tests must not reach the network`."
+      ],
+      "distinct_from_others_because": "This protects test determinism and prevents accidental live I/O, independently of CI dependency/action configuration."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-377f04276465b59d",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "532c25d6b48d37719d1f35c4a2d6fed4f9e8936f818330aea5eb3174e9ceaf69",
+        "need_hash": "330f305475edbcf9badf8fd7b1b91227ba50536609e1e019191e1396e11249b2",
+        "need": {
+          "title": "Pin the test-job GitHub Actions to immutable commit SHAs",
+          "what_is_missing_or_wrong": "The test job uses mutable action tags, so its execution can change without a repository change; the adjacent CommitLore job already follows immutable pinning.",
+          "what_done_would_look_like": "Replace `actions/checkout@v4` and `actions/setup-python@v5` with reviewed full commit SHAs and version comments, matching the pattern used by the CommitLore job.",
+          "tree_evidence": [
+            ".github/workflows/ci.yml:17 uses a full SHA for checkout.",
+            " .github/workflows/ci.yml:20 uses a full SHA for setup-node.",
+            " .github/workflows/ci.yml:38-39 use mutable `@v4` and `@v5` tags in the test job."
+          ],
+          "distinct_from_others_because": "This addresses CI supply-chain reproducibility, not Python dependency compatibility or test isolation."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "5eca524a4391d470c75363c0911173f862a593b2e640364f1f031a2355bc3c9b",
+        "need_hash": "6886818b25e0fa0757a516e54a228336debd38d3f9b337ef4c8127d0c0a81626",
+        "need": {
+          "title": "Close the test suite's network-isolation bypasses",
+          "what_is_missing_or_wrong": "The autouse fixture claims tests must not reach the network, but it blocks only `urllib.request.urlopen`. A future use of another HTTP client or raw sockets would make real outbound requests without failing the suite.",
+          "what_done_would_look_like": "Extend the fixture to block an appropriate lower-level connection path (while preserving legitimate local test behavior) and add tests proving direct-socket and non-`urlopen` access are rejected.",
+          "tree_evidence": [
+            "tests/conftest.py:6-12 makes network blocking session-wide.",
+            "tests/conftest.py:8-10 patches only `urllib.request.urlopen`.",
+            "tests/conftest.py:10 states the intended invariant: `tests must not reach the network`."
+          ],
+          "distinct_from_others_because": "This protects test determinism and prevents accidental live I/O, independently of CI dependency/action configuration."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "e29de84476b1da4e6576c251564513b39e62ed548e126ae60778f1885bb3f056",
+        "need_hash": "a9d1e9b4a952f0fa60d006aa4eda3ce431f25aa636f6600f7d30acbfc053a493",
+        "need": {
+          "title": "Make the development pytest requirement match CI's supported range",
+          "what_is_missing_or_wrong": "Contributors installing the declared `dev` extra can receive a newer pytest major version than CI exercises, because the project allows all pytest versions from 8 onward while CI deliberately caps below 9.",
+          "what_done_would_look_like": "Use one compatible pytest constraint for both the `dev` extra and CI\u2014either by bounding `dev` to the CI range or by updating CI and verifying the newer major version.",
+          "tree_evidence": [
+            "pyproject.toml:10-11 declares `dev = [\"pytest>=8\"]`.",
+            " .github/workflows/ci.yml:46-47 installs `pytest>=8,<9`."
+          ],
+          "distinct_from_others_because": "This keeps contributor and CI test environments compatible; it does not concern action integrity or outbound-network enforcement."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

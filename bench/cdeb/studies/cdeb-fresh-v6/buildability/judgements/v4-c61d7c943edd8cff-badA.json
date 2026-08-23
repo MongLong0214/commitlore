@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/judge/v4-c61d7c943edd8cff-badA/rule.txt",
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/judge/v4-c61d7c943edd8cff-badA/patch.diff"
+    ],
+    "what_the_patch_does": "Changes focused-lane test-count checks from exact equality to a minimum threshold (`passed >= cases`).",
+    "reading_applied": "Direct reading: \u201cRuled out: keep the lane counts as a floor\u201d prohibits treating these counts as minimums.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch explicitly replaces \u201cExact, not a floor\u201d with \u201cKeep the lane counts as a floor\u201d and changes the assertion accordingly. This is precisely the practice the rule ruled out, for the stated reason that slack can allow test cases and allowlists to be removed without failure."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Changes focused-lane test-count assertions from exact equality to a minimum (`passed >= cases`), explicitly treating lane counts as a floor.",
+    "reading_applied": "Direct/plain reading: the rule prohibits keeping lane counts as a floor, without a narrower exception.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch does exactly what the rule ruled out: it replaces exact lane-count checks with floor checks and states that intent in the updated comment."
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "candidate_id": "v4-f3c960a48273132c",
+  "scout_files_read": [
+    "gitseed/ports.py",
+    "gitseed/application.py",
+    "gitseed/adapters.py",
+    "gitseed/category.py",
+    "gitseed/collect/search.py",
+    "gitseed/artifact.py",
+    "gitseed/cli.py",
+    "tests/test_seam.py",
+    "tests/test_cli.py",
+    "tests/test_pipeline.py",
+    "gitseed/pipeline/run.py",
+    "gitseed/grade/smoke.py",
+    "gitseed/grade/types.py",
+    "README.md"
+  ],
+  "needs": [
+    {
+      "title": "Use the injected evidence reader\u2019s vocabulary when evidence extraction fails",
+      "what_is_missing_or_wrong": "`EvidenceReader` advertises its own `evidence_names`, but a read failure falls back to evidence generated from the default reader. A custom reader with a different vocabulary will therefore produce misleading absent-evidence/category results.",
+      "what_done_would_look_like": "Derive fallback absent evidence from the active `RunPorts.evidence` reader (or make the reader provide its fallback), and add a test using a failing reader with non-default evidence names.",
+      "tree_evidence": [
+        "gitseed/ports.py:41-49 declares `evidence_names` as part of the reader contract.",
+        "gitseed/ports.py:57-62 allows callers to inject a non-default evidence reader.",
+        "gitseed/application.py:158 invokes the injected reader, but line 164 calls `absent_evidence()` with no reader.",
+        "gitseed/category.py:92-97 makes that no-argument fallback use `DEFAULT_EVIDENCE_READER`."
+      ],
+      "distinct_from_others_because": "This fixes incorrect category evidence after a port failure, rather than request validation or timestamp semantics."
+    },
+    {
+      "title": "Enforce a positive candidate limit at the public `RunRequest` boundary",
+      "what_is_missing_or_wrong": "Programmatic callers can construct `RunRequest` with zero or a negative limit even though the CLI rejects it. The GitHub adapter converts such a limit into zero/negative paging values, allowing a zero-candidate collection to be reported as complete.",
+      "what_done_would_look_like": "Have `RunRequest` reject limits below one, with direct seam-level tests for zero and negative values; retain the CLI check as user-facing validation.",
+      "tree_evidence": [
+        "gitseed/ports.py:15-18 exposes `limit` without validation.",
+        "gitseed/application.py:58-59 forwards the request limit directly to the repository port.",
+        "gitseed/adapters.py:21-28 calculates page and per-page values directly from that limit.",
+        "gitseed/collect/search.py:161-215 treats zero pages as a completed collection.",
+        "gitseed/cli.py:939-941 validates only the CLI path, and tests/test_cli.py:654-657 tests that path."
+      ],
+      "distinct_from_others_because": "This prevents invalid execution requests; it does not concern evidence-reader failure handling or clock values."
+    },
+    {
+      "title": "Define and enforce an aware UTC contract for the clock port",
+      "what_is_missing_or_wrong": "The clock protocol accepts any `datetime`, including naive or non-UTC values, yet its value defines the metadata cutoff and is persisted for replay. The supplied implementation and test clocks consistently use UTC, but the seam gives alternate implementations no enforceable contract.",
+      "what_done_would_look_like": "Document and validate that `Clock.now()` returns a timezone-aware UTC datetime (or normalize it before use), with tests proving naive values are rejected or normalized and the metadata cutoff remains unambiguous.",
+      "tree_evidence": [
+        "gitseed/ports.py:52-53 types the clock result only as `datetime`.",
+        "gitseed/application.py:52-53 records that value and lines 72-77 pass it into metadata retrieval.",
+        "gitseed/adapters.py:38-43 derives the 30-day commit cutoff from `at`, while lines 132-134 return UTC in the built-in clock.",
+        "gitseed/artifact.py:273-274 serializes `started_at`, and lines 348-358 reuses it during replay.",
+        "tests/test_seam.py:19 and 55-57 use an explicitly UTC timestamp, indicating the intended convention without enforcing it at the port boundary."
+      ],
+      "distinct_from_others_because": "This addresses reproducible time-based metadata and artifact replay, not request limits or evidence fallback behavior."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-f3c960a48273132c",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "58998b52a46f680962431c0267e492b524511b4108b80b73a73b2b0881174ff2",
+        "need_hash": "71acf0ee209505a5463958409a51a19459cb8579b148d3073a186633d5612044",
+        "need": {
+          "title": "Use the injected evidence reader\u2019s vocabulary when evidence extraction fails",
+          "what_is_missing_or_wrong": "`EvidenceReader` advertises its own `evidence_names`, but a read failure falls back to evidence generated from the default reader. A custom reader with a different vocabulary will therefore produce misleading absent-evidence/category results.",
+          "what_done_would_look_like": "Derive fallback absent evidence from the active `RunPorts.evidence` reader (or make the reader provide its fallback), and add a test using a failing reader with non-default evidence names.",
+          "tree_evidence": [
+            "gitseed/ports.py:41-49 declares `evidence_names` as part of the reader contract.",
+            "gitseed/ports.py:57-62 allows callers to inject a non-default evidence reader.",
+            "gitseed/application.py:158 invokes the injected reader, but line 164 calls `absent_evidence()` with no reader.",
+            "gitseed/category.py:92-97 makes that no-argument fallback use `DEFAULT_EVIDENCE_READER`."
+          ],
+          "distinct_from_others_because": "This fixes incorrect category evidence after a port failure, rather than request validation or timestamp semantics."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "5e50c42e82663e25c586ba3c0aaeb7758c15a90259c935e42c66c6f1625e2d47",
+        "need_hash": "18fcc10a6976c79b4c0a02fc271247f0b2e3dd5274cea895c1af0dfef16606cb",
+        "need": {
+          "title": "Define and enforce an aware UTC contract for the clock port",
+          "what_is_missing_or_wrong": "The clock protocol accepts any `datetime`, including naive or non-UTC values, yet its value defines the metadata cutoff and is persisted for replay. The supplied implementation and test clocks consistently use UTC, but the seam gives alternate implementations no enforceable contract.",
+          "what_done_would_look_like": "Document and validate that `Clock.now()` returns a timezone-aware UTC datetime (or normalize it before use), with tests proving naive values are rejected or normalized and the metadata cutoff remains unambiguous.",
+          "tree_evidence": [
+            "gitseed/ports.py:52-53 types the clock result only as `datetime`.",
+            "gitseed/application.py:52-53 records that value and lines 72-77 pass it into metadata retrieval.",
+            "gitseed/adapters.py:38-43 derives the 30-day commit cutoff from `at`, while lines 132-134 return UTC in the built-in clock.",
+            "gitseed/artifact.py:273-274 serializes `started_at`, and lines 348-358 reuses it during replay.",
+            "tests/test_seam.py:19 and 55-57 use an explicitly UTC timestamp, indicating the intended convention without enforcing it at the port boundary."
+          ],
+          "distinct_from_others_because": "This addresses reproducible time-based metadata and artifact replay, not request limits or evidence fallback behavior."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "806f9f0af39b5aa66be32d6e56111c96c4be92dfc741e1b020fba50c349e5c2e",
+        "need_hash": "4fdb250fe14e3fd09da2172051e8594775ca533605c9e1bfd6a989b01a57e8aa",
+        "need": {
+          "title": "Enforce a positive candidate limit at the public `RunRequest` boundary",
+          "what_is_missing_or_wrong": "Programmatic callers can construct `RunRequest` with zero or a negative limit even though the CLI rejects it. The GitHub adapter converts such a limit into zero/negative paging values, allowing a zero-candidate collection to be reported as complete.",
+          "what_done_would_look_like": "Have `RunRequest` reject limits below one, with direct seam-level tests for zero and negative values; retain the CLI check as user-facing validation.",
+          "tree_evidence": [
+            "gitseed/ports.py:15-18 exposes `limit` without validation.",
+            "gitseed/application.py:58-59 forwards the request limit directly to the repository port.",
+            "gitseed/adapters.py:21-28 calculates page and per-page values directly from that limit.",
+            "gitseed/collect/search.py:161-215 treats zero pages as a completed collection.",
+            "gitseed/cli.py:939-941 validates only the CLI path, and tests/test_cli.py:654-657 tests that path."
+          ],
+          "distinct_from_others_because": "This prevents invalid execution requests; it does not concern evidence-reader failure handling or clock values."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

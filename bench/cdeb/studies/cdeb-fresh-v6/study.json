@@ -1,0 +1,41 @@
+{
+  "study_id": "cdeb-fresh-v6",
+  "schema_version": 1,
+  "phase": "stage1-hold",
+  "measured_run_allowed": false,
+  "estimand": "the total effect of automatic model-visible CommitLore decision delivery before the first relevant mutation, against the same shipping hook with the model-visible payload suppressed",
+  "record_id_required": false,
+  "independent_corroboration_required": false,
+  "owner_testimony": "disabled",
+  "predecessors": [
+    "cdeb-fresh-v3",
+    "cdeb-fresh-v3r1",
+    "cdeb-fresh-v4",
+    "cdeb-fresh-v5"
+  ],
+  "predecessor_status": "cdeb-fresh-v5 terminal-hold with zero product-effect rows",
+  "predecessor_artifact_reuse": "planning-inputs-only: decision identity, audit anchor, frozen snapshot, source scope, and the v5 pre-treatment functionally-violable classification. No v5 task, patch bytes, oracle, randomization, trajectory or row.",
+  "product_release_tag": "v1.2.0",
+  "product_release_commit": "90a8b212e1db70cccf69fbf48415b9c036b2d854",
+  "product_dist_sha256_ssot": "318e16612206ae0aa3732033127b2937276ce2f142872c33a91ec04a33133b91",
+  "product_dist_sha256_measured": "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528",
+  "product_dist_digest_deviation": "v6-d001",
+  "fixed_repository_set": [
+    "agent-operator-score",
+    "gitseed"
+  ],
+  "fixed_repository_rule": "pre-treatment measurement feasibility, established in v5 with zero product-effect rows in existence",
+  "prd_sha256": "a003e9803bff7c6174d32dca3be00e35d2f58bfc0f2df1e0f4f4254d06be89b0",
+  "source_pool_sha256": "153b4a554ef6d3525665bcf2b60e3ef57c569213a0618e48cd2850f6acd133b0",
+  "research_line_finality": "final-planned-study-no-automatic-v7",
+  "created_at": "2026-08-23T10:00:00Z",
+  "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+  "preregistration_seed_derivation": "sha256(\"cdeb-fresh-v6|\" + source_pool_sha256), recomputed from the completed pool",
+  "preregistration_sha256": "f7b29a36a69ee776459c6e8c7f0ac3c53b841e7cd1b6956ff048f739fc5333d9",
+  "seed_rederivation": {
+    "deviation": "v6-d002",
+    "superseded_pool_sha256": "1f1a0543d64ddbbe845a59f82c055a031afc4c68f4e3c02820cf9b894190dcd4",
+    "superseded_seed": "c68f09e9ff16f481c19e7b82381194fb2b7a5d6a4dfb31302208efaaa892c4af"
+  },
+  "verdict": "TERMINAL_HOLD_FINAL"
+}

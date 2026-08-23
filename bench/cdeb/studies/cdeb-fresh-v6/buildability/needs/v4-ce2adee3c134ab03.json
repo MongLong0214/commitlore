@@ -1,0 +1,105 @@
+{
+  "candidate_id": "v4-ce2adee3c134ab03",
+  "scout_files_read": [
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts",
+    "tests/planning-contract.test.mjs",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "needs": [
+    {
+      "title": "Validate evidence locators against approved runtime sources",
+      "what_is_missing_or_wrong": "The validator rejects blank locators and literal forbidden-source substrings, but accepts arbitrary unapproved or obfuscated locator text. A cell can therefore claim a frozen PRIMARY/SECONDARY class while naming a source outside the runtime's approved inventory.",
+      "what_done_would_look_like": "Use structured source identifiers or an allowlist tied to each runtime and source class; reject unknown, malformed, and normalization-obfuscated locators. Add mutation tests for an unapproved locator and a disguised forbidden source.",
+      "tree_evidence": [
+        "packages/schema/src/capability.ts:102-115 defines each runtime's approved primary and secondary inventories.",
+        "packages/schema/src/capability.ts:552-562 only checks that evidence_locator is nonblank and does a literal lowercase forbidden-substring scan.",
+        "packages/schema/test/capability.test.ts:257-307 covers missing, blank, and verbatim forbidden locators, but no unapproved-source case."
+      ],
+      "distinct_from_others_because": "This is input-source authorization for capability evidence, independent of result typing and test-environment portability."
+    },
+    {
+      "title": "Make invalid capability-validation results type-safe",
+      "what_is_missing_or_wrong": "validateCapabilityMatrix returns rows typed as CapabilityRow[] even after detecting malformed row entries. The implementation casts input.rows to that type before validation and returns it on failure, so callers can accidentally consume untrusted, nonconforming data as validated rows.",
+      "what_done_would_look_like": "Expose a discriminated validation-result type: only ok: true carries CapabilityRow[] and derived coverage; an invalid result carries errors plus either no rows or rows typed unknown. Add tests covering malformed rows/cells and the result payload contract.",
+      "tree_evidence": [
+        "packages/schema/src/capability.ts:49-55 defines rows as CapabilityRow[] for every ValidationResult.",
+        "packages/schema/src/capability.ts:290 casts input.rows directly to CapabilityRow[].",
+        "packages/schema/src/capability.ts:326 and 432 detect malformed rows but still return the same rows value.",
+        "packages/schema/test/capability.test.ts:602-610 asserts error codes for malformed rows and cells, without asserting that the returned rows are safe to consume."
+      ],
+      "distinct_from_others_because": "This concerns the validator's consumer-facing result contract, not which evidence sources it accepts."
+    },
+    {
+      "title": "Remove planning-test dependence on a pre-existing Git repository",
+      "what_is_missing_or_wrong": "Two planning-contract tests require Git history and origin/dev, but this working copy has none. Those tests cannot run here despite being otherwise tree-local contract tests.",
+      "what_done_would_look_like": "Refactor Git-dependent assertions to create and seed an isolated temporary Git fixture, or explicitly separate them into a history-required lane with a clear prerequisite. The normal planning suite should remain runnable from a history-less source tree without weakening the actual commit-message and digest-invalidation checks.",
+      "tree_evidence": [
+        "tests/planning-contract.test.mjs:596-624 runs git clone against the repository root before testing gate-digest invalidation.",
+        "tests/planning-contract.test.mjs:1344-1370 requires git merge-base origin/dev HEAD and explicitly fails when it is unavailable.",
+        "tests/planning/workspace-skeleton.test.mjs:478-496 shows the adjacent planning census tests can run directly from repository files without Git history."
+      ],
+      "distinct_from_others_because": "This is test-suite execution portability, separate from capability-matrix validation behavior and types."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-ce2adee3c134ab03",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "04b0b017b60d6f3404bd436d7cc83418318a0aae756d8935a47ac1fe817c147f",
+        "need_hash": "87152bbc7ea1411e1147f0103471270cbe78cf42267c5ae44e80b653708e2dce",
+        "need": {
+          "title": "Make invalid capability-validation results type-safe",
+          "what_is_missing_or_wrong": "validateCapabilityMatrix returns rows typed as CapabilityRow[] even after detecting malformed row entries. The implementation casts input.rows to that type before validation and returns it on failure, so callers can accidentally consume untrusted, nonconforming data as validated rows.",
+          "what_done_would_look_like": "Expose a discriminated validation-result type: only ok: true carries CapabilityRow[] and derived coverage; an invalid result carries errors plus either no rows or rows typed unknown. Add tests covering malformed rows/cells and the result payload contract.",
+          "tree_evidence": [
+            "packages/schema/src/capability.ts:49-55 defines rows as CapabilityRow[] for every ValidationResult.",
+            "packages/schema/src/capability.ts:290 casts input.rows directly to CapabilityRow[].",
+            "packages/schema/src/capability.ts:326 and 432 detect malformed rows but still return the same rows value.",
+            "packages/schema/test/capability.test.ts:602-610 asserts error codes for malformed rows and cells, without asserting that the returned rows are safe to consume."
+          ],
+          "distinct_from_others_because": "This concerns the validator's consumer-facing result contract, not which evidence sources it accepts."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "53ee7f5c004d422140625b4fae08a0925e9ea4b09d7ac639d662680be41c91d0",
+        "need_hash": "13770b274abb466b2d4cc78d67d75e03257675b5cd93d03e94134384638bbdcb",
+        "need": {
+          "title": "Remove planning-test dependence on a pre-existing Git repository",
+          "what_is_missing_or_wrong": "Two planning-contract tests require Git history and origin/dev, but this working copy has none. Those tests cannot run here despite being otherwise tree-local contract tests.",
+          "what_done_would_look_like": "Refactor Git-dependent assertions to create and seed an isolated temporary Git fixture, or explicitly separate them into a history-required lane with a clear prerequisite. The normal planning suite should remain runnable from a history-less source tree without weakening the actual commit-message and digest-invalidation checks.",
+          "tree_evidence": [
+            "tests/planning-contract.test.mjs:596-624 runs git clone against the repository root before testing gate-digest invalidation.",
+            "tests/planning-contract.test.mjs:1344-1370 requires git merge-base origin/dev HEAD and explicitly fails when it is unavailable.",
+            "tests/planning/workspace-skeleton.test.mjs:478-496 shows the adjacent planning census tests can run directly from repository files without Git history."
+          ],
+          "distinct_from_others_because": "This is test-suite execution portability, separate from capability-matrix validation behavior and types."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "c30395102aca18e4296c7d31b94db67aa610939b4f0d3d98d3fb4c314585876c",
+        "need_hash": "e012bfdb5956c70825e69775acbc7bfd3626e790f8bca940968ca42bb312f856",
+        "need": {
+          "title": "Validate evidence locators against approved runtime sources",
+          "what_is_missing_or_wrong": "The validator rejects blank locators and literal forbidden-source substrings, but accepts arbitrary unapproved or obfuscated locator text. A cell can therefore claim a frozen PRIMARY/SECONDARY class while naming a source outside the runtime's approved inventory.",
+          "what_done_would_look_like": "Use structured source identifiers or an allowlist tied to each runtime and source class; reject unknown, malformed, and normalization-obfuscated locators. Add mutation tests for an unapproved locator and a disguised forbidden source.",
+          "tree_evidence": [
+            "packages/schema/src/capability.ts:102-115 defines each runtime's approved primary and secondary inventories.",
+            "packages/schema/src/capability.ts:552-562 only checks that evidence_locator is nonblank and does a literal lowercase forbidden-substring scan.",
+            "packages/schema/test/capability.test.ts:257-307 covers missing, blank, and verbatim forbidden locators, but no unapproved-source case."
+          ],
+          "distinct_from_others_because": "This is input-source authorization for capability evidence, independent of result typing and test-environment portability."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

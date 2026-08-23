@@ -1,0 +1,37 @@
+{
+  "candidate_id": "v4-8f24735524874167",
+  "need_rank_1": {
+    "rank_key": "079e6c879f8f8ccab468d62eabbbd29023480b81c62ec6eec6e05d739a7eef86",
+    "need_hash": "ca282b0aee91f42e1619978ba3b6618a8ceb4a44f22d150a9abb36d02189d78d",
+    "need": {
+      "title": "Eliminate Node's moduleless-package warning for the schema test lane",
+      "what_is_missing_or_wrong": "The focused schema test lane runs ESM-style TypeScript tests, but Node reparses them as ES modules and emits MODULE_TYPELESS_PACKAGE_JSON warnings. The skeleton test currently pins the workspace manifest shape, so a proper module declaration requires updating that invariant deliberately.",
+      "what_done_would_look_like": "Declare the schema workspace's intended module type and adjust the manifest-shape expectation; rerun the focused doctor-contract lane and confirm it no longer emits the moduleless-package warning.",
+      "tree_evidence": [
+        "packages/schema/test/doctor-contract.test.ts:1-10 uses ESM import syntax.",
+        "tests/planning/workspace-skeleton.test.mjs:366-377 fixes each workspace manifest to a narrow identity shape.",
+        "tests/planning/workspace-skeleton.test.mjs:717-744 treats the focused schema lane as a maintained verification surface."
+      ],
+      "distinct_from_others_because": "This improves runtime/tooling configuration and developer feedback, independent of contract-case coverage and fixture ingestion."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make the maintained `@aos/schema` doctor-contract verification lane run its existing ESM-style TypeScript tests without Node emitting a `MODULE_TYPELESS_PACKAGE_JSON` warning. The schema workspace must publicly declare its intended module type, and the workspace-skeleton manifest expectation must deliberately recognize that declaration while preserving the existing constraints for the other workspaces. The focused doctor-contract command must still complete successfully.",
+  "acceptance_test_path": "tests/acceptance/schema-doctor-lane.test.mjs",
+  "acceptance_test_source": "import assert from \"node:assert/strict\";\nimport { spawnSync } from \"node:child_process\";\nimport { fileURLToPath } from \"node:url\";\nimport { resolve } from \"node:path\";\nimport test from \"node:test\";\n\nconst repositoryRoot = resolve(fileURLToPath(new URL(\"../..\", import.meta.url)));\nconst npm = process.platform === \"win32\" ? \"npm.cmd\" : \"npm\";\n\nconst focusedDoctorLane = () => {\n  const env = { ...process.env };\n  delete env.NODE_TEST_CONTEXT;\n  delete env.NODE_OPTIONS;\n\n  const result = spawnSync(npm, [\"test\", \"-w\", \"@aos/schema\", \"--\", \"doctor-contract\"], {\n    cwd: repositoryRoot,\n    encoding: \"utf8\",\n    env\n  });\n  assert.ifError(result.error);\n\n  const output = `${result.stdout ?? \"\"}${result.stderr ?? \"\"}`;\n  assert.equal(\n    result.status,\n    0,\n    `focused doctor-contract lane failed:\\n${output.slice(-4000)}`\n  );\n  return output;\n};\n\ntest(\"focused schema doctor-contract lane has no moduleless-package warning\", () => {\n  const output = focusedDoctorLane();\n  assert.doesNotMatch(\n    output,\n    /\\[MODULE_TYPELESS_PACKAGE_JSON\\]/,\n    \"the focused schema lane must not require Node to reparse its tests as ES modules\"\n  );\n});\n",
+  "how_to_run": "node --test tests/acceptance/schema-doctor-lane.test.mjs",
+  "why_it_fails_on_the_current_tree": "The focused command emits `[MODULE_TYPELESS_PACKAGE_JSON]` for the schema TypeScript test files, including `doctor-contract.test.ts`, because the schema workspace has no module-type declaration.",
+  "two_different_implementations_that_would_both_pass": [
+    "Declare the schema workspace as ESM in its public package metadata and update the existing skeleton expectation with a schema-specific expected identity.",
+    "Use a differently organized skeleton expectation (for example, derive per-workspace expected identities from a shared test fixture) while preserving the same public ESM declaration and focused-lane behavior."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "README.md",
+    "package.json",
+    "packages/schema/package.json",
+    "packages/schema/test/doctor-contract.test.ts",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "scripts/validate-planning.mjs"
+  ]
+}

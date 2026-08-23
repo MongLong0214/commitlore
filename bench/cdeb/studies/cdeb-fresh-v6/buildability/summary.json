@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v6",
+  "candidates": 34,
+  "disposed": 34,
+  "undecided": 0,
+  "pending_candidates": [],
+  "task_buildable_by_repository": {
+    "agent-operator-score": 8,
+    "gitseed": 9
+  },
+  "task_buildable_total": 17,
+  "floors": {
+    "per_repository": 10,
+    "total": 22
+  },
+  "floors_met": {
+    "agent-operator-score": false,
+    "gitseed": false
+  },
+  "verdict": "TERMINAL_HOLD_FINAL",
+  "by_repository": {
+    "agent-operator-score": {
+      "TASK_BUILDABLE": 8,
+      "NOT_TASK_BUILDABLE:no-two-compliant-controls": 4,
+      "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task": 4
+    },
+    "gitseed": {
+      "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task": 4,
+      "TASK_BUILDABLE": 9,
+      "NOT_TASK_BUILDABLE:task-already-satisfied-by-base": 3,
+      "NOT_TASK_BUILDABLE:no-two-compliant-controls": 1,
+      "NOT_TASK_BUILDABLE:candidate-decision-visible-to-task-author": 1
+    }
+  },
+  "by_disposition": {
+    "TASK_BUILDABLE": 17,
+    "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task": 8,
+    "NOT_TASK_BUILDABLE:no-two-compliant-controls": 5,
+    "NOT_TASK_BUILDABLE:task-already-satisfied-by-base": 3,
+    "NOT_TASK_BUILDABLE:candidate-decision-visible-to-task-author": 1
+  },
+  "dispositions": [
+    {
+      "candidate_id": "v4-002ffd1e428c572a",
+      "repository_id": "agent-operator-score",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-00efc0041ed3118a",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task",
+      "basis": "no implementation both did the task and took the ruled-out approach while passing both acceptances"
+    },
+    {
+      "candidate_id": "v4-04c1de5e41d66868",
+      "repository_id": "agent-operator-score",
+      "disposition": "NOT_TASK_BUILDABLE:no-two-compliant-controls",
+      "basis": "Good A did not pass both acceptances"
+    },
+    {
+      "candidate_id": "v4-0bc581744204a282",
+      "repository_id": "agent-operator-score",
+      "disposition": "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task",
+      "basis": "no implementation both did the task and took the ruled-out approach while passing both acceptances"
+    },
+    {
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-12b0486cd77dd3a9",
+      "repository_id": "agent-operator-score",
+      "disposition": "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task",
+      "basis": "no implementation both did the task and took the ruled-out approach while passing both acceptances"
+    },
+    {
+      "candidate_id": "v4-1438614686129e44",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:task-already-satisfied-by-base",
+      "basis": "decided before task authoring"
+    },
+    {
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "repository_id": "agent-operator-score",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-377f04276465b59d",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-4b7ef509f0403505",
+      "repository_id": "agent-operator-score",
+      "disposition": "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task",
+      "basis": "no implementation both did the task and took the ruled-out approach while passing both acceptances"
+    },
+    {
+      "candidate_id": "v4-77e1745655a235ce",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-7bdc1c42597e48a6",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:no-two-compliant-controls",
+      "basis": "Good A did not pass both acceptances"
+    },
+    {
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-8ab61d73c22d675b",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task",
+      "basis": "no implementation both did the task and took the ruled-out approach while passing both acceptances"
+    },
+    {
+      "candidate_id": "v4-8f24735524874167",
+      "repository_id": "agent-operator-score",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-9b42b1951da730e1",
+      "repository_id": "agent-operator-score",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-a7b04c5208e493e4",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:candidate-decision-visible-to-task-author",
+      "basis": "decided before task authoring"
+    },
+    {
+      "candidate_id": "v4-b291655fbfd2003b",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task",
+      "basis": "no implementation both did the task and took the ruled-out approach while passing both acceptances"
+    },
+    {
+      "candidate_id": "v4-bed5fc386048e412",
+      "repository_id": "agent-operator-score",
+      "disposition": "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task",
+      "basis": "the Bad control passed both acceptances and the judges found it does not violate the decision"
+    },
+    {
+      "candidate_id": "v4-c15e92a3b1a755d4",
+      "repository_id": "agent-operator-score",
+      "disposition": "NOT_TASK_BUILDABLE:no-two-compliant-controls",
+      "basis": "Good A did not pass both acceptances"
+    },
+    {
+      "candidate_id": "v4-c20a082f262f21c8",
+      "repository_id": "agent-operator-score",
+      "disposition": "NOT_TASK_BUILDABLE:no-two-compliant-controls",
+      "basis": "Good A did not pass both acceptances"
+    },
+    {
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "repository_id": "agent-operator-score",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-c976dc2332d4adab",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:task-already-satisfied-by-base",
+      "basis": "decided before task authoring"
+    },
+    {
+      "candidate_id": "v4-cadfb63755c3f504",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-cc76268ad4bb9a3e",
+      "repository_id": "agent-operator-score",
+      "disposition": "NOT_TASK_BUILDABLE:no-two-compliant-controls",
+      "basis": "Good A did not pass both acceptances"
+    },
+    {
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "repository_id": "agent-operator-score",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "repository_id": "agent-operator-score",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-df6bfd03300910e2",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:no-functionally-passing-violation-for-frozen-task",
+      "basis": "no implementation both did the task and took the ruled-out approach while passing both acceptances"
+    },
+    {
+      "candidate_id": "v4-e7587b2b65750306",
+      "repository_id": "agent-operator-score",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-ed4039b8a411ee62",
+      "repository_id": "gitseed",
+      "disposition": "NOT_TASK_BUILDABLE:task-already-satisfied-by-base",
+      "basis": "decided before task authoring"
+    },
+    {
+      "candidate_id": "v4-ed878960135ff45a",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-f3c960a48273132c",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    },
+    {
+      "candidate_id": "v4-f901052615fa3aee",
+      "repository_id": "gitseed",
+      "disposition": "TASK_BUILDABLE",
+      "basis": "task frozen, two compliant controls, a violating control confirmed by two blind judges"
+    }
+  ]
+}

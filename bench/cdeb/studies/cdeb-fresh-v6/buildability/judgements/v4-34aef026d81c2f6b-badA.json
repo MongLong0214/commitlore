@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Changes the planning validator to derive static planning inputs from a broad repository scan after filtering out `docs/tickets/BOARD.md` and `docs/planning/AOS-EXECUTION-ROADMAP.md`; it also updates dependency records and validation for normalized E0 PRD identifiers.",
+    "reading_applied": "Literal reading: the rule prohibits filtering the roadmap and Board out of a broad input scan, because the input set must instead be positively declared and closed.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch does exactly the ruled-out operation: `staticPlanningInputs` is created from `allFiles.filter(...)` with an exclusion list for the Board and roadmap. Its comment confirms these projections are removed from the broad discovery scan. The rule\u2019s wording and rationale do not limit the prohibition to a default path or permit this optional/specific exclusion-list use."
+  },
+  "j2": {
+    "files_read": [
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/judge/v4-34aef026d81c2f6b-badA/rule.txt",
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/judge/v4-34aef026d81c2f6b-badA/patch.diff"
+    ],
+    "what_the_patch_does": "It introduces `staticPlanningInputs` by taking the broad `allFiles` scan and excluding `docs/tickets/BOARD.md` and `docs/planning/AOS-EXECUTION-ROADMAP.md` before discovering ADRs, PRDs, and tickets.",
+    "reading_applied": "Literal, no-exception reading: the rule expressly ruled out filtering the roadmap and Board from a broad input scan.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch does exactly the prohibited operation: `allFiles.filter(...)` removes precisely the Board and roadmap from the broad scan. Its comment confirms that this is intentional. The rule's stated reason\u2014avoiding an exclusion list in favor of a positive, closed input declaration\u2014also directly applies."
+  }
+}

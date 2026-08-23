@@ -1,0 +1,37 @@
+{
+  "candidate_id": "v4-7bdc1c42597e48a6",
+  "need_rank_1": {
+    "rank_key": "366d7152823c1cf1b2cbc02380d06c235f9ce0704c88109a7cee08d242817cfd",
+    "need_hash": "d29d5067f78cb177aa855b56efeaec1614220b457fe2cb8af73a716b4d6e8d7f",
+    "need": {
+      "title": "Make schema migrations atomic across all version steps",
+      "what_is_missing_or_wrong": "`migrate()` intends to wrap upgrades in a transaction, but each migration uses `Connection.executescript()`, whose SQLite/Python behavior can commit pending work before running the script. A failed multi-step upgrade can therefore leave tables created without the corresponding `user_version` update.",
+      "what_done_would_look_like": "Run each migration step inside an explicitly controlled transaction without `executescript()` breaking it, and add a test that forces a later migration failure and verifies neither partial schema objects nor an intermediate version remain.",
+      "tree_evidence": [
+        "gitseed/storage_schema.py:29-33 wraps the version loop in `with connection:` and updates `user_version` after each migration.",
+        "gitseed/storage_schema.py:53-70 and 74-95 implement the migration steps with `connection.executescript()`.",
+        "tests/test_storage.py:86-98 and 191-229 cover successful migrations, but no test verifies rollback when an upgrade fails."
+      ],
+      "distinct_from_others_because": "This concerns crash/failure safety of the migration mechanism, rather than schema admission rules or correction-record validity."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make schema upgrades performed by `gitseed.storage_schema.migrate()` atomic across the complete upgrade. If any migration step fails while upgrading a database, the call must fail and leave the database exactly at its pre-upgrade schema version, with none of the schema objects created by the attempted upgrade. This includes failures in a later step of a multi-step upgrade.",
+  "acceptance_test_path": "tests/test_storage_migration_atomicity.py",
+  "acceptance_test_source": "from __future__ import annotations\n\nimport sqlite3\n\nimport pytest\n\nfrom gitseed.storage_schema import migrate\n\n\ndef test_failed_later_migration_leaves_an_empty_database_unmigrated() -> None:\n    connection = sqlite3.connect(\":memory:\")\n\n    def reject_second_migration_table(\n        action: int,\n        argument1: str | None,\n        argument2: str | None,\n        database: str | None,\n        source: str | None,\n    ) -> int:\n        if action == sqlite3.SQLITE_CREATE_TABLE and argument1 == \"repository_observations\":\n            return sqlite3.SQLITE_DENY\n        return sqlite3.SQLITE_OK\n\n    connection.set_authorizer(reject_second_migration_table)\n    try:\n        with pytest.raises(sqlite3.DatabaseError):\n            migrate(connection)\n    finally:\n        connection.set_authorizer(None)\n\n    assert connection.execute(\"PRAGMA user_version\").fetchone() == (0,)\n    assert connection.execute(\n        \"SELECT name FROM sqlite_master \"\n        \"WHERE type IN ('table', 'trigger', 'view', 'index') \"\n        \"AND name NOT LIKE 'sqlite_%'\"\n    ).fetchall() == []\n",
+  "how_to_run": "python -m pytest -q tests/test_storage_migration_atomicity.py",
+  "why_it_fails_on_the_current_tree": "The first migration creates `run_artifacts` and its triggers, then version 1 is recorded. When the authorizer rejects creation of the version-2 table, `executescript()` has already committed work outside the surrounding rollback scope. The test consequently finds schema objects and `user_version = 1`, rather than an empty version-0 database.",
+  "two_different_implementations_that_would_both_pass": [
+    "Execute all migration statements within one transaction whose rollback remains effective when the second migration fails.",
+    "Apply the upgrade to an isolated temporary database state and expose it only after every migration step completes successfully."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "gitseed/storage_schema.py",
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "tests/conftest.py",
+    "pyproject.toml",
+    "/Users/isaac/.codex/plugins/cache/commitlore/commitlore/1.2.0/skills/commitlore-codex/SKILL.md"
+  ]
+}

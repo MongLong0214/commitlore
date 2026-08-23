@@ -1,0 +1,109 @@
+{
+  "candidate_id": "v4-0bc581744204a282",
+  "scout_files_read": [
+    "docs/tickets/E0-B/E0B-002-define-controlled-and-imported-session-classification.md",
+    "packages/schema/src/session-class.ts",
+    "packages/schema/test/session-class.test.ts",
+    "specs/session-class.v0.json",
+    "tests/planning-contract.test.mjs",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "needs": [
+    {
+      "title": "Define and enforce an external attestation trust root for verified sessions",
+      "what_is_missing_or_wrong": "A reconstructed trace can satisfy every current classifier gate and pass the official-eligibility assertion. Thus CONTROLLED_VERIFIED is currently a claim of complete trace content, not evidence that the controlled wrapper observed the run.",
+      "what_done_would_look_like": "A separately approved ADR/PRD and follow-on ticket define the signer, key custody and rotation, signed payload binding, and verification failure behavior. The session contract and classifier then reject an otherwise complete forged/reconstructed trace without a valid attestation, with a regression test proving it cannot reach official eligibility.",
+      "tree_evidence": [
+        "packages/schema/test/session-class.test.ts:608-615 explicitly identifies the missing trust root.",
+        "packages/schema/test/session-class.test.ts:650-658 demonstrates that synthetic events, identity, and snapshot promote an imported reconstruction to CONTROLLED_VERIFIED and pass assertVerifiedEligibility.",
+        "packages/schema/src/session-class.ts:57-66 states that distinguishing observation from reconstruction requires an externally trusted attestation and that no such design exists.",
+        "docs/tickets/E0-B/E0B-002-define-controlled-and-imported-session-classification.md:27-31 forbids broadening this frozen-contract ticket, so this needs its own authorized follow-on work."
+      ],
+      "distinct_from_others_because": "This is an integrity/provenance problem: it establishes who observed the session, not whether its payload is private or whether the repository runtime policy is consistent."
+    },
+    {
+      "title": "Add enforceable payload-redaction and secret-exposure protection",
+      "what_is_missing_or_wrong": "The classifier validates only a declared redaction-state vocabulary and a 2,048-character payload bound. It cannot determine whether a payload marked none contains a secret or whether a payload marked redacted was actually redacted, despite the ticket treating secret exposure as a stop condition.",
+      "what_done_would_look_like": "An approved privacy contract specifies the permitted payload form and redaction/secret-detection behavior, followed by ingress/classifier enforcement that fails closed before storage or issuance. Tests should prove that representative credential-bearing payloads are rejected or redacted safely, while compliant redacted excerpts remain accepted.",
+      "tree_evidence": [
+        "packages/schema/src/session-class.ts:145-152 says the implementation cannot verify that a none claim is honest or that an excerpt was redacted correctly.",
+        "packages/schema/src/session-class.ts:450-457 checks only the state enum, payload type, and maximum length.",
+        "packages/schema/test/session-class.test.ts:812-852 verifies acceptance of both redaction labels and length-only payload limits; it contains no secret-content rejection case.",
+        "docs/tickets/E0-B/E0B-002-define-controlled-and-imported-session-classification.md:61-71 requires stopping on secret exposure and recording a security/privacy review."
+      ],
+      "distinct_from_others_because": "This is a data-privacy control over trace contents, independent of whether the trace originated from a real controlled wrapper."
+    },
+    {
+      "title": "Resolve the unapproved Node runtime-baseline conflict",
+      "what_is_missing_or_wrong": "The executable workspace configuration requires Node >=22.18 because Node 20 cannot run the TypeScript tests, while the test documents that the governing ADR/SSOT/PRD still specify Node 20 and that the correction is unapproved. This leaves the repository operating under a runtime baseline that its stated authority has not accepted.",
+      "what_done_would_look_like": "Through the required governance process, either approve and propagate the >=22.18 baseline through the authority chain, or provide a Node-20-compatible test/runtime strategy and align the executable configuration to it. The engine-matrix test should then verify consistency with the accepted authority rather than preserve a known discrepancy.",
+      "tree_evidence": [
+        "tests/planning/workspace-skeleton.test.mjs:758-772 states that Node 20 cannot execute the TypeScript lanes, asserts the current >=22.18 configuration, and records that the authority correction remains unapproved.",
+        "tests/planning/workspace-skeleton.test.mjs:763-768 explicitly calls the discrepancy a real tracked gap and forbids silently rewriting the authority chain to match runtime behavior.",
+        "tests/planning/workspace-skeleton.test.mjs:819 pins the lock/workspace expectation to engines.node >=22.18 <25."
+      ],
+      "distinct_from_others_because": "This is a toolchain-governance and CI-executability issue, unrelated to session provenance or payload privacy."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-0bc581744204a282",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "7f18cf9a53ded1bd31a731e246bd07e5e73735852f688b4c19fa0d967095554b",
+        "need_hash": "d65d3abf3167f34f1b6e2c10190c4034a2c648c418f989e4536f3f28c570eaee",
+        "need": {
+          "title": "Resolve the unapproved Node runtime-baseline conflict",
+          "what_is_missing_or_wrong": "The executable workspace configuration requires Node >=22.18 because Node 20 cannot run the TypeScript tests, while the test documents that the governing ADR/SSOT/PRD still specify Node 20 and that the correction is unapproved. This leaves the repository operating under a runtime baseline that its stated authority has not accepted.",
+          "what_done_would_look_like": "Through the required governance process, either approve and propagate the >=22.18 baseline through the authority chain, or provide a Node-20-compatible test/runtime strategy and align the executable configuration to it. The engine-matrix test should then verify consistency with the accepted authority rather than preserve a known discrepancy.",
+          "tree_evidence": [
+            "tests/planning/workspace-skeleton.test.mjs:758-772 states that Node 20 cannot execute the TypeScript lanes, asserts the current >=22.18 configuration, and records that the authority correction remains unapproved.",
+            "tests/planning/workspace-skeleton.test.mjs:763-768 explicitly calls the discrepancy a real tracked gap and forbids silently rewriting the authority chain to match runtime behavior.",
+            "tests/planning/workspace-skeleton.test.mjs:819 pins the lock/workspace expectation to engines.node >=22.18 <25."
+          ],
+          "distinct_from_others_because": "This is a toolchain-governance and CI-executability issue, unrelated to session provenance or payload privacy."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "ad2d8d844b29ead779b2735b5a809c8a0b7a426bfe68c654b153721d260932c5",
+        "need_hash": "0a98b8c6ed905c46b408637fb752f6c8bfda8f1b94eb95949c0241abc7ac6134",
+        "need": {
+          "title": "Define and enforce an external attestation trust root for verified sessions",
+          "what_is_missing_or_wrong": "A reconstructed trace can satisfy every current classifier gate and pass the official-eligibility assertion. Thus CONTROLLED_VERIFIED is currently a claim of complete trace content, not evidence that the controlled wrapper observed the run.",
+          "what_done_would_look_like": "A separately approved ADR/PRD and follow-on ticket define the signer, key custody and rotation, signed payload binding, and verification failure behavior. The session contract and classifier then reject an otherwise complete forged/reconstructed trace without a valid attestation, with a regression test proving it cannot reach official eligibility.",
+          "tree_evidence": [
+            "packages/schema/test/session-class.test.ts:608-615 explicitly identifies the missing trust root.",
+            "packages/schema/test/session-class.test.ts:650-658 demonstrates that synthetic events, identity, and snapshot promote an imported reconstruction to CONTROLLED_VERIFIED and pass assertVerifiedEligibility.",
+            "packages/schema/src/session-class.ts:57-66 states that distinguishing observation from reconstruction requires an externally trusted attestation and that no such design exists.",
+            "docs/tickets/E0-B/E0B-002-define-controlled-and-imported-session-classification.md:27-31 forbids broadening this frozen-contract ticket, so this needs its own authorized follow-on work."
+          ],
+          "distinct_from_others_because": "This is an integrity/provenance problem: it establishes who observed the session, not whether its payload is private or whether the repository runtime policy is consistent."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "f7081db6a52a9c8ce4c5e5a2621a5dfdca3f6da4f9b7043d39c8f3a2d0f512d4",
+        "need_hash": "118f7b374032148b61dedc19afdffe62403cedc05b28ffda6458ce83c0137150",
+        "need": {
+          "title": "Add enforceable payload-redaction and secret-exposure protection",
+          "what_is_missing_or_wrong": "The classifier validates only a declared redaction-state vocabulary and a 2,048-character payload bound. It cannot determine whether a payload marked none contains a secret or whether a payload marked redacted was actually redacted, despite the ticket treating secret exposure as a stop condition.",
+          "what_done_would_look_like": "An approved privacy contract specifies the permitted payload form and redaction/secret-detection behavior, followed by ingress/classifier enforcement that fails closed before storage or issuance. Tests should prove that representative credential-bearing payloads are rejected or redacted safely, while compliant redacted excerpts remain accepted.",
+          "tree_evidence": [
+            "packages/schema/src/session-class.ts:145-152 says the implementation cannot verify that a none claim is honest or that an excerpt was redacted correctly.",
+            "packages/schema/src/session-class.ts:450-457 checks only the state enum, payload type, and maximum length.",
+            "packages/schema/test/session-class.test.ts:812-852 verifies acceptance of both redaction labels and length-only payload limits; it contains no secret-content rejection case.",
+            "docs/tickets/E0-B/E0B-002-define-controlled-and-imported-session-classification.md:61-71 requires stopping on secret exposure and recording a security/privacy review."
+          ],
+          "distinct_from_others_because": "This is a data-privacy control over trace contents, independent of whether the trace originated from a real controlled wrapper."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

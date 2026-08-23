@@ -1,0 +1,41 @@
+{
+  "candidate_id": "v4-8ab61d73c22d675b",
+  "need_rank_1": {
+    "rank_key": "00f80168bca40e2d00416452f4e88d60d5870e939c9bb34af8c8075c3d370ffc",
+    "need_hash": "bfab92b58de0c654c486747aafe332f98de1acffd9a79faee23f5ef7f54b8deb",
+    "need": {
+      "title": "Validate the model\u2019s maliciousness response as a real boolean",
+      "what_is_missing_or_wrong": "The maliciousness path coerces arbitrary JSON values with `bool()`: a model response such as `{\"malicious\":\"false\"}` is treated as malicious, while a missing field is treated as safe. That makes the security gate depend on Python truthiness instead of the requested JSON contract.",
+      "what_done_would_look_like": "Require a JSON object containing an actual boolean `malicious` field; reject malformed, missing, or wrong-typed values with an actionable model-contract error, with tests for string, numeric, and missing values.",
+      "tree_evidence": [
+        "gitseed/cli.py:464-466 requests a boolean but returns `bool(result.get(\"malicious\", False))` without validating the response shape or type.",
+        "tests/test_model_choice.py:127-157 verifies the bounded request contract for the maliciousness call, but supplies only a valid `false` boolean response.",
+        "tests/test_seam.py:47-52 uses a deterministic boolean implementation, so the application seam does not cover malformed model boolean outputs."
+      ],
+      "distinct_from_others_because": "This is a fail-closed security-contract issue in model output interpretation, independent of source ordering and CLI option validation."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make the local model maliciousness classification enforce its declared response contract. A maliciousness response is valid only when it is JSON whose top-level value is an object containing a `malicious` field with a JSON boolean value. Valid `true` and `false` responses must produce those corresponding boolean results. Invalid JSON, a non-object response, an absent field, or a field with any non-boolean value must not be silently treated as safe or malicious; instead, surface an actionable error explaining that the model must return a JSON object with a boolean `malicious` field.",
+  "acceptance_test_path": "tests/test_maliciousness_contract_acceptance.py",
+  "acceptance_test_source": "from __future__ import annotations\n\nimport json\n\nimport pytest\n\nfrom gitseed.cli import OllamaGrader\n\n\nclass ResponseTransport:\n    def __init__(self, response: str) -> None:\n        self.response = response\n\n    def request(self, method, url, data=None, extra_headers=None):\n        return 200, {}, json.dumps({\"response\": self.response}).encode()\n\n\ndef maliciousness_result(response: str) -> bool:\n    grader = OllamaGrader(\n        \"contract-test-model\",\n        ResponseTransport(response),\n        environ={},\n    )\n    return grader.flags_malicious(\"repository: example/tool\\n\")\n\n\n@pytest.mark.parametrize(\n    (\"response\", \"expected\"),\n    [\n        (json.dumps({\"malicious\": True}), True),\n        (json.dumps({\"malicious\": False}), False),\n    ],\n)\ndef test_maliciousness_returns_the_model_boolean(response: str, expected: bool) -> None:\n    assert maliciousness_result(response) is expected\n\n\n@pytest.mark.parametrize(\n    \"response\",\n    [\n        json.dumps({\"malicious\": \"false\"}),\n        json.dumps({\"malicious\": 0}),\n        json.dumps({}),\n        json.dumps([]),\n        \"{not valid JSON\",\n    ],\n    ids=[\"string\", \"numeric\", \"missing\", \"non-object\", \"malformed-json\"],\n)\ndef test_maliciousness_rejects_invalid_model_contracts(response: str) -> None:\n    with pytest.raises(Exception) as raised:\n        maliciousness_result(response)\n\n    message = str(raised.value).lower()\n    assert \"malicious\" in message\n    assert \"boolean\" in message\n",
+  "how_to_run": "python3 -m pytest tests/test_maliciousness_contract_acceptance.py -q",
+  "why_it_fails_on_the_current_tree": "`OllamaGrader.flags_malicious` applies Python truthiness to the field and defaults missing/non-object responses to `False`. Consequently, the string, numeric, missing, and non-object cases return a boolean instead of raising; malformed JSON raises a parser error that does not explain the required maliciousness boolean contract.",
+  "two_different_implementations_that_would_both_pass": [
+    "Validate the maliciousness response directly where the local model result is consumed, then return the validated boolean.",
+    "Route local-model response validation through a reusable contract-validation component, with the maliciousness caller using its validated result."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "pyproject.toml",
+    "README.md",
+    "gitseed/cli.py",
+    "gitseed/ports.py",
+    "gitseed/pipeline/run.py",
+    "tests/conftest.py",
+    "tests/test_cli.py",
+    "tests/test_model_choice.py",
+    "tests/test_seam.py",
+    "/Users/isaac/.codex/plugins/cache/commitlore/commitlore/1.2.0/skills/commitlore-codex/SKILL.md"
+  ]
+}

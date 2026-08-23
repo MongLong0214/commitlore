@@ -1,0 +1,11 @@
+{
+  "study_id": "cdeb-fresh-v6",
+  "phase": "stage1-hold",
+  "measured_run_allowed": false,
+  "updated_at": "2026-08-24T02:10:00Z",
+  "successor_required": false,
+  "verdict": "TERMINAL_HOLD_FINAL",
+  "state_machine_position": "TERMINAL_HOLD_FINAL",
+  "product_effect_rows": 0,
+  "verdict_basis": "buildability/validation-report.json: 17 of 34 source decisions are TASK_BUILDABLE, 8 in agent-operator-score and 9 in gitseed, against registered floors of 10 per repository and 22 in total. The floors were fixed in PREREGISTRATION.md while the study held zero tasks."
+}

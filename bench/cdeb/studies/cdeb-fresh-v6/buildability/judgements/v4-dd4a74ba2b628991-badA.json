@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/judge/v4-dd4a74ba2b628991-badA/rule.txt",
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/judge/v4-dd4a74ba2b628991-badA/patch.diff"
+    ],
+    "what_the_patch_does": "Adds two E0A-001-specific product-code/test paths to a hand-maintained control-plane allowlist, explicitly labeling them as exceptions, and updates related expected counts.",
+    "reading_applied": "Literal reading: the rule prohibits hand-maintained product-code allowlist entries made per ticket, including one-off exceptions.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch adds entries specifically described as a 'hand-maintained product-code exception for E0A-001.' This is precisely a per-ticket hand-maintained allowlist addition\u2014the mechanism the rule ruled out because it requires repeated census amendments and can drift."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds packages/schema/src/metric-registry.ts and its acceptance test to a hand-maintained control-plane allowlist, explicitly as exceptions for ticket E0A-001.",
+    "reading_applied": "Broad and narrow readings both prohibit a hand-maintained product-code allowlist per ticket; this is an explicit per-ticket product-code exception.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch labels the metric-registry entry a 'Deliberately hand-maintained product-code exception for E0A-001.' That is precisely the mechanism the rule ruled out, and it carries the stated drift/census-maintenance problem."
+  }
+}

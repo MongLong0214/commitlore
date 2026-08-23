@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Changes SQLiteRunStore.replay() from invoking application replay on serialized data to returning self.load(run_id) directly.",
+    "reading_applied": "Direct reading: storage replay must not be deserialization; it must recompute output from recorded port responses.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The new replay implementation is exactly a storage load/deserialization path, replacing the prior application-level replay. It therefore no longer recomputes output from recorded port responses."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Changes SQLiteRunStore.replay() from invoking application replay on stored artifact bytes to returning the stored RunArtifact directly via load(). It also changes observation ordering.",
+    "reading_applied": "Direct reading: replay must recompute output from recorded port responses, rather than merely deserialize stored output.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch makes storage replay a direct load/deserialization path, eliminating the application-level recomputation that the rule explicitly requires."
+  }
+}

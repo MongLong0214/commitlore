@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v6",
+  "document_id": "cdeb-fresh-v6-acceptance-base-verification",
+  "status": "measured",
+  "measured_run_allowed": false,
+  "why": "Every authored acceptance claims to fail on the tree as it stands. That is a claim, and the seven v5 verdicts voided last week were all prose about runs nobody re-ran. Each test was written into a fresh copy of the frozen tree and executed.",
+  "outcomes": {
+    "FAILS_AS_EXPECTED": 30,
+    "PASSES_ON_BASE": 3
+  },
+  "three_outcomes_not_two": "A test that errors is not a test that failed. Counting an import error as 'fails on base' would let a broken test file certify a candidate, so DOES_NOT_RUN is separate from PASSES_ON_BASE and from FAILS_AS_EXPECTED. None of the 33 errored.",
+  "runs": [
+    {
+      "candidate_id": "v4-002ffd1e428c572a",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+      "command": "node --test packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "The current validator accepts every filled locator unless it contains one of the runtime\u2019s forbidden phrases. The test locator is nonempty and contains none of those phrases, so each mutated matrix is currently accepted."
+    },
+    {
+      "candidate_id": "v4-00efc0041ed3118a",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_smoke_model_consistency_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_smoke_model_consistency_acceptance.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "`run_smoke()` records `repeats[0].model`, while `_check_determinism()` compares only `idea` and `skill`. The acceptance client keeps those scores stable, so the current tree returns a passing result despite the fifth repeated evaluation reporting `replacement-grader:2`."
+    },
+    {
+      "candidate_id": "v4-04c1de5e41d66868",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "tmp/aos-planning-digest-history-free.acceptance.test.mjs",
+      "command": "node --test tmp/aos-planning-digest-history-free.acceptance.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 1,
+      "author_claim": "The focused regression invokes `git clone --no-local` using the working copy as its source. Because this working copy has no Git metadata, fixture creation fails before the ADR mutation and stale-digest assertion run."
+    },
+    {
+      "candidate_id": "v4-0bc581744204a282",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "tests/planning/runtime-baseline-contract.test.mjs",
+      "command": "node --test tests/planning/runtime-baseline-contract.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "The SSOT, ADR-0003, and PRD-D0 each declare `>=20 <25`, while `package.json`, the root lockfile record, and CI publish `>=22.18 <25` with only Node 22/24 lanes. The test fails at the manifest-versus-authority assertion."
+    },
+    {
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_custom_evidence_reader_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_custom_evidence_reader_acceptance.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "execute() selects packs without validating them against the injected reader, so the unsupported `mcp` run starts calling ports instead of raising. Its missing-file and reader-exception paths call the global `absent_evidence()`, which produces the default names (`files`, `manifest_entries`, `dependen"
+    },
+    {
+      "candidate_id": "v4-12b0486cd77dd3a9",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "packages/schema/test/issuance-contract-nested-shapes.acceptance.test.ts",
+      "command": "node --test packages/schema/test/issuance-contract-nested-shapes.acceptance.test.ts",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 2,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "The current validator ignores extra fields on candidate entries, expected verdicts, safety, and trace-integrity maps; accepts non-string event and invalidator items; and converts malformed safety, event, integrity, and invalidator values into ordinary gate failures. For example, an unknown safety st"
+    },
+    {
+      "candidate_id": "v4-1438614686129e44",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_storage_replay_contract.py",
+      "command": "python3 -m pytest -q tests/test_storage_replay_contract.py",
+      "exit_code": 0,
+      "outcome": "PASSES_ON_BASE",
+      "detail": {
+        "failed": 0,
+        "passed": 4
+      },
+      "seconds": 37,
+      "author_claim": "No behavior-only acceptance test can truthfully fail on the current tree for this maintenance need. `SQLiteRunStore.replay()` already delegates to `application.replay()`, which already performs the engine check and full-source validation without writing the stored row. The supplied functional test w"
+    },
+    {
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "tests/epic-dependency-normalization.acceptance.test.mjs",
+      "command": "node --test tests/epic-dependency-normalization.acceptance.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "The generated E0B-001, E0C-001, and E0D-001 board rows all display `None`, so their direct dependency assertions fail. The renderer check currently passes only because the catalog and ticket contracts consistently contain the same incorrect empty lists."
+    },
+    {
+      "candidate_id": "v4-377f04276465b59d",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_ci_action_pinning.py",
+      "command": "python3 -m pytest -q tests/test_ci_action_pinning.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "The discovered `test` job resolves `actions/checkout` as `@v4` and `actions/setup-python` as `@v5`; neither is a 40-character commit SHA and neither has an inline release-version comment."
+    },
+    {
+      "candidate_id": "v4-4b7ef509f0403505",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "tests/planning/node-version-contract.test.mjs",
+      "command": "node --test tests/planning/node-version-contract.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "It fails because the SSOT, ADR-0003, and D0 PRD still publish the old `>=20 <25` contract, although `package.json` and CI already use Node 22.18\u201324."
+    },
+    {
+      "candidate_id": "v4-77e1745655a235ce",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_category_manifest_evidence.py",
+      "command": "python3 -m pytest -q tests/test_category_manifest_evidence.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 5,
+        "passed": 5
+      },
+      "seconds": 0,
+      "author_claim": "`FileEvidenceReader` concatenates each supported manifest's raw lowercase text and uses substring containment. Every near-miss fixture therefore incorrectly emits both signals because its comments, prose, or longer package names contain `mcp` and `ollama`."
+    },
+    {
+      "candidate_id": "v4-7bdc1c42597e48a6",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_storage_migration_atomicity.py",
+      "command": "python3 -m pytest -q tests/test_storage_migration_atomicity.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "The first migration creates `run_artifacts` and its triggers, then version 1 is recorded. When the authorizer rejects creation of the version-2 table, `executescript()` has already committed work outside the surrounding rollback scope. The test consequently finds schema objects and `user_version = 1"
+    },
+    {
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_correction_point_lookup_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_correction_point_lookup_acceptance.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 35,
+      "author_claim": "`SQLiteRunStore.load()` returns only `RunArtifact`, `replay()` also returns an artifact, and `history()` is the only public operation returning `StoredRun` but is not a single-run lookup. The acceptance test therefore finds no public point lookup that returns `StoredRun`."
+    },
+    {
+      "candidate_id": "v4-8ab61d73c22d675b",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_maliciousness_contract_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_maliciousness_contract_acceptance.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 5,
+        "passed": 2
+      },
+      "seconds": 0,
+      "author_claim": "`OllamaGrader.flags_malicious` applies Python truthiness to the field and defaults missing/non-object responses to `False`. Consequently, the string, numeric, missing, and non-object cases return a boolean instead of raising; malformed JSON raises a parser error that does not explain the required ma"
+    },
+    {
+      "candidate_id": "v4-8f24735524874167",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "tests/acceptance/schema-doctor-lane.test.mjs",
+      "command": "node --test tests/acceptance/schema-doctor-lane.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 1,
+      "author_claim": "The focused command emits `[MODULE_TYPELESS_PACKAGE_JSON]` for the schema TypeScript test files, including `doctor-contract.test.ts`, because the schema workspace has no module-type declaration."
+    },
+    {
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_collect_paging_validation_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_collect_paging_validation_acceptance.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 5,
+        "passed": 2
+      },
+      "seconds": 0,
+      "author_claim": "Currently `pages=0` and negative page counts return a successful empty result without calling the transport. Invalid `per_page` values, including `101`, issue a request instead of raising `ValueError`, so the first parametrized test fails."
+    },
+    {
+      "candidate_id": "v4-9b42b1951da730e1",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "packages/schema/test/metric-registry.contract-fields.acceptance.test.ts",
+      "command": "node --test packages/schema/test/metric-registry.contract-fields.acceptance.test.ts",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "The current validator accepts registries with missing, malformed, or changed `registry_id` and `source_contract`. It also turns malformed `route_tables` and `frontiers` into empty objects, so resulting errors describe missing referenced routes/frontiers rather than the malformed root field. The acce"
+    },
+    {
+      "candidate_id": "v4-b291655fbfd2003b",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_category_pack_name_uniqueness_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_category_pack_name_uniqueness_acceptance.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "With two configured packs named `duplicate-name`, `selected_packs((\"duplicate-name\",))` currently returns both versions instead of rejecting the ambiguous request."
+    },
+    {
+      "candidate_id": "v4-bed5fc386048e412",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "tests/operational-authority-phase-scoping.acceptance.test.mjs",
+      "command": "node --test tests/operational-authority-phase-scoping.acceptance.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "`operational_authority` has one unconditional candidate-check array. It contains no explicit Bootstrap candidate-check set, so the test fails at the catalog-policy assertion before exercising the resolver scenarios."
+    },
+    {
+      "candidate_id": "v4-c15e92a3b1a755d4",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "tests/planning/d0-010-runtime-contract.acceptance.test.mjs",
+      "command": "node --test tests/planning/d0-010-runtime-contract.acceptance.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "The canonical catalog has no D0-010 record, so the test fails at the required single-record assertion. The resolver CLI also reports `unknown ticket D0-010` when asked for it."
+    },
+    {
+      "candidate_id": "v4-c20a082f262f21c8",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "packages/schema/test/doctor-contract.test.ts",
+      "command": "node --test packages/schema/test/doctor-contract.test.ts",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "`readCorpusText` calls `readFileSync` for every directory entry. The temporary directory entry raises `EISDIR` (and the dangling symlink would raise `ENOENT`) before `corpusOf` and `validateDoctorOutput` run, so no named corpus failure is returned."
+    },
+    {
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "packages/schema/test/capability-derivation-proof.acceptance.test.ts",
+      "command": "node --test packages/schema/test/capability-derivation-proof.acceptance.test.ts",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 0,
+      "author_claim": "The current validator treats every non-filled value as an unavailable derived proof. Once the test honestly changes the cell status and coverage to `UNAVAILABLE`, numbers, objects, and arrays produce no validation error, so the matrix is accepted."
+    },
+    {
+      "candidate_id": "v4-c976dc2332d4adab",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_external_action_journal.py",
+      "command": "python3 -m pytest -q tests/test_external_action_journal.py",
+      "exit_code": 0,
+      "outcome": "PASSES_ON_BASE",
+      "detail": {
+        "failed": 0,
+        "passed": 2
+      },
+      "seconds": 1,
+      "author_claim": "For a `both` approval, the current workflow calls `star` and `follow` inside one `perform()` call, then persists outcomes only after both calls return. The second callback therefore observes no new durable record after the first call. When `follow` fails, the prior successful `star` is not recorded "
+    },
+    {
+      "candidate_id": "v4-cadfb63755c3f504",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_pipeline_collection_rate_limit.py",
+      "command": "python3 -m pytest -q tests/test_pipeline_collection_rate_limit.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "run() records an incomplete collection but initializes rate_limited to false and only updates it for file-fetch failures or incomplete file-fetch results. The supplied collection stop reason therefore produces a PipelineResult with rate_limited == False."
+    },
+    {
+      "candidate_id": "v4-cc76268ad4bb9a3e",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "tests/planning/fixture-directory-census-ordering.acceptance.test.mjs",
+      "command": "node --test tests/planning/fixture-directory-census-ordering.acceptance.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 12,
+        "failed": 2
+      },
+      "seconds": 6,
+      "author_claim": "The current census returns only `admitted` and `malformed`; it exposes no catalog-path, declaration, or captured-directory lists. It also processes `catalogTicketPaths` in caller order and appends malformed diagnostics in that order. Although admitted files are currently sorted, the proposed test fa"
+    },
+    {
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "packages/schema/test/capability-validation-result.acceptance.test.ts",
+      "command": "node --test packages/schema/test/capability-validation-result.acceptance.test.ts",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 2,
+        "failed": 2
+      },
+      "seconds": 0,
+      "author_claim": "Invalid results currently retain `rows`, `required_event_groups`, and `coverage`. Also, `ok` is typed as `boolean` and `rows` as `CapabilityRow[]` for every result, so the type probe reports unused `@ts-expect-error` directives instead of rejecting unsafe access in the invalid branch."
+    },
+    {
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "packages/schema/test/metric-registry-envelope.acceptance.test.ts",
+      "command": "node --test packages/schema/test/metric-registry-envelope.acceptance.test.ts",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 9,
+        "failed": 7
+      },
+      "seconds": 0,
+      "author_claim": "The current validator returns `ok: true` after deleting or changing `registry_id` or `source_contract`, and after adding, duplicating, or making a consumer non-string. It only rejects an empty consumer array; downstream route checks happen to reject a removed required consumer."
+    },
+    {
+      "candidate_id": "v4-df6bfd03300910e2",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_cli_category_evidence_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_cli_category_evidence_acceptance.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "`_category_label` in `gitseed/cli.py` converts every category with no assigned name\u2014including an ABSENT result\u2014into `<pack>: uncategorized (<basis>)`. Radar table output, radar JSON, and explain all use that label, so unavailable evidence is currently rendered as `coding-agents: uncategorized (absen"
+    },
+    {
+      "candidate_id": "v4-e7587b2b65750306",
+      "repository_id": "agent-operator-score",
+      "rank": 1,
+      "acceptance_test_path": "packages/schema/test/metric-definition.public-contract.test.mjs",
+      "command": "node --test packages/schema/test/metric-definition.public-contract.test.mjs",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "tests": 1,
+        "failed": 1
+      },
+      "seconds": 1,
+      "author_claim": "The compiler reports TS2551 because `MetricDefinition` omits `observation_key`, including at the validator\u2019s existing uses of that property. The independent public consumer also cannot type-check its required string read."
+    },
+    {
+      "candidate_id": "v4-ed4039b8a411ee62",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_m0_recursive_tree_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_m0_recursive_tree_acceptance.py",
+      "exit_code": 0,
+      "outcome": "PASSES_ON_BASE",
+      "detail": {
+        "failed": 0,
+        "passed": 1
+      },
+      "seconds": 0,
+      "author_claim": "The current historical-tree lookup returns only the root entries `.github` and `packages`. Neither exposes the nested workflow path or the nested `tests` component, so both asserted feature values are false."
+    },
+    {
+      "candidate_id": "v4-ed878960135ff45a",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_observation_ordering_acceptance.py",
+      "command": "python3 -m pytest -q tests/test_observation_ordering_acceptance.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "The current public result follows save sequence because `observations()` orders by generated observation ID. This test saves newest first and oldest last, so it currently returns `newest`, the two tied observations, then `oldest`, rather than chronological order."
+    },
+    {
+      "candidate_id": "v4-f3c960a48273132c",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_evidence_reader_fallback.py",
+      "command": "python3 -m pytest -q tests/test_evidence_reader_fallback.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "On extraction failure, `execute()` calls `absent_evidence()` without reference to the injected reader. That function uses the default reader, so the artifact contains `files`, `manifest_entries`, `dependencies`, and `source` instead of `domain_status` and `dependency_graph`."
+    },
+    {
+      "candidate_id": "v4-f901052615fa3aee",
+      "repository_id": "gitseed",
+      "rank": 1,
+      "acceptance_test_path": "tests/test_bounded_storage_reads.py",
+      "command": "python3 -m pytest -q tests/test_bounded_storage_reads.py",
+      "exit_code": 1,
+      "outcome": "FAILS_AS_EXPECTED",
+      "detail": {
+        "failed": 1,
+        "passed": 0
+      },
+      "seconds": 0,
+      "author_claim": "Both current methods have no `limit` parameter. The acceptance test therefore fails at `store.history(limit=2)` with `TypeError: history() got an unexpected keyword argument 'limit'`. I confirmed that behavior with an in-memory store. The full pytest suite could not be run in this read-only sandbox "
+    }
+  ]
+}

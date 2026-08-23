@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Changes grading-failure handling from continuing with the next candidate to breaking out of remaining candidate processing; it also updates the docstring to state that behavior.",
+    "reading_applied": "Direct/plain reading: a grading failure must not end the run, because doing so discards candidates already screened.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The rule explicitly rules out letting a grading failure end the run. The patch replaces `continue` with `break` in the grading-failure path, so later candidates are no longer processed."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Changes grading-failure handling from continuing with later candidates to breaking out of remaining candidate processing.",
+    "reading_applied": "Plain/direct reading: a grading failure must not end the run; it should be recorded against that candidate while processing continues.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch explicitly makes a grading failure end remaining candidate processing (`continue` becomes `break`) and updates the docstring to say so. That is the behavior the rule expressly ruled out."
+  }
+}

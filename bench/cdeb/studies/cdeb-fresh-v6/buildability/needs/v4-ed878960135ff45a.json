@@ -1,0 +1,97 @@
+{
+  "candidate_id": "v4-ed878960135ff45a",
+  "scout_files_read": [
+    "gitseed/storage.py",
+    "tests/test_storage.py"
+  ],
+  "needs": [
+    {
+      "title": "Make saving a run and its observations recoverable as one unit",
+      "what_is_missing_or_wrong": "`save()` commits the immutable artifact before writing derived observations. If the second write fails, it raises `ObservationWriteError`, but retrying `save()` will fail on the existing run ID, leaving that run permanently absent from the observation history. Make the operation atomic, or add an idempotent repair/retry path for observations.",
+      "what_done_would_look_like": "A forced observation-insert failure leaves no saved artifact, or a documented retry safely completes the missing observations; tests cover that failure and recovery behavior.",
+      "tree_evidence": [
+        "gitseed/storage.py:59-64 commits `run_artifacts` before the observation write begins.",
+        "gitseed/storage.py:65-77 performs the observation write separately and raises after its failure.",
+        "tests/test_storage.py:173-188 covers successful appends only; it does not cover a failed derived-observation write."
+      ],
+      "distinct_from_others_because": "This concerns atomicity and recoverability when persistence partially fails."
+    },
+    {
+      "title": "Reject a run that claims to correct itself",
+      "what_is_missing_or_wrong": "The store accepts `corrects_run_id` without checking that it differs from `run_id`. A self-referential correction is meaningless lineage and is not prevented by the visible API.",
+      "what_done_would_look_like": "Saving with identical `run_id` and `corrects_run_id` raises a clear validation or integrity error, while valid corrections of earlier runs continue to work.",
+      "tree_evidence": [
+        "gitseed/storage.py:53-64 passes `corrects_run_id` directly into the insert with no self-reference check.",
+        "tests/test_storage.py:154-166 tests a valid correction and a missing parent, but not self-correction."
+      ],
+      "distinct_from_others_because": "This is correction-lineage validation, independent of write-failure handling."
+    },
+    {
+      "title": "Return observations in chronological order rather than insertion order",
+      "what_is_missing_or_wrong": "`observations()` orders by generated `observation_id`, so importing or saving an older artifact after a newer one produces a time series out of order even though each observation exposes `observed_at`. Order results by recorded observation time, with a deterministic tie-breaker.",
+      "what_done_would_look_like": "Observations are returned oldest-to-newest by `observed_at` (and consistently ordered for equal timestamps), with a test that saves runs out of timestamp order.",
+      "tree_evidence": [
+        "gitseed/storage.py:95-105 exposes `observed_at` but queries `ORDER BY observation_id`.",
+        "tests/test_storage.py:173-188 only saves timestamps in increasing order, so it cannot establish chronological behavior for backfilled runs."
+      ],
+      "distinct_from_others_because": "This concerns the read interface and time-series ordering, not write atomicity or lineage validity."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-ed878960135ff45a",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "1835178f8f5e8e2a8f7772db4b5b6890f623b9261e9e3006f73326d44ee3fd99",
+        "need_hash": "13427204e3c78b167a38b13d3b0937dd6686933f645b83e8c9fd80eb0f203acd",
+        "need": {
+          "title": "Return observations in chronological order rather than insertion order",
+          "what_is_missing_or_wrong": "`observations()` orders by generated `observation_id`, so importing or saving an older artifact after a newer one produces a time series out of order even though each observation exposes `observed_at`. Order results by recorded observation time, with a deterministic tie-breaker.",
+          "what_done_would_look_like": "Observations are returned oldest-to-newest by `observed_at` (and consistently ordered for equal timestamps), with a test that saves runs out of timestamp order.",
+          "tree_evidence": [
+            "gitseed/storage.py:95-105 exposes `observed_at` but queries `ORDER BY observation_id`.",
+            "tests/test_storage.py:173-188 only saves timestamps in increasing order, so it cannot establish chronological behavior for backfilled runs."
+          ],
+          "distinct_from_others_because": "This concerns the read interface and time-series ordering, not write atomicity or lineage validity."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "278d4843cfc4ac99d9250b0c7e9d7846bc207f95262fb483a6beb32ab33a66f0",
+        "need_hash": "3c387ac510aa04141511af2362ff5c2d79d140fbde50c87b50138e8c41051137",
+        "need": {
+          "title": "Make saving a run and its observations recoverable as one unit",
+          "what_is_missing_or_wrong": "`save()` commits the immutable artifact before writing derived observations. If the second write fails, it raises `ObservationWriteError`, but retrying `save()` will fail on the existing run ID, leaving that run permanently absent from the observation history. Make the operation atomic, or add an idempotent repair/retry path for observations.",
+          "what_done_would_look_like": "A forced observation-insert failure leaves no saved artifact, or a documented retry safely completes the missing observations; tests cover that failure and recovery behavior.",
+          "tree_evidence": [
+            "gitseed/storage.py:59-64 commits `run_artifacts` before the observation write begins.",
+            "gitseed/storage.py:65-77 performs the observation write separately and raises after its failure.",
+            "tests/test_storage.py:173-188 covers successful appends only; it does not cover a failed derived-observation write."
+          ],
+          "distinct_from_others_because": "This concerns atomicity and recoverability when persistence partially fails."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "fffe17c9f4c2ef505b4f8a19df36232544ab48af05018dbb8d7a8baafe86da60",
+        "need_hash": "63456fd71fbad3229d02c7238d63ac0330ba988aacb07526e0a729e4b43ecc7e",
+        "need": {
+          "title": "Reject a run that claims to correct itself",
+          "what_is_missing_or_wrong": "The store accepts `corrects_run_id` without checking that it differs from `run_id`. A self-referential correction is meaningless lineage and is not prevented by the visible API.",
+          "what_done_would_look_like": "Saving with identical `run_id` and `corrects_run_id` raises a clear validation or integrity error, while valid corrections of earlier runs continue to work.",
+          "tree_evidence": [
+            "gitseed/storage.py:53-64 passes `corrects_run_id` directly into the insert with no self-reference check.",
+            "tests/test_storage.py:154-166 tests a valid correction and a missing parent, but not self-correction."
+          ],
+          "distinct_from_others_because": "This is correction-lineage validation, independent of write-failure handling."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

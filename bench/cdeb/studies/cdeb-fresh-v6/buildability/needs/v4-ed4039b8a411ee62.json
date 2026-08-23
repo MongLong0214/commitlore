@@ -1,0 +1,113 @@
+{
+  "candidate_id": "v4-ed4039b8a411ee62",
+  "scout_files_read": [
+    "docs/M0-VERDICT.md",
+    "gitseed/m0.py",
+    "scripts/m0_analyze.py",
+    "scripts/m0_collect.py",
+    "tests/fixtures/m0/analysis.json",
+    "tests/fixtures/m0/samples.json",
+    "tests/fixtures/m0/search-responses.json",
+    "tests/test_m0.py"
+  ],
+  "needs": [
+    {
+      "title": "Traverse historical trees recursively when detecting CI and test paths",
+      "what_is_missing_or_wrong": "The feature collector lists only top-level tree entries, so nested paths such as `.github/workflows/ci.yml` cannot satisfy the GitHub Actions predicate; nested test directories are similarly not reliably inspected.",
+      "what_done_would_look_like": "Use recursive tree enumeration (or an equivalent path-aware approach) and add regression assertions that a cutoff containing `.github/workflows/ci.yml` sets `has_ci`, while nested test paths are detected. Regenerate or validate the fixture if feature values change.",
+      "tree_evidence": [
+        "gitseed/m0.py:92-96 invokes `git ls-tree` without `-r`.",
+        "gitseed/m0.py:114-119 tests for path components and specifically `.github/workflows/`, which require recursive paths.",
+        "tests/test_m0.py:38-39 creates nested test and workflow files, but tests/test_m0.py:47-52 asserts only `has_tests`; it never verifies `has_ci`.",
+        "tests/fixtures/m0/samples.json:6-14 contains records with `has_ci: true`, making this an observable inconsistency to protect."
+      ],
+      "distinct_from_others_because": "This fixes the correctness of historical feature measurement, rather than collection completeness or analysis regression coverage."
+    },
+    {
+      "title": "Mark a collection incomplete when cross-category deduplication leaves fewer than 40 selections per category",
+      "what_is_missing_or_wrong": "The collector de-duplicates repository names across all queries but only checks each raw search response has 40 items. If topic queries overlap, a later category can contribute fewer than 40 selected repositories while `collection_complete` remains true.",
+      "what_done_would_look_like": "Track accepted selections by category after deduplication and append a clear incomplete reason whenever a category has fewer than 40 retained repositories (or define and preserve an explicit replacement policy). Add a fixture-driven test with overlapping query results.",
+      "tree_evidence": [
+        "scripts/m0_collect.py:70-72 initializes one global `seen` set for all categories.",
+        "scripts/m0_collect.py:88-95 checks raw item count, then silently skips an item already in `seen`.",
+        "scripts/m0_collect.py:127-130 derives `collection_complete` solely from `incomplete_reasons` and records only the deduplicated `selected_count`.",
+        "docs/M0-VERDICT.md:9-10 defines the intended sample as 40 repositories from each of three queries."
+      ],
+      "distinct_from_others_because": "This concerns whether a network collection meets its sampling contract, independent of feature extraction and offline analysis."
+    },
+    {
+      "title": "Turn the committed analysis result into a golden regression test",
+      "what_is_missing_or_wrong": "The test proves repeated executions return the same result, but never checks that the result equals the committed `analysis.json` or the documented AUC and verdict. A deterministic but incorrect calculation would pass.",
+      "what_done_would_look_like": "Load `tests/fixtures/m0/analysis.json` in a test and assert the complete normalized analysis result\u2014sample and breakout counts, AUC, threshold verdict, and per-feature contributions\u2014matches it; ideally exercise the CLI serialization as well.",
+      "tree_evidence": [
+        "tests/test_m0.py:55-72 loads only `samples.json` and asserts equality among three runs of the same calculation.",
+        "tests/fixtures/m0/analysis.json:1 stores the expected analysis output.",
+        "scripts/m0_analyze.py:31-46 defines the published JSON contract.",
+        "docs/M0-VERDICT.md:34-41 presents the fixed AUC and pass verdict as the recorded result."
+      ],
+      "distinct_from_others_because": "This adds correctness protection for the published offline result, rather than changing how samples are collected or features are computed."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-ed4039b8a411ee62",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "112146277ff9dd718f7d80c147276882eecd538e999bfd52265cf90274dbe193",
+        "need_hash": "ef24e6d16be0d9ea6bd30357189638a52882ec1e6f8451b3fe8b4a272f820e43",
+        "need": {
+          "title": "Traverse historical trees recursively when detecting CI and test paths",
+          "what_is_missing_or_wrong": "The feature collector lists only top-level tree entries, so nested paths such as `.github/workflows/ci.yml` cannot satisfy the GitHub Actions predicate; nested test directories are similarly not reliably inspected.",
+          "what_done_would_look_like": "Use recursive tree enumeration (or an equivalent path-aware approach) and add regression assertions that a cutoff containing `.github/workflows/ci.yml` sets `has_ci`, while nested test paths are detected. Regenerate or validate the fixture if feature values change.",
+          "tree_evidence": [
+            "gitseed/m0.py:92-96 invokes `git ls-tree` without `-r`.",
+            "gitseed/m0.py:114-119 tests for path components and specifically `.github/workflows/`, which require recursive paths.",
+            "tests/test_m0.py:38-39 creates nested test and workflow files, but tests/test_m0.py:47-52 asserts only `has_tests`; it never verifies `has_ci`.",
+            "tests/fixtures/m0/samples.json:6-14 contains records with `has_ci: true`, making this an observable inconsistency to protect."
+          ],
+          "distinct_from_others_because": "This fixes the correctness of historical feature measurement, rather than collection completeness or analysis regression coverage."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "43da9d7e0200b10d629715b3e68a1674a7293df414d40909d38c1b36c8453855",
+        "need_hash": "bed3a13f93e40e2f0ebafa5c022d6a2659e9b403b19ca45f420f0081b38bbb66",
+        "need": {
+          "title": "Turn the committed analysis result into a golden regression test",
+          "what_is_missing_or_wrong": "The test proves repeated executions return the same result, but never checks that the result equals the committed `analysis.json` or the documented AUC and verdict. A deterministic but incorrect calculation would pass.",
+          "what_done_would_look_like": "Load `tests/fixtures/m0/analysis.json` in a test and assert the complete normalized analysis result\u2014sample and breakout counts, AUC, threshold verdict, and per-feature contributions\u2014matches it; ideally exercise the CLI serialization as well.",
+          "tree_evidence": [
+            "tests/test_m0.py:55-72 loads only `samples.json` and asserts equality among three runs of the same calculation.",
+            "tests/fixtures/m0/analysis.json:1 stores the expected analysis output.",
+            "scripts/m0_analyze.py:31-46 defines the published JSON contract.",
+            "docs/M0-VERDICT.md:34-41 presents the fixed AUC and pass verdict as the recorded result."
+          ],
+          "distinct_from_others_because": "This adds correctness protection for the published offline result, rather than changing how samples are collected or features are computed."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "a4f356b19b0a9ba7192632a71f0b70e5dd21e4e51b395046a5cd9d7527986d80",
+        "need_hash": "0f54bcce476445daaffe108d5270f6afa332ae99477d68ef1e9a0d8a8f74e0a7",
+        "need": {
+          "title": "Mark a collection incomplete when cross-category deduplication leaves fewer than 40 selections per category",
+          "what_is_missing_or_wrong": "The collector de-duplicates repository names across all queries but only checks each raw search response has 40 items. If topic queries overlap, a later category can contribute fewer than 40 selected repositories while `collection_complete` remains true.",
+          "what_done_would_look_like": "Track accepted selections by category after deduplication and append a clear incomplete reason whenever a category has fewer than 40 retained repositories (or define and preserve an explicit replacement policy). Add a fixture-driven test with overlapping query results.",
+          "tree_evidence": [
+            "scripts/m0_collect.py:70-72 initializes one global `seen` set for all categories.",
+            "scripts/m0_collect.py:88-95 checks raw item count, then silently skips an item already in `seen`.",
+            "scripts/m0_collect.py:127-130 derives `collection_complete` solely from `incomplete_reasons` and records only the deduplicated `selected_count`.",
+            "docs/M0-VERDICT.md:9-10 defines the intended sample as 40 repositories from each of three queries."
+          ],
+          "distinct_from_others_because": "This concerns whether a network collection meets its sampling contract, independent of feature extraction and offline analysis."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

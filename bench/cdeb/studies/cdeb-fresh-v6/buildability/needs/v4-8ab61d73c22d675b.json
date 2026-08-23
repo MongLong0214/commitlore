@@ -1,0 +1,105 @@
+{
+  "candidate_id": "v4-8ab61d73c22d675b",
+  "scout_files_read": [
+    "gitseed/application.py",
+    "gitseed/cli.py",
+    "gitseed/pipeline/run.py",
+    "tests/test_cli.py",
+    "tests/test_model_choice.py",
+    "tests/test_seam.py"
+  ],
+  "needs": [
+    {
+      "title": "Make capped GitHub source selection deterministic",
+      "what_is_missing_or_wrong": "Live GitHub tree entries are consumed in response order. Since selection stops at file and byte caps, identical repository contents can yield different scanned files, model digests, risk results, and artifacts when the API\u2019s entry order differs.",
+      "what_done_would_look_like": "Order priority and regular eligible paths deterministically before applying budgets and fetching blobs; add a regression test proving shuffled equivalent tree listings select the same files and produce the same review evidence.",
+      "tree_evidence": [
+        "gitseed/cli.py:295-336 appends candidates in raw tree iteration order and applies the total-byte and regular-file-count caps in that order.",
+        "gitseed/pipeline/run.py:313-416 embeds the selected file order and contents directly in the model digest.",
+        "tests/test_cli.py:759-772 tests the caps for one listing order, while tests/test_cli.py:933-961 tests a priority file ordered last but not ordering stability across equivalent listings."
+      ],
+      "distinct_from_others_because": "This concerns reproducibility and coverage integrity of live repository scanning, rather than command validation or model-response handling."
+    },
+    {
+      "title": "Reject all incompatible options when showing run history",
+      "what_is_missing_or_wrong": "`--history` claims it cannot be combined with run options, but its guard omits several run-only flags. For example, `--fixtures`, `--category`, `--source-mode`, `--dry-run`, and `--approve-all` are silently accepted and ignored.",
+      "what_done_would_look_like": "Define the complete allowed argument set for history mode, reject every other run-specific option with a clear invalid-invocation message, and cover representative omitted flags in CLI tests.",
+      "tree_evidence": [
+        "gitseed/cli.py:516-541 defines the run-specific options, including category, fixtures, source retention, approval, and dry-run controls.",
+        "gitseed/cli.py:920-924 checks only query, render, artifact, run_id, and corrects before executing history.",
+        "tests/test_cli.py:116-146 exercises a valid history invocation but does not cover conflicting run-only flags."
+      ],
+      "distinct_from_others_because": "This is a CLI-interface correctness issue: it prevents user-supplied options from being silently discarded."
+    },
+    {
+      "title": "Validate the model\u2019s maliciousness response as a real boolean",
+      "what_is_missing_or_wrong": "The maliciousness path coerces arbitrary JSON values with `bool()`: a model response such as `{\"malicious\":\"false\"}` is treated as malicious, while a missing field is treated as safe. That makes the security gate depend on Python truthiness instead of the requested JSON contract.",
+      "what_done_would_look_like": "Require a JSON object containing an actual boolean `malicious` field; reject malformed, missing, or wrong-typed values with an actionable model-contract error, with tests for string, numeric, and missing values.",
+      "tree_evidence": [
+        "gitseed/cli.py:464-466 requests a boolean but returns `bool(result.get(\"malicious\", False))` without validating the response shape or type.",
+        "tests/test_model_choice.py:127-157 verifies the bounded request contract for the maliciousness call, but supplies only a valid `false` boolean response.",
+        "tests/test_seam.py:47-52 uses a deterministic boolean implementation, so the application seam does not cover malformed model boolean outputs."
+      ],
+      "distinct_from_others_because": "This is a fail-closed security-contract issue in model output interpretation, independent of source ordering and CLI option validation."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-8ab61d73c22d675b",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "00f80168bca40e2d00416452f4e88d60d5870e939c9bb34af8c8075c3d370ffc",
+        "need_hash": "bfab92b58de0c654c486747aafe332f98de1acffd9a79faee23f5ef7f54b8deb",
+        "need": {
+          "title": "Validate the model\u2019s maliciousness response as a real boolean",
+          "what_is_missing_or_wrong": "The maliciousness path coerces arbitrary JSON values with `bool()`: a model response such as `{\"malicious\":\"false\"}` is treated as malicious, while a missing field is treated as safe. That makes the security gate depend on Python truthiness instead of the requested JSON contract.",
+          "what_done_would_look_like": "Require a JSON object containing an actual boolean `malicious` field; reject malformed, missing, or wrong-typed values with an actionable model-contract error, with tests for string, numeric, and missing values.",
+          "tree_evidence": [
+            "gitseed/cli.py:464-466 requests a boolean but returns `bool(result.get(\"malicious\", False))` without validating the response shape or type.",
+            "tests/test_model_choice.py:127-157 verifies the bounded request contract for the maliciousness call, but supplies only a valid `false` boolean response.",
+            "tests/test_seam.py:47-52 uses a deterministic boolean implementation, so the application seam does not cover malformed model boolean outputs."
+          ],
+          "distinct_from_others_because": "This is a fail-closed security-contract issue in model output interpretation, independent of source ordering and CLI option validation."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "66d194998c954ab284c1fd71e1a7d667e75db2085696e4dfac149d0f5594a3e1",
+        "need_hash": "adb93a60981adb6800d8038c521cc97bb177b4e6fb9c85245302debf7f019f7c",
+        "need": {
+          "title": "Reject all incompatible options when showing run history",
+          "what_is_missing_or_wrong": "`--history` claims it cannot be combined with run options, but its guard omits several run-only flags. For example, `--fixtures`, `--category`, `--source-mode`, `--dry-run`, and `--approve-all` are silently accepted and ignored.",
+          "what_done_would_look_like": "Define the complete allowed argument set for history mode, reject every other run-specific option with a clear invalid-invocation message, and cover representative omitted flags in CLI tests.",
+          "tree_evidence": [
+            "gitseed/cli.py:516-541 defines the run-specific options, including category, fixtures, source retention, approval, and dry-run controls.",
+            "gitseed/cli.py:920-924 checks only query, render, artifact, run_id, and corrects before executing history.",
+            "tests/test_cli.py:116-146 exercises a valid history invocation but does not cover conflicting run-only flags."
+          ],
+          "distinct_from_others_because": "This is a CLI-interface correctness issue: it prevents user-supplied options from being silently discarded."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "bd896d551fba373a27db1d3d66d63da5e2a7e11683c45943d5550c1ac268bdb9",
+        "need_hash": "fbe0d0b97ff1a1e65861ee50fd9e26c68e0632da69859cce14dfc7309f34ee6f",
+        "need": {
+          "title": "Make capped GitHub source selection deterministic",
+          "what_is_missing_or_wrong": "Live GitHub tree entries are consumed in response order. Since selection stops at file and byte caps, identical repository contents can yield different scanned files, model digests, risk results, and artifacts when the API\u2019s entry order differs.",
+          "what_done_would_look_like": "Order priority and regular eligible paths deterministically before applying budgets and fetching blobs; add a regression test proving shuffled equivalent tree listings select the same files and produce the same review evidence.",
+          "tree_evidence": [
+            "gitseed/cli.py:295-336 appends candidates in raw tree iteration order and applies the total-byte and regular-file-count caps in that order.",
+            "gitseed/pipeline/run.py:313-416 embeds the selected file order and contents directly in the model digest.",
+            "tests/test_cli.py:759-772 tests the caps for one listing order, while tests/test_cli.py:933-961 tests a priority file ordered last but not ordering stability across equivalent listings."
+          ],
+          "distinct_from_others_because": "This concerns reproducibility and coverage integrity of live repository scanning, rather than command validation or model-response handling."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

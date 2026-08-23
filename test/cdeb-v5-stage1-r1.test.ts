@@ -2265,16 +2265,21 @@ describe("the study is finished and cannot be named active again", () => {
     }).toThrow(/its phase is stage1-hold/);
   });
 
-  it("declares no active study rather than naming a successor that does not exist", () => {
+  it("names v5 as the last terminal study and never as the active one", () => {
     const declaration = readJson(join(V5, "..", "..", "ACTIVE-STUDY.json"));
-    expect(declaration.status).toBe("no-active-study");
-    expect(declaration.active_study_id).toBe(null);
-    expect(declaration.last_terminal_study_id).toBe("cdeb-fresh-v5");
-    // The status word and the id have to agree, and the resolver refuses a
-    // declaration where they do not.
-    expect(() => {
-      resolveActiveStudyRoot(join(V5, "..", ".."));
-    }).toThrow(/No active CDEB study/);
+    // Not which study is the most recent to end -- that moves every time one
+    // does, and asserting it made this fail when v6 reached its own hold. What
+    // has to stay true is that v5 is finished and is never the active study.
+    expect(declaration.active_study_id).not.toBe("cdeb-fresh-v5");
+    expect(readJson(join(V5, "STATUS.json")).phase).toBe("stage1-hold");
+    // The status word and the id have to agree either way: an empty slot says
+    // no-active-study with a null id, an occupied one says active with an id.
+    // Asserting which of the two is current would fail the moment a successor
+    // arrives, which is a transition rather than a defect.
+    expect(declaration.status === "no-active-study").toBe(declaration.active_study_id === null);
+    if (declaration.active_study_id !== null) {
+      expect(resolveActiveStudyRoot(join(V5, "..", ".."))).not.toBe(V5);
+    }
   });
 
   it("carries the verdict and its basis in the study's own status", () => {

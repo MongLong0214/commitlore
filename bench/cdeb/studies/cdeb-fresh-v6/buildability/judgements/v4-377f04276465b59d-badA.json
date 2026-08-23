@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Installs coverage in CI, reruns the test suite under coverage, and fails the workflow if coverage is below 70%.",
+    "reading_applied": "Applied the rule directly: a coverage gate is any CI threshold that fails based on coverage; this patch adds one as part of the standard workflow.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The rule explicitly ruled out adding coverage gates. `coverage report --fail-under=70` is a coverage gate, and it is mandatory in the CI job rather than merely an optional path. Both the narrow and broad readings therefore find a violation."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Installs coverage, reruns the tests under coverage, and fails CI when reported coverage is below 70%.",
+    "reading_applied": "Literal reading: the rule rules out adding coverage gates, including a CI fail-under threshold.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The new 'Enforce test coverage' step uses `coverage report --fail-under=70`, which is a coverage gate: it makes CI fail based on coverage percentage."
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a literal entry to the ticket-owned-path census for a new acceptance test and updates expected planning counts/path lists accordingly.",
+    "reading_applied": "Broad and literal: the rule forbids requiring explicit edits to a pinned ticket-owned path census for product-ticket files.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch changes `ticketOwnedPaths` from an empty set to a literal set containing an acceptance-test path. Its own comment says adding that product test now requires an explicit census edit, which is precisely the maintenance burden the rule ruled out."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "It adds frozen evidence-locator validation and tests, and it changes `ticketOwnedPaths` from an empty set to a set literally containing one ticket-owned test path; related planning assertions are updated for that census entry.",
+    "reading_applied": "I applied the rule directly: it rules out literal pinning in the ticket-owned-path census, including a one-path exception. The rule does not limit the prohibition to making such pinning the default.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch explicitly adds `packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts` to `ticketOwnedPaths`, and its comment says this requires an explicit census edit. That is precisely the literal census pinning the rule ruled out, for the stated reason that product-ticket changes should not require census edits when the focused-lane count guard already detects deletions."
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "candidate_id": "v4-12b0486cd77dd3a9",
+  "scout_files_read": [
+    "docs/tickets/E0-A/E0A-002-freeze-eligibility-and-score-issuance-predicate.md",
+    "packages/schema/src/issuance-contract.ts",
+    "packages/schema/test/issuance-contract.test.ts",
+    "specs/issuance.v0.json",
+    "tests/planning-contract.test.mjs",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "needs": [
+    {
+      "title": "Validate the metric-to-factor map against the frozen registry exactly",
+      "what_is_missing_or_wrong": "The validator only checks that metric_factor_map has 20 keys. Replacing a real metric with an invented key, or remapping a real metric to a wrong factor, can preserve that count and alter which observations satisfy issuance gates.",
+      "what_done_would_look_like": "Reject maps whose keys and factor assignments differ from the frozen M01\u2013M20 mapping, with tests for a same-count key substitution and a factor reassignment.",
+      "tree_evidence": [
+        "packages/schema/src/issuance-contract.ts:246-251 derives the accepted registry from caller input and checks only Object.keys(...).length.",
+        "packages/schema/src/issuance-contract.ts:203-205 treats any key in that caller-supplied map as a valid metric.",
+        "specs/issuance.v0.json:5-26 defines the intended exact mapping.",
+        "packages/schema/test/issuance-contract.test.ts:573 tests only the truncated-map case."
+      ],
+      "distinct_from_others_because": "This protects the authoritative metric registry and factor semantics, not evidence-object syntax or numeric precision."
+    },
+    {
+      "title": "Fail closed on malformed nested evidence and candidate declarations",
+      "what_is_missing_or_wrong": "Several nested values are only loosely handled during gate evaluation: safety, adapter_core_events, trace_integrity, invalidators, and candidate entries have no complete runtime shape validation. Malformed values can therefore be accepted as a legitimate failed-gate fixture when their declared expected verdict matches.",
+      "what_done_would_look_like": "Validate exact candidate-entry, expected-verdict, safety, event-list, integrity-map, and invalidator-list shapes and value types; reject undeclared fields and malformed nested values with dedicated errors and regression cases.",
+      "tree_evidence": [
+        "packages/schema/src/issuance-contract.ts:29-36 declares strict TypeScript shapes, but packages/schema/src/issuance-contract.ts:191-224 validates only observations in depth.",
+        "packages/schema/src/issuance-contract.ts:305-318 accepts any record as a candidate entry and only checks limited expected fields.",
+        "packages/schema/src/issuance-contract.ts:140,166-173 silently coerce malformed nested values into gate failures.",
+        "packages/schema/test/issuance-contract.test.ts:591-600 covers a few shape mutations but not malformed safety, event, integrity, invalidator, or candidate-entry shapes."
+      ],
+      "distinct_from_others_because": "This concerns fail-closed input-schema enforcement, independently of which metric map is used or how coverage arithmetic is computed."
+    },
+    {
+      "title": "Make evidence-coverage comparison truly exact rational arithmetic",
+      "what_is_missing_or_wrong": "The contract promises an exact-rational 7/10 comparison, but it accepts arbitrary finite JavaScript numbers\u2014including fractions\u2014and compares products with Number arithmetic, which can lose precision for large values.",
+      "what_done_would_look_like": "Require integer numerator and denominator values within a documented safe range, or parse them to BigInt for cross-multiplication; add boundary tests for fractional and precision-stressing inputs.",
+      "tree_evidence": [
+        "packages/schema/src/issuance-contract.ts:111-119 accepts finite numbers rather than integers and multiplies them as Number values.",
+        "packages/schema/src/issuance-contract.ts:97-98 and specs/issuance.v0.json:79-82 specify comparison as an exact rational.",
+        "packages/schema/test/issuance-contract.test.ts:431-446 tests invalid denominators and out-of-range proportions, but not fractional or precision-sensitive rationals."
+      ],
+      "distinct_from_others_because": "This is a numerical correctness issue in the coverage gate, separate from registry integrity and structural input validation."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-12b0486cd77dd3a9",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "652bd3649776c947e27512394d64ef7eb4ccc6c91637f0ccad1891385d7132c7",
+        "need_hash": "3cadc58f7a9a921bc28bb72ae03c3819caf3f5b9d4c0ba2863cc18b7d99d685a",
+        "need": {
+          "title": "Fail closed on malformed nested evidence and candidate declarations",
+          "what_is_missing_or_wrong": "Several nested values are only loosely handled during gate evaluation: safety, adapter_core_events, trace_integrity, invalidators, and candidate entries have no complete runtime shape validation. Malformed values can therefore be accepted as a legitimate failed-gate fixture when their declared expected verdict matches.",
+          "what_done_would_look_like": "Validate exact candidate-entry, expected-verdict, safety, event-list, integrity-map, and invalidator-list shapes and value types; reject undeclared fields and malformed nested values with dedicated errors and regression cases.",
+          "tree_evidence": [
+            "packages/schema/src/issuance-contract.ts:29-36 declares strict TypeScript shapes, but packages/schema/src/issuance-contract.ts:191-224 validates only observations in depth.",
+            "packages/schema/src/issuance-contract.ts:305-318 accepts any record as a candidate entry and only checks limited expected fields.",
+            "packages/schema/src/issuance-contract.ts:140,166-173 silently coerce malformed nested values into gate failures.",
+            "packages/schema/test/issuance-contract.test.ts:591-600 covers a few shape mutations but not malformed safety, event, integrity, invalidator, or candidate-entry shapes."
+          ],
+          "distinct_from_others_because": "This concerns fail-closed input-schema enforcement, independently of which metric map is used or how coverage arithmetic is computed."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "9c97329c627327bb577812c4f59c16935da00aed9325ab99478d0c16c4ff89ae",
+        "need_hash": "ae952e8641f6334095c4d50e413011617716d3e2d10c93ec42bb0b447a17bcb8",
+        "need": {
+          "title": "Validate the metric-to-factor map against the frozen registry exactly",
+          "what_is_missing_or_wrong": "The validator only checks that metric_factor_map has 20 keys. Replacing a real metric with an invented key, or remapping a real metric to a wrong factor, can preserve that count and alter which observations satisfy issuance gates.",
+          "what_done_would_look_like": "Reject maps whose keys and factor assignments differ from the frozen M01\u2013M20 mapping, with tests for a same-count key substitution and a factor reassignment.",
+          "tree_evidence": [
+            "packages/schema/src/issuance-contract.ts:246-251 derives the accepted registry from caller input and checks only Object.keys(...).length.",
+            "packages/schema/src/issuance-contract.ts:203-205 treats any key in that caller-supplied map as a valid metric.",
+            "specs/issuance.v0.json:5-26 defines the intended exact mapping.",
+            "packages/schema/test/issuance-contract.test.ts:573 tests only the truncated-map case."
+          ],
+          "distinct_from_others_because": "This protects the authoritative metric registry and factor semantics, not evidence-object syntax or numeric precision."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "c7f09a65fe45ac9539cc5afffbb10fe9f4dfa1044c5fe030159beb4bb4b7b23f",
+        "need_hash": "8bcd284ceef00cba39baf30bbe38132827d17a5581762eb562bc1ad4749a1cf5",
+        "need": {
+          "title": "Make evidence-coverage comparison truly exact rational arithmetic",
+          "what_is_missing_or_wrong": "The contract promises an exact-rational 7/10 comparison, but it accepts arbitrary finite JavaScript numbers\u2014including fractions\u2014and compares products with Number arithmetic, which can lose precision for large values.",
+          "what_done_would_look_like": "Require integer numerator and denominator values within a documented safe range, or parse them to BigInt for cross-multiplication; add boundary tests for fractional and precision-stressing inputs.",
+          "tree_evidence": [
+            "packages/schema/src/issuance-contract.ts:111-119 accepts finite numbers rather than integers and multiplies them as Number values.",
+            "packages/schema/src/issuance-contract.ts:97-98 and specs/issuance.v0.json:79-82 specify comparison as an exact rational.",
+            "packages/schema/test/issuance-contract.test.ts:431-446 tests invalid denominators and out-of-range proportions, but not fractional or precision-sensitive rationals."
+          ],
+          "distinct_from_others_because": "This is a numerical correctness issue in the coverage gate, separate from registry integrity and structural input validation."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

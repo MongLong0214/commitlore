@@ -1,0 +1,22 @@
+{
+  "j1": {
+    "files_read": [
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/judge/v4-8f24735524874167-badA/rule.txt",
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v6run/judge/v4-8f24735524874167-badA/patch.diff"
+    ],
+    "what_the_patch_does": "Adds `canonical_report_bodies` to `specs/doctor-output.v0.json`, populating it with the report JSON bodies, and changes validation/tests so that embedded map is the primary canonical corpus while `fixtures/doctor/*.json` are mirrors.",
+    "reading_applied": "The rule is categorical: it rules out embedding canonical reports in that exact spec file. Even the narrower 'not as the default/source of truth' reading is violated, because the patch explicitly makes the embedded reports primary.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch does precisely what was ruled out: it embeds the canonical report bodies in `specs/doctor-output.v0.json`. Its stated justification in code directly reverses the rule's fixture-path rationale by demoting `fixtures/doctor/*.json` to compatibility mirrors."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds `canonical_report_bodies` to `specs/doctor-output.v0.json`, embeds the full canonical report corpus there, and changes validation so those embedded bodies are the primary canonical source while `fixtures/doctor/*.json` are mirrors.",
+    "reading_applied": "Direct/all-use reading: \u201cRuled out: embed the canonical reports in specs/doctor-output.v0.json\u201d forbids placing the canonical reports in that file, especially because the stated reason requires the ticket-named fixtures path.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch does exactly what was ruled out: it embeds canonical report bodies in `specs/doctor-output.v0.json` and explicitly calls them the primary canonical corpus. This is not merely an optional or non-default path; it reverses the required fixture-based source arrangement."
+  }
+}

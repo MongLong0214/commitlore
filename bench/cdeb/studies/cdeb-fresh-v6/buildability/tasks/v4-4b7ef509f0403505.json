@@ -1,0 +1,49 @@
+{
+  "candidate_id": "v4-4b7ef509f0403505",
+  "need_rank_1": {
+    "rank_key": "36dddeee851dd8729bd85b7b436ac380cbf2f2273f1451e174ded481512a8390",
+    "need_hash": "f321f38929eaf1407835e7abe3fcb694d396199a861e49f184e72dc76a139a33",
+    "need": {
+      "title": "Reconcile the approved Node-version contract",
+      "what_is_missing_or_wrong": "The enforced runtime is Node 22.18\u201324, while the test documents that the ADR, SSOT, and PRD still require Node 20. This leaves the repository with conflicting authority for contributors and release environments.",
+      "what_done_would_look_like": "Obtain the required contract approval, update the authoritative runtime documents and their tests to one supported range, and keep package.json and the CI matrix aligned with that approved contract.",
+      "tree_evidence": [
+        "package.json:7-9 declares \">=22.18 <25\".",
+        "ci.yml:14-25 tests only Node 22 and 24.",
+        "workspace-skeleton.test.mjs:758-772 explicitly says the authoritative documents still specify Node 20 and that the correction is unapproved."
+      ],
+      "distinct_from_others_because": "This is runtime-policy and governance reconciliation, not CI coverage or action supply-chain hardening."
+    },
+    "rank": 1
+  },
+  "task_prompt": "After obtaining a separate, authenticated approval for the changed runtime contract, reconcile the repository\u2019s Node support statement. The SSOT, ADR-0003, and D0 PRD must all publish the supported engine range `>=22.18 <25`. Contributors and release environments must be told consistently that validation runs on Node 22 and Node 24, with Node 20 unsupported. `package.json` and the CI Node matrix must express that same contract. Update runtime-contract tests so they verify this approved agreement rather than describe the former unapproved discrepancy. Approval evidence must be genuine, bound to the changed candidate head, and must not reuse the legacy candidate as approval.",
+  "acceptance_test_path": "tests/planning/node-version-contract.test.mjs",
+  "acceptance_test_source": "import assert from \"node:assert/strict\";\nimport { readFileSync } from \"node:fs\";\nimport { dirname, resolve } from \"node:path\";\nimport test from \"node:test\";\nimport { fileURLToPath } from \"node:url\";\n\nconst repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), \"../..\");\nconst supportedRange = \">=22.18 <25\";\n\nconst authoritativeDocuments = [\n  [\"SSOT\", \"docs/north-star/agent-operator-score-ssot-v1.0.md\"],\n  [\"ADR-0003\", \"docs/adr/ADR-0003-runtime-repository-and-distribution.md\"],\n  [\"D0 PRD\", \"docs/prd/PRD-D0-name-migration-and-repository-skeleton.md\"]\n];\n\nconst nodeMatrix = (workflow) => {\n  const inline = workflow.match(/^\\s*node:\\s*\\[([^\\]]+)]/m);\n  if (inline) {\n    return inline[1].split(\",\").map((value) => value.trim().replace(/[\"']/g, \"\"));\n  }\n\n  const block = workflow.match(/^\\s*node:\\s*\\n((?:\\s*-\\s*[^\\n]+\\n?)+)/m);\n  if (block) {\n    return [...block[1].matchAll(/^\\s*-\\s*([^\\s#]+).*$/gm)]\n      .map((match) => match[1].replace(/[\"']/g, \"\"));\n  }\n\n  return [];\n};\n\ntest(\"published Node runtime contract is consistent\", () => {\n  const manifest = JSON.parse(readFileSync(resolve(repositoryRoot, \"package.json\"), \"utf8\"));\n  assert.equal(manifest.engines?.node, supportedRange);\n\n  const workflow = readFileSync(resolve(repositoryRoot, \".github/workflows/ci.yml\"), \"utf8\");\n  assert.deepEqual(nodeMatrix(workflow), [\"22\", \"24\"]);\n\n  for (const [name, path] of authoritativeDocuments) {\n    const document = readFileSync(resolve(repositoryRoot, path), \"utf8\");\n    assert.ok(\n      document.includes(supportedRange),\n      `${name} does not publish the supported Node range ${supportedRange}`\n    );\n  }\n});\n",
+  "how_to_run": "node --test tests/planning/node-version-contract.test.mjs",
+  "why_it_fails_on_the_current_tree": "It fails because the SSOT, ADR-0003, and D0 PRD still publish the old `>=20 <25` contract, although `package.json` and CI already use Node 22.18\u201324.",
+  "two_different_implementations_that_would_both_pass": [
+    "Revise the existing authority documents with concise replacement wording and retain the inline YAML matrix.",
+    "Use different explanatory wording in the documents and represent the same 22/24 matrix as a YAML block list."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "docs/north-star/agent-operator-score-ssot-v1.0.md",
+    "docs/adr/ADR-0003-runtime-repository-and-distribution.md",
+    "docs/adr/ADR-0013-authenticated-governance-modes-and-legacy-quarantine.md",
+    "docs/prd/PRD-D0-name-migration-and-repository-skeleton.md",
+    "docs/prd/PRD-D0-GOV-authenticated-governance-repair.md",
+    "docs/tickets/D0/D0-002-repository-and-npm-workspace-skeleton.md",
+    "docs/decisions/governance-mode-contract.v1.json",
+    "docs/decisions/maintainer-gate-artifact-manifest.v3.json",
+    "fixtures/governance/artifact-manifest-v3/node-22-18-candidate.json",
+    "package.json",
+    "package-lock.json",
+    ".github/workflows/ci.yml",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning-contract.test.mjs",
+    "scripts/validate-planning.mjs",
+    "README.md",
+    "CONTRIBUTING.md",
+    "docs/VALIDATION.md"
+  ]
+}

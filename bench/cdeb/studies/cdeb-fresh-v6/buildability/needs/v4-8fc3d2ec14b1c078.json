@@ -1,0 +1,105 @@
+{
+  "candidate_id": "v4-8fc3d2ec14b1c078",
+  "scout_files_read": [
+    "gitseed/collect/__init__.py",
+    "gitseed/collect/ratelimit.py",
+    "gitseed/collect/search.py",
+    "tests/test_collect.py"
+  ],
+  "needs": [
+    {
+      "title": "Validate paging arguments before issuing a search",
+      "what_is_missing_or_wrong": "`collect` accepts zero or negative page counts and invalid `per_page` values without an explicit error. For example, `pages=0` returns a successful empty result without contacting GitHub, while GitHub\u2019s request limits are left to fail later and less clearly.",
+      "what_done_would_look_like": "Reject invalid `pages` and `per_page` values at the public `collect` boundary (including GitHub\u2019s supported per-page range), and add tests covering zero, negative, and oversized inputs.",
+      "tree_evidence": [
+        "gitseed/collect/search.py:134-145 exposes `pages` and `per_page` but performs no validation.",
+        "gitseed/collect/search.py:161 starts `range(1, pages + 1)`, so `pages=0` silently produces a complete empty result.",
+        "gitseed/collect/search.py:212 uses `per_page` for termination logic.",
+        "tests/test_collect.py:310-357 covers normal paging but has no invalid-argument cases."
+      ],
+      "distinct_from_others_because": "This concerns the public request contract before any network response is processed."
+    },
+    {
+      "title": "Turn malformed successful API payloads into an explicit incomplete result",
+      "what_is_missing_or_wrong": "A 2xx response with invalid JSON aborts through `json.loads`, and a syntactically valid item with a non-numeric `stargazers_count` can abort through `int(...)`. That makes upstream payload corruption an unreported exception rather than an honest collection outcome.",
+      "what_done_would_look_like": "Handle invalid JSON and invalid candidate field types predictably\u2014either skip invalid records or return `complete=False` with a clear `stopped_because` reason\u2014and add focused tests for both cases.",
+      "tree_evidence": [
+        "gitseed/collect/search.py:122 directly calls `json.loads` without error handling.",
+        "gitseed/collect/search.py:110-117 converts `stargazers_count` with `int(...)` without guarding conversion errors.",
+        "tests/test_collect.py:354-357 verifies a malformed repository name is skipped, but not invalid JSON or invalid numeric fields."
+      ],
+      "distinct_from_others_because": "This is response-payload resilience after a nominally successful HTTP request, not input validation or retry behavior."
+    },
+    {
+      "title": "Classify the response received after a rate-limit wait accurately",
+      "what_is_missing_or_wrong": "After waiting once, every non-2xx retry response is reported as \u201cstill rate limited,\u201d including a permissions failure or server error. This discards the retry response\u2019s actual classification and can misdirect callers.",
+      "what_done_would_look_like": "Reclassify the retry response and return an accurate outcome for forbidden and general HTTP errors, while retaining the existing single-retry behavior for a second rate-limit response. Add tests for a post-wait 403-with-budget and a post-wait 5xx.",
+      "tree_evidence": [
+        "gitseed/collect/search.py:192-194 retries once, then maps every non-`ok` result to \u201cstill rate limited.\u201d",
+        "gitseed/collect/search.py:196-200 already has distinct reporting for forbidden and general errors on the initial request.",
+        "tests/test_collect.py:234-245 tests only a second exhausted rate-limit response after waiting."
+      ],
+      "distinct_from_others_because": "This concerns correctness of the retry state transition and its reported failure reason."
+    }
+  ],
+  "only_two_distinct_needs_available": false,
+  "ranking": {
+    "schema_version": 1,
+    "study_id": "cdeb-fresh-v6",
+    "candidate_id": "v4-8fc3d2ec14b1c078",
+    "preregistration_seed": "76bdf00a84699ad91fc4fe8a7711e232949eddf0143f046d042eb2e134a12eae",
+    "rule": "SHA256(preregistration_seed + candidate_id + need_hash), ascending",
+    "why_not_the_scout_order": "The scout's own ordering could reflect what it found easiest to describe, and a quality score would let an operator prefer the need that looks likely to build. A hash of the need's own content is fixed before anyone knows which one survives.",
+    "needs_ranked": [
+      {
+        "rank_key": "86f6a15f1439843c1fc3a31db909a2c740374d3fedcd19c6cb877cf6d63076a6",
+        "need_hash": "e92ac981f49c59407e9a03dbcdbb2d3d06b3bae83929a8d8c4898d6c0b9c2e94",
+        "need": {
+          "title": "Validate paging arguments before issuing a search",
+          "what_is_missing_or_wrong": "`collect` accepts zero or negative page counts and invalid `per_page` values without an explicit error. For example, `pages=0` returns a successful empty result without contacting GitHub, while GitHub\u2019s request limits are left to fail later and less clearly.",
+          "what_done_would_look_like": "Reject invalid `pages` and `per_page` values at the public `collect` boundary (including GitHub\u2019s supported per-page range), and add tests covering zero, negative, and oversized inputs.",
+          "tree_evidence": [
+            "gitseed/collect/search.py:134-145 exposes `pages` and `per_page` but performs no validation.",
+            "gitseed/collect/search.py:161 starts `range(1, pages + 1)`, so `pages=0` silently produces a complete empty result.",
+            "gitseed/collect/search.py:212 uses `per_page` for termination logic.",
+            "tests/test_collect.py:310-357 covers normal paging but has no invalid-argument cases."
+          ],
+          "distinct_from_others_because": "This concerns the public request contract before any network response is processed."
+        },
+        "rank": 1
+      },
+      {
+        "rank_key": "a24b0a35a13f81134f4a8956a32a4be10fb41b62995a089c75f7907b5f863c97",
+        "need_hash": "61ad78a1d44b22f9995b40e5df377c81eecab70ae79de2d913cbafe6ec57fc96",
+        "need": {
+          "title": "Turn malformed successful API payloads into an explicit incomplete result",
+          "what_is_missing_or_wrong": "A 2xx response with invalid JSON aborts through `json.loads`, and a syntactically valid item with a non-numeric `stargazers_count` can abort through `int(...)`. That makes upstream payload corruption an unreported exception rather than an honest collection outcome.",
+          "what_done_would_look_like": "Handle invalid JSON and invalid candidate field types predictably\u2014either skip invalid records or return `complete=False` with a clear `stopped_because` reason\u2014and add focused tests for both cases.",
+          "tree_evidence": [
+            "gitseed/collect/search.py:122 directly calls `json.loads` without error handling.",
+            "gitseed/collect/search.py:110-117 converts `stargazers_count` with `int(...)` without guarding conversion errors.",
+            "tests/test_collect.py:354-357 verifies a malformed repository name is skipped, but not invalid JSON or invalid numeric fields."
+          ],
+          "distinct_from_others_because": "This is response-payload resilience after a nominally successful HTTP request, not input validation or retry behavior."
+        },
+        "rank": 2
+      },
+      {
+        "rank_key": "cc603a8ca286ab8365d2d40593516b69370a08f4b4b9a5ded8704d98a470d5da",
+        "need_hash": "f070799f609b1a666144f152c8abd90374c71715b56bfb0425bc7e27ed84bff7",
+        "need": {
+          "title": "Classify the response received after a rate-limit wait accurately",
+          "what_is_missing_or_wrong": "After waiting once, every non-2xx retry response is reported as \u201cstill rate limited,\u201d including a permissions failure or server error. This discards the retry response\u2019s actual classification and can misdirect callers.",
+          "what_done_would_look_like": "Reclassify the retry response and return an accurate outcome for forbidden and general HTTP errors, while retaining the existing single-retry behavior for a second rate-limit response. Add tests for a post-wait 403-with-budget and a post-wait 5xx.",
+          "tree_evidence": [
+            "gitseed/collect/search.py:192-194 retries once, then maps every non-`ok` result to \u201cstill rate limited.\u201d",
+            "gitseed/collect/search.py:196-200 already has distinct reporting for forbidden and general errors on the initial request.",
+            "tests/test_collect.py:234-245 tests only a second exhausted rate-limit response after waiting."
+          ],
+          "distinct_from_others_because": "This concerns correctness of the retry state transition and its reported failure reason."
+        },
+        "rank": 3
+      }
+    ]
+  }
+}

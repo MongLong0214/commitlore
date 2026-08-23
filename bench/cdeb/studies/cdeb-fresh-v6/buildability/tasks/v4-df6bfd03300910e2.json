@@ -1,0 +1,48 @@
+{
+  "candidate_id": "v4-df6bfd03300910e2",
+  "need_rank_1": {
+    "rank_key": "33d59f561b7b290b0cb73096635f110b8897d982c828ec5a2e959a1805e762c2",
+    "need_hash": "0b0ff841797a0a8d13dbe9413e266aaa5a44f797e5d8c957489295a464623c95",
+    "need": {
+      "title": "Show unavailable category evidence in radar and explain output",
+      "what_is_missing_or_wrong": "The category model distinguishes unavailable evidence from a deterministic non-match and can render the unavailable evidence names, but the CLI reduces both to an 'uncategorized (absent)' label. Operators cannot tell which category inputs failed to be read.",
+      "what_done_would_look_like": "Have radar/table JSON as appropriate and explain output render absent categories with their missing evidence (for example, 'coding-agents: unavailable evidence: files, source'), while retaining the existing deterministic 'uncategorized' wording for a verified non-match. Add CLI coverage for both cases.",
+      "tree_evidence": [
+        "gitseed/category.py:154-158 renders ABSENT categories with their missing_evidence, separately from ordinary uncategorized results.",
+        "tests/test_category.py:21-49 explicitly requires unreadable evidence to remain distinct from a read-but-unmatched category.",
+        "gitseed/cli.py:633-639 drops missing_evidence and labels all absent results only as 'uncategorized (absent)'.",
+        "gitseed/cli.py:774-806 uses that lossy label in the explain command."
+      ],
+      "distinct_from_others_because": "This is a user-facing diagnostic/output improvement; it does not alter how categories are derived."
+    },
+    "rank": 1
+  },
+  "task_prompt": "Make CLI category reporting preserve the distinction between unavailable category evidence and a verified category non-match. In radar\u2019s table output, radar JSON output, and `explain` output, an absent category must identify its pack and list its unavailable evidence; for example, `coding-agents: unavailable evidence: files, source`. A category evaluated from available deterministic evidence that does not match must continue to be shown as `coding-agents: uncategorized (deterministic)`. Add CLI coverage for both outcomes.",
+  "acceptance_test_path": "tests/test_cli_category_evidence_acceptance.py",
+  "acceptance_test_source": "from __future__ import annotations\n\nimport json\nfrom datetime import datetime, timezone\n\nfrom gitseed.application import execute\nfrom gitseed.cli import main\nfrom gitseed.collect.search import Candidate, CollectResult\nfrom gitseed.grade.smoke import SmokeResult\nfrom gitseed.grade.types import GradeResult\nfrom gitseed.pipeline.run import FetchedFiles\nfrom gitseed.ports import RepositoryMetadata, RunPorts, RunRequest\nfrom gitseed.scoring import ScoreInputs\n\n\nclass _Repository:\n    def __init__(self, candidate: Candidate) -> None:\n        self._candidate = candidate\n\n    def search(self, query: str, limit: int) -> CollectResult:\n        return CollectResult(candidates=(self._candidate,))\n\n    def metadata(self, candidate: Candidate, at: datetime) -> RepositoryMetadata:\n        return RepositoryMetadata(ScoreInputs(True, True, True))\n\n\nclass _Files:\n    def __init__(self, unavailable: bool) -> None:\n        self._unavailable = unavailable\n\n    def read(self, candidate: Candidate) -> FetchedFiles:\n        if self._unavailable:\n            raise OSError(\"source read failed\")\n        return FetchedFiles(((\"main.py\", \"def add(a, b):\\n    return a + b\\n\"),))\n\n\nclass _Grader:\n    def evaluate(self, digest: str) -> GradeResult:\n        return GradeResult(7, 7, \"small utility\", \"test\", 0.0, \"test-v1\")\n\n    def flags_malicious(self, digest: str) -> bool:\n        return False\n\n\nclass _Clock:\n    def now(self) -> datetime:\n        return datetime(2026, 1, 1, tzinfo=timezone.utc)\n\n\ndef _write_artifact(path, repo: str, *, unavailable: bool) -> None:\n    candidate = Candidate(repo, \"example\", \"\", 1, \"\")\n    artifact = execute(\n        RunRequest(\"example\", 1, (\"coding-agents\",)),\n        RunPorts(_Repository(candidate), _Files(unavailable), _Grader(), _Clock()),\n        model_smoke=SmokeResult(True, \"test\"),\n    )\n    path.write_bytes(artifact.to_bytes())\n\n\ndef test_cli_distinguishes_unavailable_category_evidence_from_a_verified_non_match(tmp_path, capsys) -> None:\n    unavailable_artifact = tmp_path / \"unavailable.json\"\n    unmatched_artifact = tmp_path / \"unmatched.json\"\n    _write_artifact(unavailable_artifact, \"example/unavailable\", unavailable=True)\n    _write_artifact(unmatched_artifact, \"example/unmatched\", unavailable=False)\n\n    unavailable_label = \"coding-agents: unavailable evidence: files, source\"\n    unmatched_label = \"coding-agents: uncategorized (deterministic)\"\n\n    assert main([\"radar\", \"--render\", str(unavailable_artifact)]) == 2\n    unavailable_table = capsys.readouterr().out\n    assert unavailable_label in next(\n        line for line in unavailable_table.splitlines() if \"example/unavailable\" in line\n    )\n\n    assert main([\"radar\", \"--render\", str(unavailable_artifact), \"--json\"]) == 2\n    unavailable_json = json.loads(capsys.readouterr().out)\n    assert unavailable_json[0][\"category\"] == unavailable_label\n\n    assert main([\"explain\", \"example/unavailable\", \"--artifact\", str(unavailable_artifact)]) == 2\n    assert f\"category: {unavailable_label}\\n\" in capsys.readouterr().out\n\n    assert main([\"radar\", \"--render\", str(unmatched_artifact)]) == 0\n    unmatched_table = capsys.readouterr().out\n    assert unmatched_label in next(\n        line for line in unmatched_table.splitlines() if \"example/unmatched\" in line\n    )\n\n    assert main([\"radar\", \"--render\", str(unmatched_artifact), \"--json\"]) == 0\n    unmatched_json = json.loads(capsys.readouterr().out)\n    assert unmatched_json[0][\"category\"] == unmatched_label\n\n    assert main([\"explain\", \"example/unmatched\", \"--artifact\", str(unmatched_artifact)]) == 0\n    assert f\"category: {unmatched_label}\\n\" in capsys.readouterr().out\n",
+  "how_to_run": "pytest tests/test_cli_category_evidence_acceptance.py",
+  "why_it_fails_on_the_current_tree": "`_category_label` in `gitseed/cli.py` converts every category with no assigned name\u2014including an ABSENT result\u2014into `<pack>: uncategorized (<basis>)`. Radar table output, radar JSON, and explain all use that label, so unavailable evidence is currently rendered as `coding-agents: uncategorized (absent)` rather than naming `files, source`.",
+  "two_different_implementations_that_would_both_pass": [
+    "Change the shared category display formatting so ABSENT matches render their recorded missing evidence, leaving other match states unchanged.",
+    "Have each CLI output surface derive its displayed category text independently from the public category result, provided all surfaces produce the specified unavailable and deterministic non-match text."
+  ],
+  "files_read_by_author": [
+    "AGENTS.md",
+    "pyproject.toml",
+    "gitseed/category.py",
+    "gitseed/cli.py",
+    "gitseed/application.py",
+    "gitseed/artifact.py",
+    "gitseed/pipeline/run.py",
+    "gitseed/ports.py",
+    "gitseed/evidence.py",
+    "gitseed/collect/search.py",
+    "gitseed/grade/types.py",
+    "gitseed/grade/smoke.py",
+    "gitseed/scoring.py",
+    "tests/conftest.py",
+    "tests/test_category.py",
+    "tests/test_cli.py",
+    "tests/test_seam.py"
+  ]
+}
