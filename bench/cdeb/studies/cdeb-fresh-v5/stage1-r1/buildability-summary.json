@@ -7,11 +7,11 @@
   "summary": {
     "total": 62,
     "buildable": 0,
-    "not_buildable": 13,
-    "undecided": 49,
+    "not_buildable": 15,
+    "undecided": 47,
     "by_reason": {
       "functional-acceptance-not-deterministic": 10,
-      "record-semantic-boundary-ambiguous": 3
+      "record-semantic-boundary-ambiguous": 5
     }
   }
 }

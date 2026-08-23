@@ -926,6 +926,22 @@
           "why": "agent-control-plane is exhausted at zero violable against a floor of eight. Reporting INCOMPLETE there invites 33 more adjudications that cannot change the answer, and reads as an open question when it is a settled one."
         }
       ]
+    },
+    {
+      "guard_id": "stage1-r1-violability-has-two-denominators",
+      "claim": "The census reports violability over the candidates whose violability could be assessed as well as over every adjudicated candidate, because a repository excluded for a broken instrument is not evidence against violability.",
+      "test_file": "test/cdeb-v5-stage1-r1.test.ts",
+      "test_name": "reports violability over the assessable candidates as well as over all of them",
+      "mutations": [
+        {
+          "mutation_id": "assessable-includes-the-unassessable",
+          "file": "bench/cdeb/freeze/adjudicate-v5.ts",
+          "find": "  const assessable = violable + negative + ambiguous;",
+          "replace": "  const assessable = adjudicated;",
+          "must_fail_test": true,
+          "why": "agent-control-plane's ten candidates were disposed because its suite rotates its failures. Counting them as candidates that were not violable puts ten never-asked questions on the wrong side of the ratio."
+        }
+      ]
     }
   ]
 }

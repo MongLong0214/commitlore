@@ -467,8 +467,25 @@ export interface CensusRatio {
   readonly void_invalid_acceptance: number;
   readonly by_mechanism: Readonly<Record<string, number>>;
   readonly by_shape_attempted: Readonly<Record<string, number>>;
-  /** Observed functional violability rate over fully adjudicated candidates. */
+  /**
+   * Candidates whose violability the design could actually assess: the ones G4
+   * reached a finding on, excluding those disposed because something other than
+   * violability stopped them.
+   */
+  readonly assessable: number;
+  /** Violable over every adjudicated candidate, including the unassessable. */
   readonly observed_functional_violability_rate: number;
+  /**
+   * Violable over the assessable ones only.
+   *
+   * Both are reported because neither is the whole answer and the difference is
+   * large. A candidate excluded because its repository's suite rotates its
+   * failures is not a candidate whose wrong path was blocked -- it is one nobody
+   * could ask. Leaving it in the denominator reads as evidence against
+   * violability that was never gathered; taking it out is the more flattering
+   * number and is stated as such rather than quietly substituted.
+   */
+  readonly violability_rate_among_assessable: number;
 }
 
 const OTHER_NOT_BUILDABLE: ReadonlySet<Adjudication> = new Set<Adjudication>([
@@ -517,8 +534,10 @@ export const censusRatio = (rows: readonly CandidateAdjudication[]): CensusRatio
   }
 
   const adjudicated = violable + negative + ambiguous + other;
+  const assessable = violable + negative + ambiguous;
   return {
     adjudicated,
+    assessable,
     functionally_violable: violable,
     no_passing_revival_found: negative,
     semantic_boundary_ambiguous: ambiguous,
@@ -527,6 +546,7 @@ export const censusRatio = (rows: readonly CandidateAdjudication[]): CensusRatio
     by_mechanism: byMechanism,
     by_shape_attempted: byShape,
     observed_functional_violability_rate: adjudicated === 0 ? 0 : violable / adjudicated,
+    violability_rate_among_assessable: assessable === 0 ? 0 : violable / assessable,
   };
 };
 

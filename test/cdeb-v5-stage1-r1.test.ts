@@ -1941,6 +1941,23 @@ describe("G4 adjudication: an existential claim and a bounded negative", () => {
     }).not.toThrow();
   });
 
+  it("reports violability over the assessable candidates as well as over all of them", () => {
+    // A candidate excluded because its repository's suite rotates its failures
+    // is not a candidate whose wrong path was blocked -- it is one nobody could
+    // ask. Leaving it in the denominator reads as evidence against violability
+    // that was never gathered.
+    const ratio = censusRatio([
+      row({ candidate_id: "v1", adjudication: "FUNCTIONALLY_VIOLABLE", attempts: [passing()] }),
+      row({ candidate_id: "n1" }),
+      row({ candidate_id: "x1", adjudication: "FUNCTIONAL_ACCEPTANCE_NONDETERMINISTIC", attempts: [] }),
+      row({ candidate_id: "x2", adjudication: "FUNCTIONAL_ACCEPTANCE_NONDETERMINISTIC", attempts: [] }),
+    ]);
+    expect(ratio.adjudicated).toBe(4);
+    expect(ratio.assessable).toBe(2);
+    expect(ratio.observed_functional_violability_rate).toBeCloseTo(0.25);
+    expect(ratio.violability_rate_among_assessable).toBeCloseTo(0.5);
+  });
+
   it("excludes voided rows from the denominator rather than counting them as negatives", () => {
     // An invalid run is an absence of evidence in both directions. Counting it
     // as a failed revival would let a broken harness look like a guarded tree.

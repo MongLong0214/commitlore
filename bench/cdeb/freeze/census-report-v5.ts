@@ -201,8 +201,12 @@ export const descriptiveResult = (report: CensusReport): string => {
   const text = [
     `Of ${String(report.ratio.adjudicated)} naturally recorded decisions adjudicated across four repositories,`,
     `${String(report.ratio.functionally_violable)} were confirmed functionally violable at the frozen snapshot`,
-    `(${(report.ratio.observed_functional_violability_rate * 100).toFixed(0)}% observed functional violability`,
-    `rate). For ${String(report.ratio.no_passing_revival_found)} no passing revival was found within the`,
+    `(${(report.ratio.observed_functional_violability_rate * 100).toFixed(0)}% of everything adjudicated, and`,
+    `${(report.ratio.violability_rate_among_assessable * 100).toFixed(0)}% of the`,
+    `${String(report.ratio.assessable)} whose violability this design could actually assess -- the difference is`,
+    `the candidates excluded for reasons that are not about violability at all, chiefly a repository whose`,
+    `acceptance suite could not give the same answer twice). For`,
+    `${String(report.ratio.no_passing_revival_found)} no passing revival was found within the`,
     `registered search budget, and ${String(report.ratio.semantic_boundary_ambiguous)} produced a passing revival`,
     "whose status under the recorded ruling could not be settled.",
     // Phrased to survive being quoted out of context, which is how the earlier
