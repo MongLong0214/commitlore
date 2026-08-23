@@ -1361,11 +1361,19 @@ describe("the record-blind sandbox", () => {
       "gitseed",
       "logic-pro-mcp",
     ]);
-    // Every repository must have been shown to run its own suite, because a
-    // frozen tree that fails its own acceptance scores every episode zero
-    // whatever the arm.
+    // Every repository's verdict must be one the vocabulary admits. "runnable"
+    // is not required of all four: logic-pro-mcp was recorded runnable and
+    // deterministic on two clean serial runs, and a third failed under machine
+    // load, so its verdict is PENDING. A test that demanded "runnable" would
+    // force the artifact to keep a claim two observations could not support.
     for (const [name, row] of Object.entries(repositories)) {
-      expect(String(row.verdict), name).toMatch(/runnable/);
+      expect(String(row.verdict), name).toMatch(/^(acceptance is runnable|PENDING)/);
+    }
+    // And a PENDING repository must say what is unresolved rather than leaving
+    // the reader to infer it from the absence of a verdict.
+    const pending = Object.entries(repositories).filter(([, row]) => String(row.verdict).startsWith("PENDING"));
+    for (const [name, row] of pending) {
+      expect(JSON.stringify(row), name).toMatch(/no longer established as|not established as deterministic/);
     }
     // The two configurations this screen had to choose are in the runtime lock,
     // not only in the prose that discovered them.

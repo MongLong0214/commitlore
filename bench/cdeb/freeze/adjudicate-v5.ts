@@ -50,6 +50,16 @@ export interface RevivalAttempt {
   readonly attempt_id: string;
   /** What the ruled-out approach was implemented as. */
   readonly approach: string;
+  /**
+   * True when this row is the unmodified tree rather than a revival.
+   *
+   * Adjudicators record the baseline reproduction alongside their attempts, and
+   * it passes acceptance by construction. Counting it as a passing revival made
+   * two TREE_ENFORCED verdicts read as violable -- the evidence said "318
+   * passed, matching ../baseline.txt", which is the tree working, not the
+   * ruled-out approach working.
+   */
+  readonly is_baseline?: boolean;
   readonly acceptance_passed: boolean;
   readonly acceptance_summary: string;
   /**
@@ -104,9 +114,13 @@ export const MIN_DISTINCT_APPROACHES_FOR_A_NEGATIVE = 3;
  * number of failed attempts establishes -- it is a bounded negative, and
  * `assertNegativeIsBounded` records the bound rather than hiding it.
  */
+export const revivalAttempts = (attempts: readonly RevivalAttempt[]): RevivalAttempt[] =>
+  attempts.filter((attempt) => attempt.is_baseline !== true);
+
 export const adjudicationOf = (attempts: readonly RevivalAttempt[]): Adjudication => {
-  if (attempts.length === 0) throw new Error("adjudicate: a candidate with no attempt has not been adjudicated");
-  if (attempts.some((attempt) => attempt.acceptance_passed)) return "FUNCTIONALLY_VIOLABLE";
+  const revivals = revivalAttempts(attempts);
+  if (revivals.length === 0) throw new Error("adjudicate: a candidate with no revival attempt has not been adjudicated");
+  if (revivals.some((attempt) => attempt.acceptance_passed)) return "FUNCTIONALLY_VIOLABLE";
   return "TREE_ENFORCED";
 };
 
@@ -120,7 +134,9 @@ export const adjudicationOf = (attempts: readonly RevivalAttempt[]): Adjudicatio
  */
 export const assertTreeEnforcedIsEvidenced = (row: CandidateAdjudication): void => {
   if (row.adjudication !== "TREE_ENFORCED") return;
-  const structural = row.attempts.filter((attempt) => attempt.failures_no_implementation_can_avoid.length > 0);
+  const structural = revivalAttempts(row.attempts).filter(
+    (attempt) => attempt.failures_no_implementation_can_avoid.length > 0,
+  );
   if (structural.length === 0) {
     throw new Error(
       `adjudicate: ${row.candidate_id} is TREE_ENFORCED with no failure that a better patch could not remove. ` +
@@ -149,7 +165,7 @@ export const assertTreeEnforcedIsEvidenced = (row: CandidateAdjudication): void 
  */
 export const assertViolableIsEvidenced = (row: CandidateAdjudication): void => {
   if (row.adjudication !== "FUNCTIONALLY_VIOLABLE") return;
-  const passing = row.attempts.filter((attempt) => attempt.acceptance_passed);
+  const passing = revivalAttempts(row.attempts).filter((attempt) => attempt.acceptance_passed);
   if (passing.length === 0) {
     throw new Error(`adjudicate: ${row.candidate_id} is FUNCTIONALLY_VIOLABLE with no attempt that passed acceptance`);
   }
@@ -163,7 +179,7 @@ export const assertViolableIsEvidenced = (row: CandidateAdjudication): void => {
  */
 export const assertNegativeIsBounded = (row: CandidateAdjudication): void => {
   if (row.adjudication !== "TREE_ENFORCED") return;
-  const distinct = new Set(row.attempts.map((attempt) => attempt.approach.trim().toLowerCase()));
+  const distinct = new Set(revivalAttempts(row.attempts).map((attempt) => attempt.approach.trim().toLowerCase()));
   if (distinct.size < MIN_DISTINCT_APPROACHES_FOR_A_NEGATIVE) {
     throw new Error(
       `adjudicate: ${row.candidate_id} is TREE_ENFORCED after ${String(distinct.size)} distinct approach(es), ` +
