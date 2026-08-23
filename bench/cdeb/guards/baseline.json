@@ -255,6 +255,30 @@
     {
       "guard_id": "stage1-hold-is-a-terminal-study-phase",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "v6-source-pool-is-exactly-the-prequalified-34",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "v6-regression-only-pass-is-not-a-functional-pass",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "v6-controls-judged-against-their-own-baseline",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "v6-bad-control-needs-two-agreeing-blind-judges",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "v6-floors-were-not-adjusted-to-fit-the-census",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "v6-holds-zero-measured-rows-and-makes-no-claim",
+      "outcome": "bound"
     }
   ]
 }

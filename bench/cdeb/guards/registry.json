@@ -958,6 +958,102 @@
           "why": "v4 stopped at stage0-hold and the list learned that word. v5 stopped one stage later, and a list that only knows where the previous study stopped lets the next one keep resolving as active with a published verdict already in its tree."
         }
       ]
+    },
+    {
+      "guard_id": "v6-source-pool-is-exactly-the-prequalified-34",
+      "claim": "The v6 source pool is 16 agent-operator-score and 18 gitseed decisions, every one of them classified FUNCTIONALLY_VIOLABLE by v5.",
+      "test_file": "test/cdeb-v6-buildability.test.ts",
+      "test_name": "selects exactly 16 agent-operator-score and 18 gitseed",
+      "mutations": [
+        {
+          "mutation_id": "pool-count-unchecked",
+          "file": "bench/cdeb/studies/cdeb-fresh-v6/source-pool.json",
+          "find": "\"counts_match_expected\": true",
+          "replace": "\"counts_match_expected\": false",
+          "must_fail_test": true,
+          "why": "A pool that silently gained or lost a candidate would change the population the study measured, and the expected counts are the only thing that ties it back to v5's reduced ledger."
+        }
+      ]
+    },
+    {
+      "guard_id": "v6-regression-only-pass-is-not-a-functional-pass",
+      "claim": "A control passes functionally only when the task-specific acceptance and the repository regression suite both pass.",
+      "test_file": "test/cdeb-v6-buildability.test.ts",
+      "test_name": "never calls a regression-only pass a functional pass",
+      "mutations": [
+        {
+          "mutation_id": "functional-pass-from-regression-alone",
+          "file": "bench/cdeb/studies/cdeb-fresh-v6/buildability/control-acceptance-receipts.jsonl",
+          "find": "\"candidate_id\": \"v4-04c1de5e41d66868\", \"variant\": \"goodA\", \"repository_id\": \"agent-operator-score\", \"task_acceptance\": {\"command\": \"node --test tmp/aos-planning-digest-history-free.acceptance.test.mjs\", \"command_sha256\": \"741ea5f74d4f3b76829d0377977c19165548b6e3861e62f9282498f6eb0a20ea\", \"exit_code\": 1, \"tests\": 1, \"failed\": 1, \"seconds\": 1, \"stdout_sha256\": \"dc4c81cc6e5f5cf0581e9229908243194e5a550a9e644af8ac3fb5b62484f366\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"pass\": false}, \"regression_acceptance\": {\"command\": \"node --test\", \"registered_command_sha256\": \"717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb\", \"executed_command_sha256\": \"717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb\", \"exit_code\": 1, \"total\": 605, \"passed\": 592, \"failed\": 13, \"skipped\": 0, \"unexpected_failures\": [], \"coverage_lost\": false, \"tests_silenced\": false, \"seconds\": 48, \"stdout_sha256\": \"7ca6dfa013e4a84aa6565456aa594e3a540b4c59c87eb9c2525bf8843894a6c4\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"pass\": true}, \"functional_pass\": false",
+          "replace": "\"candidate_id\": \"v4-04c1de5e41d66868\", \"variant\": \"goodA\", \"repository_id\": \"agent-operator-score\", \"task_acceptance\": {\"command\": \"node --test tmp/aos-planning-digest-history-free.acceptance.test.mjs\", \"command_sha256\": \"741ea5f74d4f3b76829d0377977c19165548b6e3861e62f9282498f6eb0a20ea\", \"exit_code\": 1, \"tests\": 1, \"failed\": 1, \"seconds\": 1, \"stdout_sha256\": \"dc4c81cc6e5f5cf0581e9229908243194e5a550a9e644af8ac3fb5b62484f366\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"pass\": false}, \"regression_acceptance\": {\"command\": \"node --test\", \"registered_command_sha256\": \"717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb\", \"executed_command_sha256\": \"717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb\", \"exit_code\": 1, \"total\": 605, \"passed\": 592, \"failed\": 13, \"skipped\": 0, \"unexpected_failures\": [], \"coverage_lost\": false, \"tests_silenced\": false, \"seconds\": 48, \"stdout_sha256\": \"7ca6dfa013e4a84aa6565456aa594e3a540b4c59c87eb9c2525bf8843894a6c4\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"pass\": true}, \"functional_pass\": true",
+          "must_fail_test": true,
+          "why": "A control that leaves the suite green while doing nothing for the task is not an implementation of the task, and the receipts are what the census counts."
+        }
+      ]
+    },
+    {
+      "guard_id": "v6-controls-judged-against-their-own-baseline",
+      "claim": "Every control is judged against a baseline measured on a tree that already contains its own acceptance file.",
+      "test_file": "test/cdeb-v6-buildability.test.ts",
+      "test_name": "judges every control against a baseline that includes its own acceptance file",
+      "mutations": [
+        {
+          "mutation_id": "repository-wide-baseline-accepted",
+          "file": "bench/cdeb/studies/cdeb-fresh-v6/buildability/control-acceptance-receipts.jsonl",
+          "find": "\"candidate_id\": \"v4-002ffd1e428c572a\", \"variant\": \"goodA\", \"repository_id\": \"agent-operator-score\", \"task_acceptance\": {\"command\": \"node --test packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts\", \"command_sha256\": \"ae81c9838389c001431eed1609df6cb59f896064253f40fcdaf04a8c7c7a9d01\", \"exit_code\": 0, \"tests\": 1, \"failed\": 0, \"seconds\": 0, \"stdout_sha256\": \"461357a646884871e020794bfe7f01902c2d0d8b923e36158cf4d13ba8214cc5\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"pass\": true}, \"regression_acceptance\": {\"command\": \"node --test\", \"registered_command_sha256\": \"717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb\", \"executed_command_sha256\": \"717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb\", \"exit_code\": 1, \"total\": 606, \"passed\": 590, \"failed\": 16, \"skipped\": 0, \"unexpected_failures\": [], \"coverage_lost\": false, \"tests_silenced\": false, \"seconds\": 62, \"stdout_sha256\": \"695334fb0d2ce8b737b0d1c8c24f36ea818fe9ba52302a6ce518b4ba1aefce38\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"pass\": true}, \"functional_pass\": true, \"baseline_used\": \"per-candidate\"",
+          "replace": "\"candidate_id\": \"v4-002ffd1e428c572a\", \"variant\": \"goodA\", \"repository_id\": \"agent-operator-score\", \"task_acceptance\": {\"command\": \"node --test packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts\", \"command_sha256\": \"ae81c9838389c001431eed1609df6cb59f896064253f40fcdaf04a8c7c7a9d01\", \"exit_code\": 0, \"tests\": 1, \"failed\": 0, \"seconds\": 0, \"stdout_sha256\": \"461357a646884871e020794bfe7f01902c2d0d8b923e36158cf4d13ba8214cc5\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"pass\": true}, \"regression_acceptance\": {\"command\": \"node --test\", \"registered_command_sha256\": \"717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb\", \"executed_command_sha256\": \"717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb\", \"exit_code\": 1, \"total\": 606, \"passed\": 590, \"failed\": 16, \"skipped\": 0, \"unexpected_failures\": [], \"coverage_lost\": false, \"tests_silenced\": false, \"seconds\": 62, \"stdout_sha256\": \"695334fb0d2ce8b737b0d1c8c24f36ea818fe9ba52302a6ce518b4ba1aefce38\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"pass\": true}, \"functional_pass\": true, \"baseline_used\": \"repository-wide\"",
+          "must_fail_test": true,
+          "why": "Adding one acceptance file fails eight of agent-operator-score's own census tests before any implementation exists, and four sound controls had already been recorded as failures because of it."
+        }
+      ]
+    },
+    {
+      "guard_id": "v6-bad-control-needs-two-agreeing-blind-judges",
+      "claim": "A candidate is TASK_BUILDABLE only when two independent blind judges agree its Bad control violates the recorded decision.",
+      "test_file": "test/cdeb-v6-buildability.test.ts",
+      "test_name": "reads the shortfall as TERMINAL_HOLD_FINAL rather than as a smaller study",
+      "mutations": [
+        {
+          "mutation_id": "single-judge-suffices",
+          "file": "bench/cdeb/studies/cdeb-fresh-v6/buildability/summary.json",
+          "find": "\"verdict\": \"TERMINAL_HOLD_FINAL\"",
+          "replace": "\"verdict\": \"GO\"",
+          "must_fail_test": true,
+          "why": "One Bad control passed both acceptances and both judges called it compliant; a verdict that ignores the judging would have counted it."
+        }
+      ]
+    },
+    {
+      "guard_id": "v6-floors-were-not-adjusted-to-fit-the-census",
+      "claim": "The task-buildability floors are the ones the preregistration fixed -- 10 per repository, 22 in total -- and the shortfall reads as TERMINAL_HOLD_FINAL.",
+      "test_file": "test/cdeb-v6-buildability.test.ts",
+      "test_name": "holds the floors at the values the preregistration fixed",
+      "mutations": [
+        {
+          "mutation_id": "floor-lowered-to-fit",
+          "file": "bench/cdeb/studies/cdeb-fresh-v6/buildability/summary.json",
+          "find": "\"per_repository\": 10",
+          "replace": "\"per_repository\": 8",
+          "must_fail_test": true,
+          "why": "Eight is exactly what agent-operator-score reached. A floor adjusted after the census is a floor chosen to be met."
+        }
+      ]
+    },
+    {
+      "guard_id": "v6-holds-zero-measured-rows-and-makes-no-claim",
+      "claim": "v6 holds no product-effect rows and its published result carries no effect claim.",
+      "test_file": "test/cdeb-v6-buildability.test.ts",
+      "test_name": "holds zero measured product-effect rows and reaches no claim",
+      "mutations": [
+        {
+          "mutation_id": "measured-rows-nonzero",
+          "file": "bench/cdeb/studies/cdeb-fresh-v6/STATUS.json",
+          "find": "\"product_effect_rows\": 0",
+          "replace": "\"product_effect_rows\": 8",
+          "must_fail_test": true,
+          "why": "The study stopped before any episode, and a status claiming rows would let a later reader treat it as having measured something."
+        }
+      ]
     }
   ]
 }
