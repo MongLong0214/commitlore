@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v5",
+  "stage": "stage1-r1",
+  "artifact": "instrument-defects-found-while-running-the-census",
+  "written": "while the census was still running, so the list cannot be trimmed to what the final numbers make comfortable",
+  "why_this_belongs_in_the_record": "The census measured two things. One is the corpus: how many naturally recorded decisions are still functionally violable. The other is the instrument that measured it, and the instrument turned out to have more defects than the corpus had surprises. A census that reports only the first number would be reporting a figure produced by machinery it did not describe.",
+  "defects": [
+    {
+      "defect": "a negative verdict is an unproven universal",
+      "found_by": "an accidental overlap: two dispatchers adjudicated three candidates twice, and one pair disagreed",
+      "impact": "four TREE_ENFORCED verdicts overturned on re-examination, all of which had stopped at two attempts",
+      "fix": "a registered minimum of three structurally distinct approaches, and the verdict recorded as a bounded negative",
+      "residual": "three is a floor that was tested, not a guarantee. Three variations on one idea would still miss a fourth shape"
+    },
+    {
+      "defect": "adjudicators judged a subset because the sandbox forbade the full acceptance",
+      "found_by": "a validator rejected one row for claiming violable with no passing attempt; reading it found six more",
+      "impact": "seven verdicts voided -- an entire repository's worth",
+      "fix": "that repository runs under the sandbox its own suite needs; the others keep the narrower one",
+      "residual": "the seven were caught because one contradicted itself. A sandbox that narrows what runs without producing a self-contradictory row would still pass"
+    },
+    {
+      "defect": "the baseline, four separate ways",
+      "found_by": "each one differently: a repository stuck at zero for forty minutes, a validator rejection, and once by noticing my own reasoning mid-edit",
+      "impact": "tail -3 captured a duration line instead of a test summary, leaving an empty baseline that anything matched; a killed run left a zero-byte file that read as a cache; a stale copy survived in a candidate directory after the cache was fixed; and I nearly seeded a baseline from a PATCHED tree rather than an unmodified one",
+      "fix": "atomic rename on write, unconditional re-copy per candidate, verdict-line-only extraction, and the cache as the single source",
+      "residual": "a wrong baseline is invisible -- it produces verdicts that look exactly like correct ones, which is why the same site failed four times before the pattern was clear"
+    },
+    {
+      "defect": "per-repository rates are not comparable",
+      "found_by": "noticing the acceptance commands differ in scope while the rates were being tallied",
+      "impact": "none, because the comparison was refused before it was made",
+      "fix": "counts are published beside the command that produced them and no cross-repository claim is made",
+      "residual": "the equal-weight estimand does not need the comparison, so nothing in the primary analysis depends on this"
+    },
+    {
+      "defect": "a heuristic screen that matched the dictionary",
+      "found_by": "running a null with unrelated English words",
+      "impact": "none: 61-of-62 was discarded before it was used",
+      "fix": "no screen has exclusion authority without a null demonstrating its false-positive rate",
+      "residual": "the null only covers the screens that were tried. A screen nobody thought to null would still carry authority it has not earned"
+    },
+    {
+      "defect": "the quiet-machine precondition is not mine to guarantee",
+      "found_by": "counting codex processes and finding four of the six belonged to another session running PR reviews at /private/tmp/review-pr-390 and -391. Load average was 15.84 with 30 swift processes.",
+      "impact": "logic-pro-mcp verdicts are being produced under load that I neither caused nor can stop. Its suite failed once with 'Timed out waiting for matching MCP frame' under exactly this condition, so a verdict from this window may be about the machine rather than the patch. The baseline itself was captured during a genuinely quiet moment, so the reference is sound and the comparisons against it may not be.",
+      "fix": "None available from inside this session. The wait-for-quiet gate counts every codex process, so it cannot distinguish my load from another session's, and it cannot pause work it does not own.",
+      "residual": "This is the one defect on the list with no fix. Any logic-pro-mcp verdict is recorded with the machine load at the time so a reader can judge it, and a TREE_ENFORCED verdict from a loaded window is treated as provisional -- a timeout is a failure, and a failure is what produces a negative. The asymmetry runs the wrong way here: load can only manufacture negatives, and negatives are the verdicts this census has already had to overturn four times."
+    }
+  ],
+  "the_direction_of_every_correction": "Each of these moved candidates from unusable toward usable, or refused a comparison that would have made the corpus look worse -- with one exception. Machine load can only manufacture negatives, so verdicts produced under it can understate violability further. Both error directions therefore push the same way: the census can understate how violable this corpus is and cannot overstate it."
+}
