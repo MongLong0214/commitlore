@@ -247,6 +247,10 @@
     {
       "guard_id": "stage1-r1-an-unreachable-floor-settles-the-study",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-violability-has-two-denominators",
+      "outcome": "bound"
     }
   ]
 }
