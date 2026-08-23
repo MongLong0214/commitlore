@@ -203,6 +203,46 @@
     {
       "guard_id": "stage1-r1-sizing-takes-no-pilot-input",
       "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-receipt-catches-a-narrowed-command",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-adjudication-fails-closed-without-a-receipt",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-a-passing-revival-is-not-automatically-a-violation",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-negative-counts-shapes-not-wording",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-baseline-must-name-its-failures",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-void-is-not-a-negative",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-semantic-verdict-needs-two-agreeing-judges",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-an-unchanged-tree-is-not-a-revival",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-scope-conflict-comes-from-the-ruling",
+      "outcome": "bound"
+    },
+    {
+      "guard_id": "stage1-r1-a-revival-may-not-remove-or-silence-tests",
+      "outcome": "bound"
     }
   ]
 }
