@@ -1,0 +1,1755 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "document_id": "cdeb-fresh-v7-control-replay",
+  "what_was_replayed": "Base and Bad A, on a fresh tree cloned from the sealed bundle at the locked snapshot commit, carrying the frozen acceptance file",
+  "what_was_not_replayed": "Good A and Good B, whose bytes v6 did not preserve; v7 builds its own under deviation v7-d003",
+  "no_oracle_run": true,
+  "baseline_used": "per-candidate, measured in v6 on a tree already carrying the acceptance file",
+  "candidates": 17,
+  "base_and_badA_pass": 16,
+  "failures": 1,
+  "failing_candidates": [
+    "v4-f3c960a48273132c"
+  ],
+  "results": [
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-002ffd1e428c572a",
+      "repository_id": "agent-operator-score",
+      "base": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+          "command_sha256": "ae81c9838389c001431eed1609df6cb59f896064253f40fcdaf04a8c7c7a9d01",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "429146a34d4e52b91d5acc38b0abce6c5cff751d30ec2dbd3b9e58951a6df6c5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 39,
+          "stdout_sha256": "d14a0cc2282010c054a666efd9889af1a287eccd9645f7fc04daf3b5d4fbda1a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+          "command_sha256": "ae81c9838389c001431eed1609df6cb59f896064253f40fcdaf04a8c7c7a9d01",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "ae1aac1160cfcf24be1d2243a6e41e62c12eec894e2531399d7519d5a83665a4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 606,
+          "passed": 595,
+          "failed": 11,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 41,
+          "stdout_sha256": "1c1c22676137d58bc767483cc7cdfb4dfe2deea24d84246d4d45f779f0fb286e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/src/capability.ts",
+          "packages/schema/test/capability.test.ts",
+          "scripts/validate-planning.mjs",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs",
+          "packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts"
+        ],
+        "final_tree_oid": "e37429a0481a51e17da6e2447c6959f32d02f4e7"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "ee96ac48adaa6b9f1c30cda20021b5946ee3e043c6a5ed64ac5e9832e7a74b1d",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:46:22Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_custom_evidence_reader_acceptance.py",
+          "command_sha256": "d2130588ac053eea03b4dd0e414d0128273ed0bd2ce9c0e67bccfe18dfa08636",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "665b535bae1fe4b76e46eaf24188ba31c5bb7b90bc52842dd6b7b91edd99c7a0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "1f92e8cc31d55fd3af894453fac8c3536a1c0632d6abd66e7b40cbe765b9dcb0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_custom_evidence_reader_acceptance.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_custom_evidence_reader_acceptance.py",
+          "command_sha256": "d2130588ac053eea03b4dd0e414d0128273ed0bd2ce9c0e67bccfe18dfa08636",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "35d86279d96ed65491ba8ff0748e1c8e7891711531404dc5d4b9cd6ae33de3ec",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 0,
+          "total": 322,
+          "passed": 319,
+          "failed": 0,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "f2aba4f835adcb68a95931d2f17ac81f3247003b16a10c0ad8a112653b4ef232",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "gitseed/adapters.py",
+          "gitseed/application.py",
+          "gitseed/category.py",
+          "gitseed/cli.py",
+          "gitseed/ports.py",
+          "tests/test_custom_evidence_reader_acceptance.py"
+        ],
+        "final_tree_oid": "feafb3eece773ca54f303195034d77c0055ce7a2"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "8411ae82cffc5639358c0e9d702cb2827b302e89bd7ae44af79b9e93ba9e1b8a",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:31:09Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "repository_id": "agent-operator-score",
+      "base": {
+        "task_acceptance": {
+          "command": "node --test tests/epic-dependency-normalization.acceptance.test.mjs",
+          "command_sha256": "02d007e0950d52170494ecc32ef82d11c5a296c0d5577c519b832fa4f83885c4",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "f31379c3704c30a6e84a0ccb107af5fc91ce0e9308101bff02f4e5722fe4eb5a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 592,
+          "failed": 13,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 48,
+          "stdout_sha256": "fef81af07a087d5f8e666c1acdc188c758c17f7e2a3815da6916277f973bdc3d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 592,
+          "failed": 13,
+          "skipped": 0
+        },
+        "changed_files": [
+          "tests/epic-dependency-normalization.acceptance.test.mjs"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "node --test tests/epic-dependency-normalization.acceptance.test.mjs",
+          "command_sha256": "02d007e0950d52170494ecc32ef82d11c5a296c0d5577c519b832fa4f83885c4",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "908d8876856518c1792f0a8442d2d26f5d7d61500da2feff142c5728059a8436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 608,
+          "passed": 599,
+          "failed": 9,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 48,
+          "stdout_sha256": "5b4c92ddd7ce6e0a80228452637c9faf49c5f967765cbe16e79c64220f6c7b64",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 592,
+          "failed": 13,
+          "skipped": 0
+        },
+        "changed_files": [
+          "docs/issues.json",
+          "docs/planning/AOS-EXECUTION-ROADMAP.md",
+          "docs/tickets/BOARD.md",
+          "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+          "docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md",
+          "docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md",
+          "scripts/validate-planning.mjs",
+          "tests/planning-contract.test.mjs",
+          "tests/epic-dependency-normalization.acceptance.test.mjs"
+        ],
+        "final_tree_oid": "e55c710f80934ecb4f07c402a45cdce5b53d6cce"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "502a17fbe0cdeb3289cef5c8a237f14686d6852cb1f100161cba2fa3a1fab33a",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:34:33Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-377f04276465b59d",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_ci_action_pinning.py",
+          "command_sha256": "7c926cc83ee870738a4cad17dadaddf27c9715825b0089af206bbc75e012e96e",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "0bfbc30913739fcbb8a2e6a3f8d6776015056beeb1f236c3c5fccc2d0d939a00",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "93a83f418849835e4b4a24555dcd9b5c14618cd5ccb5c7d7a87b24a4d2d7915a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_ci_action_pinning.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_ci_action_pinning.py",
+          "command_sha256": "7c926cc83ee870738a4cad17dadaddf27c9715825b0089af206bbc75e012e96e",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "4bcefcc9f6c645923b9993ccf73ad92e6b400ca25458ea14e095857fc2131342",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 0,
+          "total": 322,
+          "passed": 319,
+          "failed": 0,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "1ae63ed0852f9204c158b6d8744a01306fd04b920340ced13076a942a4631860",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          ".github/workflows/ci.yml",
+          "tests/test_ci_action_pinning.py"
+        ],
+        "final_tree_oid": "61a058df49a0eea137679da5e46333788f6a36b0"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "a1e47247a2a7da0f886dff2ccaa25491d309c69ed64783f5e619f10dbaac70a0",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:42:04Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-77e1745655a235ce",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_category_manifest_evidence.py",
+          "command_sha256": "d6bef3613bfcd06ea3f575fbcd648af696f4e433524ee2ce20ebce999ea3534b",
+          "exit_code": 1,
+          "tests": 10,
+          "failed": 5,
+          "seconds": 0,
+          "stdout_sha256": "c9dec86ae8a9ab0e72f7e0db2210079c9c90029cf8bdf66889b8338d03f79d83",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 331,
+          "passed": 323,
+          "failed": 5,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "80269e987044dd6e13386d7769655e2f5e050369ed360f96686509074e78169e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 331,
+          "passed": 323,
+          "failed": 5,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_category_manifest_evidence.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_category_manifest_evidence.py",
+          "command_sha256": "d6bef3613bfcd06ea3f575fbcd648af696f4e433524ee2ce20ebce999ea3534b",
+          "exit_code": 0,
+          "tests": 10,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "1253f6ca793d46eb9c48b6f1606064815d0bb62be75a701be4c49494044e47ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 0,
+          "total": 331,
+          "passed": 328,
+          "failed": 0,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "7ec23626c3d388d69275c5772682af80240767bf3524a11e516bd1abefdd44f6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 331,
+          "passed": 323,
+          "failed": 5,
+          "skipped": 3
+        },
+        "changed_files": [
+          "gitseed/category.py",
+          "tests/test_category_manifest_evidence.py"
+        ],
+        "final_tree_oid": "8caa7aa382aa58fa4bf19aa4bc98aa486135c117"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "49a96744743faa792bfe1cdd1a463cd8686f1b4b1531d40f392e463233ba68d4",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:42:10Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_correction_point_lookup_acceptance.py",
+          "command_sha256": "0ed7cedf9e6f26bf3dab214decccfedc1c6a53c0477ed34b7b1dc613c352e129",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "c6ff80dae0091967485fce8fe109657bc6de543978596b8af7e06169f784e4bd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "87c8b69c2ab8835cba6a8610aa83b23dff703bfb416e5a1e2aedb3c6c18387e4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_correction_point_lookup_acceptance.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_correction_point_lookup_acceptance.py",
+          "command_sha256": "0ed7cedf9e6f26bf3dab214decccfedc1c6a53c0477ed34b7b1dc613c352e129",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "5b19689a97d618d5cdfce632de67285a8efa3c57100a80350a5bb7ca9e05ae34",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 0,
+          "total": 322,
+          "passed": 319,
+          "failed": 0,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "ddb881892fc82b43f6d1c89e7a0bc8690e57f68c75dd05e057e60ed168dec76a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "gitseed/storage.py",
+          "gitseed/storage_schema.py",
+          "tests/test_correction_point_lookup_acceptance.py"
+        ],
+        "final_tree_oid": "e6491abc305ceac522f4de65da2212f121357f56"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "3f5b01c4513f47918370d52c7d363622024c2a7c52cd136579d7f6554b990f95",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:42:17Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-8f24735524874167",
+      "repository_id": "agent-operator-score",
+      "base": {
+        "task_acceptance": {
+          "command": "node --test tests/acceptance/schema-doctor-lane.test.mjs",
+          "command_sha256": "fa63d861c1cd592dffa8bccab6c82d31c74d849d3bb0350f4af4d22a2f557f83",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 1,
+          "stdout_sha256": "f17f83780d0cac8ca3484b5281f4c74ec558aabca839ecb1aa916937adb7bb45",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 592,
+          "failed": 13,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 39,
+          "stdout_sha256": "a48b2fd47a7ee4ce7e665eb039a4ef0720dc86b371da633bd1010f267ca601fd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 592,
+          "failed": 13,
+          "skipped": 0
+        },
+        "changed_files": [
+          "tests/acceptance/"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "node --test tests/acceptance/schema-doctor-lane.test.mjs",
+          "command_sha256": "fa63d861c1cd592dffa8bccab6c82d31c74d849d3bb0350f4af4d22a2f557f83",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 1,
+          "stdout_sha256": "f0d398143458183ebcc10dea0453614fdcb172d4fa696635c6789acfff50971a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 593,
+          "failed": 12,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 36,
+          "stdout_sha256": "277eaa80621522208655c53e9a5e54a9fdabdc3f1083a4dc139d5f1f58e45c6f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 592,
+          "failed": 13,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/package.json",
+          "packages/schema/src/doctor-contract.ts",
+          "packages/schema/test/doctor-contract.test.ts",
+          "specs/doctor-output.v0.json",
+          "tests/planning/workspace-skeleton.test.mjs",
+          "tests/acceptance/"
+        ],
+        "final_tree_oid": "86fb011849e0e89f2c75243690207c444006b563"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "c530960d6ff985aefb12d3daceeff8180dd87b32f0c7f4413c2d3fd83e376475",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:35:51Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_collect_paging_validation_acceptance.py",
+          "command_sha256": "043c0a913710e719f725d5150749e5dd2e81b697201996961e55fc2a3febd6bd",
+          "exit_code": 1,
+          "tests": 7,
+          "failed": 5,
+          "seconds": 0,
+          "stdout_sha256": "69e1a47dcc7b6ec5864b4b4fb76b25d7e93ade35807cf19a8c76f7c3758dad78",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 328,
+          "passed": 320,
+          "failed": 5,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "053cc642b3433340d5e5cb81cece84c79a2cbfef94cfcbd5d6cf236f3ecf0442",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 328,
+          "passed": 320,
+          "failed": 5,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_collect_paging_validation_acceptance.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_collect_paging_validation_acceptance.py",
+          "command_sha256": "043c0a913710e719f725d5150749e5dd2e81b697201996961e55fc2a3febd6bd",
+          "exit_code": 0,
+          "tests": 7,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "ee09f6debd9f81709cd5af75a47e8b1c6ed9a94b8e82a9b34c00f597199e9c17",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 0,
+          "total": 336,
+          "passed": 333,
+          "failed": 0,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "26ce4e032e2b554bca8a5f3b6380a7d7b7272c70556bfaa687668978d7f8d9e8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 328,
+          "passed": 320,
+          "failed": 5,
+          "skipped": 3
+        },
+        "changed_files": [
+          "gitseed/collect/search.py",
+          "tests/test_collect.py",
+          "tests/test_collect_paging_validation_acceptance.py"
+        ],
+        "final_tree_oid": "5576b22d0726afc1129fab6882a58185b24dc9b9"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "43aed82fbe6b4e48620f6a3fa7a6d3da6862d0f0f178f85c06bb11fa335c434c",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:42:23Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-9b42b1951da730e1",
+      "repository_id": "agent-operator-score",
+      "base": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/metric-registry.contract-fields.acceptance.test.ts",
+          "command_sha256": "d1bc2f335e9df4a976d2815086b1736e8bcf6967569034b4bcac0438b9a7051c",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "d7ec48488733d864556196a30ad00a49c998150f43e781a33572e69d5931ca50",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 34,
+          "stdout_sha256": "5a7cfc9c7483ee5a2b4b3b1718b03b309adcc6128e6862b889ea2b3f091baa7c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/test/metric-registry.contract-fields.acceptance.test.ts"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/metric-registry.contract-fields.acceptance.test.ts",
+          "command_sha256": "d1bc2f335e9df4a976d2815086b1736e8bcf6967569034b4bcac0438b9a7051c",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "7d561c6ff2cd1e43db688d91e25f7fddd4ad7a963082e4b8cfc596bd5b760e62",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 589,
+          "failed": 16,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 33,
+          "stdout_sha256": "fa9098986c77a68a9df76ad8c7df8b48fab7a7ba509a2201d66811bd445a7ee9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/src/metric-registry.ts",
+          "scripts/validate-planning.mjs",
+          "tests/planning-contract.test.mjs",
+          "packages/schema/test/metric-registry.contract-fields.acceptance.test.ts"
+        ],
+        "final_tree_oid": "07d4cd337b3f485027502d5699aacb12b14c8334"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "117277c6ced54e78663498078b03350d58dfb499d5454faa60ebfaea6f5c027f",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:36:58Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "repository_id": "agent-operator-score",
+      "base": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/capability-derivation-proof.acceptance.test.ts",
+          "command_sha256": "782cb77a3a95cb4f50030403f026210ed3044a2d8f276765acecdf449858bda4",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "e1923056fa0d557cab795860657f816ffb3261fdcb0bb43e7a2e8ce6b3b46422",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 33,
+          "stdout_sha256": "73f090b1835e76ce88f0ae9f5276d4cdb7ad0b2b2d7ce3ab85df94665e6b2590",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/test/capability-derivation-proof.acceptance.test.ts"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/capability-derivation-proof.acceptance.test.ts",
+          "command_sha256": "782cb77a3a95cb4f50030403f026210ed3044a2d8f276765acecdf449858bda4",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "97b187a533cef2a45e6fe7213e49d4d4e2de78a1a736ab2aad0d7b1a0fe4aeb3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 591,
+          "failed": 14,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 36,
+          "stdout_sha256": "7a8e896f5ec41f52777ed57717dc98ed0b9698ab3997a515a6d15ebfc8fa00c1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/src/capability.ts",
+          "packages/schema/test/capability.test.ts",
+          "tests/planning/workspace-skeleton.test.mjs",
+          "packages/schema/test/capability-derivation-proof.acceptance.test.ts"
+        ],
+        "final_tree_oid": "e41460d4600f35b1980e5ce38337ff7874294abd"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "d8cb9be2747afb19605dee3c7c3defb59b65c8501012efb78fdc680e8b43249c",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:38:07Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-cadfb63755c3f504",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_pipeline_collection_rate_limit.py",
+          "command_sha256": "4139ac9b47d6eefe7979c6303e3375b22def185ee936bac94ace295eae4825b6",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "6a8fe2a233175d1cd65c43b8e2568476918a84b157421fbf2a9381a3fd44e20d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "38a072078c8b1260f2c06570cceeda1f34f16c54fb17f118647ac8581b925b94",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_pipeline_collection_rate_limit.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_pipeline_collection_rate_limit.py",
+          "command_sha256": "4139ac9b47d6eefe7979c6303e3375b22def185ee936bac94ace295eae4825b6",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "a71df3ef716cabe43ead70bd8311cda3aeadcb986bea501da0ea9262f31c3925",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 0,
+          "total": 322,
+          "passed": 319,
+          "failed": 0,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "617662c085846aa5b9c1960dac36b31aad48ee2d9956eb0a0ffdfb701fb63d5b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "gitseed/pipeline/run.py",
+          "tests/test_pipeline_collection_rate_limit.py"
+        ],
+        "final_tree_oid": "f71ce32e06d6e03ef6a46bff1c5e21c28fd92b56"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "6f27f52af9c2c375238b5d7707ad276eb1acccf54986e58e5ee205e485af725c",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:42:30Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "repository_id": "agent-operator-score",
+      "base": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/capability-validation-result.acceptance.test.ts",
+          "command_sha256": "21e1291eb1df3f802d9342c9c533b35877eff4f94b1cbcc883b4fd05b9ac4fe1",
+          "exit_code": 1,
+          "tests": 2,
+          "failed": 2,
+          "seconds": 0,
+          "stdout_sha256": "e869ace6d0886ce4b380520020f35d00b7981fbcecb21d8e3875794c449ea13d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 606,
+          "passed": 588,
+          "failed": 18,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 34,
+          "stdout_sha256": "a42a6796e3eded77e7256e1f23192b130d902320fa771fe9e67e6e38e9a66c1d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 606,
+          "passed": 588,
+          "failed": 18,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/test/capability-validation-result.acceptance.test.ts"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/capability-validation-result.acceptance.test.ts",
+          "command_sha256": "21e1291eb1df3f802d9342c9c533b35877eff4f94b1cbcc883b4fd05b9ac4fe1",
+          "exit_code": 0,
+          "tests": 2,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "a7cba06c2f365c557c829ece05b327773b25227822b64927e18a22198aed7e8e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 606,
+          "passed": 597,
+          "failed": 9,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 36,
+          "stdout_sha256": "320f28d4200edb2d613fe0c55c801a278f1962e07985b1aad10f015ecb51d644",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 606,
+          "passed": 588,
+          "failed": 18,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/src/capability.ts",
+          "scripts/validate-planning.mjs",
+          "tests/planning/workspace-skeleton.test.mjs",
+          "packages/schema/test/capability-validation-result.acceptance.test.ts"
+        ],
+        "final_tree_oid": "501dc9e7b76a0cc684a31375cab5433127865606"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "ddd7905387908493c7a8526ed0d32ead149bafef4a68b60bb4a583331b5a63a9",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:39:17Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "repository_id": "agent-operator-score",
+      "base": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/metric-registry-envelope.acceptance.test.ts",
+          "command_sha256": "4845ef9e39ed187cf8b74e954220cb1310379349d6caf203e8457e3db542ab73",
+          "exit_code": 1,
+          "tests": 9,
+          "failed": 7,
+          "seconds": 0,
+          "stdout_sha256": "2d4698651a873aa1057c9558bf5ca3641c11354643ea5a43958bf2fca30b9ba5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 613,
+          "passed": 590,
+          "failed": 23,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 34,
+          "stdout_sha256": "f36db85dc628c52cf0517d18250a0dbe77fb4322b67c1a7379126dfecec31f0c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 613,
+          "passed": 590,
+          "failed": 23,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/test/metric-registry-envelope.acceptance.test.ts"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/metric-registry-envelope.acceptance.test.ts",
+          "command_sha256": "4845ef9e39ed187cf8b74e954220cb1310379349d6caf203e8457e3db542ab73",
+          "exit_code": 0,
+          "tests": 9,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "c8ab46a53c75c6f9b647d6b9f4e891defc18639adce0eb649dfb074221524f27",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 613,
+          "passed": 604,
+          "failed": 9,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 38,
+          "stdout_sha256": "24abe276a0b81bfd9882ad22cbf64202345597348c19cdf10c783f83ecbc8b02",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 613,
+          "passed": 590,
+          "failed": 23,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/src/metric-registry.ts",
+          "scripts/validate-planning.mjs",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs",
+          "packages/schema/test/metric-registry-envelope.acceptance.test.ts"
+        ],
+        "final_tree_oid": "87b10f82ba967ceebef7d57fc24b780b35abdc8a"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "1f84cfbd89057a6e09e2c1690d94adac605a62eee39ce8d01a7f25c310fd10dc",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:40:29Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-e7587b2b65750306",
+      "repository_id": "agent-operator-score",
+      "base": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/metric-definition.public-contract.test.mjs",
+          "command_sha256": "359f54365ec034232d09425752a2236af2121327f8497b6f3444292f34016abf",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 1,
+          "stdout_sha256": "234a832973b95da9db665c93d3585507232617db453eab14c3281926a0baa450",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 45,
+          "stdout_sha256": "dfe4e9745a01b1412e235687c7d0f649b9c29c3a7f60693efee450a87c24e4fe",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/test/metric-definition.public-contract.test.mjs"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "node --test packages/schema/test/metric-definition.public-contract.test.mjs",
+          "command_sha256": "359f54365ec034232d09425752a2236af2121327f8497b6f3444292f34016abf",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 1,
+          "stdout_sha256": "362ae9589afdc88a41a0d0fc984ba19603c69e1239dfa6c54524a989df7c4ca0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "node --test",
+          "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+          "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+          "exit_code": 1,
+          "total": 605,
+          "passed": 591,
+          "failed": 14,
+          "skipped": 0,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 42,
+          "stdout_sha256": "40734480326855f6bffb673e6270dd01fd41bee9ad275a7788004fd82996d58d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 605,
+          "passed": 588,
+          "failed": 17,
+          "skipped": 0
+        },
+        "changed_files": [
+          "packages/schema/src/metric-registry.ts",
+          "tests/planning/workspace-skeleton.test.mjs",
+          "packages/schema/test/metric-definition.public-contract.test.mjs"
+        ],
+        "final_tree_oid": "c21feb5d97b65c35d27858d1ef53ae663288c547"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "d943daea464cd2f02333619800b5650f4ae2c57a664fdded7eb15497f5bd77ba",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:41:57Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-ed878960135ff45a",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_observation_ordering_acceptance.py",
+          "command_sha256": "834d629ebeb377a34d04251f53886e15fa4ade77728369b3b2a8707157bd3f87",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "aff97703ba366b1409c6149a2c9e8125aeb0edee8d0114cbcca3ca33d3b9d712",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "f7f4dcb1b3354afdfcecc0991311f7aedacd1964fd51171b223bff5771d89af7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_observation_ordering_acceptance.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_observation_ordering_acceptance.py",
+          "command_sha256": "834d629ebeb377a34d04251f53886e15fa4ade77728369b3b2a8707157bd3f87",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "f4c77b58e2280613a49ba18da1c4a02d440e862c49a6c8fe5daaf277333ff99d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 0,
+          "total": 322,
+          "passed": 319,
+          "failed": 0,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "2b67de66e97ec3800fe212440bdcfa3c38d49658b54c2d838cb44755e59e5554",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "gitseed/storage.py",
+          "tests/test_observation_ordering_acceptance.py"
+        ],
+        "final_tree_oid": "a757bdd7a648382cec39db55a4c5e186f8f3ab53"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "1444a8da1c326bf69212316083dc924b5f91e603ef1d5be4b76bb2195895d2c8",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:42:36Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-f3c960a48273132c",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_evidence_reader_fallback.py",
+          "command_sha256": "44ce3874cc98342d57bb2d85d6ccfa3ebbca90d171401eabc7c6fed2f376c61e",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "a101a69df5735131e07d20682ac994cbbb5d0ec2f62d14d13aace4aa6326465c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "ba8d0d13094c4e99e2b343621f1c89a3294a6b393e43fb03309fcc1d6ed9a5d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_evidence_reader_fallback.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_evidence_reader_fallback.py",
+          "command_sha256": "44ce3874cc98342d57bb2d85d6ccfa3ebbca90d171401eabc7c6fed2f376c61e",
+          "exit_code": 2,
+          "tests": null,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "82716d9d47f8e36b18ac92e23c07271db578d1ef52007a5fc00f88c86b02183d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 2,
+          "total": null,
+          "passed": null,
+          "failed": null,
+          "skipped": null,
+          "unexpected_failures": [],
+          "coverage_lost": true,
+          "tests_silenced": false,
+          "seconds": 0,
+          "stdout_sha256": "39380cbea3bc1fa354477874eb10cdd81a5e3dc31658f0a736b17b1f8decf364",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "gitseed/application.py",
+          "gitseed/category.py",
+          "gitseed/pipeline/run.py",
+          "gitseed/ports.py",
+          "tests/test_seam.py",
+          "tests/test_storage.py",
+          "tests/test_evidence_reader_fallback.py"
+        ],
+        "final_tree_oid": "c457e66302ca509c5eeb43f51743d6d3c81624b5"
+      },
+      "badA_matrix_pass": false,
+      "badA_patch_sha256": "a929968a94bc1a8d0d3164337103aa42e6164a331b11e9437478fbac9d9217b2",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:42:40Z"
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-f901052615fa3aee",
+      "repository_id": "gitseed",
+      "base": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_bounded_storage_reads.py",
+          "command_sha256": "33b38d1b24eac3a57601fdbd1e18da1bdf8950f4efbfc8eac2988cfad3769eb9",
+          "exit_code": 1,
+          "tests": 1,
+          "failed": 1,
+          "seconds": 0,
+          "stdout_sha256": "fba2043980e170f3dc143f511d949d945eea8194a2803eddc1587823ea0cca93",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": false
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 1,
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "489cf8e5b8d2086a65f0c140afc0ce593bf8dcedf634620322878e9ac18ba74b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "tests/test_bounded_storage_reads.py"
+        ],
+        "final_tree_oid": null
+      },
+      "base_matrix_pass": true,
+      "badA": {
+        "task_acceptance": {
+          "command": "python3 -m pytest -q tests/test_bounded_storage_reads.py",
+          "command_sha256": "33b38d1b24eac3a57601fdbd1e18da1bdf8950f4efbfc8eac2988cfad3769eb9",
+          "exit_code": 0,
+          "tests": 1,
+          "failed": 0,
+          "seconds": 0,
+          "stdout_sha256": "f4c77b58e2280613a49ba18da1c4a02d440e862c49a6c8fe5daaf277333ff99d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "regression_acceptance": {
+          "command": "python3 -m pytest -q",
+          "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+          "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+          "exit_code": 0,
+          "total": 325,
+          "passed": 322,
+          "failed": 0,
+          "skipped": 3,
+          "unexpected_failures": [],
+          "coverage_lost": false,
+          "tests_silenced": false,
+          "seconds": 3,
+          "stdout_sha256": "1743069a12815f5eded0a5389adacf131da2cc844d2a4a48d69a24a4a7fa83f6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pass": true
+        },
+        "baseline_used": "per-candidate",
+        "baseline": {
+          "total": 322,
+          "passed": 318,
+          "failed": 1,
+          "skipped": 3
+        },
+        "changed_files": [
+          "gitseed/storage.py",
+          "tests/test_storage.py",
+          ".gitseed/",
+          "tests/test_bounded_storage_reads.py"
+        ],
+        "final_tree_oid": "811f99aefd3b7d68910235b4997869bcac53a624"
+      },
+      "badA_matrix_pass": true,
+      "badA_patch_sha256": "b229e2d1c9e2afd70e02695e35870ff217871217bd2afa96f3496c8848a34d7b",
+      "goodA": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "goodB": {
+        "outcome": "BYTES_NOT_AVAILABLE",
+        "why": "v6 recorded the builder's prose and never the diff"
+      },
+      "checked_at": "2026-08-24T01:42:47Z"
+    }
+  ]
+}
