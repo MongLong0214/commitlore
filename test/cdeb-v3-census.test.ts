@@ -203,6 +203,58 @@ describe("CDEB-Fresh v3 snapshot census", () => {
     expect(entry.ineligibility_codes).toContain(`legacy-exclusion:${record!.reason}`);
   });
 
+  // The three below are the rest of the index that a candidate can actually
+  // carry. `exclusionsFor` matches an entry against candidate_id, record_ids and
+  // decision_source_refs, so a study id, a task id, a prompt or fixture hash, a
+  // randomization block and a trajectory id have no field to arrive in and no
+  // candidate can be made ineligible by them.
+  //
+  // Each pins the value it expects instead of reading it back out of the index.
+  // A test that sources both the fixture and the expectation from the same entry
+  // passes whatever that entry happens to say, which leaves the identity itself
+  // unguarded.
+  it("keeps the index's ambiguous candidate identity ineligible", () => {
+    const index = readLegacyExclusionIndex(ACTIVE_INDEX);
+    const record = index.exclusions.find((e) => e.kind === "candidate-id" && e.value === "r-d0004gatecensus");
+    expect(record).toBeDefined();
+    const files = fixture([record!]);
+    const frozen = commitDecision(files.repositoryPath, record!.value);
+    writeCensusInputs(files, frozen);
+    runCensus(files.options);
+    const [entry] = readFileSync(files.registryPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(entry).toMatchObject({ candidate_id: "r-d0004gatecensus", qualification_status: "ineligible" });
+    expect(entry.ineligibility_codes).toContain("legacy-exclusion:ambiguous-pending-adjudication");
+  });
+
+  it("keeps the benchmark-authored record ineligible", () => {
+    const index = readLegacyExclusionIndex(ACTIVE_INDEX);
+    const record = index.exclusions.find((e) => e.kind === "benchmark-authored-record" && e.value === "r-cdebp01");
+    expect(record).toBeDefined();
+    const files = fixture([record!]);
+    const frozen = commitDecision(files.repositoryPath, record!.value);
+    writeCensusInputs(files, frozen);
+    runCensus(files.options);
+    const [entry] = readFileSync(files.registryPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(entry).toMatchObject({ candidate_id: "r-cdebp01", qualification_status: "ineligible" });
+    expect(entry.ineligibility_codes).toContain("legacy-exclusion:benchmark-authored");
+  });
+
+  it("keeps the publicly answer-exposed decision ineligible under its own reason", () => {
+    // This value is also the record-id entry's value, so a candidate carrying it
+    // collects both codes. The reason is what separates them, and the reason is
+    // what a reader of the census sees.
+    const index = readLegacyExclusionIndex(ACTIVE_INDEX);
+    const record = index.exclusions.find((e) => e.kind === "publicly-answer-exposed-decision" && e.value === "r-gcunstageable");
+    expect(record).toBeDefined();
+    const files = fixture([record!]);
+    const frozen = commitDecision(files.repositoryPath, record!.value);
+    writeCensusInputs(files, frozen);
+    runCensus(files.options);
+    const [entry] = readFileSync(files.registryPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(entry).toMatchObject({ candidate_id: "r-gcunstageable", qualification_status: "ineligible" });
+    expect(entry.ineligibility_codes).toContain("legacy-exclusion:publicly-answer-exposed");
+  });
+
   it("refuses a declared dist digest that differs from the release-tagged dist", () => {
     const files = fixture();
     const frozen = commitDecision(files.repositoryPath);

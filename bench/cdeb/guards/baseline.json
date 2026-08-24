@@ -54,8 +54,7 @@
     },
     {
       "guard_id": "exclusion-index-blocks-candidate-id",
-      "outcome": "uncovered",
-      "reason": "The census can match this candidate identifier by value, but the registry has no mutation that proves the claim makes it ineligible."
+      "outcome": "bound"
     },
     {
       "guard_id": "exclusion-index-blocks-record-id",
@@ -83,13 +82,11 @@
     },
     {
       "guard_id": "exclusion-index-blocks-benchmark-authored-record",
-      "outcome": "uncovered",
-      "reason": "The census can match this source-record identity by value, but the registry has no mutation that proves the claim makes its candidate ineligible."
+      "outcome": "bound"
     },
     {
       "guard_id": "exclusion-index-blocks-publicly-answer-exposed-decision",
-      "outcome": "uncovered",
-      "reason": "The census can match this decision's source-record identity by value, but the registry has no mutation that proves the claim makes its candidate ineligible."
+      "outcome": "bound"
     },
     {
       "guard_id": "frozen-bundle-digest-is-verified",
