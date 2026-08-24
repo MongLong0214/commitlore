@@ -190,8 +190,17 @@
       "guard_id": "exclusion-index-blocks-candidate-id",
       "claim": "The candidate r-d0004gatecensus cannot reach the registry as anything but ineligible.",
       "test_file": "test/cdeb-v3-census.test.ts",
-      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
-      "mutations": []
+      "test_name": "keeps the index's ambiguous candidate identity ineligible",
+      "mutations": [
+        {
+          "mutation_id": "candidate-id-value-changed",
+          "file": "bench/cdeb/studies/cdeb-fresh-v3r1/corpus/legacy-exclusion-index.json",
+          "find": "\"kind\": \"candidate-id\",\n      \"value\": \"r-d0004gatecensus\"",
+          "replace": "\"kind\": \"candidate-id\",\n      \"value\": \"r-no-candidate-carries-this\"",
+          "must_fail_test": true,
+          "why": "The index stops naming this identity, so a candidate carrying it is no longer made ineligible and the census lets it through as an ordinary row."
+        }
+      ]
     },
     {
       "guard_id": "exclusion-index-blocks-record-id",
@@ -241,15 +250,33 @@
       "guard_id": "exclusion-index-blocks-benchmark-authored-record",
       "claim": "A candidate associated with the recorded benchmark-authored decision cannot reach the registry as anything but ineligible.",
       "test_file": "test/cdeb-v3-census.test.ts",
-      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
-      "mutations": []
+      "test_name": "keeps the benchmark-authored record ineligible",
+      "mutations": [
+        {
+          "mutation_id": "benchmark-authored-value-changed",
+          "file": "bench/cdeb/studies/cdeb-fresh-v3r1/corpus/legacy-exclusion-index.json",
+          "find": "\"kind\": \"benchmark-authored-record\",\n      \"value\": \"r-cdebp01\"",
+          "replace": "\"kind\": \"benchmark-authored-record\",\n      \"value\": \"r-no-candidate-carries-this\"",
+          "must_fail_test": true,
+          "why": "The index stops naming this identity, so a candidate carrying it is no longer made ineligible and the census lets it through as an ordinary row."
+        }
+      ]
     },
     {
       "guard_id": "exclusion-index-blocks-publicly-answer-exposed-decision",
       "claim": "A candidate associated with the publicly answer-exposed decision cannot reach the registry as anything but ineligible.",
       "test_file": "test/cdeb-v3-census.test.ts",
-      "test_name": "keeps a Record-Id named by the index as an ineligible visible row",
-      "mutations": []
+      "test_name": "keeps the publicly answer-exposed decision ineligible under its own reason",
+      "mutations": [
+        {
+          "mutation_id": "answer-exposed-value-changed",
+          "file": "bench/cdeb/studies/cdeb-fresh-v3r1/corpus/legacy-exclusion-index.json",
+          "find": "\"kind\": \"publicly-answer-exposed-decision\",\n      \"value\": \"r-gcunstageable\"",
+          "replace": "\"kind\": \"publicly-answer-exposed-decision\",\n      \"value\": \"r-no-candidate-carries-this\"",
+          "must_fail_test": true,
+          "why": "The index stops naming this identity, so a candidate carrying it is no longer made ineligible and the census lets it through as an ordinary row."
+        }
+      ]
     },
     {
       "guard_id": "frozen-bundle-digest-is-verified",
