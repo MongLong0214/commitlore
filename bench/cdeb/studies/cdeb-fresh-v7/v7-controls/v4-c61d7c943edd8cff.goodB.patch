@@ -1,0 +1,76 @@
+diff --git a/packages/schema/src/capability.ts b/packages/schema/src/capability.ts
+index ff35c57..141578c 100644
+--- a/packages/schema/src/capability.ts
++++ b/packages/schema/src/capability.ts
+@@ -196,6 +196,23 @@ const isFilledString = (value: unknown): value is string =>
+ const sameList = (left: unknown, right: readonly string[]): boolean =>
+   Array.isArray(left) && left.length === right.length && right.every((entry, index) => left[index] === entry);
+ 
++/**
++ * The proof field has two independent concerns: its JSON shape and, for derived cells, whether
++ * the string is substantive enough to establish availability. Keeping shape validation here
++ * prevents the status derivation from accidentally treating arbitrary JSON values as an absent
++ * proof and accepting them after an otherwise honest UNAVAILABLE/coverage declaration.
++ */
++const derivationProofField = {
++  accepts(value: unknown): value is string | null {
++    return value === null || typeof value === "string";
++  },
++  validate(eventGroup: string, runtimeId: string, value: unknown, add: (message: string) => void): void {
++    if (!this.accepts(value)) {
++      add(`DERIVATION_PROOF_TYPE ${eventGroup} ${runtimeId} must be null or a string`);
++    }
++  }
++};
++
+ /**
+  * The 계약 column is the only authority on a row's requirement level. "REQUIRED for M18/M20"
+  * is a conditional requirement and yields CONDITIONAL scope, never the unconditional one.
+@@ -546,6 +563,7 @@ const validateCell = (
+   if (Object.hasOwn(cell, "capture") && cell.capture !== capture) {
+     add(`CAPTURE_TEXT_MISMATCH ${eventGroup} ${runtimeId} must read ${capture}`);
+   }
++  derivationProofField.validate(eventGroup, runtimeId, cell.derivation_proof, add);
+ 
+   // A cell that names no source is not a capability. SSOT 9.2 also bars named source
+   // classes outright, so naming a forbidden one is worse than naming none.
+diff --git a/packages/schema/test/capability.test.ts b/packages/schema/test/capability.test.ts
+index cfcb01c..2c54dbd 100644
+--- a/packages/schema/test/capability.test.ts
++++ b/packages/schema/test/capability.test.ts
+@@ -408,6 +408,35 @@ describe("adapter-capability-matrix", () => {
+       assert.deepEqual(honestResult.coverage["claude-code"].known_missing_events, []);
+     }
+ 
++    // Invalid JSON values must not be laundered into an honest unavailable declaration. Cover
++    // every derived event/runtime cell and both scalar and container malformed proof values.
++    for (const eventGroup of DERIVED_ROWS) {
++      for (const runtimeId of RUNTIME_IDS) {
++        for (const [kind, proof] of [
++          ["number", 123],
++          ["object", { source: "runner filesystem" }],
++          ["array", ["runner filesystem"]]
++        ] as const) {
++          const malformed = frozen();
++          const cell = cellOf(malformed, eventGroup, runtimeId);
++          const runtime = runtimeOf(malformed, runtimeId);
++          cell.derivation_proof = proof;
++          cell.status = "UNAVAILABLE";
++          runtime.supported_event_groups = runtime.supported_event_groups.filter(
++            (entry: string) => entry !== eventGroup
++          );
++          runtime.known_missing_events = [eventGroup];
++
++          const result = validateCapabilityMatrix(malformed);
++          assert.equal(result.ok, false, `${eventGroup}/${runtimeId} accepted ${kind} proof`);
++          assert.ok(
++            has(result, `DERIVATION_PROOF_TYPE ${eventGroup} ${runtimeId}`),
++            result.errors.join("; ")
++          );
++        }
++      }
++    }
++
+     // A non-derived cell may not carry a derivation proof; that would let a wrapper capture
+     // masquerade as a deterministic reconstruction.
+     const unexpected = frozen();
