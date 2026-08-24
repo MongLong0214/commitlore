@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-e7587b2b65750306",
+  "variant": "goodB",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "e47ceb20203bc48d8bd50f81856742656707f1126fe80eae750f57c8a82f7d95",
+  "j1": {
+    "files_read": [
+      "patch.diff",
+      "rule.txt"
+    ],
+    "what_the_patch_does": "Adds a shared required `observation_key: string` field and has `MetricDefinition` extend it.",
+    "reading_applied": "Narrow: the rule prohibits pinning prose content by literal digest/value, not requiring the presence and string type of an identity field.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch adds no literal digest or fixed prose value. It only makes `observation_key` structurally required, so it does not duplicate or freeze prose in the validator."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "It introduces a shared internal type containing `observation_key` and makes `MetricDefinition` extend it; no validator or literal digest checks are added.",
+    "reading_applied": "Both the narrow/default and broad/not-at-all readings: the rule forbids literal-digest pinning of prose fields, and this patch performs no such pinning.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch is a type-structure refactor for a non-prose identifier field. It neither freezes prose text nor duplicates prose contracts into validation logic."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

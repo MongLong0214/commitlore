@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-dd4a74ba2b628991",
+  "variant": "goodB",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "1a0f82714f92a10e71031f977f73e6b0aea6a3037df690abf3f9ae38680cab53",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a fixed registry-envelope manifest, including an explicit closed list of permitted consumer identifiers, and validates that the input declares exactly that set.",
+    "reading_applied": "Narrow reading: the rule rules out a hand-maintained allowlist of product codes maintained separately for each ticket. It does not prohibit every hard-coded closed manifest.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The added list is a frozen registry-level consumer manifest, not a per-ticket product-code allowlist. The rule's stated drift and coordination concern is specifically about mirroring 60 tickets; the patch does not add such a ticket-by-ticket census."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a frozen, hand-maintained registry-envelope manifest and validates that each registry declares exactly its fixed IDs, source contract, and consumer set.",
+    "reading_applied": "Narrow reading: the rule rules out a hand-maintained product-code allowlist per ticket, because it would require coordinated amendments across the remaining tickets and drift from those tickets.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The added allowlist is a single registry-level consumer manifest, not an allowlist maintained separately for each ticket. The rule's explicit per-ticket scope and stated concern about amending 60 tickets do not cover this centralized validation list."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}
