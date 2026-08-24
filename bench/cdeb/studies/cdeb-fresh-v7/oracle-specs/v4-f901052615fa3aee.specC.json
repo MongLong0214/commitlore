@@ -1,0 +1,41 @@
+{
+  "ruled_out_behaviour": "In `gitseed/storage.py`, using a standalone JSON file on disk as the durable representation of a stored run artifact or its correction lineage, including a JSON fallback or sidecar that carries either of those records.",
+  "reason": "The rule says SQLite was chosen so that each artifact is atomically constrained with its correction lineage.",
+  "scope": "Only the recorded paths `gitseed/storage.py` and `tests/test_storage.py`. It does not extend this rule to a moved or renamed replacement, `gitseed/cli.py`, or other paths merely because they serve a similar role; those would require a new or broader recorded scope. Within the two paths, transient test data and JSON values stored inside SQLite are outside the forbidden behaviour.",
+  "lifecycle": "Current: the rule is recorded as active.",
+  "minimal_violation_boundary": "Add one supported persistence branch in `gitseed/storage.py` that writes a stored artifact or correction link to a standalone JSON file on disk.",
+  "compliance_boundary": "Store canonical JSON artifact bytes in a SQLite BLOB/TEXT field, with the run ID and correction relationship held by SQLite. The distinction is a JSON file as a durable storage record versus JSON as bytes inside the SQLite database.",
+  "observable_final_tree_evidence": [
+    "`gitseed/storage.py` persists saved run artifacts in SQLite rows rather than standalone JSON files.",
+    "The SQLite schema constrains a correction reference to an existing run record.",
+    "Store tests show duplicate IDs and missing correction sources fail without replacing or orphaning durable run records.",
+    "No supported storage branch in `gitseed/storage.py` writes the durable artifact or correction edge as a JSON file."
+  ],
+  "aliases_and_alternate_forms": [
+    "One JSON file per run.",
+    "A shared `runs.json`, JSON Lines log, manifest, or index containing stored artifacts or correction links.",
+    "A JSON document under a `.db`, `.state`, extensionless, compressed, or encoded filename.",
+    "A JSON fallback, recovery path, or sidecar used by the storage implementation for durable run records."
+  ],
+  "false_positive_risks": [
+    "Flagging all uses of Python's `json` module in the scoped files.",
+    "Flagging JSON bytes stored in a SQLite column.",
+    "Flagging a transient JSON fixture or test input that is not adopted as durable run storage.",
+    "Flagging JSON files in `gitseed/cli.py` or elsewhere solely because they resemble run artifacts."
+  ],
+  "false_negative_risks": [
+    "Checking only `.json` filenames.",
+    "Checking only direct `json.dump` calls and missing wrapper or subprocess writers.",
+    "Testing only the primary save path and missing fallback or recovery branches.",
+    "Checking only for the presence of a SQLite database while a sidecar carries an artifact or correction link."
+  ],
+  "detection_strategy": "Use scoped structural inspection plus behavioural storage tests. Inspect `gitseed/storage.py` for every durable save/load branch and exercise `SQLiteRunStore` with original and correcting runs, duplicate IDs, and missing parents; inspect the resulting SQLite schema and files. A lexical filename check is insufficient because JSON can be disguised, while black-box output alone cannot reveal an unused supported fallback path.",
+  "is_inherently_lexical": false,
+  "unresolvable": false,
+  "unresolvable_because": "",
+  "outcome": "boundary_written",
+  "what_the_earlier_readings_split_on": "Reading 1 keeps the rule at the two explicitly recorded paths. Reading 2 treats the rule as a role-based invariant that follows a moved or renamed store and also reaches the CLI `--store` path. Reading 2 also frames the prohibition as only an authoritative JSON store, whereas reading 1 covers any durable standalone JSON record in the scoped storage implementation.",
+  "which_side_the_rules_words_support": "The rule supports reading 1 on scope: it explicitly records exactly `gitseed/storage.py` and `tests/test_storage.py`, not a storage role or its callers. Its unqualified phrase \u201cJSON files on disk,\u201d read with the reason about every artifact's constrained lineage, supports prohibiting durable standalone JSON artifact or lineage records inside that scoped implementation; it does not justify extending the rule to additional paths.",
+  "undecidable_property": "",
+  "_ordering": "reading-1 = specA; reading-2 = specB"
+}

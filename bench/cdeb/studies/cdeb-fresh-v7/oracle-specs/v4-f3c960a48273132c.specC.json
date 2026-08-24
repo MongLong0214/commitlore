@@ -1,0 +1,41 @@
+{
+  "ruled_out_behaviour": "In `gitseed/ports.py`, declare a caller-implementable dependency contract that supplies the scoring or screening computation or its resulting decision. This includes an unused `Scorer`/`Screener` protocol, a `RunPorts` field, a callback type, or a method added to another port when its contract produces a score, recommendation, signals, severity, or risk verdict.",
+  "reason": "The decision rules out scoring and screening ports because those computations are pure deterministic domain functions and have no outside capability to supply.",
+  "scope": "Applies only to `gitseed/ports.py`, the sole recorded path scope. It does not prohibit equivalent injection added only in `gitseed/application.py`, `gitseed/pipeline/run.py`, or another file; that may be architectural evasion, but it is outside this recorded rule. It also does not prohibit ports in `gitseed/ports.py` that supply raw external observations, such as score inputs or fetched files.",
+  "lifecycle": "Current and active; no supersession or condition is recorded.",
+  "minimal_violation_boundary": "Adding an otherwise unused protocol in `gitseed/ports.py` such as `class Scorer(Protocol): def score(self, inputs: ScoreInputs) -> Score: ...` is sufficient. Runtime wiring is not required: the ruled-out thing is the scoring port itself.",
+  "compliance_boundary": "A `RepositoryReader` may return `ScoreInputs`, and a `FileReader` may return `FetchedFiles`; these are observations an outside capability can supply. The application or pipeline then directly invokes the fixed deterministic domain functions. The boundary is between supplying facts for the calculation and supplying the calculation or its verdict.",
+  "observable_final_tree_evidence": [
+    "A structured parse of `gitseed/ports.py` finds no protocol, callable annotation, dependency field, or port method whose contract provides a scoring or screening implementation or a score, recommendation, signals, severity, or risk result.",
+    "`RepositoryMetadata.score_inputs` and `FileReader.read` return raw domain inputs rather than a computed score or screening decision.",
+    "The scoring and screening calls in `gitseed/application.py` and `gitseed/pipeline/run.py` remain direct domain calls; these calls are corroborating evidence, not part of the path-scoped prohibition."
+  ],
+  "aliases_and_alternate_forms": [
+    "A `Ranker`, `Evaluator`, `Policy`, `RulesEngine`, or similarly renamed scoring/screening protocol declared in `gitseed/ports.py`.",
+    "A `Callable`, lambda-typed field, strategy registry, nested dependency object, or optional `RunPorts` member in `gitseed/ports.py` that supplies the calculation or verdict.",
+    "Adding `score`, `recommend`, `scan`, `screen`, `evaluate`, or a generically named equivalent to an existing port in `gitseed/ports.py` when its contract supplies the prohibited result.",
+    "A wrapper or opaque result type declared in `gitseed/ports.py` that hides a supplied scoring or screening decision behind indirection."
+  ],
+  "false_positive_risks": [
+    "Treating `RepositoryMetadata.score_inputs: ScoreInputs` as a scoring port.",
+    "Treating `FileReader.read` returning source files as a screening port.",
+    "Treating the model-grade or category-evidence ports as scoring or screening ports.",
+    "Flagging direct calls to `score`, `scan_files`, or `risk_of`, or a fixed internal refactor of those calls.",
+    "Flagging a scoring or screening replacement seam located solely outside `gitseed/ports.py` under this path-scoped rule."
+  ],
+  "false_negative_risks": [
+    "Checking only names such as `Scorer` and `Screener` while missing generic callback and strategy forms.",
+    "Checking only `RunPorts` fields while missing an equivalent method or nested contract in `gitseed/ports.py`.",
+    "Missing aliases, re-exports, opaque wrapper types, or `Any`-typed contracts that carry a scoring or screening decision.",
+    "Mistaking a port that claims to return observations for one that actually returns a precomputed verdict."
+  ],
+  "detection_strategy": "Use a structured Python parse with resolved imports and type/contract predicates over `gitseed/ports.py`. Identify public protocols, callable aliases, dataclass dependency fields, and methods; reject contracts that expose an externally implementable scoring or screening computation or a result of one. Black-box testing cannot decide this because an unused forbidden port has no runtime effect, and lexical matching cannot handle renamed or generic forms.",
+  "is_inherently_lexical": false,
+  "unresolvable": false,
+  "unresolvable_because": "",
+  "outcome": "boundary_written",
+  "what_the_earlier_readings_split_on": "They split on whether the ban concerns the structural declaration of a port within the recorded `gitseed/ports.py` scope, including an unused one, or only a production-reachable replacement seam wherever it is introduced. Reading 2 therefore extends the scope beyond the named path and requires execution reachability; reading 1 retains the path scope but still makes runtime routing part of its minimum functional violation.",
+  "which_side_the_rules_words_support": "The rule supports the structural, path-scoped reading. Its subject is \u201cscoring and screening ports,\u201d not used replacement paths, and its explicit recorded scope is the single path `gitseed/ports.py`. Its reason distinguishes pure calculation from outside-supplied capability, which permits input-observation ports but rejects an interface offered for an outside implementation of the calculation. Nothing in the record extends the ban to equivalent seams outside that path or adds a production-reachability requirement.",
+  "undecidable_property": "",
+  "_ordering": "reading-1 = specA; reading-2 = specB"
+}
