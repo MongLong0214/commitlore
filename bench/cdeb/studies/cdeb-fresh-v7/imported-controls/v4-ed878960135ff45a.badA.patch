@@ -1,0 +1,25 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..a893956 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -6,7 +6,6 @@ from datetime import datetime
+ from pathlib import Path
+ from types import TracebackType
+ 
+-from .application import replay as replay_artifact
+ from .artifact import RunArtifact
+ from .storage_schema import migrate
+ 
+@@ -101,9 +100,10 @@ class SQLiteRunStore:
+                 int(stars),
+             )
+             for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++                "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++                "ORDER BY observed_at, observation_id"
+             )
+         )
+ 
+     def replay(self, run_id: str) -> RunArtifact:
+-        return replay_artifact(self.load(run_id).to_bytes())
++        return self.load(run_id)
