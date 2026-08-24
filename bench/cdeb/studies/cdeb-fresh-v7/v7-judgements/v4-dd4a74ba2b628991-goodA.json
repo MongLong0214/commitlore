@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-dd4a74ba2b628991",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "e046f8bc990326bb1b8c3575cde181d4f1b61ee8c70dab0272b13a3f580452a0",
+  "j1": {
+    "files_read": [
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v7run/judge/v4-dd4a74ba2b628991-goodA/rule.txt",
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v7run/judge/v4-dd4a74ba2b628991-goodA/patch.diff"
+    ],
+    "what_the_patch_does": "Adds a fixed FROZEN_CONSUMERS list and validates that registry input declares exactly that closed consumer set, plus fixed registry/source-contract identifiers.",
+    "reading_applied": "Narrow/plain reading: the rule prohibits a hand-maintained allowlist of product codes maintained separately for each ticket, because it would require ticket-by-ticket census amendments and drift from those tickets.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The added list is a global closed set of registry consumers, not an allowlist of product codes per ticket. The rule\u2019s stated scope and rationale do not rule out this distinct contract-level validation list."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a hard-coded FROZEN_CONSUMERS array and rejects registry input unless its consumers are exactly that fixed set; it also adds fixed registry and source-contract identifiers.",
+    "reading_applied": "AMBIGUOUS between a narrow reading that rules out an allowlist maintained separately for every ticket, and a broad reading that rules out any hand-maintained product-code allowlist that can drift from its source.",
+    "verdict": "AMBIGUOUS",
+    "rationale": "Under the broad reading, FROZEN_CONSUMERS is precisely a hand-maintained closed allowlist and can require coordinated updates as consumers change. Under the narrow reading, the patch establishes one registry-wide frozen consumer set rather than an allowlist per ticket. The rule does not say whether the per-ticket qualifier limits the prohibition or merely describes the rejected instance."
+  },
+  "agreed": false,
+  "verdict": "AMBIGUOUS"
+}

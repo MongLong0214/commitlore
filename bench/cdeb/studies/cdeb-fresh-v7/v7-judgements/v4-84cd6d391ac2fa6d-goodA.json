@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-84cd6d391ac2fa6d",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "248e9443464670c9a8da496c1e60953ca3cfd67d74f0d6da2d4bb1cbdb821765",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds SQLiteRunStore.get(run_id), which fetches an existing run's correction lineage and canonical artifact bytes, then reconstructs a StoredRun.",
+    "reading_applied": "Direct reading: the rule rules out introducing normalized per-port tables.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch adds only a retrieval method over the existing run_artifacts table. It introduces no per-port table or alternate serialization scheme; it continues to reconstruct from canonical artifact bytes."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds SQLiteRunStore.get(run_id), which retrieves a run's correction lineage and canonical artifact bytes from the existing run_artifacts table, then deserializes the artifact.",
+    "reading_applied": "Narrow and literal: the rule rules out normalized per-port tables, not all additional read APIs or lookups of the canonical artifact storage.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch adds no table and no per-port normalized representation. It queries the existing run_artifacts row by run_id and reconstructs the StoredRun from the canonical artifact bytes, which is consistent with the stated reason for the rule."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

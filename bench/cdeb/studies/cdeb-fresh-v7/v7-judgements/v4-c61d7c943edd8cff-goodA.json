@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-c61d7c943edd8cff",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "4c2917168f5e067473d03e60de38fad48068a094a79a6f5427278ad7f0404927",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds validation that derivation_proof must be null or a string, plus matrix tests ensuring invalid proof shapes are rejected even when the derived capability is declared unavailable and listed as missing.",
+    "reading_applied": "Applied the rule directly: it rules out treating lane counts as minimum floors, because that slack masks removed test cases and allowlists.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch does not add, preserve, or rely on lane-count floors. It adds an independent proof-shape validation and tests for it, so it does not do the thing the rule ruled out."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds validation requiring `derivation_proof` to be either `null` or a string, plus exhaustive tests that malformed proofs are rejected even when the derived capability is declared unavailable and listed as missing.",
+    "reading_applied": "Narrow, text-faithful reading: the rule forbids treating lane counts as a minimum/floor, because that slack had allowed coverage to be removed without failing. It does not prohibit adding validation or tests for a separate field.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch neither lowers nor relaxes lane-count expectations, and it does not make any coverage optional through a floor-style count check. Its tests instead ensure invalid derivation proofs cannot be accepted through an unavailable/missing-event path, which closes a validation loophole rather than reintroducing the ruled-out slack."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

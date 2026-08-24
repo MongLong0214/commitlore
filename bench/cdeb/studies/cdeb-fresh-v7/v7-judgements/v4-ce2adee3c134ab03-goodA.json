@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-ce2adee3c134ab03",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "574d026c5e6a36c353e6652393c046369b31512ea28b1445e946720b41d64411",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "It makes capability-matrix validation a discriminated success/failure union. Failure results now expose only diagnostics, while rows, coverage, and required event groups are available only after a successful validation; doctor-contract is updated to require that success type for its matrix view.",
+    "reading_applied": "Narrow, text-specific reading: the rule rules out retaining a wildcard census while relying on a focused-lane guard, because that guard detects deletions but not unreviewed file additions.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch changes TypeScript validation result typing and downstream consumption. It neither preserves or introduces a wildcard census nor adds reliance on a focused-lane guard, so it does not perform the ruled-out approach."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Makes capability-matrix validation a discriminated success/failure union, so invalid results expose only diagnostics and callers can require validated matrix data.",
+    "reading_applied": "Direct reading: the rule forbids retaining a wildcard census while relying on a focused-lane guard to detect changes.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch changes validation-result typing and failure payloads. It neither retains nor adds a wildcard census or a focused-lane guard, so it does not do the ruled-out thing."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

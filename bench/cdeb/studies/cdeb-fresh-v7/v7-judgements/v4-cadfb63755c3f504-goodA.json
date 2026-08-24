@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-cadfb63755c3f504",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "a40ab132f5c90ee54d94d1372a5e1bb0f36cc4025732c8cd389b763ea395960e",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Records a rate-limit condition when candidate collection stopped early, by inspecting the collection stop reason.",
+    "reading_applied": "Narrow and ordinary reading: the rule prohibits a grading failure from ending the run; it does not prohibit handling collection-stage failures or rate limits.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch only augments collection-stop handling and does not add or alter any path where grading failure ends the run."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds detection of whether early collection stopped because of a rate limit, storing that in `rate_limited`. It does not change the grading loop or cause a grading failure to terminate the run.",
+    "reading_applied": "Applied the rule according to its plain, narrow scope: it rules out allowing a grading failure to end the run.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch concerns collection stopping early due to rate limiting. It neither introduces a grading failure path nor changes run termination behavior for grading failures."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

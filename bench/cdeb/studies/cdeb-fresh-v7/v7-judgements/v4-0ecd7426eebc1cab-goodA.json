@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-0ecd7426eebc1cab",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "5df6b981148b397debefa30bba0074e2e60ff60c45535a6f6b5e0916e19bb0a2",
+  "j1": {
+    "files_read": [
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v7run/judge/v4-0ecd7426eebc1cab-goodA/rule.txt",
+      "/private/tmp/claude-501/-Users-isaac-projects-commitlore/3e640e5b-d403-4bee-ae6e-4da5ce9037d3/scratchpad/v7run/judge/v4-0ecd7426eebc1cab-goodA/patch.diff"
+    ],
+    "what_the_patch_does": "Introduces an EvidenceVocabulary protocol so category validation and absent-evidence generation use the configured evidence reader's vocabulary, and passes ports.evidence at call sites.",
+    "reading_applied": "Narrow: the rule rules out a port for storing artifacts, not every small protocol or capability interface related to reading evidence.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch adds no artifact-storage port and no alternate storage or replay path. Its protocol is limited to evidence-name vocabulary supplied by an existing evidence reader."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "It generalizes category-pack validation and absent-evidence generation to accept an EvidenceVocabulary protocol, then supplies the already-configured ports.evidence reader during execution.",
+    "reading_applied": "Narrow, ordinary reading: an 'artifact storage port' is an abstraction for persisting or retrieving artifacts via alternative storage backends, rather than every interface around evidence reading.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch adds no artifact storage abstraction or alternate storage shape. Its protocol exposes only evidence_names and is used to keep validation and synthetic absent evidence consistent with the configured evidence reader. It neither persists artifacts nor adds a replay/storage backend."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}
