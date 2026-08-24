@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-f3c960a48273132c",
+  "variant": "goodB",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "975b511486c31d07532f628e86bcd086ddd08a90e2bbc03e99f4e8a83787e72c",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds an EvidenceReadFallback value object that captures an existing EvidenceReader\u2019s evidence-name vocabulary, then uses it to produce absent evidence when reading a repository fails.",
+    "reading_applied": "Narrow reading: the rule rules out introducing ports for scoring or screening themselves, because those deterministic domain functions need no external capability.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch does not add a scoring or screening port. It consumes the existing EvidenceReader at the application boundary to shape fallback evidence after a read failure; classification remains a direct deterministic call."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds an EvidenceReadFallback that derives absent-evidence entries from an EvidenceReader\u2019s evidence_names, and uses it when an evidence read fails instead of the fixed absent_evidence() result.",
+    "reading_applied": "AMBIGUOUS between a narrow reading that only forbids dedicated scoring/screening ports and a wider reading that forbids giving deterministic scoring/screening-domain behavior an outside-capability dependency.",
+    "verdict": "AMBIGUOUS",
+    "rationale": "The patch does not add a port explicitly for scoring or screening, so it complies with the narrow reading. But it introduces a domain-level factory that accepts an EvidenceReader port to shape fallback evidence; that conflicts with the stated rationale if it is read as prohibiting outside capabilities for these deterministic domain functions. The rule does not say whether its ban is limited to port purpose/name or covers this indirect reader-derived dependency."
+  },
+  "agreed": false,
+  "verdict": "AMBIGUOUS"
+}
