@@ -1,0 +1,225 @@
+diff --git a/gitseed/adapters.py b/gitseed/adapters.py
+index 3b3b018..8d6f56f 100644
+--- a/gitseed/adapters.py
++++ b/gitseed/adapters.py
+@@ -3,17 +3,29 @@ from __future__ import annotations
+ import json
+ from dataclasses import replace
+ from datetime import datetime, timedelta, timezone
++from pathlib import Path
+ from typing import Callable
+ from urllib.parse import quote, urlencode
+ 
+ from .collect.ratelimit import classify
+ from .collect.search import Candidate, CollectResult, Transport, collect
+ from .evidence import ClaimBasis
++from .artifact import RunArtifact
+ from .pipeline.run import FetchedFiles
+ from .ports import RepositoryMetadata
+ from .scoring import ScoreInputs
+ 
+ 
++class PathArtifactStorage:
++    """Pathlib-backed implementation of the application's artifact storage port."""
++
++    def __init__(self, path: Path) -> None:
++        self._path = path
++
++    def store(self, artifact: RunArtifact) -> None:
++        self._path.write_bytes(artifact.to_bytes())
++
++
+ class GitHubRepository:
+     def __init__(self, transport: Transport) -> None:
+         self.transport = transport
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..aafbd8c 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ from dataclasses import dataclass
+ from datetime import datetime
+ 
+-from .category import absent_evidence, classify_all, selected_packs
++from .category import absent_evidence, classify_all, selected_packs, validate_pack
+ from .artifact import (
+     ENGINE_VERSIONS,
+     ArtifactCollection,
+@@ -21,7 +21,7 @@ from .collect.search import Candidate, CollectResult
+ from .grade.smoke import SmokeResult, run_smoke
+ from .grade.types import GradeResult
+ from .pipeline.run import BLOCKING_SEVERITY, FileFetchError, FetchedFiles, run
+-from .ports import RepositoryMetadata, RunPorts, RunRequest
++from .ports import ArtifactStorage, RepositoryMetadata, RunPorts, RunRequest
+ from .scoring import Recommendation, ScoreInputs, score
+ 
+ 
+@@ -40,8 +40,13 @@ def execute(
+     *,
+     model_smoke: SmokeResult | None = None,
+     source_mode: SourceMode = "digest",
++    artifact_storage: ArtifactStorage | None = None,
+ ) -> RunArtifact:
+     packs = selected_packs(request.categories)
++    # This preflight is deliberately before the clock, search, files, model, or
++    # storage ports: an unsupported requested category must not start a run.
++    for pack in packs:
++        validate_pack(pack, ports.evidence)
+     failures: list[PortFailure] = []
+     trace_failures: dict[str, list[PortFailure]] = {}
+     metadata: dict[str, RepositoryMetadata | None] = {}
+@@ -153,7 +158,7 @@ def execute(
+     for candidate in collected.candidates:
+         try:
+             evidence = (
+-                absent_evidence()
++                absent_evidence(ports.evidence)
+                 if candidate.repo not in files
+                 else ports.evidence.read_evidence(candidate, files[candidate.repo], metadata[candidate.repo])
+             )
+@@ -161,7 +166,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = absent_evidence(ports.evidence)
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+@@ -182,7 +187,7 @@ def execute(
+         )
+         for candidate in collected.candidates
+     )
+-    return RunArtifact(
++    artifact = RunArtifact(
+         request=request,
+         started_at=started_at,
+         collection=ArtifactCollection.from_collected(collected),
+@@ -195,6 +200,9 @@ def execute(
+         source_mode=source_mode,
+         category_packs=packs,
+     )
++    if artifact_storage is not None:
++        artifact_storage.store(artifact)
++    return artifact
+ 
+ 
+ class _RecordingModel:
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..55ce6ba 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -2,7 +2,7 @@ from __future__ import annotations
+ 
+ import re
+ from dataclasses import dataclass
+-from typing import TYPE_CHECKING, Final
++from typing import TYPE_CHECKING, Final, Protocol
+ 
+ from .evidence import ClaimBasis
+ 
+@@ -25,6 +25,12 @@ class Evidence:
+     basis: ClaimBasis
+ 
+ 
++class EvidenceVocabulary(Protocol):
++    """Names an evidence reader can record without coupling to its implementation."""
++
++    evidence_names: frozenset[str]
++
++
+ class FileEvidenceReader:
+     """Extract the small, deterministic evidence vocabulary category packs use."""
+ 
+@@ -89,12 +95,16 @@ class FileEvidenceReader:
+ DEFAULT_EVIDENCE_READER: Final = FileEvidenceReader()
+ 
+ 
+-def satisfiable_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
++def satisfiable_evidence(reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
+     return reader.evidence_names
+ 
+ 
+-def absent_evidence() -> tuple[Evidence, ...]:
+-    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
++def absent_evidence(reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> tuple[Evidence, ...]:
++    """Record every vocabulary item as unavailable when its reader cannot run."""
++    return tuple(
++        Evidence(name, frozenset(), ClaimBasis.ABSENT)
++        for name in sorted(satisfiable_evidence(reader))
++    )
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+@@ -161,7 +171,7 @@ class CategoryMatch:
+ Categorization = CategoryMatch
+ 
+ 
+-def validate_pack(pack: CategoryPack, reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> None:
++def validate_pack(pack: CategoryPack, reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> None:
+     missing = tuple(
+         requirement.evidence
+         for requirement in pack.evidence
+diff --git a/gitseed/cli.py b/gitseed/cli.py
+index 77a6577..0f70f03 100644
+--- a/gitseed/cli.py
++++ b/gitseed/cli.py
+@@ -19,7 +19,7 @@ from pathlib import Path
+ from typing import Callable, Final, IO, Mapping, Protocol, Sequence
+ from urllib.parse import parse_qs, quote, urlparse
+ 
+-from .adapters import CallableFileReader, GitHubRepository, SystemClock
++from .adapters import CallableFileReader, GitHubRepository, PathArtifactStorage, SystemClock
+ from .application import engine_version_mismatches, execute, re_evaluate, render, replay
+ from .artifact import ArtifactCollection, ArtifactReviewed, RunArtifact
+ from .category import CATEGORY_PACKS, CategoryMatch
+@@ -973,10 +973,11 @@ def main(
+                 SystemClock(),
+             ),
+             source_mode=args.source_mode,
++            artifact_storage=(
++                None if args.artifact is None else PathArtifactStorage(args.artifact)
++            ),
+         )
+         run_id = args.run_id or uuid4().hex
+-        if args.artifact is not None:
+-            args.artifact.write_bytes(recorded.to_bytes())
+         review_items = rank_review_items(recorded)
+         _render_radar(recorded, args.json, out, review_items)
+         status = _status(recorded, err)
+diff --git a/gitseed/ports.py b/gitseed/ports.py
+index b7f1a10..9b14559 100644
+--- a/gitseed/ports.py
++++ b/gitseed/ports.py
+@@ -2,7 +2,7 @@ from __future__ import annotations
+ 
+ from dataclasses import dataclass
+ from datetime import datetime
+-from typing import Protocol
++from typing import TYPE_CHECKING, Protocol
+ 
+ from .category import DEFAULT_EVIDENCE_READER, Evidence
+ from .collect.search import Candidate, CollectResult
+@@ -10,6 +10,9 @@ from .grade.types import GradeClient
+ from .pipeline.run import FetchedFiles
+ from .scoring import ScoreInputs
+ 
++if TYPE_CHECKING:
++    from .artifact import RunArtifact
++
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+ class RunRequest:
+@@ -49,6 +52,12 @@ class EvidenceReader(Protocol):
+     ) -> tuple[Evidence, ...]: ...
+ 
+ 
++class ArtifactStorage(Protocol):
++    """Persists a completed application artifact in a caller-selected medium."""
++
++    def store(self, artifact: RunArtifact) -> None: ...
++
++
+ class Clock(Protocol):
+     def now(self) -> datetime: ...
+ 

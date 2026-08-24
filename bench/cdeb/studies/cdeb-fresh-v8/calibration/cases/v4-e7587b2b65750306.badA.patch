@@ -1,0 +1,124 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..1e1499e 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -49,6 +49,7 @@ export interface MetricDefinition {
+   gaming_guard: string;
+   treatment: string;
+   consumer_routes: string[];
++  observation_key: string;
+ }
+ 
+ type ValidationResult = { ok: boolean; errors: string[]; metrics: MetricDefinition[] };
+@@ -87,6 +88,88 @@ const FROZEN_CONFIDENCE: Record<string, number> = {
+   immutable_artifact: 0.7, operator_claim: 0, not_observed_below: 0.7
+ };
+ 
++/*
++ * These are deliberately literal SHA-256 commitments to all reader-facing
++ * string fields of each metric.  Keeping the prose in the registry avoids a
++ * second text copy here, while the digest makes every word load-bearing.
++ */
++const PROSE_FIELDS = [
++  "label", "factor", "question", "observation_type", "eligible_opportunity",
++  "numerator", "denominator", "partial_credit_rule", "per_opportunity_formula",
++  "aggregation", "not_observed_rule", "invalid_rule", "normalization",
++  "observation_key", "version", "gaming_guard", "treatment"
++] as const;
++const FROZEN_PROSE_DIGESTS: Record<string, string> = {
++  M01: "7220270c20a416c0a7e4936932043c011660c41c1ef8a23faa5b0116e4189fab",
++  M02: "1d19b6c9c8b456e65f433b1e24fa08adc42b44a874efb529dbb516b28f3492ba",
++  M03: "8ffbc88336ff38bafd0d62d6d8b3ef424981744a13f8d302941b73b0f8324049",
++  M04: "eb4b504b8f5d871b705482b4d7afa020a12f9b7d3e5fca96bfd9c2718d71cfce",
++  M05: "6d077f5bebe9e4d78ce4e51931f99f9f6842b36eb5cd8983e0fb211957fdaf1a",
++  M06: "307712e8166e7f25e95a42a8640c586d203cea7868b68f250d2e6b4e6ea87b68",
++  M07: "788dc261807f51ba5d8b53dbbb881d9b2b978d4fc2c4f9969d846c5cba0d80b0",
++  M08: "364766e7edf51711ed4ed6453c901adb8fda686aade50cb7afbba64fc3654df0",
++  M09: "e15a5e2bcdb14d8756b5f91845de395d9836f830c4c86380c98b96c634c2ffa9",
++  M10: "3917c3cffdf3d9fd99bd9565b8af819d1f97c0addb206a44cdea300bcffa471b",
++  M11: "dd226696ea765e91d0af1805a2f11ade24751695e6b4f2677ba1cafd7f78a804",
++  M12: "6c046ed476fbd4440c3ec9607a9f8141dcbb72f9698f08fac78cdb65ce9285bb",
++  M13: "4a09f52c8010690afe3b9a057d1c79a049a4ade3c55bffbd37932ce2d160e5e0",
++  M14: "bc37424f95d8b266aed1474daea90b0012790e2a53c0324157eccf69b82ee52f",
++  M15: "56a35b16bdf1161e5551bdb4ecd2b558d0fac486ad8ce06482ee61eacec77317",
++  M16: "5d0f8f9bf745523773dc49d4f3ceeafe44a18c9a5b061a0cf9d031a5208805c6",
++  M17: "ded00e8b5cfc8e3aab979f96701c64e8456277961563946abbc6dd9d1e507272",
++  M18: "07ea1a14eca4ae6566d901a64439cdbdec40aecfc5c689dbc937f411d76e008b",
++  M19: "6a40b9fd67dc9759850ce48a330e0fe3c9a436d1627ef0c21fa6859f7d43b8c2",
++  M20: "0e09f70a8d6f193e8beae2f305ba16463cf41b69c772f9e54147976af01f2abb"
++};
++
++const SHA256_ROUND_CONSTANTS = [
++  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
++  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
++  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
++  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
++  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
++  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
++  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
++  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
++];
++
++const sha256 = (value: string): string => {
++  const bytes = Array.from(new TextEncoder().encode(value));
++  const bitLength = bytes.length * 8;
++  bytes.push(0x80);
++  while (bytes.length % 64 !== 56) bytes.push(0);
++  for (let shift = 56; shift >= 0; shift -= 8) bytes.push(Math.floor(bitLength / 2 ** shift) & 0xff);
++
++  const hash = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
++  for (let offset = 0; offset < bytes.length; offset += 64) {
++    const words = new Array<number>(64);
++    for (let index = 0; index < 16; index += 1) {
++      const start = offset + index * 4;
++      words[index] = (bytes[start] << 24) | (bytes[start + 1] << 16) | (bytes[start + 2] << 8) | bytes[start + 3];
++    }
++    for (let index = 16; index < 64; index += 1) {
++      const s0 = ((words[index - 15] >>> 7) | (words[index - 15] << 25)) ^ ((words[index - 15] >>> 18) | (words[index - 15] << 14)) ^ (words[index - 15] >>> 3);
++      const s1 = ((words[index - 2] >>> 17) | (words[index - 2] << 15)) ^ ((words[index - 2] >>> 19) | (words[index - 2] << 13)) ^ (words[index - 2] >>> 10);
++      words[index] = (words[index - 16] + s0 + words[index - 7] + s1) | 0;
++    }
++    let [a, b, c, d, e, f, g, h] = hash;
++    for (let index = 0; index < 64; index += 1) {
++      const sum1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
++      const choice = (e & f) ^ (~e & g);
++      const temp1 = (h + sum1 + choice + SHA256_ROUND_CONSTANTS[index] + words[index]) | 0;
++      const sum0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
++      const majority = (a & b) ^ (a & c) ^ (b & c);
++      const temp2 = (sum0 + majority) | 0;
++      [h, g, f, e, d, c, b, a] = [g, f, e, (d + temp1) | 0, c, b, a, (temp1 + temp2) | 0];
++    }
++    for (let index = 0; index < hash.length; index += 1) hash[index] = (hash[index] + [a, b, c, d, e, f, g, h][index]) | 0;
++  }
++  return hash.map((word) => (word >>> 0).toString(16).padStart(8, "0")).join("");
++};
++
++const proseDigest = (metric: Record<string, unknown>): string =>
++  sha256(JSON.stringify(Object.fromEntries(PROSE_FIELDS.map((field) => [field, metric[field]]))));
++
+ const CANONICAL_IDS = Array.from({ length: 20 }, (_, index) => `M${String(index + 1).padStart(2, "0")}`);
+ const SUFFIXES = ["pass", "partial", "fail", "no"];
+ const DERIVED_METRICS = ["M10", "M20"];
+@@ -208,6 +291,9 @@ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+     }
+ 
+     if (CANONICAL_IDS.includes(id)) {
++      if (proseDigest(metric) !== FROZEN_PROSE_DIGESTS[id]) {
++        add(`PROSE_DIGEST_MISMATCH ${id} every metric prose field must match its literal SHA-256 commitment`);
++      }
+       if (Object.hasOwn(metric, "factor") && metric.factor !== FACTOR_OF[id]) {
+         add(`FACTOR_MISMATCH ${id} declares ${String(metric.factor)} and not ${FACTOR_OF[id]}`);
+       }
+diff --git a/tests/planning/workspace-skeleton.test.mjs b/tests/planning/workspace-skeleton.test.mjs
+index 2ccd2f7..8176907 100644
+--- a/tests/planning/workspace-skeleton.test.mjs
++++ b/tests/planning/workspace-skeleton.test.mjs
+@@ -729,7 +729,7 @@ test("focused-lane-is-not-silently-empty", () => {
+   // Exact, not a floor: a lane that loses a case must fail here. Every count includes the
+   // per-file results the runner emits, so adding a test file shifts all of them at once.
+   const lanes = [
+-    ["metric-registry", 23], ["issuance-contract", 17], ["capability", 19], ["scoring-contract", 20], ["session-class", 28], ["doctor-contract", 41], ["prescription-input", 15], ["trace-schema", 19], ["result-schema", 19], ["treatment-registry", 15]
++    ["metric-registry", 24], ["issuance-contract", 18], ["capability", 20], ["scoring-contract", 21], ["session-class", 29], ["doctor-contract", 42], ["prescription-input", 16], ["trace-schema", 20], ["result-schema", 20], ["treatment-registry", 16]
+   ];
+   for (const [pattern, cases] of lanes) {
+     const output = run(pattern);

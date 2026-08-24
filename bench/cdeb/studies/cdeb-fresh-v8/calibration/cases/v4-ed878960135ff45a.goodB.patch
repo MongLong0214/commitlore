@@ -1,0 +1,57 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..fec368a 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -30,11 +30,33 @@ class ObservationWriteError(RuntimeError):
+     """The run was stored but its derived observation could not be appended."""
+ 
+ 
++class _ObservationHistory:
++    """Reads recorded observations in their event-time order."""
++
++    def __init__(self, connection: sqlite3.Connection) -> None:
++        self._connection = connection
++
++    def read(self) -> tuple[StoredObservation, ...]:
++        return tuple(
++            StoredObservation(
++                str(run_id),
++                str(repo),
++                datetime.fromisoformat(str(observed_at)),
++                int(stars),
++            )
++            for run_id, repo, observed_at, stars in self._connection.execute(
++                "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++                "ORDER BY julianday(observed_at), observation_id"
++            )
++        )
++
++
+ class SQLiteRunStore:
+     def __init__(self, path: str | Path) -> None:
+         self._connection = sqlite3.connect(path)
+         self._connection.execute("PRAGMA foreign_keys = ON")
+         migrate(self._connection)
++        self._observation_history = _ObservationHistory(self._connection)
+ 
+     def __enter__(self) -> SQLiteRunStore:
+         return self
+@@ -93,17 +115,7 @@ class SQLiteRunStore:
+         )
+ 
+     def observations(self) -> tuple[StoredObservation, ...]:
+-        return tuple(
+-            StoredObservation(
+-                str(run_id),
+-                str(repo),
+-                datetime.fromisoformat(str(observed_at)),
+-                int(stars),
+-            )
+-            for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
+-            )
+-        )
++        return self._observation_history.read()
+ 
+     def replay(self, run_id: str) -> RunArtifact:
+         return replay_artifact(self.load(run_id).to_bytes())

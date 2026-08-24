@@ -1,0 +1,64 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..af58931 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ from dataclasses import dataclass
+ from datetime import datetime
+ 
+-from .category import absent_evidence, classify_all, selected_packs
++from .category import EvidenceReadFallback, absent_evidence, classify_all, selected_packs
+ from .artifact import (
+     ENGINE_VERSIONS,
+     ArtifactCollection,
+@@ -150,6 +150,7 @@ def execute(
+     reviewed_by_repo = {reviewed.candidate.repo: reviewed for reviewed in result.reviewed}
+     category_evidence = {}
+     categories = {}
++    evidence_read_fallback = EvidenceReadFallback.from_reader(ports.evidence)
+     for candidate in collected.candidates:
+         try:
+             evidence = (
+@@ -161,7 +162,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = evidence_read_fallback.items()
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..1c346dd 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -9,7 +9,7 @@ from .evidence import ClaimBasis
+ if TYPE_CHECKING:
+     from .collect.search import Candidate
+     from .pipeline.run import FetchedFiles
+-    from .ports import RepositoryMetadata
++    from .ports import EvidenceReader, RepositoryMetadata
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+@@ -97,6 +97,20 @@ def absent_evidence() -> tuple[Evidence, ...]:
+     return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
+ 
+ 
++@dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
++class EvidenceReadFallback:
++    """Absent evidence shaped by the vocabulary of a failed reader."""
++
++    evidence_names: frozenset[str]
++
++    @classmethod
++    def from_reader(cls, reader: "EvidenceReader") -> "EvidenceReadFallback":
++        return cls(reader.evidence_names)
++
++    def items(self) -> tuple[Evidence, ...]:
++        return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in self.evidence_names)
++
++
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+ class UnavailableEvidence(ValueError):
+     pack: str

@@ -1,0 +1,36 @@
+diff --git a/gitseed/pipeline/run.py b/gitseed/pipeline/run.py
+index e6af978..7267768 100644
+--- a/gitseed/pipeline/run.py
++++ b/gitseed/pipeline/run.py
+@@ -151,9 +151,8 @@ def run(
+     """Carry `collected` through screening and grading.
+ 
+     Neither `fetch_files` nor `grader` is called for a candidate that screening
+-    has already rejected, and a failure in either is recorded against that one
+-    candidate rather than ending the run. One unreachable repository is not a
+-    reason to discard the nine that were fine.
++    has already rejected. File-read failures are recorded against their own
++    candidate, while a grading failure ends remaining candidate processing.
+     """
+     reviewed: list[Reviewed] = []
+     incomplete_because: list[str] = []
+@@ -165,6 +164,10 @@ def run(
+             incomplete_because.append(why)
+ 
+     if not collected.complete:
++        stopped_because = (collected.stopped_because or "").casefold()
++        rate_limited = rate_limited or (
++            "rate limit" in stopped_because or "rate-limit" in stopped_because
++        )
+         mark_incomplete(
+             f"collection stopped early: {collected.stopped_because or 'reason not recorded'}"
+         )
+@@ -292,7 +295,7 @@ def run(
+                     coverage=coverage,
+                 )
+             )
+-            continue
++            break
+ 
+         reviewed.append(
+             Reviewed(

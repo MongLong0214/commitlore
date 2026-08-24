@@ -1,0 +1,69 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..7945415 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -57,6 +57,8 @@ type RouteRow = { route_id: string; eligible: boolean; quality: boolean; safety:
+ type Coordinate = { name: string; lower: number; upper: number; weight: number; frontier: number };
+ 
+ const CONTRACT_VERSION = "metric-scoring-contract-v1";
++const REGISTRY_ID = "metrics.v0";
++const SOURCE_CONTRACT = "docs/contracts/metric-scoring-contract-v1.md";
+ 
+ const REQUIRED_FIELDS = [
+   "metric_id", "label", "factor", "question", "observation_type", "eligible_opportunity",
+@@ -135,24 +137,43 @@ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+     return { ok: false, errors: ["REGISTRY_NOT_AN_OBJECT the metric registry must be a JSON object"], metrics: [] };
+   }
+ 
+-  const rawMetrics = input.metrics;
+-  if (!Array.isArray(rawMetrics)) {
+-    return { ok: false, errors: ["REGISTRY_METRICS_MISSING the metric registry must declare a metrics array"], metrics: [] };
++  for (const field of REGISTRY_FIELDS) {
++    if (!Object.hasOwn(input, field)) add(`REGISTRY_ROOT_FIELD_MISSING ${field} is required by contract v1`);
++  }
++  for (const field of Object.keys(input)) {
++    if (!REGISTRY_FIELDS.includes(field)) add(`REGISTRY_DEAD_FIELD ${field} is not part of contract v1`);
+   }
+-  const metrics = rawMetrics as MetricDefinition[];
+-
+-  const consumers = Array.isArray(input.consumers) ? (input.consumers as string[]) : [];
+-  if (consumers.length === 0) add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
+-  const routeTables = isPlainRecord(input.route_tables) ? input.route_tables : {};
+-  const frontiers = isPlainRecord(input.frontiers) ? input.frontiers : {};
+ 
++  if (input.registry_id !== REGISTRY_ID) add(`REGISTRY_ID_MISMATCH registry_id expected ${REGISTRY_ID}`);
+   if (input.contract_version !== CONTRACT_VERSION) {
+-    add(`REGISTRY_CONTRACT_VERSION expected ${CONTRACT_VERSION}`);
++    add(`REGISTRY_CONTRACT_VERSION contract_version expected ${CONTRACT_VERSION}`);
+   }
+-  for (const field of Object.keys(input)) {
+-    if (!REGISTRY_FIELDS.includes(field)) add(`REGISTRY_DEAD_FIELD ${field} is not part of contract v1`);
++  if (input.source_contract !== SOURCE_CONTRACT) {
++    add(`REGISTRY_SOURCE_CONTRACT source_contract expected ${SOURCE_CONTRACT}`);
+   }
+ 
++  const rawConsumers = input.consumers;
++  if (!Array.isArray(rawConsumers) || !rawConsumers.every((consumer) => typeof consumer === "string")) {
++    add("REGISTRY_ROOT_FIELD_INVALID consumers must be an array of strings");
++  }
++  const consumers = Array.isArray(rawConsumers) ? (rawConsumers as string[]) : [];
++  if (consumers.length === 0) add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
++
++  const rawRouteTables = input.route_tables;
++  if (!isPlainRecord(rawRouteTables)) add("REGISTRY_ROOT_FIELD_INVALID route_tables must be an object");
++  const routeTables = isPlainRecord(rawRouteTables) ? rawRouteTables : {};
++
++  const rawFrontiers = input.frontiers;
++  if (!isPlainRecord(rawFrontiers)) add("REGISTRY_ROOT_FIELD_INVALID frontiers must be an object");
++  const frontiers = isPlainRecord(rawFrontiers) ? rawFrontiers : {};
++
++  const rawMetrics = input.metrics;
++  if (!Array.isArray(rawMetrics)) {
++    add("REGISTRY_ROOT_FIELD_INVALID metrics must be an array");
++    return { ok: false, errors, metrics: [] };
++  }
++  const metrics = rawMetrics as MetricDefinition[];
++
+   // --- identity: exactly M01..M20, once each, in canonical order -----------
+   if (metrics.length !== 20) add(`METRIC_COUNT_NOT_20 found ${metrics.length}`);
+ 
