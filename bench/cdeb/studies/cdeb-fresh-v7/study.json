@@ -1,4 +1,6 @@
 {
+  "boundary_settled": 8,
+  "boundary_unresolved": 9,
   "created_at": "2026-08-24T00:00:00Z",
   "estimand": "the total effect of automatic model-visible delivery of the relevant target decision, over a fixed finite benchmark of 17 tasks",
   "expected_measured_episodes": 340,
@@ -14,7 +16,7 @@
   "oracle_imported_from_predecessor": false,
   "oracle_owner_study": "cdeb-fresh-v7",
   "owner_testimony": "never evidence",
-  "phase": "v7-draft",
+  "phase": "stage1-hold",
   "prd_sha256": "bce257d0b634f43e1d2590b284351214b21be2d7965e61177b9c1368914d21b2",
   "predecessor": "cdeb-fresh-v6",
   "predecessor_artifact_reuse": "read-only historical evidence; the exact 17 TASK_BUILDABLE inputs are imported and never rewritten",
@@ -41,6 +43,7 @@
   "record_id_required": true,
   "repeats_per_arm_per_task": 10,
   "research_line_finality": "final-effect-trial-no-automatic-v8",
+  "result_sha256": "d5c6f45b82f1fb37c01dee5bfa33f5789d0c290f36f6bb2bb74355fcecb9c9a1",
   "schema_version": 1,
   "study_id": "cdeb-fresh-v7",
   "superseded_pre_execution_draft": {
@@ -52,5 +55,5 @@
     "why_this_is_not_an_outcome_aware_amendment": "no episode had been assigned or run, so nothing about the answer was visible when the correction was made"
   },
   "v6_source_pool_sha256": "153b4a554ef6d3525665bcf2b60e3ef57c569213a0618e48cd2850f6acd133b0",
-  "verdict": null
+  "verdict": "TERMINAL_HOLD_FINAL"
 }

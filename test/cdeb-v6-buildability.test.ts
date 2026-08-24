@@ -299,8 +299,12 @@ describe("§27 the floor decided the study and was not adjusted to fit it", () =
     // the most recent study and broke the moment a successor opened. What v6
     // durably established is that it ended and cannot be reopened -- so assert
     // that, and that no declaration can name v6 itself as active again.
+    // `last_terminal_study_id` names whichever study ended most recently, so it
+    // moves every time one does. Pinning it here broke the first time a successor
+    // terminalised, which is the same shape as pinning `active_study_id` broke
+    // the first time a successor opened. What holds for v6 whatever comes after
+    // is that it ended and can never be named active again.
     const declaration = readJson(resolve(V6, "..", "..", "ACTIVE-STUDY.json"));
-    expect(declaration.last_terminal_study_id).toBe("cdeb-fresh-v6");
     expect(declaration.active_study_id).not.toBe("cdeb-fresh-v6");
     expect(declaration.successor_requires_new_study_id).toBe(true);
 
