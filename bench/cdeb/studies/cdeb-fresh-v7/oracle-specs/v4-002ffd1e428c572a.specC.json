@@ -1,0 +1,43 @@
+{
+  "ruled_out_behaviour": "Within the six recorded paths, an exhaustive expected `ticket_owned_code_paths` census expressed as an explicit fixed list of path members, rather than being re-derived from the candidate tree.",
+  "reason": "The recorded reason is that this literal census forces a census amendment for every remaining product ticket, while the focused-lane count guard already catches the deletion failure it was intended to catch.",
+  "scope": "The rule's recorded scope is exactly the six listed paths. It does not support extending the rule to equivalent checks elsewhere, and it does not say whether fixed census data imported into one of those paths from outside the six paths is in scope.",
+  "lifecycle": "Active as recorded, with no condition or supersession stated in rule.txt.",
+  "minimal_violation_boundary": "An in-scope assertion whose expected side explicitly enumerates every current ticket-owned code path and rejects a valid newly declared path solely because that path is absent from the enumeration.",
+  "compliance_boundary": "The nearest unambiguously compliant approach derives the expected current census from ticket ownership/RED declarations and materialized source files at evaluation time. A non-exhaustive individual path assertion, a control-plane allowlist, and focused-lane case counts are also outside the unambiguous forbidden core.",
+  "observable_final_tree_evidence": [
+    "rule.txt records a six-path scope and calls the rule active.",
+    "tests/planning-contract.test.mjs contains `acceptedValidatorOutput` and `pendingValidatorOutput`, each with an explicit exhaustive `ticket_owned_code_paths` enumeration.",
+    "scripts/validate-planning.mjs derives `ticketOwnedPaths` from current ticket ownership and RED declarations before reporting `ticket_owned_code_paths`.",
+    "tests/planning/workspace-skeleton.test.mjs independently derives ticket-owned paths and compares them with the validator report.",
+    "tests/planning/workspace-skeleton.test.mjs also contains focused-lane exact case counts, the separate deletion guard named by the rule's reason."
+  ],
+  "aliases_and_alternate_forms": [
+    "An explicit JavaScript array, Set, object-key map, or comma-separated string containing all expected census paths.",
+    "A regular expression or serialized snapshot that visibly contains every expected census path.",
+    "A complete literal path enumeration embedded in a test helper or wrapper within a recorded scoped path.",
+    "A digest, count-only assertion, generated constant, or externally imported fixed fixture is the disputed boundary, not an established alias of the forbidden behaviour."
+  ],
+  "false_positive_risks": [
+    "Treating exact ownership declarations in ticket files as a forbidden census pin.",
+    "Treating the control-plane allowlist as a ticket-owned-path census.",
+    "Treating exact focused-lane case counts as the forbidden enumeration.",
+    "Treating a fixture's small local path set as a live exhaustive census oracle.",
+    "Treating every static path string in a scoped file as part of a complete census assertion."
+  ],
+  "false_negative_risks": [
+    "Searching only for array literals and missing an exhaustive path enumeration encoded in a regex or serialized string.",
+    "Searching only for `ticket_owned_code_paths` and missing a helper that receives an equivalent census before formatting.",
+    "Missing an exhaustive literal enumeration moved into a scoped helper.",
+    "Classifying a hash, fixed count, or imported/generated fixed value as either compliant or violating despite the rule not deciding that question."
+  ],
+  "detection_strategy": "No detector can decide the rule's full boundary because the decisive representation question is unspecified. For the uncontested core, structured parsing and local value-flow analysis over the six recorded paths can find an exhaustive expected census whose path members are explicitly fixed and compare it with the validator output. Black-box behavior cannot resolve the ambiguity: rejection of a newly declared path could arise from a literal list, a digest, a fixed count, or another constraint, and the rule does not classify all of those.",
+  "is_inherently_lexical": false,
+  "unresolvable": true,
+  "unresolvable_because": "The split turns on \u201cliterally.\u201d Reading 1 treats it as limited to an explicit path enumeration and leaves fixed counts, hashes, generated data, and similar representations unresolved; reading 2 treats every tree-fixed exhaustive membership oracle as equivalent. The reason favors the broader maintenance-cost reading, but the operative words specifically prohibit pinning the path list \u201cliterally.\u201d Neither the rule nor its reason says whether representation or the per-ticket-edit effect is the boundary. The recorded path scope does settle the separate scope dispute in favor of the six listed paths, but it does not cure the representation ambiguity.",
+  "outcome": "rule_does_not_settle_it",
+  "what_the_earlier_readings_split_on": "Whether the word \u201cliterally\u201d limits the prohibition to an explicit exhaustive path list or extends it to any fixed exhaustive census representation, such as a digest, snapshot, generated constant, or fixed count. They also differ on whether the stated six-path scope is exhaustive; the recorded scope resolves that latter issue, but not the representation issue.",
+  "which_side_the_rules_words_support": "",
+  "undecidable_property": "",
+  "_ordering": "reading-1 = specA; reading-2 = specB"
+}
