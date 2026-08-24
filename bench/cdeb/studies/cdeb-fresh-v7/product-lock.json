@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "product_release_tag": "v1.2.0",
+  "tag_object_type": "tag",
+  "tag_object": "557e6cd506c79eb5d2731885e3c544fa85f0384a",
+  "tag_resolves_to_commit": "90a8b212e1db70cccf69fbf48415b9c036b2d854",
+  "ssot_product_release_commit": "90a8b212e1db70cccf69fbf48415b9c036b2d854",
+  "commit_matches_ssot": true,
+  "dist_artifact": "dist/commitlore.mjs",
+  "dist_blob_oid": "dc1186d3b2ddc0e28fa642a37b034eb43a31fe9d",
+  "dist_bytes": 1377723,
+  "dist_sha256_measured": "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528",
+  "executable_identity_pinned_to": "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528",
+  "predecessor_declared_dist_sha256": "318e16612206ae0aa3732033127b2937276ce2f142872c33a91ec04a33133b91",
+  "predecessor_declared_digest_matches_measured": false,
+  "verification_note": "The tag object, the commit it resolves to and the dist bytes all verify. The digest the first v7 draft declared matches no artifact at that commit -- v6 recorded the same mismatch as v6-d001 after scanning 338 files there and finding none. This lock pins the measured digest as the executable identity and keeps the declared value beside it as predecessor history rather than deleting it. Every runtime check verifies the measured digest.",
+  "no_newer_release_substituted": true,
+  "deviation": "v7-d001"
+}

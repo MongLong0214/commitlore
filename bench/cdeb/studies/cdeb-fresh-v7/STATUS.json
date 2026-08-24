@@ -1,0 +1,14 @@
+{
+  "measured_run_allowed": false,
+  "no_automatic_v8": true,
+  "oracle_frozen": false,
+  "phase": "benchmark-imported",
+  "product_effect_rows": 0,
+  "schema_version": 1,
+  "state_machine_position": "PRODUCT_IDENTITY_LOCKED",
+  "study_id": "cdeb-fresh-v7",
+  "successor_required": false,
+  "updated_at": "2026-08-24T00:00:00Z",
+  "verdict": null,
+  "verdict_basis": null
+}

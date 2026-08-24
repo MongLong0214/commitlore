@@ -1,7 +1,7 @@
 {
-  "active_study_id": null,
+  "active_study_id": "cdeb-fresh-v7",
   "last_terminal_study_id": "cdeb-fresh-v6",
-  "status": "no-active-study",
-  "reason": "cdeb-fresh-v6 reached TERMINAL_HOLD_FINAL at its task-buildability gate. Of 34 prequalified decisions, 17 could carry a fresh record-blind task with a violating implementation passing both acceptances -- 8 in agent-operator-score and 9 in gitseed, against registered floors of 10 each and 22 in total. The floors were fixed before the first task existed and were not adjusted. No product-effect episode was run and the study holds zero measured rows. Its descriptive result stands in buildability/validation-report.json: for roughly half this corpus the ruled-out path is already closed by the repository's own tests, named by file and line. v3, v3r1, v4 and v5 are terminal and none may be resumed. This was the final planned study of the research line; a successor requires a separate owner decision and is not generated automatically.",
+  "status": "active",
+  "reason": "cdeb-fresh-v7 is the final effect trial of this research line, opened by a separate owner decision after cdeb-fresh-v6 reached TERMINAL_HOLD_FINAL holding zero product-effect rows. v6 remains terminal and read-only; v7 does not resume it and does not move its floors. The benchmark is the exact 17 candidates v6 established as TASK_BUILDABLE -- 8 in agent-operator-score and 9 in gitseed -- run as 17 tasks x 2 arms x 10 fresh repetitions, 340 assigned episodes, with no sample-size gate. Two corrections were registered before any episode existed: the product dist digest now pins the measured artifact rather than a value that matches nothing at the release commit, and the revival oracle is built by v7 rather than imported from v6, which never built one. No oracle is imported and no measured episode may run before ORACLE_FROZEN. v3, v3r1, v4, v5 and v6 are terminal and none may be resumed. This is the final planned study; a successor requires a separate owner decision and is not generated automatically.",
   "successor_requires_new_study_id": true
 }
