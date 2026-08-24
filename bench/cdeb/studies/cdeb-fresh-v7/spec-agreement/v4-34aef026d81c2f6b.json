@@ -1,0 +1,15 @@
+{
+  "agree": false,
+  "refutations_attempted": [
+    "Changed `scripts/render-execution-views.mjs` to recursively discover `docs/**/*.md`, filter out Board and Roadmap, and use the remainder to render generated blocks: both specifications classify this as a violation.",
+    "Kept renderer sources closed to the catalog and validated catalog ticket paths, while reading fixed Board/Roadmap targets only for marker validation and rewrite preservation: both classify this as compliant.",
+    "Added a broad document scan used only for a disconnected lint/census report: both classify it as compliant because it reaches neither authority/render content nor renderer source selection."
+  ],
+  "separating_case": "In `scripts/validate-planning.mjs`, add an operational-readiness path that runs `git ls-files docs`, retains Markdown files, removes `docs/tickets/BOARD.md` and `docs/planning/AOS-EXECUTION-ROADMAP.md`, reads every remaining file, and uses the resulting documents to compute the readiness value emitted by `.github/workflows/operational-state.yml`. Do not pass this set to `scripts/render-execution-views.mjs` or use it in renderer validation.",
+  "separating_case_violates_under": "spec-1",
+  "boundary_in_common": "Both forbid an open-ended document/file discovery whose members are admitted as renderer authority or fresh rendered content by default after known projection surfaces are excluded; both allow a closed catalog plus validated catalog ticket paths, with fixed Board/Roadmap reads confined to output-target handling.",
+  "either_declared_unresolvable": false,
+  "detection_strategy_conflict": "Spec-1 analyzes the full recorded workflow/validator/projection pipeline and treats discovered-and-pruned inputs to operational readiness as in scope. Spec-2 limits the rule to execution-view renderer source selection or renderer validation, so it permits the described readiness-only path; conversely, it explicitly examines renderer validation outcomes as sinks.",
+  "_candidate_id": "v4-34aef026d81c2f6b",
+  "_ordering": "spec-1 = specB; spec-2 = specA"
+}
