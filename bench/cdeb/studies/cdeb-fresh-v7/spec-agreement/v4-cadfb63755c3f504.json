@@ -1,0 +1,18 @@
+{
+  "agree": true,
+  "refutations_attempted": [
+    "Made the injected middle candidate's `evaluate()` raise: both require a normal, incomplete result retaining the ungraded middle candidate and processing the final candidate.",
+    "Caught the grading exception but used `break`, early `return`, task cancellation, or a truncated result: both classify this as a violation.",
+    "Recorded incompleteness but omitted the failed candidate or represented it with a successful grade: both classify this as a violation.",
+    "Moved grading behind a helper/callback/future and let its failure escape the `run()` boundary: both classify this as a violation.",
+    "Made digest construction, grade parsing, or grade validation fail inside the per-candidate grading attempt and escape the candidate boundary: neither spec permits that failure to terminate the run; it must be localized and reported.",
+    "Tried deterministic-only execution, screening-blocked candidates, file/collection failures, and startup smoke-gate failure: both exclude these from this per-candidate grading rule."
+  ],
+  "separating_case": "",
+  "separating_case_violates_under": "",
+  "boundary_in_common": "After deterministic screening, a failure in one eligible candidate's per-candidate model-grading attempt must be retained as that candidate's ungraded, explained failure and make the result incomplete, while `run()` returns normally and continues to represent later candidates; propagation, short-circuiting, omission, or disguising the failure as a real grade violates the rule.",
+  "either_declared_unresolvable": false,
+  "detection_strategy_conflict": "",
+  "_candidate_id": "v4-cadfb63755c3f504",
+  "_ordering": "spec-1 = specB; spec-2 = specA"
+}
