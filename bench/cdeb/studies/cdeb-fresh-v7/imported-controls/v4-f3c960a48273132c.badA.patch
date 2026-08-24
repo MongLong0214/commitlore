@@ -1,0 +1,176 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..dd48c16 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -22,7 +22,7 @@ from .grade.smoke import SmokeResult, run_smoke
+ from .grade.types import GradeResult
+ from .pipeline.run import BLOCKING_SEVERITY, FileFetchError, FetchedFiles, run
+ from .ports import RepositoryMetadata, RunPorts, RunRequest
+-from .scoring import Recommendation, ScoreInputs, score
++from .scoring import Recommendation, ScoreInputs
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+@@ -112,7 +112,13 @@ def execute(
+ 
+     smoke = run_smoke(ports.model) if model_smoke is None else model_smoke
+     model = _RecordingModel(ports, grades, failures, trace_failures) if smoke.passed else None
+-    result = run(collected, fetch_files=read, grader=model, on_survivor=observe_metadata)
++    result = run(
++        collected,
++        fetch_files=read,
++        grader=model,
++        on_survivor=observe_metadata,
++        screening=ports.screening,
++    )
+ 
+     if smoke.passed is False:
+         result = result.with_incomplete(
+@@ -143,7 +149,7 @@ def execute(
+         scored.append(
+             ScoredCandidate(
+                 reviewed.candidate.repo,
+-                Recommendation(score(inputs), reviewed.severity),
++                Recommendation(ports.scoring.score(inputs), reviewed.severity),
+             )
+         )
+ 
+@@ -153,7 +159,7 @@ def execute(
+     for candidate in collected.candidates:
+         try:
+             evidence = (
+-                absent_evidence()
++                absent_evidence(ports.evidence)
+                 if candidate.repo not in files
+                 else ports.evidence.read_evidence(candidate, files[candidate.repo], metadata[candidate.repo])
+             )
+@@ -161,7 +167,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = absent_evidence(ports.evidence)
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..7306963 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -9,7 +9,7 @@ from .evidence import ClaimBasis
+ if TYPE_CHECKING:
+     from .collect.search import Candidate
+     from .pipeline.run import FetchedFiles
+-    from .ports import RepositoryMetadata
++    from .ports import EvidenceReader, RepositoryMetadata
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+@@ -89,12 +89,12 @@ class FileEvidenceReader:
+ DEFAULT_EVIDENCE_READER: Final = FileEvidenceReader()
+ 
+ 
+-def satisfiable_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
++def satisfiable_evidence(reader: EvidenceReader = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
+     return reader.evidence_names
+ 
+ 
+-def absent_evidence() -> tuple[Evidence, ...]:
+-    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
++def absent_evidence(reader: EvidenceReader = DEFAULT_EVIDENCE_READER) -> tuple[Evidence, ...]:
++    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence(reader))
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+diff --git a/gitseed/pipeline/run.py b/gitseed/pipeline/run.py
+index e6af978..b7e3a0b 100644
+--- a/gitseed/pipeline/run.py
++++ b/gitseed/pipeline/run.py
+@@ -18,6 +18,7 @@ from dataclasses import dataclass
+ from typing import Callable, Sequence
+ 
+ from ..collect.search import Candidate, CollectResult
++from ..domain_ports import ScreeningPort
+ from ..evidence import ClaimBasis
+ from ..grade.types import GradeClient, GradeResult
+ from ..screen.coverage import SourceCoverage
+@@ -141,12 +142,26 @@ class FileFetchError(RuntimeError):
+         return self.detail
+ 
+ 
++class _DefaultScreening:
++    """Keep the pipeline's deterministic defaults observable to its tests."""
++
++    def scan(self, files: Sequence[tuple[str, str]]) -> tuple[Signal, ...]:
++        return scan_files(files)
++
++    def risk(self, signals: Sequence[Signal], coverage: SourceCoverage | None) -> str:
++        return risk_of(tuple(signals), coverage)
++
++
++DEFAULT_SCREENING = _DefaultScreening()
++
++
+ def run(
+     collected: CollectResult,
+     *,
+     fetch_files: Callable[[Candidate], FetchedFiles | Sequence[tuple[str, str]]],
+     grader: GradeClient | None,
+     on_survivor: Callable[[Candidate], None] | None = None,
++    screening: ScreeningPort = DEFAULT_SCREENING,
+ ) -> PipelineResult:
+     """Carry `collected` through screening and grading.
+ 
+@@ -236,8 +251,8 @@ def run(
+             )
+             continue
+ 
+-        signals = scan_files(files)
+-        severity = risk_of(signals, coverage)
++        signals = screening.scan(files)
++        severity = screening.risk(signals, coverage)
+         screened_files = tuple(path for path, _ in files)
+ 
+         if severity == BLOCKING_SEVERITY:
+diff --git a/gitseed/ports.py b/gitseed/ports.py
+index b7f1a10..10255ae 100644
+--- a/gitseed/ports.py
++++ b/gitseed/ports.py
+@@ -6,6 +6,7 @@ from typing import Protocol
+ 
+ from .category import DEFAULT_EVIDENCE_READER, Evidence
+ from .collect.search import Candidate, CollectResult
++from .domain_ports import DEFAULT_SCORING_PORT, DEFAULT_SCREENING_PORT, ScoringPort, ScreeningPort
+ from .grade.types import GradeClient
+ from .pipeline.run import FetchedFiles
+ from .scoring import ScoreInputs
+@@ -60,3 +61,5 @@ class RunPorts:
+     model: GradeClient
+     clock: Clock
+     evidence: EvidenceReader = DEFAULT_EVIDENCE_READER
++    scoring: ScoringPort = DEFAULT_SCORING_PORT
++    screening: ScreeningPort = DEFAULT_SCREENING_PORT
+diff --git a/tests/test_seam.py b/tests/test_seam.py
+index cc155de..9542d2f 100644
+--- a/tests/test_seam.py
++++ b/tests/test_seam.py
+@@ -347,6 +347,8 @@ def test_the_run_seam_has_no_external_writer_port() -> None:
+         "model",
+         "clock",
+         "evidence",
++        "scoring",
++        "screening",
+     ]
+ 
+ 
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..3720612 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -278,4 +278,6 @@ def test_stored_replay_has_no_external_writer_port() -> None:
+         "model",
+         "clock",
+         "evidence",
++        "scoring",
++        "screening",
+     ]

@@ -19,6 +19,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { TERMINAL_STUDY_PHASES } from "../bench/cdeb/active-study.ts";
+
 const HERE = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const V6 = resolve(HERE, "..", "bench", "cdeb", "studies", "cdeb-fresh-v6");
 const V5 = resolve(HERE, "..", "bench", "cdeb", "studies", "cdeb-fresh-v5");
@@ -292,10 +294,22 @@ describe("§27 the floor decided the study and was not adjusted to fit it", () =
     expect(result).not.toMatch(/\d+% fewer repeated bad decisions/);
   });
 
-  it("leaves no active study and names no successor", () => {
+  it("ends terminal, is never itself the active study, and forces a successor to carry a new id", () => {
+    // Written first as `active_study_id === null`, which held only while v6 was
+    // the most recent study and broke the moment a successor opened. What v6
+    // durably established is that it ended and cannot be reopened -- so assert
+    // that, and that no declaration can name v6 itself as active again.
+    // `last_terminal_study_id` names whichever study ended most recently, so it
+    // moves every time one does. Pinning it here broke the first time a successor
+    // terminalised, which is the same shape as pinning `active_study_id` broke
+    // the first time a successor opened. What holds for v6 whatever comes after
+    // is that it ended and can never be named active again.
     const declaration = readJson(resolve(V6, "..", "..", "ACTIVE-STUDY.json"));
-    expect(declaration.active_study_id).toBe(null);
-    expect(declaration.status).toBe("no-active-study");
-    expect(declaration.last_terminal_study_id).toBe("cdeb-fresh-v6");
+    expect(declaration.active_study_id).not.toBe("cdeb-fresh-v6");
+    expect(declaration.successor_requires_new_study_id).toBe(true);
+
+    const status = readJson(join(V6, "STATUS.json"));
+    expect(status.verdict).toBe("TERMINAL_HOLD_FINAL");
+    expect(TERMINAL_STUDY_PHASES).toContain(status.phase);
   });
 });

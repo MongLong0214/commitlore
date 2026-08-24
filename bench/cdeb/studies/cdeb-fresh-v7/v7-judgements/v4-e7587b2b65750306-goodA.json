@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-e7587b2b65750306",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "713b7de406d35ef2e82b107ea38de97c5591eab1ceb7cac2b60e0131f1f97b93",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a required `observation_key: string` field to `MetricDefinition` and increments expected test-case counts for affected planning lanes.",
+    "reading_applied": "Narrow reading: the rule forbids validating every prose field by a literal digest, while permitting other schema fields and validation changes.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch neither adds literal digests nor pins prose text. It adds a string key field and adjusts test counts, so it does not perform the ruled-out practice under either the narrow reading or the stricter reading."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a required `observation_key` field to `MetricDefinition` and updates focused-test lane counts for the additional test coverage.",
+    "reading_applied": "Direct/narrow reading: the rule prohibits pinning prose fields by literal digest; it does not prohibit adding schema fields or updating test-count expectations.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch contains no prose-field digests or other full-text pinning. It only changes a TypeScript interface and expected test counts."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

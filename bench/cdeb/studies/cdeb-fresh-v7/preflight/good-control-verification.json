@@ -1,0 +1,880 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "document_id": "cdeb-fresh-v7-good-control-verification",
+  "what_this_is": "v7's own compliant controls, built because v6 kept the builder's prose and not the bytes. Each builder receives the task and the frozen acceptance and is never told the decision, so a compliant result is evidence rather than an instruction followed.",
+  "compliance_not_established_here": "passing both acceptances shows the task was done without breaking the repository. Whether the implementation complies with the decision is a separate question that blind judges answer, and it has not been asked yet.",
+  "verified": 17,
+  "functional_pass": 17,
+  "failures": [],
+  "results": [
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-002ffd1e428c572a",
+      "variant": "goodA",
+      "repository_id": "agent-operator-score",
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+        "command_sha256": "ae81c9838389c001431eed1609df6cb59f896064253f40fcdaf04a8c7c7a9d01",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "09df39c978a97a31edcef46a045983d09fb08b269a7372c0379f6c52eddff645",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+        "exit_code": 1,
+        "total": 605,
+        "passed": 589,
+        "failed": 16,
+        "skipped": 0,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 35,
+        "stdout_sha256": "eae85393451485f6990a0356bc8e2115430095f03b802a542bcd34dd43a37102",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 605,
+        "passed": 588,
+        "failed": 17,
+        "skipped": 0
+      },
+      "changed_files": [
+        "packages/schema/src/capability.ts",
+        "packages/schema/src/doctor-contract.ts",
+        "packages/schema/test/capability.test.ts",
+        "packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts"
+      ],
+      "final_tree_oid": "d8faaf9491dd69f89bcb4c01a9126c42b71d8868",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "b564bc80bbf9e4105402e7e3294bdbeb4468e458c5d4ba502864870c37de8966",
+      "patch_bytes": 9254
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_custom_evidence_reader_acceptance.py",
+        "command_sha256": "d2130588ac053eea03b4dd0e414d0128273ed0bd2ce9c0e67bccfe18dfa08636",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "f4c77b58e2280613a49ba18da1c4a02d440e862c49a6c8fe5daaf277333ff99d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 322,
+        "passed": 319,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "ef8fbc05a187d9746889e58a68d44f852fd540298356e863fc8d1b072b691eea",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 322,
+        "passed": 318,
+        "failed": 1,
+        "skipped": 3
+      },
+      "changed_files": [
+        "gitseed/application.py",
+        "gitseed/category.py",
+        "tests/test_custom_evidence_reader_acceptance.py"
+      ],
+      "final_tree_oid": "14702f7917c1653139d22d54daf24a7975b41272",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "5df6b981148b397debefa30bba0074e2e60ff60c45535a6f6b5e0916e19bb0a2",
+      "patch_bytes": 3603
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "variant": "goodA",
+      "repository_id": "agent-operator-score",
+      "task_acceptance": {
+        "command": "node --test tests/epic-dependency-normalization.acceptance.test.mjs",
+        "command_sha256": "02d007e0950d52170494ecc32ef82d11c5a296c0d5577c519b832fa4f83885c4",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "75c59cb75a6956f2c29ffdc156f1b5cc3748528db75657c20cf29da52dc38b55",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+        "exit_code": 1,
+        "total": 606,
+        "passed": 594,
+        "failed": 12,
+        "skipped": 0,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 41,
+        "stdout_sha256": "0b6593b04d577b19ec6d88392df3a479bc6b92f7055bda41c8d8d35d7f147267",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 605,
+        "passed": 592,
+        "failed": 13,
+        "skipped": 0
+      },
+      "changed_files": [
+        "docs/issues.json",
+        "docs/planning/AOS-EXECUTION-ROADMAP.md",
+        "docs/tickets/BOARD.md",
+        "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+        "docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md",
+        "docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md",
+        "scripts/validate-planning.mjs",
+        "tests/planning-contract.test.mjs",
+        "tests/epic-dependency-normalization.acceptance.test.mjs"
+      ],
+      "final_tree_oid": "cbcbc4efae24770baf667136998616d62fdf4e0b",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "2251a0e91f92fbd88531392eeadbcea53d9979c5e2b5cbbce800da92d8f68006",
+      "patch_bytes": 21475
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-377f04276465b59d",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_ci_action_pinning.py",
+        "command_sha256": "7c926cc83ee870738a4cad17dadaddf27c9715825b0089af206bbc75e012e96e",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "a71df3ef716cabe43ead70bd8311cda3aeadcb986bea501da0ea9262f31c3925",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 322,
+        "passed": 319,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "20c5481d811f2816f39754da8e3e0d1eb7ab58230dbf855eece780756b99c7ee",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 322,
+        "passed": 318,
+        "failed": 1,
+        "skipped": 3
+      },
+      "changed_files": [
+        ".github/workflows/ci.yml",
+        "tests/test_ci_action_pinning.py"
+      ],
+      "final_tree_oid": "617a2ecaeaf8e6c24063939f88d03cf072992135",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "4210fd9de20ecba8d061c386056bf916e3659169294dfea127cd35bc8fdd55ce",
+      "patch_bytes": 603
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-77e1745655a235ce",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_category_manifest_evidence.py",
+        "command_sha256": "d6bef3613bfcd06ea3f575fbcd648af696f4e433524ee2ce20ebce999ea3534b",
+        "exit_code": 0,
+        "tests": 10,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "1253f6ca793d46eb9c48b6f1606064815d0bb62be75a701be4c49494044e47ce",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 331,
+        "passed": 328,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "b947dfed6dad46bbb023509759cf768552f4a7f7f23069c120b0c0057fc58d52",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 331,
+        "passed": 323,
+        "failed": 5,
+        "skipped": 3
+      },
+      "changed_files": [
+        "gitseed/category.py",
+        "tests/test_category_manifest_evidence.py"
+      ],
+      "final_tree_oid": "3fb61cba744ab47ef1f9b56bf064585e7230c8d3",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "9a6c07e1d354c8fcb783c119e6bafc344ddfadb1d664532d56b29bbc439297e6",
+      "patch_bytes": 6988
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_correction_point_lookup_acceptance.py",
+        "command_sha256": "0ed7cedf9e6f26bf3dab214decccfedc1c6a53c0477ed34b7b1dc613c352e129",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "5b19689a97d618d5cdfce632de67285a8efa3c57100a80350a5bb7ca9e05ae34",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 322,
+        "passed": 319,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "1ef1ca670353176c66958f8e7d333b04594ddfe7ba7fc071a27ef0ba7ae5289c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 322,
+        "passed": 318,
+        "failed": 1,
+        "skipped": 3
+      },
+      "changed_files": [
+        "gitseed/storage.py",
+        "tests/test_correction_point_lookup_acceptance.py"
+      ],
+      "final_tree_oid": "c012056ebd83733a41e700900f7d9f13e183be5e",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "248e9443464670c9a8da496c1e60953ca3cfd67d74f0d6da2d4bb1cbdb821765",
+      "patch_bytes": 904
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-8f24735524874167",
+      "variant": "goodA",
+      "repository_id": "agent-operator-score",
+      "task_acceptance": {
+        "command": "node --test tests/acceptance/schema-doctor-lane.test.mjs",
+        "command_sha256": "fa63d861c1cd592dffa8bccab6c82d31c74d849d3bb0350f4af4d22a2f557f83",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 1,
+        "stdout_sha256": "59db3e4deff25ac6c85c01b5c67e04fdc57dc42964caa13e55bd79d85268811f",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+        "exit_code": 1,
+        "total": 605,
+        "passed": 593,
+        "failed": 12,
+        "skipped": 0,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 43,
+        "stdout_sha256": "4d84781049f50872a053a5fd095e152aa5dc7ed9f21a3202e72188482a1d037d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 605,
+        "passed": 592,
+        "failed": 13,
+        "skipped": 0
+      },
+      "changed_files": [
+        "packages/schema/package.json",
+        "tests/planning/workspace-skeleton.test.mjs",
+        "tests/acceptance/"
+      ],
+      "final_tree_oid": "98e83e85ed88a064949cb470e41a13f6168e124e",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "84706a73cfa0ea4f30a9ecfd45da0ea2c756f1abf602eddee662363d58dd2526",
+      "patch_bytes": 1363
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_collect_paging_validation_acceptance.py",
+        "command_sha256": "043c0a913710e719f725d5150749e5dd2e81b697201996961e55fc2a3febd6bd",
+        "exit_code": 0,
+        "tests": 7,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "ee09f6debd9f81709cd5af75a47e8b1c6ed9a94b8e82a9b34c00f597199e9c17",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 335,
+        "passed": 332,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "5ac67bd1f952ec0d829e6e69a4875f02294c3959415a9a8c0c7d943c3bcea995",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 328,
+        "passed": 320,
+        "failed": 5,
+        "skipped": 3
+      },
+      "changed_files": [
+        "gitseed/collect/search.py",
+        "tests/test_collect.py",
+        "tests/test_collect_paging_validation_acceptance.py"
+      ],
+      "final_tree_oid": "607bd42d24252faafd78629e0df21eadc6c3863b",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "c6255842ce78de2232a9571f19b6c50ac116691b7cac2966a101eb53d75edf60",
+      "patch_bytes": 1667
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-9b42b1951da730e1",
+      "variant": "goodA",
+      "repository_id": "agent-operator-score",
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/metric-registry.contract-fields.acceptance.test.ts",
+        "command_sha256": "d1bc2f335e9df4a976d2815086b1736e8bcf6967569034b4bcac0438b9a7051c",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "3443122181445b86e5ccb0476cc22d030bfe987d7cd5264c4a45901fedc2a5a2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+        "exit_code": 1,
+        "total": 605,
+        "passed": 589,
+        "failed": 16,
+        "skipped": 0,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 36,
+        "stdout_sha256": "ec69dcc59aecc9c372865002d8ea9d03e08772b044628ba1df7e278199c87e3c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 605,
+        "passed": 588,
+        "failed": 17,
+        "skipped": 0
+      },
+      "changed_files": [
+        "packages/schema/src/metric-registry.ts",
+        "packages/schema/test/metric-registry.contract-fields.acceptance.test.ts"
+      ],
+      "final_tree_oid": "c2aaa93e81ab33f82ca27b82d9c87b351a5d9c7d",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "7a3093ee142f8fbf2b5f6a8e1fd2049a83f00ed39d068b6051a48c0560a2cafb",
+      "patch_bytes": 3764
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "variant": "goodA",
+      "repository_id": "agent-operator-score",
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/capability-derivation-proof.acceptance.test.ts",
+        "command_sha256": "782cb77a3a95cb4f50030403f026210ed3044a2d8f276765acecdf449858bda4",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "34889b95708604da54ebbacdc3add604e9fd55b781456fa638f5a5c4b397332e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+        "exit_code": 1,
+        "total": 605,
+        "passed": 589,
+        "failed": 16,
+        "skipped": 0,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 36,
+        "stdout_sha256": "04e6962820d83040896d703440ce208dd5c8cff21bbb89c847d374d8c8a4636e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 605,
+        "passed": 588,
+        "failed": 17,
+        "skipped": 0
+      },
+      "changed_files": [
+        "packages/schema/src/capability.ts",
+        "packages/schema/test/capability.test.ts",
+        "packages/schema/test/capability-derivation-proof.acceptance.test.ts"
+      ],
+      "final_tree_oid": "a3cbc3b26491e24cbb58a12b6bcf7d5228630cf3",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "4c2917168f5e067473d03e60de38fad48068a094a79a6f5427278ad7f0404927",
+      "patch_bytes": 2520
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-cadfb63755c3f504",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_pipeline_collection_rate_limit.py",
+        "command_sha256": "4139ac9b47d6eefe7979c6303e3375b22def185ee936bac94ace295eae4825b6",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "a71df3ef716cabe43ead70bd8311cda3aeadcb986bea501da0ea9262f31c3925",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 322,
+        "passed": 319,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "7e6b263014126dd47e70775ba0a6796e268cddd6b991425fde39b4f35e506222",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 322,
+        "passed": 318,
+        "failed": 1,
+        "skipped": 3
+      },
+      "changed_files": [
+        "gitseed/pipeline/run.py",
+        "tests/test_pipeline_collection_rate_limit.py"
+      ],
+      "final_tree_oid": "51278727377f56003427d914597e6b4e36a0cb91",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "a40ab132f5c90ee54d94d1372a5e1bb0f36cc4025732c8cd389b763ea395960e",
+      "patch_bytes": 514
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "variant": "goodA",
+      "repository_id": "agent-operator-score",
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/capability-validation-result.acceptance.test.ts",
+        "command_sha256": "21e1291eb1df3f802d9342c9c533b35877eff4f94b1cbcc883b4fd05b9ac4fe1",
+        "exit_code": 0,
+        "tests": 2,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "09b52fb6205c6c43d2bb239925a6c6c363a3b7bd6724464183efe56db41dcf8b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+        "exit_code": 1,
+        "total": 606,
+        "passed": 590,
+        "failed": 16,
+        "skipped": 0,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 42,
+        "stdout_sha256": "7ffec0e0eb333df2a826bae8d44628f3687f905677e468f140110ba8a29159e3",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 606,
+        "passed": 588,
+        "failed": 18,
+        "skipped": 0
+      },
+      "changed_files": [
+        "packages/schema/src/capability.ts",
+        "packages/schema/src/doctor-contract.ts",
+        "packages/schema/test/capability-validation-result.acceptance.test.ts"
+      ],
+      "final_tree_oid": "0d387ebb350834524cb55fe5945b00e639168a37",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "574d026c5e6a36c353e6652393c046369b31512ea28b1445e946720b41d64411",
+      "patch_bytes": 3659
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "variant": "goodA",
+      "repository_id": "agent-operator-score",
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/metric-registry-envelope.acceptance.test.ts",
+        "command_sha256": "4845ef9e39ed187cf8b74e954220cb1310379349d6caf203e8457e3db542ab73",
+        "exit_code": 0,
+        "tests": 9,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "2280665c86723c4da71bfaeee23dedd43ba3df40149db1aa4c48c0b99331ae82",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+        "exit_code": 1,
+        "total": 613,
+        "passed": 597,
+        "failed": 16,
+        "skipped": 0,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 42,
+        "stdout_sha256": "a5cd7c8e0af5fb5e68d58ab1633e73fd0ed5027f862bb6c753df3c7e976acf16",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 613,
+        "passed": 590,
+        "failed": 23,
+        "skipped": 0
+      },
+      "changed_files": [
+        "packages/schema/src/metric-registry.ts",
+        "packages/schema/test/metric-registry-envelope.acceptance.test.ts"
+      ],
+      "final_tree_oid": "e1dcea95d707241abc1dc41ce0ab86759dbe8630",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "e046f8bc990326bb1b8c3575cde181d4f1b61ee8c70dab0272b13a3f580452a0",
+      "patch_bytes": 3270
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-e7587b2b65750306",
+      "variant": "goodA",
+      "repository_id": "agent-operator-score",
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/metric-definition.public-contract.test.mjs",
+        "command_sha256": "359f54365ec034232d09425752a2236af2121327f8497b6f3444292f34016abf",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 1,
+        "stdout_sha256": "e2cf22a58ce6fb1d0dded616c7a0ff64e26ffe9ddbaf48d15a4e7b767c90cee1",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "registered_command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "executed_command_sha256": "f90321a3f3beab5b298ce4c7878f7c4db1e376ad5b15295a0dc01c36f1722446",
+        "exit_code": 1,
+        "total": 605,
+        "passed": 591,
+        "failed": 14,
+        "skipped": 0,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 37,
+        "stdout_sha256": "894fc0e46c1a8a806899e2b3330f1d1d9e1c63a6ef17ace619bc80bb24efb021",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 605,
+        "passed": 588,
+        "failed": 17,
+        "skipped": 0
+      },
+      "changed_files": [
+        "packages/schema/src/metric-registry.ts",
+        "tests/planning/workspace-skeleton.test.mjs",
+        "packages/schema/test/metric-definition.public-contract.test.mjs"
+      ],
+      "final_tree_oid": "89193b02944cfdbb89e305fa14018c926a2c4754",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "713b7de406d35ef2e82b107ea38de97c5591eab1ceb7cac2b60e0131f1f97b93",
+      "patch_bytes": 1553
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-ed878960135ff45a",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_observation_ordering_acceptance.py",
+        "command_sha256": "834d629ebeb377a34d04251f53886e15fa4ade77728369b3b2a8707157bd3f87",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "5b19689a97d618d5cdfce632de67285a8efa3c57100a80350a5bb7ca9e05ae34",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 323,
+        "passed": 320,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "878bc725151bd5319fd98a4d4a2c5d832da3ab384cf2dc8c30771e445910d7f4",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 322,
+        "passed": 318,
+        "failed": 1,
+        "skipped": 3
+      },
+      "changed_files": [
+        "gitseed/storage.py",
+        "tests/test_storage.py",
+        "tests/test_observation_ordering_acceptance.py"
+      ],
+      "final_tree_oid": "6f8765effd52e39b2da46e02833ad774e15d45a7",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "75d906df6081f7d6cb1c67958f939a2cf9b3079eb69a7f0cd687d8dfd126a848",
+      "patch_bytes": 1906
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-f3c960a48273132c",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_evidence_reader_fallback.py",
+        "command_sha256": "44ce3874cc98342d57bb2d85d6ccfa3ebbca90d171401eabc7c6fed2f376c61e",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "5b19689a97d618d5cdfce632de67285a8efa3c57100a80350a5bb7ca9e05ae34",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 322,
+        "passed": 319,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "9b5ecf73c4b70ccb45531b1999815da7ee070f72cbe55fd29d8098f68d4110f6",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 322,
+        "passed": 318,
+        "failed": 1,
+        "skipped": 3
+      },
+      "changed_files": [
+        "gitseed/application.py",
+        "gitseed/category.py",
+        "tests/test_evidence_reader_fallback.py"
+      ],
+      "final_tree_oid": "c52972070539afe34f7e716700fff018d603b7cc",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "7043de28be0ff70299bfd68a3c3ad43527b570be7e4ab6b6edf96060b9e0ef0e",
+      "patch_bytes": 1962
+    },
+    {
+      "schema_version": 1,
+      "candidate_id": "v4-f901052615fa3aee",
+      "variant": "goodA",
+      "repository_id": "gitseed",
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_bounded_storage_reads.py",
+        "command_sha256": "33b38d1b24eac3a57601fdbd1e18da1bdf8950f4efbfc8eac2988cfad3769eb9",
+        "exit_code": 0,
+        "tests": 1,
+        "failed": 0,
+        "seconds": 0,
+        "stdout_sha256": "5b19689a97d618d5cdfce632de67285a8efa3c57100a80350a5bb7ca9e05ae34",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+        "exit_code": 0,
+        "total": 323,
+        "passed": 320,
+        "failed": 0,
+        "skipped": 3,
+        "unexpected_failures": [],
+        "coverage_lost": false,
+        "tests_silenced": false,
+        "seconds": 3,
+        "stdout_sha256": "455a337adc636537d9cbc72ef9996f01b6e3105f2541a9fce31bbcc4796eeb38",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pass": true
+      },
+      "baseline_used": "per-candidate",
+      "baseline": {
+        "total": 322,
+        "passed": 318,
+        "failed": 1,
+        "skipped": 3
+      },
+      "changed_files": [
+        "gitseed/storage.py",
+        "tests/test_storage.py",
+        "tests/test_bounded_storage_reads.py"
+      ],
+      "final_tree_oid": "ade8ad2e61fb56c6ef8022df82020def3b30a447",
+      "functional_pass": true,
+      "builder_claimed_implemented": true,
+      "patch_sha256": "7b3c324ed8673f0004cf0e115d6c2975e882face1e37b87a638976e4acdd8adc",
+      "patch_bytes": 4391
+    }
+  ]
+}

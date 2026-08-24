@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-0ecd7426eebc1cab",
+  "variant": "goodB",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "40e84dfafed383e87ca6d3a35ca54ce54a77aecfcba2f1362e5f422365999c6e",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds an application-layer _CategoryEvidenceReader that validates configured category evidence names, reads evidence through the existing EvidenceReader, and supplies absent evidence when files are unavailable.",
+    "reading_applied": "Literal rule: it rules out introducing an artifact storage port, not using or wrapping an existing evidence-reading port.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The diff introduces no artifact storage port or alternate storage shape. Its new helper coordinates category evidence and calls the pre-existing ports.evidence reader."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a configured EvidenceReader wrapper for category classification, validating requested evidence names and producing absent evidence when fetched files are missing or incomplete.",
+    "reading_applied": "Direct/narrow reading: the rule rules out an artifact-storage port, not every port or reader abstraction.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch introduces an EvidenceReader used to derive category evidence from already fetched files; it does not introduce an alternate artifact-storage interface or storage shape. pathlib can remain the sole artifact-storage shape, so the change does not do what the rule ruled out."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

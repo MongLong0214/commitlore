@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-77e1745655a235ce",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "9a6c07e1d354c8fcb783c119e6bafc344ddfadb1d664532d56b29bbc439297e6",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Replaces broad substring scanning of manifest text with manifest-specific dependency-name extraction, then has the existing mCP and Ollama producer methods test those extracted names.",
+    "reading_applied": "Narrow and ordinary reading: the rule forbids a separate, detached allowlist of evidence kinds. It does not forbid parsing or allowlisting manifest structures while producer methods remain the source of evidence kinds.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch does not add an evidence-kind allowlist detached from producers. The only evidence kinds remain the literals \"mcp\" and \"ollama\" within their respective producer methods. Its new lists select manifest fields and dependency sections to parse, not evidence kinds that could be accepted without a corresponding collector."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Replaces broad manifest-text substring checks with manifest-specific parsing that extracts normalized dependency/tool names, then has the existing mcp and ollama producer methods test those parsed names.",
+    "reading_applied": "Narrow reading: the rule forbids a separate, detached allowlist of evidence kinds, rather than forbidding producer methods from naming the concrete dependency they collect evidence for.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch adds no separate evidence-kind allowlist. Its mcp and ollama checks remain in their respective producer methods, while the shared helper derives names from the actual fetched manifests. That directly avoids the stated risk of accepting an evidence kind that no collector emits."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

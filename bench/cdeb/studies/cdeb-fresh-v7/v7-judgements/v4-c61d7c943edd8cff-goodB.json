@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-c61d7c943edd8cff",
+  "variant": "goodB",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "6625066bd2e46d3c79af98d49d279f26ba60ff1419aac00cdbea939be27c2a8b",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds validation that each cell's derivation_proof is either null or a string, plus exhaustive tests for malformed number, object, and array proof values across derived event/runtime cells.",
+    "reading_applied": "Narrow reading: the rule specifically rules out treating lane counts as a minimum threshold (a floor).",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch adds type validation and coverage tests; it neither introduces nor relies on lane-count thresholds, floors, or slack in counts. The rule's stated concern\u2014count-based slack allowing test cases and allowlists to be removed\u2014does not apply to this change."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds type validation for `derivation_proof` and matrix tests that malformed proof values are rejected for every derived event/runtime cell.",
+    "reading_applied": "I applied the ordinary/narrow reading: the rule prohibits treating lane counts as a minimum threshold that can tolerate extra or missing lanes.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch neither introduces nor relies on a lane-count floor. Its loops expand validation coverage across existing derived-event/runtime combinations; they do not accept slack in a count-based completeness check."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

@@ -1,0 +1,100 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..a79ea00 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -3,7 +3,14 @@ from __future__ import annotations
+ from dataclasses import dataclass
+ from datetime import datetime
+ 
+-from .category import absent_evidence, classify_all, selected_packs
++from .category import (
++    CategoryPack,
++    Evidence,
++    UnavailableEvidence,
++    classify_all,
++    selected_packs,
++)
++from .evidence import ClaimBasis
+ from .artifact import (
+     ENGINE_VERSIONS,
+     ArtifactCollection,
+@@ -21,7 +28,7 @@ from .collect.search import Candidate, CollectResult
+ from .grade.smoke import SmokeResult, run_smoke
+ from .grade.types import GradeResult
+ from .pipeline.run import BLOCKING_SEVERITY, FileFetchError, FetchedFiles, run
+-from .ports import RepositoryMetadata, RunPorts, RunRequest
++from .ports import EvidenceReader, RepositoryMetadata, RunPorts, RunRequest
+ from .scoring import Recommendation, ScoreInputs, score
+ 
+ 
+@@ -42,6 +49,7 @@ def execute(
+     source_mode: SourceMode = "digest",
+ ) -> RunArtifact:
+     packs = selected_packs(request.categories)
++    category_evidence_reader = _CategoryEvidenceReader(ports.evidence, packs)
+     failures: list[PortFailure] = []
+     trace_failures: dict[str, list[PortFailure]] = {}
+     metadata: dict[str, RepositoryMetadata | None] = {}
+@@ -152,16 +160,16 @@ def execute(
+     categories = {}
+     for candidate in collected.candidates:
+         try:
+-            evidence = (
+-                absent_evidence()
+-                if candidate.repo not in files
+-                else ports.evidence.read_evidence(candidate, files[candidate.repo], metadata[candidate.repo])
++            evidence = category_evidence_reader.read(
++                candidate,
++                files.get(candidate.repo),
++                metadata[candidate.repo],
+             )
+         except Exception as error:  # noqa: BROAD_EXCEPT_OK -- category evidence must not reach approval
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = category_evidence_reader.absent()
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+@@ -197,6 +205,40 @@ def execute(
+     )
+ 
+ 
++class _CategoryEvidenceReader:
++    """Coordinates one run's configured evidence vocabulary and fallbacks."""
++
++    def __init__(self, reader: EvidenceReader, packs: tuple[CategoryPack, ...]) -> None:
++        self._reader = reader
++        self._evidence_names = frozenset(reader.evidence_names)
++        for pack in packs:
++            unavailable = tuple(
++                dict.fromkeys(
++                    requirement.evidence
++                    for requirement in pack.evidence
++                    if requirement.evidence not in self._evidence_names
++                )
++            )
++            if unavailable:
++                raise UnavailableEvidence(pack.name, unavailable)
++
++    def read(
++        self,
++        candidate: Candidate,
++        files: FetchedFiles | None,
++        metadata: RepositoryMetadata | None,
++    ) -> tuple[Evidence, ...]:
++        if files is None or not files.complete:
++            return self.absent()
++        return self._reader.read_evidence(candidate, files, metadata)
++
++    def absent(self) -> tuple[Evidence, ...]:
++        return tuple(
++            Evidence(name, frozenset(), ClaimBasis.ABSENT)
++            for name in sorted(self._evidence_names)
++        )
++
++
+ class _RecordingModel:
+     def __init__(
+         self,

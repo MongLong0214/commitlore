@@ -1,0 +1,15 @@
+{
+  "agree": false,
+  "refutations_attempted": [
+    "Store `RunArtifact.to_bytes()` JSON only in a SQLite BLOB/TEXT column with constrained correction references: both specifications classify this as compliant.",
+    "Replace the store's source of truth with `runs.json` (or NDJSON) for artifacts and correction links: both specifications classify this as a violation.",
+    "Leave the store unchanged and add a separately requested CLI `--artifact run.json` export: both specifications classify this as compliant."
+  ],
+  "separating_case": "In `gitseed/storage.py`, change `SQLiteRunStore.save` so that, after its normal successful SQLite insert/commit, it also writes `artifact.to_bytes()` to `run-<run_id>.audit` beside the database. Do not read this file from `load`, history, or correction lookup; SQLite remains the sole source of truth and retains its duplicate-ID and foreign-key constraints. This is a durable standalone JSON copy of each run artifact, but not an authoritative history store.",
+  "separating_case_violates_under": "spec-1",
+  "boundary_in_common": "Both prohibit JSON files when they are the authoritative durable run-history representation or correction lineage instead of constrained SQLite rows, while permitting artifact JSON stored inside SQLite and separately requested portable artifact exports.",
+  "either_declared_unresolvable": false,
+  "detection_strategy_conflict": "",
+  "_candidate_id": "v4-f901052615fa3aee",
+  "_ordering": "spec-1 = specA; spec-2 = specB"
+}

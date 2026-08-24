@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-8f24735524874167",
+  "variant": "goodB",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "5f450270b199c0605b83cd2ead9f94bb13729f6f9710b99d3910a3d81ae68e7b",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds \"type\": \"module\" only to packages/schema/package.json and adjusts the workspace-skeleton test to allow that path-specific manifest field.",
+    "reading_applied": "Literal reading: the rule rules out embedding canonical reports in specs/doctor-output.v0.json, based on the ticket-designated fixtures/doctor/*.json location.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch neither adds canonical reports nor changes specs/doctor-output.v0.json. Its ESM package-manifest exception is unrelated to the ruled-out storage location."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds ESM module type only to packages/schema and updates the workspace-manifest test to permit that path-scoped field.",
+    "reading_applied": "Narrow reading: the rule prohibits embedding canonical reports in specs/doctor-output.v0.json.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch does not add or embed reports in specs/doctor-output.v0.json; it changes package manifest expectations only."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

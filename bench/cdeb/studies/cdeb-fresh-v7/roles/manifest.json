@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "isolation_rule": "each role runs in a fresh session and receives only the inputs its row names; no role receives the whole transcript",
+  "roles": [
+    {
+      "role": "ORCHESTRATOR",
+      "owns": "state, manifests, PRs, schedule, integrity",
+      "may_not_see": "nothing withheld"
+    },
+    {
+      "role": "ORACLE-SPEC-A",
+      "owns": "independent semantic boundary extraction",
+      "may_not_see": "ORACLE-SPEC-B output, any oracle implementation, any arm or outcome"
+    },
+    {
+      "role": "ORACLE-SPEC-B",
+      "owns": "independent semantic boundary extraction",
+      "may_not_see": "ORACLE-SPEC-A output, any oracle implementation, any arm or outcome"
+    },
+    {
+      "role": "ORACLE-SPEC-ADJUDICATOR",
+      "owns": "third reading when A and B disagree",
+      "may_not_see": "which of A or B authored which reading"
+    },
+    {
+      "role": "ORACLE-IMPLEMENTER",
+      "owns": "deterministic oracle from the agreed spec",
+      "may_not_see": "any measured outcome; the Bad A diff is available only as a mandatory control to classify"
+    },
+    {
+      "role": "NEAR-MISS-BUILDER",
+      "owns": "fresh near-miss trees",
+      "may_not_see": "v6 control bytes"
+    },
+    {
+      "role": "ALTERNATE-SHAPE-BUILDER",
+      "owns": "alternate-shape violation attempts",
+      "may_not_see": "the oracle implementation"
+    },
+    {
+      "role": "SEMANTIC-JUDGE",
+      "owns": "blind violation judgement on a tree",
+      "may_not_see": "arm, oracle verdict, the other judge, delivery logs"
+    },
+    {
+      "role": "ORACLE-REDTEAM",
+      "owns": "adversarial attack on frozen oracles",
+      "may_not_see": "arms, outcomes, aggregate effect"
+    },
+    {
+      "role": "RUNNER",
+      "owns": "episode execution under the frozen assignment",
+      "may_not_see": "candidate id, oracle, hidden acceptance, benchmark artifacts"
+    },
+    {
+      "role": "STAT-A",
+      "owns": "independent SAP implementation",
+      "may_not_see": "STAT-B code, results or narrative"
+    },
+    {
+      "role": "STAT-B",
+      "owns": "independent SAP implementation",
+      "may_not_see": "STAT-A code, results or narrative"
+    },
+    {
+      "role": "RE-EXPLANATION-REVIEWER",
+      "owns": "secondary human-consequence read",
+      "may_not_see": "arm, payload, Record-Id, delivery log, transcript, tokens"
+    }
+  ]
+}

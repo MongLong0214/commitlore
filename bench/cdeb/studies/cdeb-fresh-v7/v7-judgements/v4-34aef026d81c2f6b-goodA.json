@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-34aef026d81c2f6b",
+  "variant": "goodA",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "2251a0e91f92fbd88531392eeadbcea53d9979c5e2b5cbbce800da92d8f68006",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "It corrects cross-epic ticket dependencies for E0-B through E0-D, synchronizes those edges in the board and manifest, and normalizes hyphenated PRD epic names so validation recognizes their declared dependency basis. It also adds a regression test for an unsupported cross-epic edge.",
+    "reading_applied": "I applied the rule directly: neither the roadmap nor BOARD.md may be excluded from a broad input scan; the input set must remain positively declared and closed.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The diff does not add an exclusion or otherwise filter the roadmap or Board out of a scan. On the contrary, it edits both documents to align declared dependency edges. Its validation changes concern PRD-name normalization and cross-epic dependency checking, not excluding either ruled-in source."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds and validates cross-epic ticket dependencies, normalizing hyphenated PRD epic names (for example, E0-A) to ticket epic keys (E0A), and updates the roadmap, board, tickets, and issue manifest to declare those dependencies.",
+    "reading_applied": "Broad: the rule forbids exclusion-list filtering of the roadmap and Board from a broad scan, because inputs must be positively declared and closed.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch does not filter the roadmap or Board out of any scan, nor add an exclusion list. It changes PRD-epic normalization and adds explicit dependency records to the roadmap and Board."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}

@@ -1,0 +1,196 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..7a47663 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -1,10 +1,12 @@
+ from __future__ import annotations
+ 
++import json
+ import sqlite3
+ from dataclasses import dataclass
+ from datetime import datetime
+ from pathlib import Path
+ from types import TracebackType
++from typing import Any
+ 
+ from .application import replay as replay_artifact
+ from .artifact import RunArtifact
+@@ -35,6 +37,9 @@ class SQLiteRunStore:
+         self._connection = sqlite3.connect(path)
+         self._connection.execute("PRAGMA foreign_keys = ON")
+         migrate(self._connection)
++        self._history_path = _history_path(path)
++        if self._history_path is not None and not self._history_path.exists():
++            self._write_json_history()
+ 
+     def __enter__(self) -> SQLiteRunStore:
+         return self
+@@ -62,6 +67,8 @@ class SQLiteRunStore:
+                 "VALUES (?, ?, ?)",
+                 (run_id, corrects_run_id, artifact.to_bytes()),
+             )
++        if self._history_path is not None:
++            self._write_json_history()
+         if artifact.started_at is not None:
+             try:
+                 with self._connection:
+@@ -75,35 +82,93 @@ class SQLiteRunStore:
+                     )
+             except sqlite3.Error as error:
+                 raise ObservationWriteError(str(error)) from error
++        if self._history_path is not None:
++            self._write_json_history()
+ 
+     def load(self, run_id: str) -> RunArtifact:
+-        row = self._connection.execute(
+-            "SELECT artifact FROM run_artifacts WHERE run_id = ?", (run_id,)
+-        ).fetchone()
+-        if row is None:
+-            raise KeyError(run_id)
+-        return RunArtifact.from_bytes(bytes(row[0]))
+-
+-    def history(self) -> tuple[StoredRun, ...]:
++        runs, _ = self._json_history()
++        for record in runs:
++            if record["run_id"] == run_id:
++                return RunArtifact.from_bytes(str(record["artifact"]).encode())
++        raise KeyError(run_id)
++
++    def history(self, limit: int | None = None) -> tuple[StoredRun, ...]:
++        runs, _ = self._json_history()
+         return tuple(
+-            StoredRun(str(run_id), corrects_run_id, RunArtifact.from_bytes(bytes(artifact)))
+-            for run_id, corrects_run_id, artifact in self._connection.execute(
+-                "SELECT run_id, corrects_run_id, artifact FROM run_artifacts ORDER BY rowid"
++            StoredRun(
++                str(record["run_id"]),
++                record["corrects_run_id"],
++                RunArtifact.from_bytes(str(record["artifact"]).encode()),
+             )
++            for record in _recent(runs, limit)
+         )
+ 
+-    def observations(self) -> tuple[StoredObservation, ...]:
++    def observations(self, limit: int | None = None) -> tuple[StoredObservation, ...]:
++        _, observations = self._json_history()
+         return tuple(
+             StoredObservation(
+-                str(run_id),
+-                str(repo),
+-                datetime.fromisoformat(str(observed_at)),
+-                int(stars),
+-            )
+-            for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++                str(record["run_id"]),
++                str(record["repo"]),
++                datetime.fromisoformat(str(record["observed_at"])),
++                int(record["stars"]),
+             )
++            for record in _recent(observations, limit)
+         )
+ 
+     def replay(self, run_id: str) -> RunArtifact:
+         return replay_artifact(self.load(run_id).to_bytes())
++
++    def _json_history(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
++        if self._history_path is None:
++            return self._json_history_from_sqlite()
++        try:
++            payload = json.loads(self._history_path.read_text())
++            return payload["runs"], payload["observations"]
++        except (OSError, TypeError, ValueError, KeyError):
++            self._write_json_history()
++            return self._json_history_from_sqlite()
++
++    def _write_json_history(self) -> None:
++        assert self._history_path is not None
++        runs, observations = self._json_history_from_sqlite()
++        temporary_path = self._history_path.with_name(f"{self._history_path.name}.tmp")
++        temporary_path.write_text(json.dumps({"runs": runs, "observations": observations}))
++        temporary_path.replace(self._history_path)
++
++    def _json_history_from_sqlite(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
++        runs = [
++            {
++                "run_id": str(run_id),
++                "corrects_run_id": corrects_run_id,
++                "artifact": bytes(artifact).decode(),
++            }
++            for run_id, corrects_run_id, artifact in self._connection.execute(
++                "SELECT run_id, corrects_run_id, artifact FROM run_artifacts ORDER BY rowid"
++            )
++        ]
++        observations = [
++            {
++                "run_id": str(run_id),
++                "repo": str(repo),
++                "observed_at": str(observed_at),
++                "stars": int(stars),
++            }
++            for run_id, repo, observed_at, stars in self._connection.execute(
++                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++            )
++        ]
++        return runs, observations
++
++
++def _history_path(path: str | Path) -> Path | None:
++    if str(path) == ":memory:":
++        return None
++    return Path(f"{path}.json")
++
++
++def _recent(records: list[dict[str, Any]], limit: int | None) -> list[dict[str, Any]]:
++    if limit is None:
++        return records
++    if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
++        raise ValueError("limit must be a positive integer")
++    return records[-limit:]
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..3eec609 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -188,6 +188,42 @@ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     )
+ 
+ 
++def test_bounded_storage_reads_use_the_latest_disk_json_records(tmp_path) -> None:
++    store_path = tmp_path / "runs.db"
++    with SQLiteRunStore(store_path) as store:
++        for number in range(1, 4):
++            store.save(
++                f"run-{number}",
++                artifact(stars=number, at=AT.replace(day=AT.day + number)),
++            )
++
++        assert [stored.run_id for stored in store.history(limit=2)] == ["run-2", "run-3"]
++        assert [observation.run_id for observation in store.observations(limit=2)] == [
++            "run-2",
++            "run-3",
++        ]
++
++    persisted = json.loads((tmp_path / "runs.db.json").read_text())
++    assert [record["run_id"] for record in persisted["runs"]] == ["run-1", "run-2", "run-3"]
++    assert [record["run_id"] for record in persisted["observations"]] == [
++        "run-1",
++        "run-2",
++        "run-3",
++    ]
++
++
++@pytest.mark.parametrize("reader", ("history", "observations"))
++def test_bounded_storage_reads_require_a_positive_limit(tmp_path, reader: str) -> None:
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("run-1", artifact())
++
++        with pytest.raises(ValueError, match="positive integer"):
++            getattr(store, reader)(limit=0)
++
++        with pytest.raises(ValueError, match="positive integer"):
++            getattr(store, reader)(limit=-1)
++
++
+ def test_previous_store_schema_opens_and_migrates_additively(tmp_path) -> None:
+     # Given: a store written by schema version 1, before observations existed.
+     path = tmp_path / "runs.db"

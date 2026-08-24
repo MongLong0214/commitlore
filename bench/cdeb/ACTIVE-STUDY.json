@@ -1,7 +1,7 @@
 {
   "active_study_id": null,
-  "last_terminal_study_id": "cdeb-fresh-v6",
+  "last_terminal_study_id": "cdeb-fresh-v7",
   "status": "no-active-study",
-  "reason": "cdeb-fresh-v6 reached TERMINAL_HOLD_FINAL at its task-buildability gate. Of 34 prequalified decisions, 17 could carry a fresh record-blind task with a violating implementation passing both acceptances -- 8 in agent-operator-score and 9 in gitseed, against registered floors of 10 each and 22 in total. The floors were fixed before the first task existed and were not adjusted. No product-effect episode was run and the study holds zero measured rows. Its descriptive result stands in buildability/validation-report.json: for roughly half this corpus the ruled-out path is already closed by the repository's own tests, named by file and line. v3, v3r1, v4 and v5 are terminal and none may be resumed. This was the final planned study of the research line; a successor requires a separate owner decision and is not generated automatically.",
+  "reason": "cdeb-fresh-v7 reached TERMINAL_HOLD_FINAL before any product-effect episode. Of the fixed 17 decisions, 8 yielded a semantic boundary precise enough for deterministic oracle construction and 9 did not. The preregistered population was fixed at all 17 and unresolved ambiguity was terminal, so the population was not reduced post hoc and no episode was run. The study holds zero measured product-effect rows. This result concerns deterministic machine adjudicability, not the causal effect of CommitLore delivery. v3, v3r1, v4, v5, v6 and v7 are terminal and none may be resumed; a successor requires a separate owner decision and is not generated automatically.",
   "successor_requires_new_study_id": true
 }

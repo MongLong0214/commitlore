@@ -1,0 +1,44 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..a485ba7 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -148,12 +148,13 @@ def execute(
+         )
+ 
+     reviewed_by_repo = {reviewed.candidate.repo: reviewed for reviewed in result.reviewed}
++    unavailable_evidence = absent_evidence(ports.evidence.evidence_names)
+     category_evidence = {}
+     categories = {}
+     for candidate in collected.candidates:
+         try:
+             evidence = (
+-                absent_evidence()
++                unavailable_evidence
+                 if candidate.repo not in files
+                 else ports.evidence.read_evidence(candidate, files[candidate.repo], metadata[candidate.repo])
+             )
+@@ -161,7 +162,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = unavailable_evidence
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..f8094e3 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -93,8 +93,9 @@ def satisfiable_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -
+     return reader.evidence_names
+ 
+ 
+-def absent_evidence() -> tuple[Evidence, ...]:
+-    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
++def absent_evidence(evidence_names: frozenset[str] | None = None) -> tuple[Evidence, ...]:
++    names = satisfiable_evidence() if evidence_names is None else evidence_names
++    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in names)
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.

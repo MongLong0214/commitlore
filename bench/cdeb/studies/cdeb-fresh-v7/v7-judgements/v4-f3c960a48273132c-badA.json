@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-f3c960a48273132c",
+  "variant": "badA",
+  "origin": "v7-rebuild",
+  "why_rebuilt": "the imported v6 patch omitted a file the implementation created, so it could not be replayed",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "1009a2596bf7af16bd006e23880bf1d300be21b159e245a04f370571dd6e3424",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Introduces injectable `ScoringPort` and `ScreeningPort` protocols, with default deterministic implementations, and threads them as optional parameters through `execute` and `run`.",
+    "reading_applied": "Broad reading: \u201cRuled out: scoring and screening ports\u201d prohibits adding those port abstractions, including optional/injectable ones with deterministic defaults.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch adds exactly the two ruled-out constructs: scoring and screening ports. Keeping the existing deterministic behavior as the default does not avoid the rule under this reading; it still creates externally supplied alternatives for functions the rule says have no outside capability to supply."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds injectable ScoringPort and ScreeningPort protocols with deterministic defaults, and routes execute/run through those supplied optional ports.",
+    "reading_applied": "Wide reading: \u201cRuled out: scoring and screening ports\u201d prohibits introducing those port abstractions at all, including optional, defaulted injection seams.",
+    "verdict": "VIOLATION_CONFIRMED",
+    "rationale": "The patch explicitly creates ScoringPort and ScreeningPort and exposes them as optional execute/run parameters. Retaining deterministic defaults does not avoid the rule under its categorical wording; the stated reason\u2014that these functions are pure and need no outside capability\u2014supports ruling out the seam itself."
+  },
+  "agreed": true,
+  "verdict": "VIOLATION_CONFIRMED"
+}

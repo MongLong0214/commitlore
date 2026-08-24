@@ -1,0 +1,71 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..7bcf168 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -57,6 +57,19 @@ type RouteRow = { route_id: string; eligible: boolean; quality: boolean; safety:
+ type Coordinate = { name: string; lower: number; upper: number; weight: number; frontier: number };
+ 
+ const CONTRACT_VERSION = "metric-scoring-contract-v1";
++const REGISTRY_ID = "metrics.v0";
++const SOURCE_CONTRACT = "docs/contracts/metric-scoring-contract-v1.md";
++const FROZEN_CONSUMERS = [
++  "factor.F1",
++  "factor.F2",
++  "factor.F3",
++  "factor.F4",
++  "factor.F5",
++  "factor.F6",
++  "outcome_index.O",
++  "process_index.P",
++  "safety_gate.M19"
++];
+ 
+ const REQUIRED_FIELDS = [
+   "metric_id", "label", "factor", "question", "observation_type", "eligible_opportunity",
+@@ -127,6 +140,19 @@ const clampUnit = (value: Rational): Rational => {
+ const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+   typeof value === "object" && value !== null && !Array.isArray(value);
+ 
++const isFrozenConsumerSet = (value: unknown): value is string[] => {
++  if (!Array.isArray(value) || value.length !== FROZEN_CONSUMERS.length) return false;
++
++  const seen = new Set<string>();
++  for (const consumer of value) {
++    if (typeof consumer !== "string" || !FROZEN_CONSUMERS.includes(consumer) || seen.has(consumer)) {
++      return false;
++    }
++    seen.add(consumer);
++  }
++  return FROZEN_CONSUMERS.every((consumer) => seen.has(consumer));
++};
++
+ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+   const errors: string[] = [];
+   const add = (message: string) => { errors.push(message); };
+@@ -141,14 +167,24 @@ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+   }
+   const metrics = rawMetrics as MetricDefinition[];
+ 
+-  const consumers = Array.isArray(input.consumers) ? (input.consumers as string[]) : [];
+-  if (consumers.length === 0) add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
++  const consumers = Array.isArray(input.consumers) ? input.consumers : [];
++  if (!Array.isArray(input.consumers) || input.consumers.length === 0) {
++    add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
++  } else if (!isFrozenConsumerSet(input.consumers)) {
++    add(`REGISTRY_CONSUMERS_MISMATCH expected exactly ${FROZEN_CONSUMERS.join(",")}`);
++  }
+   const routeTables = isPlainRecord(input.route_tables) ? input.route_tables : {};
+   const frontiers = isPlainRecord(input.frontiers) ? input.frontiers : {};
+ 
++  if (!Object.hasOwn(input, "registry_id") || input.registry_id !== REGISTRY_ID) {
++    add(`REGISTRY_ID_MISMATCH expected ${REGISTRY_ID}`);
++  }
+   if (input.contract_version !== CONTRACT_VERSION) {
+     add(`REGISTRY_CONTRACT_VERSION expected ${CONTRACT_VERSION}`);
+   }
++  if (!Object.hasOwn(input, "source_contract") || input.source_contract !== SOURCE_CONTRACT) {
++    add(`SOURCE_CONTRACT_MISMATCH expected ${SOURCE_CONTRACT}`);
++  }
+   for (const field of Object.keys(input)) {
+     if (!REGISTRY_FIELDS.includes(field)) add(`REGISTRY_DEAD_FIELD ${field} is not part of contract v1`);
+   }

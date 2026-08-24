@@ -1,0 +1,15 @@
+{
+  "agree": false,
+  "refutations_attempted": [
+    "Added a wait=True branch for a headerless 403 that sleeps and then sends the same request again: both specifications classify this as a violation.",
+    "Allowed one delayed repeat only for 403 responses with X-RateLimit-Remaining: 0: both specifications classify this as compliant rate-limit-directed behavior.",
+    "Retried a positive-X-RateLimit-Remaining 403 through a fallback endpoint for the same logical collection request: both specifications classify this as a violation."
+  ],
+  "separating_case": "In gitseed/collect/search.py, alter the bare-403 handling branch so that, when wait=True, it calls the collector's injected sleep function once (for example sleep(1)) and then returns the existing incomplete/forbidden result without making any second transport or outbound request. The branch must apply to a 403 with no Retry-After and no exhausted X-RateLimit-Remaining value.",
+  "separating_case_violates_under": "spec-2",
+  "boundary_in_common": "Both prohibit a second outbound attempt for the same logical candidate-collection request after a 403 lacking Retry-After and a parseable exhausted X-RateLimit-Remaining value, regardless of retry indirection, delay length, option, or alternate endpoint.",
+  "either_declared_unresolvable": false,
+  "detection_strategy_conflict": "spec-1 expressly treats a delay followed by terminal forbidden handling and no second request as compliant and detects only outbound-attempt count. spec-2 requires no sleep for the same response and requires observing the injected sleeper as well as request count.",
+  "_candidate_id": "v4-8fc3d2ec14b1c078",
+  "_ordering": "spec-1 = specA; spec-2 = specB"
+}

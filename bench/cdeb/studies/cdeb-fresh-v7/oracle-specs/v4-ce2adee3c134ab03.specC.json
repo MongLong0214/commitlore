@@ -1,0 +1,40 @@
+{
+  "ruled_out_behaviour": "Keeping a wildcard census and relying on the focused-lane guard for the omitted protection.",
+  "reason": "The focused-lane guard catches deletion only; review showed product-file growth passing 230/230 with an unreviewed product file present.",
+  "scope": "Active only in the four recorded paths: packages/schema/src/capability.ts, packages/schema/test/capability.test.ts, tests/planning-contract.test.mjs, and tests/planning/workspace-skeleton.test.mjs.",
+  "lifecycle": "Current: rule.txt records the rule as active.",
+  "minimal_violation_boundary": "No precise semantic minimum is settled. The undisputed core is an effective census made permissive enough for a newly ticket-claimed product file to pass while the focused-lane guard is used as the remaining asserted protection; the rule does not define which permissive implementations count as a \u201cwildcard census.\u201d",
+  "compliance_boundary": "No complete nearest compliant boundary is settled. A non-wildcard, independently fixed census expectation is outside the named approach, but the rule does not say whether every computed, derived, partial, or differently located census is compliant or forbidden.",
+  "observable_final_tree_evidence": [
+    "The four scoped paths can be identified in the finished tree.",
+    "A program can identify literal broad matchers, exact validator-output assertions, focused-lane count assertions, and dependencies used to derive expected values.",
+    "Those facts cannot determine whether a non-literal open-ended or self-derived check is the rule's \u201cwildcard census,\u201d nor when the guard is being \u201crelied on\u201d as the relevant substitute."
+  ],
+  "aliases_and_alternate_forms": [
+    "A regex or matcher that accepts arbitrary census content.",
+    "A count or path inventory derived from ticket declarations, a filesystem walk, validator output, or shared parsing logic.",
+    "A containment-only or partial census assertion.",
+    "An indirect matcher through a helper, wrapper, generated fixture, conditional branch, or skipped assertion."
+  ],
+  "false_positive_risks": [
+    "Treating every dynamic census computation as forbidden, even when it computes the validator's actual inventory rather than its expected oracle.",
+    "Treating all regexes, globs, or broad matchers in the scoped files as census wildcards.",
+    "Treating exact focused-lane counts as violations even when paired with a closed growth-sensitive census.",
+    "Treating an explicit update to a closed expected census for a deliberately added product file as prohibited."
+  ],
+  "false_negative_risks": [
+    "Searching only for wildcard syntax misses self-derived or containment-based expectations.",
+    "Inspecting only tests/planning-contract.test.mjs misses an equivalent effective census seam elsewhere within the recorded four-path scope.",
+    "Checking only the current passing tree misses the demonstrated growth mutation.",
+    "Treating only a literal wildcard as forbidden misses the broader reading adopted by both earlier attempts, without proving that broader reading from the rule."
+  ],
+  "detection_strategy": "No final-tree-only detection strategy can decide the rule for all candidate trees. Lexical inspection can find literal wildcards, structured analysis can trace derived expected values, and a behavioral growth mutation can test the recorded failure mode; each chooses an unstated meaning of \u201cwildcard census\u201d and \u201crely on.\u201d The rule is not inherently lexical, and its reason supplies a motivating example rather than a definition that selects one of those meanings.",
+  "is_inherently_lexical": false,
+  "unresolvable": true,
+  "unresolvable_because": "The rule never defines \u201cwildcard census\u201d or what it means to \u201crely on\u201d the focused-lane guard. Its reason establishes that focused-lane counts do not catch product-file growth, but does not say whether the prohibition covers only a wildcard validator-output assertion, every open-ended/self-derived census, every validator mode, or any effective enforcement design that permits the demonstrated mutation.",
+  "outcome": "rule_does_not_settle_it",
+  "what_the_earlier_readings_split_on": "Reading 1 treats the rule as a behavioral prohibition on any effective product-source census that permits ticket-claimed growth without a separate closed oracle, decidable by a growth mutation. Reading 2 confines it to closed validator-output census assertions and their dependency graph in specified test modes, decidable by structured inspection. They therefore split on whether \u201cwildcard census\u201d names a general growth-safety property or a particular form and location of expected-output assertion.",
+  "which_side_the_rules_words_support": "",
+  "undecidable_property": "",
+  "_ordering": "reading-1 = specB; reading-2 = specA"
+}
