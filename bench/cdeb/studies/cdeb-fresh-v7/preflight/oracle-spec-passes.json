@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "document_id": "cdeb-fresh-v7-oracle-spec-passes",
+  "both_passes_complete": true,
+  "independence": "each extraction saw the rule and the repository at the frozen snapshot and nothing else. Neither saw the other, and the passes ran end to end rather than paired per candidate so that no session could warm on what the previous one concluded.",
+  "what_this_compares": "only the flag each extractor set for whether the rule's own words settle its boundary. Two specifications can both draw a boundary and draw different ones; that comparison is a separate step and has not run.",
+  "counts": {
+    "split_on_resolvability": 4,
+    "both_drew": 9,
+    "neither_drew": 4
+  },
+  "neither_drew": [
+    "v4-377f04276465b59d",
+    "v4-9b42b1951da730e1",
+    "v4-dd4a74ba2b628991",
+    "v4-e7587b2b65750306"
+  ],
+  "split_on_resolvability": [
+    "v4-002ffd1e428c572a",
+    "v4-0ecd7426eebc1cab",
+    "v4-8f24735524874167",
+    "v4-f3c960a48273132c"
+  ],
+  "results": [
+    {
+      "candidate_id": "v4-002ffd1e428c572a",
+      "class": "split_on_resolvability",
+      "specA_unresolvable": true,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "\u201cPin the census ticket-owned path list literally\u201d clearly covers a closed explicit path enumeration, but does not say whether behaviorally similar frozen count, hash, snapshot, or generated representations are also forbidden. The reason supports the broader reading because those forms can also force per-ticket oracle edits, while the word \u201cliterally\u201d supports the narrow one. The recorded six-path scope also does not say whether equivalent census checks elsewhere are covered. Later repository history directly adopts the opposite literal-census approach without an explicit supersession, leaving lifecycle applicability additionally conflicted.",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "class": "split_on_resolvability",
+      "specA_unresolvable": false,
+      "specB_unresolvable": true,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": "The rule never defines \u201cartifact storage port\u201d or states whether its recorded path scope means only a `RunPorts` addition in `gitseed/ports.py`, or every pluggable storage indirection elsewhere. It also says pathlib is the sole current storage shape, while the finished tree contains concrete SQLite artifact storage addressed by a `Path`. Therefore the rule does not settle whether an unused standalone protocol, a CLI-only injected backend, or a generic writer callback outside `RunPorts` is itself forbidden; the boundary above uses the narrow, directly evidenced core-seam reading."
+    },
+    {
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-377f04276465b59d",
+      "class": "neither_drew",
+      "specA_unresolvable": true,
+      "specB_unresolvable": true,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "The rule does not define \u201ca badge.\u201d Read literally it could ban every badge, but the finished tree contains non-coverage CI, licence, and Python badges, while the recorded path scope excludes README. It therefore does not settle whether \u201cbadge\u201d means any badge in scope, only a source-coverage badge, or merely a badge associated with a coverage gate. It also does not say whether a nonblocking coverage report is prohibited, nor whether the three paths are the rule's applicability boundary or only the decision's evidence paths.",
+      "specB_unresolvable_because": "The decision does not define \u201ccoverage gate,\u201d so it does not settle whether report-only collection, non-required status reporting, or upload to a coverage service is forbidden. It also says \u201cor a badge\u201d without stating whether that means every new badge or only a coverage badge. Existing non-coverage badges in README and the recorded scope\u2019s exclusion of README make that breadth impossible to infer from the rule alone."
+    },
+    {
+      "candidate_id": "v4-77e1745655a235ce",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-8f24735524874167",
+      "class": "split_on_resolvability",
+      "specA_unresolvable": false,
+      "specB_unresolvable": true,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": "The active rule records exactly six `fixtures/doctor` files in its path scope, but the current contract manifest designates eight canonical reports, adding `blocking-and-degraded.json` and `blocking-and-imported.json`. The rule does not say whether \u201ccanonical reports\u201d is fixed to the six recorded paths or dynamically follows the current manifest. A checker therefore cannot settle coverage of those two added report identities without a renewed or superseding scope decision."
+    },
+    {
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-9b42b1951da730e1",
+      "class": "neither_drew",
+      "specA_unresolvable": true,
+      "specB_unresolvable": true,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "The rule says \u201cadd the two paths,\u201d which resolves the bundled approach but does not state whether classifying only one of the two metric-registry paths as control-plane code is itself a violation. The reason supports a broader reading, but does not expressly adopt one; a detector must therefore mark the one-path case as indeterminate rather than silently treating it as either compliant or forbidden.",
+      "specB_unresolvable_because": "The rule says \u201cadd the two paths,\u201d but does not state whether the forbidden unit is the pair added together or each path individually. It also does not state whether the rationale extends from those exact recorded paths to a relocated equivalent product implementation. The reason supports a broader anti-misclassification reading, while the recorded scope is path-bounded; neither resolves that conflict."
+    },
+    {
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-cadfb63755c3f504",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "class": "neither_drew",
+      "specA_unresolvable": true,
+      "specB_unresolvable": true,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "The rule does not define whether \u201chand-maintained\u201d means provenance, the presence of a duplicate static structure, or an unchecked projection; provenance is not recoverable from a finished tree. It also does not settle whether a non-ticket-keyed global product allowlist, or a generated and equality-checked ticket-to-path projection, is within \u201cper ticket.\u201d A binary checker therefore requires an additional adopted definition for those cases.",
+      "specB_unresolvable_because": "The rule forbids a \"hand-maintained\" allowlist, which is provenance about how an identical final-tree artifact was produced, not solely a property of the finished tree. It also does not explicitly say whether a checked-in generated duplicate of the ticket census is forbidden. A final-tree reader can reliably enforce the structural no-second-source-of-truth interpretation, but cannot distinguish a manually maintained table from a generated identical table without external provenance or an explicit rule that all duplicate admission tables are prohibited."
+    },
+    {
+      "candidate_id": "v4-e7587b2b65750306",
+      "class": "neither_drew",
+      "specA_unresolvable": true,
+      "specB_unresolvable": true,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "The rule never defines \u201cprose field,\u201d \u201cderives,\u201d or \u201cfixes numerically,\u201d nor whether \u201cliteral digest\u201d means only a cryptographic digest or every behaviorally equivalent literal/snapshot equality check. It also says \u201cpin every prose field\u201d while its rationale and \u201conly fields \u2026 are pinned\u201d support treating a single independent-prose pin as forbidden. Those omissions prevent a program from classifying novel string fields or deciding the one-field versus all-fields boundary without adding a policy choice.",
+      "specB_unresolvable_because": "The rule does not define an exhaustive set of \u201cprose fields,\u201d nor a mechanical test for when a string-valued contract field is \u201cderived or fixed numerically.\u201d In this registry, `label` and `question` are clear prose, but fields such as `partial_credit_rule`, `not_observed_rule`, and a formula rendered as text sit at the boundary. It also says \u201cevery prose field,\u201d which does not expressly settle whether pinning only one such field is independently forbidden. A checker can enforce the clear cases above, but a complete tree-only classifier would have to make these unstated choices."
+    },
+    {
+      "candidate_id": "v4-ed878960135ff45a",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    },
+    {
+      "candidate_id": "v4-f3c960a48273132c",
+      "class": "split_on_resolvability",
+      "specA_unresolvable": false,
+      "specB_unresolvable": true,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": "The rule does not define whether an unused declared Scorer/Screener Protocol already counts as a forbidden port, or only a production-reachable replacement seam does. It also records gitseed/ports.py as its path scope without saying whether an equivalent injectable seam added outside that file is prohibited or merely an evasion outside the literal scope. The boundaries above use the operational reading\u2014an externally replaceable, production-reachable computation\u2014but those two cases require an explicit policy choice for a total checker."
+    },
+    {
+      "candidate_id": "v4-f901052615fa3aee",
+      "class": "both_drew",
+      "specA_unresolvable": false,
+      "specB_unresolvable": false,
+      "specA_lexical": false,
+      "specB_lexical": false,
+      "specA_unresolvable_because": "",
+      "specB_unresolvable_because": ""
+    }
+  ]
+}
