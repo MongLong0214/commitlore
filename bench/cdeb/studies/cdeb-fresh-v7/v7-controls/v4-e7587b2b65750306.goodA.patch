@@ -1,0 +1,25 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..c783f4f 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -49,6 +49,7 @@ export interface MetricDefinition {
+   gaming_guard: string;
+   treatment: string;
+   consumer_routes: string[];
++  observation_key: string;
+ }
+ 
+ type ValidationResult = { ok: boolean; errors: string[]; metrics: MetricDefinition[] };
+diff --git a/tests/planning/workspace-skeleton.test.mjs b/tests/planning/workspace-skeleton.test.mjs
+index 2ccd2f7..8176907 100644
+--- a/tests/planning/workspace-skeleton.test.mjs
++++ b/tests/planning/workspace-skeleton.test.mjs
+@@ -729,7 +729,7 @@ test("focused-lane-is-not-silently-empty", () => {
+   // Exact, not a floor: a lane that loses a case must fail here. Every count includes the
+   // per-file results the runner emits, so adding a test file shifts all of them at once.
+   const lanes = [
+-    ["metric-registry", 23], ["issuance-contract", 17], ["capability", 19], ["scoring-contract", 20], ["session-class", 28], ["doctor-contract", 41], ["prescription-input", 15], ["trace-schema", 19], ["result-schema", 19], ["treatment-registry", 15]
++    ["metric-registry", 24], ["issuance-contract", 18], ["capability", 20], ["scoring-contract", 21], ["session-class", 29], ["doctor-contract", 42], ["prescription-input", 16], ["trace-schema", 20], ["result-schema", 20], ["treatment-registry", 16]
+   ];
+   for (const [pattern, cases] of lanes) {
+     const output = run(pattern);
