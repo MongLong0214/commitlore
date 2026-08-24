@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "candidate_id": "v4-f3c960a48273132c",
+  "variant": "badA",
+  "origin": "v7-rebuild",
+  "repository_id": "gitseed",
+  "task_acceptance": {
+    "command": "python3 -m pytest -q tests/test_evidence_reader_fallback.py",
+    "command_sha256": "44ce3874cc98342d57bb2d85d6ccfa3ebbca90d171401eabc7c6fed2f376c61e",
+    "exit_code": 0,
+    "tests": 1,
+    "failed": 0,
+    "seconds": 0,
+    "stdout_sha256": "f4c77b58e2280613a49ba18da1c4a02d440e862c49a6c8fe5daaf277333ff99d",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "pass": true
+  },
+  "regression_acceptance": {
+    "command": "python3 -m pytest -q",
+    "registered_command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+    "executed_command_sha256": "61adb62480de84d9ab140e02b0ebc3c11f941ab1f49ac245feebc76a1b61bc5f",
+    "exit_code": 0,
+    "total": 323,
+    "passed": 320,
+    "failed": 0,
+    "skipped": 3,
+    "unexpected_failures": [],
+    "coverage_lost": false,
+    "tests_silenced": false,
+    "seconds": 3,
+    "stdout_sha256": "13145bda6256da6180a0926dbc0e6865231d492e5617a1414859ff5838693d65",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "pass": true
+  },
+  "baseline_used": "per-candidate",
+  "baseline": {
+    "total": 322,
+    "passed": 318,
+    "failed": 1,
+    "skipped": 3
+  },
+  "changed_files": [
+    "gitseed/application.py",
+    "gitseed/category.py",
+    "gitseed/pipeline/run.py",
+    "gitseed/scoring.py",
+    "tests/test_seam.py",
+    "tests/test_evidence_reader_fallback.py"
+  ],
+  "final_tree_oid": "385a2d968dd2f0111be205ce2ab21918c561b5a0",
+  "functional_pass": true,
+  "patch_sha256": "1009a2596bf7af16bd006e23880bf1d300be21b159e245a04f370571dd6e3424",
+  "patch_bytes": 9344
+}
