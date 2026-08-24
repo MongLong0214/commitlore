@@ -1,0 +1,131 @@
+diff --git a/packages/schema/src/capability.ts b/packages/schema/src/capability.ts
+index ff35c57..f48f4a4 100644
+--- a/packages/schema/src/capability.ts
++++ b/packages/schema/src/capability.ts
+@@ -10,8 +10,9 @@
+  * requirement scope, the conditional metrics, the missing-effect classes, the affected metric
+  * ids, the unconditionally REQUIRED event-group set, the per-cell status and the per-runtime
+  * coverage lists are all recomputed from the four frozen text columns and compared. The four
+- * columns themselves are pinned verbatim, so a document cannot make the derivation agree by
+- * quietly rewriting the prose it derives from.
++ * columns and every cell's approved evidence locator are pinned verbatim, so a document cannot
++ * make the derivation agree by quietly rewriting the prose it derives from or by naming an
++ * undocumented source surface.
+  *
+  * Two invariants carry most of the weight. A row whose 계약 cell is anything other than
+  * exactly "REQUIRED" — including "REQUIRED for M18/M20" and "DERIVED/CONDITIONAL" — is never
+@@ -162,6 +163,38 @@ const frozenSourceClassOf = (eventGroup: string, runtimeId: string): string | nu
+   return runtimeId === "codex" ? row[1] : runtimeId === "claude-code" ? row[2] : null;
+ };
+ 
++/**
++ * Approved evidence locators, frozen by event group and runtime.
++ *
++ * The SSOT source inventories describe approved source surfaces, but do not provide a grammar
++ * that can safely identify a locator authored later. Exact locators therefore form the v0
++ * allowlist. Pairing each one with the source class frozen above keeps PRIMARY, SECONDARY, and
++ * RUNNER_DERIVED cells from borrowing a locator from another surface.
++ *
++ * [event_group, codex, claude-code]
++ */
++const FROZEN_EVIDENCE_LOCATORS: [string, string, string][] = [
++  ["run_lifecycle", "controlled wrapper process supervisor record for task.started and task.ended", "controlled wrapper process supervisor record for task.started and task.ended"],
++  ["runtime_identity", "app-server stdio JSON-RPC runtime query response and the exact installed generated schema digest", "official TypeScript SDK runtime query response and the resolved settings digest"],
++  ["user_instruction", "app-server stdio JSON-RPC user turn events correlated with the controlled wrapper prompt record", "official TypeScript SDK user SDKMessage turns carried over stream-json"],
++  ["tool_call", "supported app-server stdio JSON-RPC tool call, tool result and tool error events", "official TypeScript SDK tool use and tool result SDKMessage entries carried over stream-json"],
++  ["workspace_diff", "runner filesystem snapshot pair taken by the isolated runner", "runner filesystem snapshot pair taken by the isolated runner"],
++  ["evidence_claim", "controlled wrapper evidence ledger joined to the scorer evidence and completion claim events", "controlled wrapper evidence ledger joined to the scorer evidence and completion claim events"],
++  ["approval_safety", "controlled wrapper sandbox and approval decision record", "official permission/tool surface hook decisions joined to the controlled wrapper approval record"],
++  ["context_selection", "documented configuration snapshot and controlled wrapper context ledger", "official hook record and controlled wrapper context ledger"],
++  ["retrieval_memory", "intercepted tool and MCP call events on the app-server stdio JSON-RPC surface", "intercepted tool and MCP call events on the official permission/tool surface"],
++  ["delegation_handoff", "controlled wrapper subagent spawn, return, handoff and join record", "controlled wrapper subagent hook record for spawn, return, handoff and join"],
++  ["plan_state", "runner state artifacts and the runner stall watchdog timeline", "runner state artifacts and the runner stall watchdog timeline"],
++  ["token_cost", "provider and runtime usage metadata on the app-server stdio JSON-RPC surface", "provider and runtime usage metadata on the official TypeScript SDK result message"],
++  ["human_active_time", "controlled wrapper explicit intervention event and takeover timer", "controlled wrapper explicit intervention event and takeover timer"],
++  ["actor_attribution", "controlled wrapper actor field correlated with runner workspace authorship", "official TypeScript SDK message actor correlated with runner workspace authorship"]
++];
++const frozenEvidenceLocatorOf = (eventGroup: string, runtimeId: string): string | null => {
++  const row = FROZEN_EVIDENCE_LOCATORS.find(([group]) => group === eventGroup);
++  if (!row) return null;
++  return runtimeId === "codex" ? row[1] : runtimeId === "claude-code" ? row[2] : null;
++};
++
+ /**
+  * The SSOT §9.2 "v0 event coverage matrix" (lines 951-966), verbatim.
+  * [event_group, Event group, 계약, Codex adapter v0, Claude Code adapter v0, 누락 처리]
+@@ -547,13 +580,18 @@ const validateCell = (
+     add(`CAPTURE_TEXT_MISMATCH ${eventGroup} ${runtimeId} must read ${capture}`);
+   }
+ 
+-  // A cell that names no source is not a capability. SSOT 9.2 also bars named source
+-  // classes outright, so naming a forbidden one is worse than naming none.
++  // A cell that names no source is not a capability. The locator must name the exact approved
++  // source for its frozen runtime/source-class cell; SSOT 9.2 also bars named source classes
++  // outright, so naming a forbidden one is worse than naming none.
+   const locator = cell.evidence_locator;
+   if (Object.hasOwn(cell, "evidence_locator")) {
+     if (!isFilledString(locator)) {
+       add(`EMPTY_EVIDENCE_LOCATOR ${eventGroup} ${runtimeId} declares no evidence source`);
+     } else {
++      const approvedLocator = frozenEvidenceLocatorOf(eventGroup, runtimeId);
++      if (locator !== approvedLocator) {
++        add(`UNAPPROVED_EVIDENCE_LOCATOR ${eventGroup} ${runtimeId} is outside the approved ${frozenSourceClassOf(eventGroup, runtimeId) ?? "unknown"} source surface`);
++      }
+       for (const forbidden of FROZEN_RUNTIMES[runtimeId].forbidden) {
+         if (locator.toLowerCase().includes(forbidden.toLowerCase())) {
+           add(`FORBIDDEN_SOURCE ${eventGroup} ${runtimeId} ${forbidden} is forbidden by SSOT 9.2`);
+diff --git a/packages/schema/src/doctor-contract.ts b/packages/schema/src/doctor-contract.ts
+index 5099d9c..691658a 100644
+--- a/packages/schema/src/doctor-contract.ts
++++ b/packages/schema/src/doctor-contract.ts
+@@ -47,11 +47,10 @@
+  *     token within a length bound — which proves the field was filled in, not that it names
+  *     the version that is installed. That is a presence-and-shape check and it is worth
+  *     exactly that much.
+- *   - `evidence_locator` is proved to reproduce the frozen matrix cell verbatim. E0B-001
+- *     recorded that the locator itself is validated as non-empty prose plus a substring scan
+- *     against each runtime's forbidden source list; this contract inherits that limit and
+- *     adds nothing to it. The report is proved to name the source the matrix names, never
+- *     proved that the source exists or was read.
++ *   - `evidence_locator` is proved to reproduce the frozen matrix cell verbatim. The matrix
++ *     validator admits only its exact frozen runtime/source-class locator, and this contract
++ *     adds nothing to that allowlist. The report is proved to name the approved matrix source,
++ *     never proved that the source exists or was read.
+  *   - the nine `statement` fields of the frozen document — two assessment modes, four verdicts
+  *     and three reason codes — are prose the derivation never reads and are checked for
+  *     presence and non-emptiness only. That proves the field exists, not that it says anything
+diff --git a/packages/schema/test/capability.test.ts b/packages/schema/test/capability.test.ts
+index cfcb01c..af51a5e 100644
+--- a/packages/schema/test/capability.test.ts
++++ b/packages/schema/test/capability.test.ts
+@@ -307,6 +307,30 @@ describe("adapter-capability-matrix", () => {
+       }
+     }
+ 
++    // A nonblank locator must be one of the frozen, documented sources for this exact
++    // event/runtime/source-class cell. This is deliberately stronger than the forbidden-word
++    // scan: an arbitrary external URL has no forbidden phrase, but is still not evidence.
++    for (const eventGroup of EVENT_GROUPS) {
++      for (const runtimeId of RUNTIME_IDS) {
++        const declared = frozen();
++        assert.equal(
++          validateCapabilityMatrix(declared).ok,
++          true,
++          `${eventGroup}/${runtimeId} must retain its declared locator`
++        );
++
++        const unapproved = frozen();
++        cellOf(unapproved, eventGroup, runtimeId).evidence_locator =
++          "https://evidence.example.invalid/trace/42";
++        const result = validateCapabilityMatrix(unapproved);
++        assert.equal(result.ok, false, `${eventGroup}/${runtimeId} accepted an unapproved locator`);
++        assert.ok(
++          has(result, `UNAPPROVED_EVIDENCE_LOCATOR ${eventGroup} ${runtimeId}`),
++          result.errors.join("; ")
++        );
++      }
++    }
++
+     // The runtime source declarations themselves are frozen prose the guards depend on.
+     const clauseTamper = frozen();
+     runtimeOf(clauseTamper, "codex").source_clause = "Codex v0 primary는 무엇이든 된다.";
