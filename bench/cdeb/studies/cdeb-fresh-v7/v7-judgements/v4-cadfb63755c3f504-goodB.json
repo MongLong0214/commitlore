@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v7",
+  "candidate_id": "v4-cadfb63755c3f504",
+  "variant": "goodB",
+  "origin": "v7-build",
+  "judges_saw": [
+    "rule.txt",
+    "patch.diff"
+  ],
+  "patch_sha256": "d5b166d6dda3871bee299d2893195f2620fe4427b4a07d56f3dd49ee744b180b",
+  "j1": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Refactors collection-stage completion reporting into `_CollectionCompletion` and derives the `rate_limited` flag from a collection stop reason.",
+    "reading_applied": "Applied the rule directly: it prohibits a grading failure from ending the run. This patch concerns collection status, not grading failures.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The diff does not add or alter control flow for grader exceptions or failures. It only centralizes how an incomplete collection and rate-limit condition are reported, so it does not let a grading failure end the run."
+  },
+  "j2": {
+    "files_read": [
+      "rule.txt",
+      "patch.diff"
+    ],
+    "what_the_patch_does": "Adds a helper that translates collection completion into an incomplete reason and rate-limit flag, then uses it in run(). It refactors handling of collection-stage early termination; it does not alter grading-failure handling or cause grading failures to end a run.",
+    "reading_applied": "Literal behavioral reading: the rule prohibits a grading failure from terminating the run, because that would discard candidates already screened.",
+    "verdict": "NOT_A_VIOLATION",
+    "rationale": "The patch only centralizes and normalizes collection-result reporting. It neither adds nor changes a path where a grader failure ends the run."
+  },
+  "agreed": true,
+  "verdict": "NOT_A_VIOLATION"
+}
