@@ -1,15 +1,17 @@
 {
+  "calibration_candidates_completed": 1,
+  "calibration_candidates_required_minimum": 3,
   "calibration_complete": false,
   "measured_run_allowed": false,
   "no_automatic_v9": true,
   "panel_frozen": false,
-  "phase": "v8-draft",
+  "phase": "judge-calibration",
   "product_effect_rows": 0,
   "schema_version": 1,
-  "state_machine_position": "V8_DRAFT",
+  "state_machine_position": "JUDGE_CALIBRATION",
   "study_id": "cdeb-fresh-v8",
   "successor_required": false,
-  "updated_at": "2026-08-24T00:00:00Z",
+  "updated_at": "2026-08-26T00:00:00Z",
   "verdict": null,
   "verdict_basis": null
 }
