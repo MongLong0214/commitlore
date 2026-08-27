@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "document_id": "cdeb-fresh-v8-claude-candidate-partial",
+  "status": "INCOMPLETE \u2014 stopped on owner instruction, not scored",
+  "judged": 9,
+  "corpus": 47,
+  "why_not_scored": "scoring an incomplete corpus and comparing it to the codex candidate's full 47 compares two different tests. The batch skips packets that already have an output, so resuming completes this corpus rather than restarting it.",
+  "resume": "bash harness/batch-calib.sh cand-claude claude claude-sonnet-4-5",
+  "judgements": [
+    {
+      "packet_id": "2d954bdc3aab785f",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    },
+    {
+      "packet_id": "39016266fa6d9104",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    },
+    {
+      "packet_id": "4250684e46e280cd",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    },
+    {
+      "packet_id": "8b23d70ecd70d12b",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    },
+    {
+      "packet_id": "9fc82e2f6cece7fe",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    },
+    {
+      "packet_id": "b30e42a04a6afefe",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    },
+    {
+      "packet_id": "c3f2c7ed3ced81ef",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    },
+    {
+      "packet_id": "c971ea363b84f83e",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    },
+    {
+      "packet_id": "d82f20a0c1ff7b52",
+      "label": "COMPLIANT",
+      "confidence": "high"
+    }
+  ]
+}
