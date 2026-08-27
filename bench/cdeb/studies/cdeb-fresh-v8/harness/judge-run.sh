@@ -64,11 +64,30 @@ try:
     text = outer.get('result', raw) if isinstance(outer, dict) else raw
 except Exception:
     text = raw
-m = re.search(r'\{.*\}', text, re.S)
-if m:
-    json.dump(json.loads(m.group(0)), open('$OUT','w'), indent=2)
+
+def candidates(t):
+    # A fenced block is the model saying which part is the answer, so prefer it.
+    for m in re.finditer(r'\`\`\`(?:json)?\s*(\{.*?\})\s*\`\`\`', t, re.S):
+        yield m.group(1)
+    # Otherwise scan every '{' and take what parses, longest first. A single
+    # greedy \{.*\} starts at the first brace in the prose and never closes.
+    starts = [i for i, c in enumerate(t) if c == '{']
+    for i in sorted(starts, reverse=True):
+        yield t[i:]
+
+got = None
+for c in candidates(text):
+    try:
+        obj = json.JSONDecoder().raw_decode(c)[0]
+    except Exception:
+        continue
+    if isinstance(obj, dict) and 'label' in obj:
+        got = obj
+        break
+if got is None:
+    print('no json object with a label found', file=sys.stderr)
 else:
-    print('no json object found', file=sys.stderr)
+    json.dump(got, open('$OUT','w'), indent=2)
 " 2>> "$PACKET/err.$JUDGE.txt"
     ;;
   *) echo "unknown family $FAMILY"; exit 1 ;;
