@@ -1,0 +1,167 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..6557238 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -56,7 +56,9 @@ type ValidationResult = { ok: boolean; errors: string[]; metrics: MetricDefiniti
+ type RouteRow = { route_id: string; eligible: boolean; quality: boolean; safety: boolean; route_utility: number };
+ type Coordinate = { name: string; lower: number; upper: number; weight: number; frontier: number };
+ 
++const REGISTRY_ID = "metrics.v0";
+ const CONTRACT_VERSION = "metric-scoring-contract-v1";
++const SOURCE_CONTRACT = "docs/contracts/metric-scoring-contract-v1.md";
+ 
+ const REQUIRED_FIELDS = [
+   "metric_id", "label", "factor", "question", "observation_type", "eligible_opportunity",
+@@ -135,23 +137,55 @@ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+     return { ok: false, errors: ["REGISTRY_NOT_AN_OBJECT the metric registry must be a JSON object"], metrics: [] };
+   }
+ 
+-  const rawMetrics = input.metrics;
+-  if (!Array.isArray(rawMetrics)) {
+-    return { ok: false, errors: ["REGISTRY_METRICS_MISSING the metric registry must declare a metrics array"], metrics: [] };
++  for (const field of REGISTRY_FIELDS) {
++    if (!Object.hasOwn(input, field)) {
++      add(`REGISTRY_ROOT_FIELD_MISSING ${field} is required by contract v1`);
++    }
++  }
++  for (const field of Object.keys(input)) {
++    if (!REGISTRY_FIELDS.includes(field)) add(`REGISTRY_DEAD_FIELD ${field} is not part of contract v1`);
+   }
+-  const metrics = rawMetrics as MetricDefinition[];
+-
+-  const consumers = Array.isArray(input.consumers) ? (input.consumers as string[]) : [];
+-  if (consumers.length === 0) add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
+-  const routeTables = isPlainRecord(input.route_tables) ? input.route_tables : {};
+-  const frontiers = isPlainRecord(input.frontiers) ? input.frontiers : {};
+ 
++  if (input.registry_id !== REGISTRY_ID) {
++    add(`REGISTRY_ROOT_FIELD_INVALID registry_id expected ${REGISTRY_ID}`);
++  }
+   if (input.contract_version !== CONTRACT_VERSION) {
++    add(`REGISTRY_ROOT_FIELD_INVALID contract_version expected ${CONTRACT_VERSION}`);
+     add(`REGISTRY_CONTRACT_VERSION expected ${CONTRACT_VERSION}`);
+   }
+-  for (const field of Object.keys(input)) {
+-    if (!REGISTRY_FIELDS.includes(field)) add(`REGISTRY_DEAD_FIELD ${field} is not part of contract v1`);
++  if (input.source_contract !== SOURCE_CONTRACT) {
++    add(`REGISTRY_ROOT_FIELD_INVALID source_contract expected ${SOURCE_CONTRACT}`);
++  }
++
++  const rawMetrics = input.metrics;
++  const consumers = input.consumers;
++  const routeTables = input.route_tables;
++  const frontiers = input.frontiers;
++  const structuralFieldsAreValid =
++    Array.isArray(rawMetrics) &&
++    Array.isArray(consumers) &&
++    isPlainRecord(routeTables) &&
++    isPlainRecord(frontiers);
++
++  if (!Array.isArray(consumers)) {
++    add("REGISTRY_ROOT_FIELD_INVALID consumers must be an array");
++  } else if (consumers.length === 0) {
++    add("REGISTRY_ROOT_FIELD_INVALID consumers must declare its closed consumer set");
++    add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
++  }
++  if (!isPlainRecord(routeTables)) {
++    add("REGISTRY_ROOT_FIELD_INVALID route_tables must be an object");
+   }
++  if (!isPlainRecord(frontiers)) {
++    add("REGISTRY_ROOT_FIELD_INVALID frontiers must be an object");
++  }
++  if (!Array.isArray(rawMetrics)) {
++    add("REGISTRY_ROOT_FIELD_INVALID metrics must be an array");
++    add("REGISTRY_METRICS_MISSING the metric registry must declare a metrics array");
++  }
++  if (!structuralFieldsAreValid) return { ok: false, errors, metrics: [] };
++
++  const metrics = rawMetrics as MetricDefinition[];
+ 
+   // --- identity: exactly M01..M20, once each, in canonical order -----------
+   if (metrics.length !== 20) add(`METRIC_COUNT_NOT_20 found ${metrics.length}`);
+diff --git a/packages/schema/test/metric-registry.test.ts b/packages/schema/test/metric-registry.test.ts
+index 3e7d2cc..27364aa 100644
+--- a/packages/schema/test/metric-registry.test.ts
++++ b/packages/schema/test/metric-registry.test.ts
+@@ -62,6 +62,16 @@ const CONSUMERS = [
+   "safety_gate.M19"
+ ];
+ 
++const REGISTRY_ROOT_FIELDS = [
++  "registry_id",
++  "contract_version",
++  "source_contract",
++  "consumers",
++  "route_tables",
++  "frontiers",
++  "metrics"
++];
++
+ const ratio = (n: number, d: number) => ({ n, d });
+ 
+ describe("metric-registry", () => {
+@@ -85,6 +95,64 @@ describe("metric-registry", () => {
+     assert.ok(codes(short).includes("METRIC_COUNT_NOT_20"), short.errors.join("; "));
+   });
+ 
++  test("complete-registry-root-contract", () => {
++    const registry = frozen();
++    assert.deepEqual(
++      Object.keys(registry).sort(),
++      [...REGISTRY_ROOT_FIELDS].sort(),
++      "the frozen registry must contain all and only its declared root contract fields"
++    );
++    assert.equal(registry.registry_id, "metrics.v0");
++    assert.equal(registry.contract_version, "metric-scoring-contract-v1");
++    assert.equal(registry.source_contract, "docs/contracts/metric-scoring-contract-v1.md");
++
++    for (const field of REGISTRY_ROOT_FIELDS) {
++      const missing = frozen();
++      delete missing[field];
++      const missingResult = validateMetricRegistry(missing);
++      assert.equal(missingResult.ok, false, `accepted a registry missing ${field}`);
++      assert.ok(
++        has(missingResult, `REGISTRY_ROOT_FIELD_MISSING ${field}`),
++        `${field} missing produced ${missingResult.errors.join("; ")}`
++      );
++    }
++
++    const malformedValues: Record<string, unknown> = {
++      registry_id: 0,
++      contract_version: {},
++      source_contract: [],
++      consumers: {},
++      route_tables: [],
++      frontiers: [],
++      metrics: {}
++    };
++    for (const [field, value] of Object.entries(malformedValues)) {
++      const malformed = frozen();
++      malformed[field] = value;
++      const malformedResult = validateMetricRegistry(malformed);
++      assert.equal(malformedResult.ok, false, `accepted a registry with malformed ${field}`);
++      assert.ok(
++        has(malformedResult, `REGISTRY_ROOT_FIELD_INVALID ${field}`),
++        `${field} type tamper produced ${malformedResult.errors.join("; ")}`
++      );
++    }
++
++    for (const [field, value] of [
++      ["registry_id", "metrics.v1"],
++      ["contract_version", "metric-scoring-contract-v2"],
++      ["source_contract", "docs/contracts/metric-scoring-contract-v2.md"]
++    ]) {
++      const altered = frozen();
++      altered[field] = value;
++      const result = validateMetricRegistry(altered);
++      assert.equal(result.ok, false, `accepted altered ${field}`);
++      assert.ok(
++        has(result, `REGISTRY_ROOT_FIELD_INVALID ${field}`),
++        `${field} alteration produced ${result.errors.join("; ")}`
++      );
++    }
++  });
++
+   test("reject-M21", () => {
+     const registry = frozen();
+     const clone = JSON.parse(JSON.stringify(metricOf(registry, "M20")));

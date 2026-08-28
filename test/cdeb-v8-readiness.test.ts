@@ -17,7 +17,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -90,12 +90,44 @@ describe("v8 inherits a terminal v7 and no product rows", () => {
     expect(v7.measured_run_allowed).toBe(false);
   });
 
-  it("v8 has produced no measured rows and does not allow a run yet", () => {
-    expect(status.measured_run_allowed).toBe(false);
-    expect(status.product_effect_rows).toBe(0);
+  it("every measured row is one the frozen schedule asked for", () => {
+    // This used to assert that no row existed at all, which was the right guard
+    // until the run started and the wrong one afterwards. What must hold now is
+    // that the rows on disk are a subset of the 340 the schedule fixed, that no
+    // assignment appears twice, and that STATUS agrees with what is there.
     expect(status.no_automatic_v9).toBe(true);
-    // §13's layout puts measured rows under rows/. Nothing may be there yet.
-    expect(existsSync(resolve(V8, "rows"))).toBe(false);
+
+    const rowsDir = resolve(V8, "rows");
+    const rows: { candidate_id: string; repetition: number; arm: string }[] = [];
+    if (existsSync(rowsDir)) {
+      for (const entry of readdirSync(rowsDir)) {
+        const path = resolve(rowsDir, entry, "row.json");
+        if (existsSync(path)) rows.push(readJson(path));
+      }
+    }
+
+    expect(rows.length).toBeLessThanOrEqual(340);
+    expect(status.product_effect_rows).toBe(rows.length);
+
+    const scheduled = new Set(
+      expectedRows.rows.map((r) => `${r.candidate_id}|${r.repetition}|${r.arm}`),
+    );
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const key = `${row.candidate_id}|${row.repetition}|${row.arm}`;
+      expect(scheduled.has(key), key).toBe(true);
+      expect(seen.has(key), `${key} appears twice`).toBe(false);
+      seen.add(key);
+    }
+  });
+
+  it("the measured run is only open when someone opened it", () => {
+    // The gate is a decision, not a default. It may be true while a run is in
+    // flight; what must never happen is finding it true with nothing recording why.
+    if (status.measured_run_allowed === true) {
+      expect(typeof status.measured_run_scope).toBe("string");
+      expect(status.measured_run_scope.length).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -468,9 +500,18 @@ describe("the transition log records how the freeze was reached", () => {
     for (const id of ids) expect(referenced.has(id)).toBe(true);
   });
 
-  it("has no transition claiming a measured episode ran", () => {
-    for (const transition of transitions) {
-      expect(transition.transition).not.toMatch(/CONFIRMATORY|ROWS_SEALED|PUBLISHED/);
+  it("does not claim a seal or a publication before there is one", () => {
+    // CONFIRMATORY_RUNNING is legitimate once the owner opens the gate. What must
+    // not appear ahead of the rows is a claim that they are sealed or published.
+    const names = transitions.map((t) => t.transition);
+    const rowsDir = resolve(V8, "rows");
+    const rowCount = existsSync(rowsDir)
+      ? readdirSync(rowsDir).filter((e) => existsSync(resolve(rowsDir, e, "row.json"))).length
+      : 0;
+    if (rowCount < 340) {
+      for (const name of names) {
+        expect(name).not.toMatch(/ROWS_SEALED|PUBLISHED/);
+      }
     }
   });
 });

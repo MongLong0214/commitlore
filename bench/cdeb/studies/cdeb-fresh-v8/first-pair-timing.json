@@ -1,0 +1,59 @@
+{
+  "an_episode_can_end_in_a_refusal": {
+    "is_this_a_harness_defect": "No. The agent received the task, read the repository and declined under rules the repository states. That is a legitimate episode outcome: completed true, functional false.",
+    "not_attributed_to_the_arm": "Both arms met the same governance material. Which of them refused is one draw and carries no information about the treatment.",
+    "observed": "One episode changed no files in 32 seconds. The agent ran the repository's own ticket resolver, got `unknown ticket E0A-001`, and declined to start under the repository's gate rules. The other read the same AGENTS.md and the same ticket document and proceeded.",
+    "why_it_matters_for_pacing": "Episode length is bimodal. 247 seconds of real work against 32 seconds of refusal, in the same pair.",
+    "why_it_matters_for_power": "A refusal produces an empty diff. An empty diff cannot implement a ruled-out approach, so a panel would judge it compliant, and a compliant episode that is not functional scores zero in P-DSFPS regardless. Refusals therefore cost power rather than bias the estimate -- but if they are common, the study measures willingness to start as much as it measures anything else."
+  },
+  "document_id": "cdeb-fresh-v8-first-pair-timing",
+  "episodes": [
+    {
+      "agent_seconds": 247,
+      "arm": "SUPPRESSED",
+      "changed_files": 2,
+      "completed": true,
+      "diff_bytes": 7088,
+      "episode_index": 0,
+      "functional_pass": false,
+      "regression": false,
+      "task_acceptance": true
+    },
+    {
+      "agent_seconds": 32,
+      "arm": "ON",
+      "changed_files": 0,
+      "completed": true,
+      "diff_bytes": 0,
+      "episode_index": 1,
+      "functional_pass": false,
+      "regression": true,
+      "task_acceptance": false
+    }
+  ],
+  "extrapolation": {
+    "basis": "n=2, one long and one refusal, one repository",
+    "how_much_weight_this_carries": "Little. Two episodes, one of them a refusal. It moves the estimate off the 30-minute timeout, which was the only bound available before, and it is not a forecast.",
+    "if_this_mix_holds": {
+      "agent-operator-score": "160 episodes at ~180s \u2248 8 hours",
+      "gitseed": "180 episodes, agent time unmeasured; its fixed cost is 5s against AOS's 40s and its tree is a third the size",
+      "wall_clock": "the two workers run in parallel, so roughly 8-10 hours for the episodes"
+    },
+    "per_episode_total_seconds": [
+      287,
+      72
+    ],
+    "still_unmeasured": "the 1,020 judgements. Packets are 2.4-4.3 MB and a judge explores rather than reads whole, and no judgement has been timed."
+  },
+  "pair": {
+    "candidate": "v4-9b42b1951da730e1",
+    "pair_position": 0,
+    "repetition": 4,
+    "repository": "agent-operator-score"
+  },
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "wall_clock_seconds": 354,
+  "what_this_is": "Wall-clock and per-episode timing from the first pair of the measured run, taken in the frozen order. Their rows are kept and count toward the 340.",
+  "what_this_is_not": "An effect estimate. Two episodes say nothing about a difference between arms, and section 33 forbids interim aggregate effect analysis. The outcomes below are reported because pacing depends on how long an episode takes and on what an episode can end as, not because they are a result."
+}

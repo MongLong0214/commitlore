@@ -1,0 +1,24 @@
+# An episode's working directory holds a materialised repository tree and a judge
+# packet carrying a second copy of it: about 5 MB per episode, and the run makes
+# 340. The trees are rebuildable from the sealed bundle plus the recorded diff --
+# the same reasoning that keeps the bundles themselves out of git.
+#
+# Kept: the row, what was delivered, the prompt, the diff, and the flat files a
+# judge reads. Not kept: either copy of the tree, the event stream, the fresh HOME.
+*
+!/.gitignore
+!*/
+!*/row.json
+!*/delivered.txt
+!*/prompt.txt
+!*/diff.patch
+!*/*/decision.txt
+!*/*/task.txt
+!*/*/diff.patch
+!*/*/packet_id.txt
+!*/*/packet-record.json
+*/*/tree/
+*/tree/
+*/home/
+*/events.jsonl
+*/err.txt

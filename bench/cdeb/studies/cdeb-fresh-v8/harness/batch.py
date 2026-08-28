@@ -111,6 +111,25 @@ def main():
         return 2
 
     schedule = json.load(open(os.path.join(V8, "schedule.json")))
+
+    # `--pairs N` runs the first N pair positions in the frozen order and stops.
+    # It is not a sample and not a pilot: these are the first episodes of the
+    # measured run, taken in the order the schedule fixed, and their rows are kept.
+    # It exists so the run can be paced against a measured episode time rather than
+    # against a 30-minute timeout, which is all that bounds it beforehand.
+    limit = None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--pairs" and i + 1 < len(sys.argv):
+            limit = int(sys.argv[i + 1])
+    if limit is not None:
+        keep = {e["episode_index"] for e in schedule["episodes"]
+                if e["pair_position"] < limit}
+        schedule = dict(schedule, episodes=[e for e in schedule["episodes"]
+                                            if e["episode_index"] in keep])
+        say(f"  --pairs {limit}: running {len(schedule['episodes'])} of "
+            f"{len(json.load(open(os.path.join(V8, 'schedule.json')))['episodes'])} "
+            f"episodes, in the frozen order, keeping their rows")
+
     rows_root = os.path.join(V8, "rows")
     os.makedirs(rows_root, exist_ok=True)
 
