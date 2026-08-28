@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Section 13: run the analysis on data whose answer is already known.
+"""Run the analysis on data whose answer is already known.
+
+Required by section 17 execution readiness and by PR-A, not by section 13.
 
 Every scenario here is generated with an effect I chose, so the test is whether
 the analysis recovers it. Two of them are negative controls in the strict sense --

@@ -1,4 +1,9 @@
-# Section 13 — analysis proven on synthetic data
+# Analysis proven on synthetic data
+
+Required by section 17 (execution readiness: "judge packet/analysis simulation
+pass") and by PR-A. An earlier version of this file and its commit message cited
+section 13, which is the artifact layout and asks for nothing of the sort; the
+commit message is left as written rather than rewritten.
 
 Run before any episode exists. No benchmark outcome is involved and none could
 be: the generator here produces rows from probabilities I chose, so every answer
