@@ -435,6 +435,27 @@ describe("the transition log records how the freeze was reached", () => {
     );
   });
 
+  it("cross-references every deviation by id, in both directions", () => {
+    // Two transitions had put the deviation's prose into the field meant for its
+    // id, and one deviation was reachable from nothing. Either way the log stops
+    // being an index of itself, which is the only thing it is for.
+    const deviations = readJsonl<{ deviation_id: string }>(
+      resolve(V8, "deviations.jsonl"),
+    );
+    const ids = new Set(deviations.map((d) => d.deviation_id));
+    const referenced = new Set(
+      transitions.flatMap((t) => (t as { deviations?: string[] }).deviations ?? []),
+    );
+
+    expect(ids.size).toBe(deviations.length);
+    for (const id of ids) expect(id).toMatch(/^v8-d\d{3}$/);
+    for (const reference of referenced) {
+      expect(reference).toMatch(/^v8-d\d{3}$/);
+      expect(ids.has(reference)).toBe(true);
+    }
+    for (const id of ids) expect(referenced.has(id)).toBe(true);
+  });
+
   it("has no transition claiming a measured episode ran", () => {
     for (const transition of transitions) {
       expect(transition.transition).not.toMatch(/CONFIRMATORY|ROWS_SEALED|PUBLISHED/);
