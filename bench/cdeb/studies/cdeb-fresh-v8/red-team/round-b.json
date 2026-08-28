@@ -9,10 +9,12 @@
   ],
   "disposition": {
     "assignment revealed before the judgements are sealed": {
-      "resolution": "NOT RESOLVED HERE -- escalated",
+      "resolution": "RESOLVED by owner ruling, 2026-08-28",
+      "ruling": "Section 21.4 governs role access, not public availability. 'Reveal' means the arm mapping is not available to the judging and analysis roles before the seal; section 18 separately requires the complete schedule be committed before the first episode, and the two are consistent under that reading.",
       "severity_as_raised": "P0",
       "verified": true,
-      "why": "Section 18.1 commits the seed and section 18.2 derives every arm from it, so the arm mapping is publicly recomputable from a committed artifact; section 21.4 requires it concealed until the seal. The two sections cannot both hold as written. Verified by recomputing five pairs' arm order from the committed seed and matching the recorded values. Choosing between them changes the preregistration and is an owner decision."
+      "what_enforces_it": "Operational isolation, implemented in harness/judge-run.sh: each judge runs in a scratch copy carrying only the packet's own files, with a fresh HOME, no repository access, and the runner refuses if the packet holds any judgement artifact. Packet ids are unreversible (v8-d004), so a judge cannot map its packet to a schedule row even if it reached one.",
+      "what_this_does_not_claim": "Cryptographic concealment. Anyone holding the committed seed can recompute every arm; that is by design under this reading, and the guarantee is role separation rather than secrecy."
     },
     "judge cross-episode memory and cross-judge contamination": {
       "resolution": "fixed in harness/judge-run.sh; measured in preflight/judge-independence-audit.json -- 48 of 96 calibration judgements had the opportunity, 1 confirmed read, no selection outcome changes",
