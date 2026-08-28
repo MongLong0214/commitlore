@@ -20,7 +20,7 @@
   "phase": "schedule-frozen",
   "product_effect_rows": 0,
   "red_team_p0_open": 0,
-  "red_team_p1_open": 1,
+  "red_team_p1_open": 2,
   "red_team_p1_open_detail": "two, both owner decisions rather than defects: the calibration label/origin confound preregistered before the panel freeze, and the section 27 headline wording. Neither is a code fix.",
   "red_team_rounds_complete": [
     "A: population and product integrity",
