@@ -15,6 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from analysis import (GATE, bootstrap, by_candidate, candidate_effect, delta,  # noqa: E402
+                      itt_rows,
                       evaluate_gate, fleiss_kappa, gwet_ac1, median_pairwise_ac1,
                       p_dsfps, p_ind, pairwise_raw_agreement, panel_label,
                       randomization_p, rbdr, reliability,
@@ -74,16 +75,37 @@ eff = candidate_effect(list(by_candidate(itt)["c"].values()))
 check("post-start failure retained in ITT", abs(eff - (-0.2)) < 1e-9,
       f"a crashed ON episode must lower the ON arm, got {eff}")
 
-# --- a duplicate assignment is refused ---------------------------------------
-dup = [row("c", 0, "ON", functional=False), row("c", 0, "ON", functional=True)]
+# --- section 20: one retry is allowed, both rows are kept, one enters ITT ----
+def superseded(cand, rep, arm, **kw):
+    r = row(cand, rep, arm, **kw)
+    r["retry_lineage"] = {"attempt": 1, "superseded_by_retry": True,
+                          "reason": "arm-independent infrastructure failure before "
+                                    "any meaningful model turn"}
+    return r
+
+two_live = [row("c", 0, "ON", functional=False), row("c", 0, "ON", functional=True)]
 try:
-    by_candidate(dup)
+    by_candidate(two_live)
     refused = False
 except ValueError:
     refused = True
-check("a duplicate assignment is refused", refused,
-      "two rows for one candidate/repetition/arm must not silently collapse to the "
-      "last one; that is how a retried post-start failure would disappear")
+check("two live rows for one assignment are refused", refused,
+      "replacing an episode that reached a model is what section 20 forbids, and "
+      "silently keeping the last row is how it would disappear")
+
+legit = [superseded("c", 0, "ON", functional=False), row("c", 0, "ON")]
+kept = itt_rows(legit)
+check("a superseded attempt plus its retry yields one ITT row",
+      len(kept) == 1 and kept[0].get("retry_lineage") is None,
+      f"got {len(kept)} row(s); section 20 keeps both in the archive and counts one")
+
+try:
+    itt_rows([superseded("c", 0, "ON", functional=False)])
+    orphan_refused = False
+except ValueError:
+    orphan_refused = True
+check("a superseded attempt with no retry is refused", orphan_refused,
+      "an outcome that was dropped rather than retried must not vanish quietly")
 
 # --- repository weighting: 1 candidate must not outweigh 9 ------------------
 rows, repo_of = [], {}

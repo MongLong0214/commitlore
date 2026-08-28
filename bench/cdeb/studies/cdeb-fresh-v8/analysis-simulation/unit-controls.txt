@@ -4,7 +4,9 @@
   ok   incomplete is not a success
   ok   functional failure is not a success
   ok   post-start failure retained in ITT
-  ok   a duplicate assignment is refused
+  ok   two live rows for one assignment are refused
+  ok   a superseded attempt plus its retry yields one ITT row
+  ok   a superseded attempt with no retry is refused
   ok   repositories weighted equally
   ok   per-repository effects reported
   ok   bootstrap fixture has candidates that differ

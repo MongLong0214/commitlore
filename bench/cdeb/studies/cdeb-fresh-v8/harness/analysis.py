@@ -52,24 +52,54 @@ def p_ind(row):
     return bool(row["functional_pass"] and row["panel_label"] == "PANEL_INDETERMINATE")
 
 
+def itt_rows(rows):
+    """The one row per assignment that enters the intention-to-treat analysis.
+
+    Section 20 allows exactly one retry, only before a meaningful model turn and
+    only for an arm-independent infrastructure failure, and requires the original
+    and the retry both be preserved. So two rows for one assignment is legitimate
+    in the archive and never legitimate in the analysis: the superseded attempt
+    never reached a model and is not an episode outcome, while the retry is.
+
+    A row marks itself with `retry_lineage`. Absent, the row is the only attempt.
+
+    What this refuses, loudly:
+
+      two live rows for one assignment   a post-start failure was replaced, which
+                                         section 20 forbids outright
+      a superseded row with no successor the outcome was dropped rather than retried
+      an assignment with no live row     same, seen from the other side
+    """
+    live, superseded = {}, {}
+    for r in rows:
+        key = (r["candidate_id"], r["repetition"], r["arm"])
+        lineage = r.get("retry_lineage") or {}
+        if lineage.get("superseded_by_retry"):
+            superseded.setdefault(key, []).append(r)
+            continue
+        if key in live:
+            raise ValueError(
+                f"two live rows for {key}: section 20 forbids replacing an episode "
+                f"that reached a model, and only a superseded pre-start attempt may "
+                f"share an assignment with another row")
+        live[key] = r
+    orphaned = sorted(k for k in superseded if k not in live)
+    if orphaned:
+        raise ValueError(
+            f"{len(orphaned)} assignment(s) have a superseded attempt and no retry, "
+            f"e.g. {orphaned[0]}: a dropped outcome, not a retried one")
+    return list(live.values())
+
+
 def by_candidate(rows):
     """{candidate: {repetition: {arm: row}}} -- the pairing unit is candidate x repetition.
 
-    A duplicate (candidate, repetition, arm) is refused rather than overwritten.
-    Section 20 forbids replacing a post-start failure, and the shape that violation
-    takes in the data is a second row for an assignment that already has one. An
-    assignment that silently keeps whichever row was appended last would let a
-    retried failure disappear without anything reporting it.
+    Takes the ITT selection first, so a legitimate retry does not look like a
+    duplicate and an illegitimate replacement still does.
     """
     out = {}
-    for r in rows:
-        slot = out.setdefault(r["candidate_id"], {}).setdefault(r["repetition"], {})
-        if r["arm"] in slot:
-            raise ValueError(
-                f"duplicate row for {r['candidate_id']} repetition {r['repetition']} "
-                f"arm {r['arm']}: an assignment has exactly one row, and a second "
-                f"one is a retry the protocol does not allow")
-        slot[r["arm"]] = r
+    for r in itt_rows(rows):
+        out.setdefault(r["candidate_id"], {}).setdefault(r["repetition"], {})[r["arm"]] = r
     return out
 
 

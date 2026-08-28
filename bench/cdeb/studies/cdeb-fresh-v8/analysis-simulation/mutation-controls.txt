@@ -1,7 +1,9 @@
 baseline unmutated: all controls pass
   caught       indeterminate counts as a success  <- indeterminate is not a success
   caught       panel label drops the PANEL_ prefix  <- panel truth table matches section 9.1, an indeterminate panel counts a
-  caught       a duplicate assignment silently overwrites  <- a duplicate assignment is refused
+  caught       a second live row for one assignment is accepted  <- two live rows for one assignment are refused
+  caught       a superseded attempt with no retry passes  <- a superseded attempt with no retry is refused
+  caught       a superseded attempt still enters ITT  <- crashed: ValueError: two live rows for ('c', 0, 'ON'): section 20 for
   caught       incomplete episodes dropped from ITT  <- incomplete is not a success
   caught       one judge decides the panel  <- panel truth table matches section 9.1
   caught       repositories weighted by candidate count  <- repositories weighted equally
@@ -18,5 +20,5 @@ baseline unmutated: all controls pass
   caught       three-way agreement counts non-unanimous episodes  <- three-way agreement counts only unanimous episodes
   caught       Fleiss kappa drops the chance correction  <- Fleiss kappa collapses on the same data
 
-18/18 mutations caught
-code pinned: analysis.py 542e3618ad34b3e5
+20/20 mutations caught
+code pinned: analysis.py 27df529d9999385e
