@@ -1,0 +1,280 @@
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..fd3dbd3 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import json
+ import re
+ from dataclasses import dataclass
+ from typing import TYPE_CHECKING, Final
+@@ -55,14 +56,14 @@ class FileEvidenceReader:
+     def _manifest_entries(self, files: FetchedFiles, basis: ClaimBasis) -> Evidence:
+         return Evidence(
+             self._producer_name(self._manifest_entries),
+-            frozenset({"mcp"} if "mcp" in self._manifest(files) else ()),
++            frozenset({"mcp"} if "mcp" in self._manifest_names(files) else ()),
+             basis,
+         )
+ 
+     def _dependencies(self, files: FetchedFiles, basis: ClaimBasis) -> Evidence:
+         return Evidence(
+             self._producer_name(self._dependencies),
+-            frozenset({"ollama"} if "ollama" in self._manifest(files) else ()),
++            frozenset({"ollama"} if "ollama" in self._manifest_names(files) else ()),
+             basis,
+         )
+ 
+@@ -75,17 +76,150 @@ class FileEvidenceReader:
+             basis,
+         )
+ 
+-    def _manifest(self, files: FetchedFiles) -> str:
+-        return "\n".join(
+-            text.lower()
+-            for path, text in files.files
+-            if path.rsplit("/", 1)[-1] in {"package.json", "pyproject.toml", "Cargo.toml", "go.mod", "requirements.txt"}
+-        )
++    def _manifest_names(self, files: FetchedFiles) -> frozenset[str]:
++        """Return normalized names declared by the supported manifest formats.
++
++        Manifest prose is deliberately not searched: category evidence is based on
++        dependency and configuration declarations, never descriptions or comments.
++        """
++        names: set[str] = set()
++        for path, text in files.files:
++            name = path.rsplit("/", 1)[-1]
++            if name == "package.json":
++                names.update(_package_json_names(text))
++            elif name in {"pyproject.toml", "Cargo.toml"}:
++                names.update(_toml_names(name, text))
++            elif name == "go.mod":
++                names.update(_go_mod_names(text))
++            elif name == "requirements.txt":
++                names.update(_requirements_names(text))
++        return frozenset(names)
+ 
+     def _producer_name(self, producer) -> str:
+         return producer.__name__.removeprefix("_")
+ 
+ 
++_DEPENDENCY_KEYS: Final = frozenset(
++    {"dependencies", "devdependencies", "peerdependencies", "optionaldependencies", "bundleddependencies"}
++)
++_ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
++
++
++def _normalize_entry(name: str) -> str:
++    return re.sub(r"[-_.]+", "-", name.strip().lower())
++
++
++def _package_json_names(text: str) -> set[str]:
++    try:
++        manifest = json.loads(text)
++    except (json.JSONDecodeError, TypeError):
++        return set()
++    if not isinstance(manifest, dict):
++        return set()
++
++    names: set[str] = set()
++
++    def visit(value: object) -> None:
++        if not isinstance(value, dict):
++            return
++        for key, entry in value.items():
++            names.add(_normalize_entry(key))
++            if _normalize_entry(key).replace("-", "") in _DEPENDENCY_KEYS and isinstance(entry, list):
++                for item in entry:
++                    if isinstance(item, str):
++                        names.update(_requirement_names(item))
++            visit(entry)
++
++    visit(manifest)
++    return names
++
++
++def _toml_names(filename: str, text: str) -> set[str]:
++    names: set[str] = set()
++    section = ""
++    collecting_dependencies = False
++    dependency_values: list[str] = []
++
++    def consume_dependencies() -> None:
++        nonlocal collecting_dependencies
++        for value in dependency_values:
++            names.update(_requirement_names(value))
++        dependency_values.clear()
++        collecting_dependencies = False
++
++    for raw_line in text.splitlines():
++        line = raw_line.split("#", 1)[0].strip()
++        if not line:
++            continue
++        table = re.fullmatch(r"\[\[?([^\]]+)\]?\]", line)
++        if table:
++            if collecting_dependencies:
++                consume_dependencies()
++            section = table.group(1).strip().strip('"')
++            section_parts = section.split(".")
++            names.update(_normalize_entry(part.strip('"')) for part in section_parts)
++            continue
++
++        assignment = re.match(r"(?:\"([^\"]+)\"|'([^']+)'|([A-Za-z0-9_-]+))\s*=\s*(.*)", line)
++        if not assignment:
++            if collecting_dependencies:
++                dependency_values.append(line)
++                if "]" in line:
++                    consume_dependencies()
++            continue
++        key = next(part for part in assignment.groups()[:3] if part is not None)
++        value = assignment.group(4)
++        normalized_key = _normalize_entry(key)
++        names.add(normalized_key)
++        if filename == "pyproject.toml" and (
++            (section == "project" and normalized_key == "dependencies")
++            or section == "project.optional-dependencies"
++        ):
++            dependency_values.append(value)
++            collecting_dependencies = "]" not in value
++            if not collecting_dependencies:
++                consume_dependencies()
++    if collecting_dependencies:
++        consume_dependencies()
++    return names
++
++
++def _go_mod_names(text: str) -> set[str]:
++    names: set[str] = set()
++    in_require_block = False
++    for raw_line in text.splitlines():
++        line = raw_line.split("//", 1)[0].strip()
++        if not line:
++            continue
++        if line == "require (":
++            in_require_block = True
++            continue
++        if in_require_block and line == ")":
++            in_require_block = False
++            continue
++        if line.startswith("require "):
++            line = line.removeprefix("require ").strip()
++        elif not in_require_block:
++            continue
++        entry = line.split(maxsplit=1)[0]
++        names.add(_normalize_entry(entry))
++    return names
++
++
++def _requirements_names(text: str) -> set[str]:
++    names: set[str] = set()
++    for raw_line in text.splitlines():
++        line = raw_line.split("#", 1)[0].strip()
++        if not line or line.startswith(("-", "--")):
++            continue
++        names.update(_requirement_names(line))
++    return names
++
++
++def _requirement_names(value: str) -> set[str]:
++    return {_normalize_entry(match.group(0)) for match in _ENTRY_NAME.finditer(value)}
++
++
+ DEFAULT_EVIDENCE_READER: Final = FileEvidenceReader()
+ 
+ 
+diff --git a/tests/test_category.py b/tests/test_category.py
+index fbd2ec4..22953d0 100644
+--- a/tests/test_category.py
++++ b/tests/test_category.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ from dataclasses import replace
++import json
+ 
+ import pytest
+ 
+@@ -172,3 +173,82 @@ def test_same_version_packs_keep_distinct_identities() -> None:
+ 
+     assert mcp.pack != local_ai.pack
+     assert (mcp.pack.name, mcp.pack.version) == ("mcp", "v1")
++
++
++@pytest.mark.parametrize(
++    ("path", "contents"),
++    (
++        ("package.json", json.dumps({"dependencies": {"MCP": "1", "Ollama": "1"}})),
++        ("pyproject.toml", '[project]\ndependencies = ["MCP>=1", "Ollama == 1"]\n'),
++        ("Cargo.toml", '[dependencies]\nMCP = "1"\nOllama = "1"\n'),
++        ("go.mod", "module example.test/demo\n\nrequire (\n\tmcp v1.0.0\n\tollama v1.0.0\n)\n"),
++        ("requirements.txt", "MCP>=1\nOllama == 1\n"),
++    ),
++)
++def test_manifest_declarations_produce_category_signals(path: str, contents: str) -> None:
++    evidence = FileEvidenceReader().read_evidence(
++        Candidate("org/repo", "org", "", 0, ""),
++        FetchedFiles(((path, contents),)),
++        None,
++    )
++
++    assert next(item for item in evidence if item.evidence == "manifest_entries").values == frozenset({"mcp"})
++    assert next(item for item in evidence if item.evidence == "dependencies").values == frozenset({"ollama"})
++
++
++@pytest.mark.parametrize(
++    ("path", "contents"),
++    (
++        (
++            "package.json",
++            json.dumps(
++                {
++                    "name": "mcp",
++                    "description": "ollama",
++                    "dependencies": {"mcp-tools": "1", "ollama-client": "1"},
++                }
++            ),
++        ),
++        (
++            "pyproject.toml",
++            '# mcp ollama\n[project]\nname = "mcp"\ndescription = "ollama"\ndependencies = ["mcp-tools", "ollama-client"]\n',
++        ),
++        (
++            "Cargo.toml",
++            '# mcp ollama\n[package]\nname = "mcp"\ndescription = "ollama"\n[dependencies]\nmcp-tools = "1"\nollama-client = "1"\n',
++        ),
++        (
++            "go.mod",
++            "// mcp ollama\nmodule mcp\n\nrequire mcp-tools v1.0.0\nrequire ollama-client v1.0.0\n",
++        ),
++        ("requirements.txt", "# mcp ollama\nmcp-tools>=1\nollama-client>=1\n"),
++    ),
++)
++def test_manifest_prose_and_longer_names_do_not_produce_category_signals(path: str, contents: str) -> None:
++    evidence = FileEvidenceReader().read_evidence(
++        Candidate("org/repo", "org", "", 0, ""),
++        FetchedFiles(((path, contents),)),
++        None,
++    )
++
++    assert next(item for item in evidence if item.evidence == "manifest_entries").values == frozenset()
++    assert next(item for item in evidence if item.evidence == "dependencies").values == frozenset()
++
++
++@pytest.mark.parametrize(
++    ("path", "contents"),
++    (
++        ("package.json", json.dumps({"config": {"mcp": True, "ollama": True}})),
++        ("pyproject.toml", "[tool.category]\nmcp = true\nollama = true\n"),
++        ("Cargo.toml", "[package.metadata.category]\nmcp = true\nollama = true\n"),
++    ),
++)
++def test_manifest_configuration_entry_names_produce_category_signals(path: str, contents: str) -> None:
++    evidence = FileEvidenceReader().read_evidence(
++        Candidate("org/repo", "org", "", 0, ""),
++        FetchedFiles(((path, contents),)),
++        None,
++    )
++
++    assert next(item for item in evidence if item.evidence == "manifest_entries").values == frozenset({"mcp"})
++    assert next(item for item in evidence if item.evidence == "dependencies").values == frozenset({"ollama"})

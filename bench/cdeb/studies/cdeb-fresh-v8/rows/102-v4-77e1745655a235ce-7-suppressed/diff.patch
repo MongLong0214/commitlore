@@ -1,0 +1,300 @@
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..97551cf 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import json
+ import re
+ from dataclasses import dataclass
+ from typing import TYPE_CHECKING, Final
+@@ -55,14 +56,14 @@ class FileEvidenceReader:
+     def _manifest_entries(self, files: FetchedFiles, basis: ClaimBasis) -> Evidence:
+         return Evidence(
+             self._producer_name(self._manifest_entries),
+-            frozenset({"mcp"} if "mcp" in self._manifest(files) else ()),
++            frozenset({"mcp"} if "mcp" in self._declared_manifest_entries(files) else ()),
+             basis,
+         )
+ 
+     def _dependencies(self, files: FetchedFiles, basis: ClaimBasis) -> Evidence:
+         return Evidence(
+             self._producer_name(self._dependencies),
+-            frozenset({"ollama"} if "ollama" in self._manifest(files) else ()),
++            frozenset({"ollama"} if "ollama" in self._declared_manifest_entries(files) else ()),
+             basis,
+         )
+ 
+@@ -75,17 +76,185 @@ class FileEvidenceReader:
+             basis,
+         )
+ 
+-    def _manifest(self, files: FetchedFiles) -> str:
+-        return "\n".join(
+-            text.lower()
+-            for path, text in files.files
+-            if path.rsplit("/", 1)[-1] in {"package.json", "pyproject.toml", "Cargo.toml", "go.mod", "requirements.txt"}
+-        )
++    def _declared_manifest_entries(self, files: FetchedFiles) -> frozenset[str]:
++        """Return dependency and configuration names, never arbitrary manifest text."""
++        entries: set[str] = set()
++        for path, text in files.files:
++            name = path.rsplit("/", 1)[-1]
++            if name == "package.json":
++                entries.update(self._package_json_entries(text))
++            elif name == "pyproject.toml":
++                entries.update(self._pyproject_entries(text))
++            elif name == "Cargo.toml":
++                entries.update(self._cargo_entries(text))
++            elif name == "go.mod":
++                entries.update(self._go_mod_entries(text))
++            elif name == "requirements.txt":
++                entries.update(self._requirements_entries(text))
++        return frozenset(entries)
++
++    @staticmethod
++    def _package_json_entries(text: str) -> set[str]:
++        try:
++            manifest = json.loads(text)
++        except (json.JSONDecodeError, TypeError):
++            return set()
++        if not isinstance(manifest, dict):
++            return set()
++
++        entries: set[str] = set()
++        for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
++            declared = manifest.get(section)
++            if isinstance(declared, dict):
++                entries.update(declared)
++        for section in ("bundleDependencies", "bundledDependencies"):
++            declared = manifest.get(section)
++            if isinstance(declared, list):
++                entries.update(entry for entry in declared if isinstance(entry, str))
++        configured = manifest.get("config")
++        if isinstance(configured, dict):
++            entries.update(_mapping_keys(configured))
++        return {_normalize_entry(entry) for entry in entries}
++
++    @staticmethod
++    def _pyproject_entries(text: str) -> set[str]:
++        entries: set[str] = set()
++        section = ""
++        collecting_dependencies = False
++        dependency_lines: list[str] = []
++
++        def collect_requirements() -> None:
++            entries.update(_requirement_entries("\n".join(dependency_lines)))
++
++        for raw_line in text.splitlines():
++            line = _without_toml_comment(raw_line).strip()
++            if collecting_dependencies:
++                dependency_lines.append(line)
++                if _toml_array_complete(line):
++                    collect_requirements()
++                    dependency_lines = []
++                    collecting_dependencies = False
++                continue
++            header = re.fullmatch(r"\[([^]]+)\]", line)
++            if header:
++                section = header.group(1).strip().lower()
++                # Tool tables name configuration entries; project metadata does not.
++                if section.startswith("tool."):
++                    entries.add(_normalize_entry(section.rsplit(".", 1)[-1].strip('"\'')))
++                continue
++            assignment = re.match(r"([A-Za-z0-9_.-]+)\s*=\s*(.*)", line)
++            if not assignment:
++                continue
++            key, value = assignment.groups()
++            dependency_table = section.endswith("dependencies") or section == "dependency-groups"
++            if section.startswith("tool."):
++                entries.add(_normalize_entry(key))
++            if (section == "project" and key == "dependencies") or dependency_table or key == "dependency-groups":
++                if dependency_table and key != "dependencies":
++                    entries.add(_normalize_entry(key))
++                if value.lstrip().startswith("["):
++                    dependency_lines = [value]
++                    if _toml_array_complete(value):
++                        collect_requirements()
++                        dependency_lines = []
++                    else:
++                        collecting_dependencies = True
++        if collecting_dependencies:
++            collect_requirements()
++        return entries
++
++    @staticmethod
++    def _cargo_entries(text: str) -> set[str]:
++        entries: set[str] = set()
++        section = ""
++        for raw_line in text.splitlines():
++            line = _without_toml_comment(raw_line).strip()
++            header = re.fullmatch(r"\[([^]]+)\]", line)
++            if header:
++                section = header.group(1).strip().lower()
++                continue
++            assignment = re.match(r"([A-Za-z0-9_.-]+)\s*=", line)
++            if assignment and (section.endswith("dependencies") or ".dependencies" in section):
++                entries.add(_normalize_entry(assignment.group(1)))
++        return entries
++
++    @staticmethod
++    def _go_mod_entries(text: str) -> set[str]:
++        entries: set[str] = set()
++        directive = ""
++        for raw_line in text.splitlines():
++            line = raw_line.split("//", 1)[0].strip()
++            if not line:
++                continue
++            if line == ")":
++                directive = ""
++                continue
++            match = re.match(r"(require|replace)\s+(.*)", line)
++            if match:
++                directive, line = match.groups()
++                if line == "(":
++                    continue
++            elif not directive:
++                continue
++            entry = line.split(None, 1)[0] if line else ""
++            if entry and entry != "(":
++                entries.add(_normalize_entry(entry))
++        return entries
++
++    @staticmethod
++    def _requirements_entries(text: str) -> set[str]:
++        return _requirement_entries("\n".join(line.split(" #", 1)[0] for line in text.splitlines()))
+ 
+     def _producer_name(self, producer) -> str:
+         return producer.__name__.removeprefix("_")
+ 
+ 
++def _normalize_entry(entry: str) -> str:
++    """Use the common package-name normalization without accepting partial names."""
++    return re.sub(r"[-_.]+", "-", entry.strip().lower())
++
++
++def _without_toml_comment(line: str) -> str:
++    quote = ""
++    for index, character in enumerate(line):
++        if character in "\"'":
++            quote = "" if quote == character else (character if not quote else quote)
++        elif character == "#" and not quote:
++            return line[:index]
++    return line
++
++
++def _toml_array_complete(line: str) -> bool:
++    quote = ""
++    for character in line:
++        if character in "\"'":
++            quote = "" if quote == character else (character if not quote else quote)
++        elif character == "]" and not quote:
++            return True
++    return False
++
++
++def _requirement_entries(text: str) -> set[str]:
++    entries: set[str] = set()
++    for line in text.splitlines():
++        quoted = re.findall(r"[\"']([^\"']+)[\"']", line)
++        requirements = quoted or [line]
++        for requirement in requirements:
++            match = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9_.-]*)", requirement)
++            if match and not requirement.lstrip().startswith(("-", "#")):
++                entries.add(_normalize_entry(match.group(1)))
++    return entries
++
++
++def _mapping_keys(mapping: dict) -> set[str]:
++    keys: set[str] = set()
++    for key, value in mapping.items():
++        keys.add(key)
++        if isinstance(value, dict):
++            keys.update(_mapping_keys(value))
++    return keys
++
++
+ DEFAULT_EVIDENCE_READER: Final = FileEvidenceReader()
+ 
+ 
+diff --git a/tests/test_category.py b/tests/test_category.py
+index fbd2ec4..bbec6ef 100644
+--- a/tests/test_category.py
++++ b/tests/test_category.py
+@@ -18,6 +18,75 @@ from gitseed.evidence import ClaimBasis
+ from gitseed.pipeline.run import FetchedFiles
+ 
+ 
++@pytest.mark.parametrize(
++    ("path", "manifest"),
++    (
++        ("package.json", '{"description": "mcp ollama", "dependencies": {"MCP": "1", "ollama": "1"}}'),
++        ("pyproject.toml", '[project]\ndescription = "mcp ollama"\ndependencies = ["MCP[cli]>=1", "ollama"]'),
++        ("Cargo.toml", '[package]\ndescription = "mcp ollama"\n[dependencies]\nMCP = "1"\nollama = "1"'),
++        ("go.mod", "module example/mcp // ollama\nrequire (\n  MCP v1.0.0\n  ollama v1.0.0\n)"),
++        ("requirements.txt", "# mcp ollama\nMCP>=1\nollama==1"),
++    ),
++)
++def test_manifest_evidence_uses_exact_declared_entry_names(path: str, manifest: str) -> None:
++    reader = FileEvidenceReader()
++    evidence = reader.read_evidence(
++        Candidate("org/repo", "org", "", 0, ""),
++        FetchedFiles(((path, manifest),)),
++        None,
++    )
++
++    values = {item.evidence: item.values for item in evidence}
++
++    assert values["manifest_entries"] == frozenset({"mcp"})
++    assert values["dependencies"] == frozenset({"ollama"})
++
++
++@pytest.mark.parametrize(
++    ("path", "manifest"),
++    (
++        ("package.json", '{"config": {"integrations": {"mcp": true}, "ollama": true}}'),
++        ("pyproject.toml", "[tool.mcp]\n[tool.runtime]\nollama = true"),
++    ),
++)
++def test_manifest_evidence_uses_declared_configuration_entry_names(path: str, manifest: str) -> None:
++    reader = FileEvidenceReader()
++    evidence = reader.read_evidence(
++        Candidate("org/repo", "org", "", 0, ""),
++        FetchedFiles(((path, manifest),)),
++        None,
++    )
++
++    values = {item.evidence: item.values for item in evidence}
++
++    assert values["manifest_entries"] == frozenset({"mcp"})
++    assert values["dependencies"] == frozenset({"ollama"})
++
++
++@pytest.mark.parametrize(
++    ("path", "manifest"),
++    (
++        ("package.json", '{"description": "mcp ollama", "dependencies": {"mcp-tools": "1", "ollama-client": "1"}}'),
++        ("pyproject.toml", '# mcp ollama\n[project]\ndescription = "mcp ollama"\ndependencies = ["mcp-tools", "ollama-client"]'),
++        ("Cargo.toml", '# mcp ollama\n[package]\ndescription = "mcp ollama"\n[dependencies]\nmcp-tools = "1"\nollama-client = "1"'),
++        ("go.mod", "// mcp ollama\nmodule example/mcp-tools\nrequire github.com/example/ollama-client v1.0.0"),
++        ("requirements.txt", "# mcp ollama\nmcp-tools>=1\nollama-client==1"),
++    ),
++)
++def test_manifest_evidence_ignores_comments_metadata_and_partial_names(path: str, manifest: str) -> None:
++    reader = FileEvidenceReader()
++    evidence = reader.read_evidence(
++        Candidate("org/repo", "org", "", 0, ""),
++        FetchedFiles(((path, manifest),)),
++        None,
++    )
++
++    values = {item.evidence: item.values for item in evidence}
++
++    assert values["manifest_entries"] == frozenset()
++    assert values["dependencies"] == frozenset()
++
++
+ def test_unreadable_evidence_is_absent_not_an_uncategorized_match() -> None:
+     # Given: the only evidence needed by this category could not be read.
+     pack = CategoryPack(

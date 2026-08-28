@@ -1,0 +1,31 @@
+Recorded decisions for the files you are about to change:
+
+  record r-relcigate (active)
+
+  record r-chlog030 (active)
+    Ruled-out: also bumping __version__ in gitseed/__init__.py | this task's forbidden scope excludes gitseed/ (source); the prior 0.2.0 release bumped both files in one commit (7d52ec1) but this branch's remit does not extend there
+    Warn: gitseed/__init__.py still reports 0.2.0 after this commit, so it and pyproject.toml disagree until __init__.py is bumped, most naturally alongside the v0.3.0 tag on main the way 7d52ec1 did for 0.2.0
+    Warn: README.md's "Known limitations (as of the 2026-07-28 review)" section still states issues #36, #45, #46, #48 and #49 are unaddressed; all five are closed by commits covered in this changelog. Not corrected here — README.md is outside this task's scope — but it is now stale and should be updated before or shortly after this release
+
+  record r-rel020devsync (active)
+
+  record r-rel020main (active)
+
+  record r-rel020ver (active)
+
+  record r-c24wire (active)
+    Ruled-out: dist/cli.js | requires development node_modules and is not the distributed artifact
+    Limit: CommitLore is not registry-installable; CI must clone a pinned build
+    Warn: commitlore.bin and .claude/settings.json are machine-local settings
+
+  record r-gsc209 (active)
+    Warn: the previous task reported "YAML validation passed" and that was true and irrelevant. A YAML parser accepting a file says nothing about whether GitHub accepts it as a workflow. This one reports honestly that it is NOT validated — `actionlint` is unavailable and `api.github.com` is unreachable from the delegated sandbox, so the first GitHub run is the only remaining proof
+
+  record r-gsb108 (active)
+    Ruled-out: adding coverage gates or a badge | one workflow that tells the truth is worth more than five nobody reads
+    Warn: the spec for this task said gitseed had no CI. It had one since 6072c2a. Written without checking, which is the same failure mode as the five "CI is green" claims made against a red CI today
+
+  record r-gs0004 (active)
+    Ruled-out: a boolean verdict like the seed's `security_flag` | one bit cannot separate "ships a payload" from "mentions an IP", so acting on the strong case means accepting the weak one
+    Ruled-out: flagging short base64 and hex | they are hashes, keys and test vectors; length is what distinguishes a checksum from a payload, and the clean corpus proves the threshold with a real sha256
+    Warn: severity is three levels on purpose — collapsing it to a boolean anywhere downstream reintroduces the seed's defect

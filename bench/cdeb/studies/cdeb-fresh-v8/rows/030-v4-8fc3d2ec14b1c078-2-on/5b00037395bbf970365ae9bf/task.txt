@@ -1,0 +1,5 @@
+Make the public `gitseed.collect.search.collect` API reject invalid paging arguments before it issues any request through its supplied transport.
+
+`pages` must be at least 1. `per_page` must be within GitHub's supported inclusive range of 1 through 100. For an invalid value, `collect` must raise `ValueError` and must not contact the transport. Valid boundary values (`per_page=1` and `per_page=100`) must remain accepted.
+
+Add automated coverage for zero, negative, and oversized values.

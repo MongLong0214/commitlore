@@ -1,0 +1,135 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..1e800ec 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -84,15 +84,40 @@ class SQLiteRunStore:
+             raise KeyError(run_id)
+         return RunArtifact.from_bytes(bytes(row[0]))
+ 
+-    def history(self) -> tuple[StoredRun, ...]:
++    def history(self, limit: int | None = None) -> tuple[StoredRun, ...]:
++        if limit is not None and limit <= 0:
++            raise ValueError("limit must be positive")
++        query = "SELECT run_id, corrects_run_id, artifact FROM run_artifacts ORDER BY rowid"
++        parameters: tuple[int, ...] = ()
++        if limit is not None:
++            query = (
++                "SELECT run_id, corrects_run_id, artifact FROM ("
++                "SELECT rowid AS appended_at, run_id, corrects_run_id, artifact "
++                "FROM run_artifacts ORDER BY appended_at DESC LIMIT ?"
++                ") ORDER BY appended_at"
++            )
++            parameters = (limit,)
+         return tuple(
+             StoredRun(str(run_id), corrects_run_id, RunArtifact.from_bytes(bytes(artifact)))
+-            for run_id, corrects_run_id, artifact in self._connection.execute(
+-                "SELECT run_id, corrects_run_id, artifact FROM run_artifacts ORDER BY rowid"
+-            )
++            for run_id, corrects_run_id, artifact in self._connection.execute(query, parameters)
+         )
+ 
+-    def observations(self) -> tuple[StoredObservation, ...]:
++    def observations(self, limit: int | None = None) -> tuple[StoredObservation, ...]:
++        if limit is not None and limit <= 0:
++            raise ValueError("limit must be positive")
++        query = (
++            "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++            "ORDER BY observation_id"
++        )
++        parameters: tuple[int, ...] = ()
++        if limit is not None:
++            query = (
++                "SELECT run_id, repo, observed_at, stars FROM ("
++                "SELECT observation_id AS appended_at, run_id, repo, observed_at, stars "
++                "FROM repository_observations ORDER BY appended_at DESC LIMIT ?"
++                ") ORDER BY appended_at"
++            )
++            parameters = (limit,)
+         return tuple(
+             StoredObservation(
+                 str(run_id),
+@@ -100,9 +125,7 @@ class SQLiteRunStore:
+                 datetime.fromisoformat(str(observed_at)),
+                 int(stars),
+             )
+-            for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
+-            )
++            for run_id, repo, observed_at, stars in self._connection.execute(query, parameters)
+         )
+ 
+     def replay(self, run_id: str) -> RunArtifact:
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..10a6d8d 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -14,7 +14,7 @@ from gitseed.grade.types import GradeResult
+ from gitseed.pipeline.run import FetchedFiles
+ from gitseed.ports import RepositoryMetadata, RunPorts, RunRequest
+ from gitseed.scoring import ALL_FEATURES, ScoreInputs
+-from gitseed.storage import SQLiteRunStore
++from gitseed.storage import SQLiteRunStore, StoredObservation
+ from gitseed.storage_schema import SCHEMA_VERSION, SchemaVersionError, migrate
+ 
+ AT = datetime(2026, 7, 27, 12, 0, tzinfo=timezone.utc)
+@@ -170,6 +170,30 @@ def test_partial_artifact_and_correction_history_are_preserved(tmp_path) -> None
+     assert loaded.to_bytes() == partial.to_bytes()
+ 
+ 
++def test_history_limit_returns_the_recent_append_slice_in_chronological_order(tmp_path) -> None:
++    # Given: three persisted run artifacts were appended in order.
++    recorded = (
++        artifact(stars=4),
++        artifact(stars=7),
++        artifact(stars=11),
++    )
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        for index, value in enumerate(recorded, start=1):
++            store.save(f"run-{index}", value)
++
++        # When: callers request the two most recently appended runs.
++        recent = store.history(limit=2)
++        complete = store.history()
++
++    # Then: the slice retains append order and complete reads remain unchanged.
++    assert [run.run_id for run in recent] == ["run-2", "run-3"]
++    assert [run.artifact.to_bytes() for run in recent] == [
++        recorded[1].to_bytes(),
++        recorded[2].to_bytes(),
++    ]
++    assert [run.run_id for run in complete] == ["run-1", "run-2", "run-3"]
++
++
+ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     # Given: the store records the same repository again with a later count.
+     later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
+@@ -188,6 +212,29 @@ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     )
+ 
+ 
++def test_observations_limit_returns_the_recent_append_slice_in_chronological_order(tmp_path) -> None:
++    # Given: three saved artifacts each derived one repository observation.
++    observed_at = (
++        AT,
++        datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc),
++        datetime(2026, 7, 29, 12, 0, tzinfo=timezone.utc),
++    )
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        for index, (at, stars) in enumerate(zip(observed_at, (4, 7, 11)), start=1):
++            store.save(f"run-{index}", artifact(stars=stars, at=at))
++
++        # When: callers request the two most recently appended observations.
++        recent = store.observations(limit=2)
++        complete = store.observations()
++
++    # Then: the derived values and chronological append order survive the slice.
++    assert recent == (
++        StoredObservation("run-2", CANDIDATE.repo, observed_at[1], 7),
++        StoredObservation("run-3", CANDIDATE.repo, observed_at[2], 11),
++    )
++    assert [observation.run_id for observation in complete] == ["run-1", "run-2", "run-3"]
++
++
+ def test_previous_store_schema_opens_and_migrates_additively(tmp_path) -> None:
+     # Given: a store written by schema version 1, before observations existed.
+     path = tmp_path / "runs.db"

@@ -1,0 +1,58 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..a517fc0 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -76,13 +76,17 @@ class SQLiteRunStore:
+             except sqlite3.Error as error:
+                 raise ObservationWriteError(str(error)) from error
+ 
+-    def load(self, run_id: str) -> RunArtifact:
++    def get(self, run_id: str) -> StoredRun:
+         row = self._connection.execute(
+-            "SELECT artifact FROM run_artifacts WHERE run_id = ?", (run_id,)
++            "SELECT corrects_run_id, artifact FROM run_artifacts WHERE run_id = ?", (run_id,)
+         ).fetchone()
+         if row is None:
+             raise KeyError(run_id)
+-        return RunArtifact.from_bytes(bytes(row[0]))
++        corrects_run_id, artifact = row
++        return StoredRun(run_id, corrects_run_id, RunArtifact.from_bytes(bytes(artifact)))
++
++    def load(self, run_id: str) -> RunArtifact:
++        return self.get(run_id).artifact
+ 
+     def history(self) -> tuple[StoredRun, ...]:
+         return tuple(
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..c623abd 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -170,6 +170,28 @@ def test_partial_artifact_and_correction_history_are_preserved(tmp_path) -> None
+     assert loaded.to_bytes() == partial.to_bytes()
+ 
+ 
++def test_get_returns_the_stored_correction_and_its_lineage(tmp_path) -> None:
++    # Given: a correction was stored with a link to the run it supersedes.
++    correction = artifact()
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("run-1", artifact())
++        store.save("run-2", correction, corrects_run_id="run-1")
++
++        # When: the known correction is retrieved directly.
++        stored = store.get("run-2")
++
++    # Then: the lookup returns that correction's artifact and correction lineage.
++    assert stored.run_id == "run-2"
++    assert stored.corrects_run_id == "run-1"
++    assert stored.artifact.to_bytes() == correction.to_bytes()
++
++
++def test_get_rejects_an_unknown_run_identifier(tmp_path) -> None:
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        with pytest.raises(KeyError, match="missing-run"):
++            store.get("missing-run")
++
++
+ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     # Given: the store records the same repository again with a later count.
+     later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)

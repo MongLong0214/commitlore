@@ -1,0 +1,344 @@
+diff --git a/docs/issues.json b/docs/issues.json
+index d0ed48f..211fc03 100644
+--- a/docs/issues.json
++++ b/docs/issues.json
+@@ -409,7 +409,9 @@
+       "issue": 61,
+       "ticket_path": "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+       "milestone": "S0 · Name & Contracts",
+-      "dependencies": [],
++      "dependencies": [
++        "E0A-002"
++      ],
+       "size": "L",
+       "epic": "E0-B",
+       "kind": "executable",
+@@ -418,7 +420,7 @@
+         "phase:S0",
+         "size:L"
+       ],
+-      "body_template": "## Gate state\n\n**BLOCKED — ADR + PRD + TICKET MAINTAINER GATES REQUIRED. Product implementation is not authorized by issue creation.**\n\n- Epic: `E0-B`\n- Milestone: S0 · Name & Contracts\n- Size: L\n- Dependencies: None\n- Exact implementation contract: [docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md](/docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md)\n- Authority: [`docs/north-star/agent-operator-score-ssot-v1.0.md`](/docs/north-star/agent-operator-score-ssot-v1.0.md)\n\n## Execution rule\n\nRead the final SSOT, required ADRs, owning PRD, and the exact ticket in full. The ticket exclusively defines file/symbol ownership, forbidden scope, RED and expected failure, minimum GREEN, acceptance-to-test mapping, verification lanes, stop conditions, completion evidence, and invalidation.\n\n## Gate checklist\n\n- [ ] Required ADR set accepted at exact digest\n- [ ] Owning PRD accepted at exact digest\n- [ ] Exact ticket accepted at exact digest\n- [ ] Execution packet pins base SHA and clean ownership\n- [ ] RED captured with expected reason before GREEN\n- [ ] Focused, full, build/package, and required manual/live lanes pass at exact head\n- [ ] Cumulative exact-head review and CI pass\n\nDo not broaden scope, infer missing observability, or continue past a failed dependency."
++      "body_template": "## Gate state\n\n**BLOCKED — ADR + PRD + TICKET MAINTAINER GATES REQUIRED. Product implementation is not authorized by issue creation.**\n\n- Epic: `E0-B`\n- Milestone: S0 · Name & Contracts\n- Size: L\n- Dependencies: E0A-002\n- Exact implementation contract: [docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md](/docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md)\n- Authority: [`docs/north-star/agent-operator-score-ssot-v1.0.md`](/docs/north-star/agent-operator-score-ssot-v1.0.md)\n\n## Execution rule\n\nRead the final SSOT, required ADRs, owning PRD, and the exact ticket in full. The ticket exclusively defines file/symbol ownership, forbidden scope, RED and expected failure, minimum GREEN, acceptance-to-test mapping, verification lanes, stop conditions, completion evidence, and invalidation.\n\n## Gate checklist\n\n- [ ] Required ADR set accepted at exact digest\n- [ ] Owning PRD accepted at exact digest\n- [ ] Exact ticket accepted at exact digest\n- [ ] Execution packet pins base SHA and clean ownership\n- [ ] RED captured with expected reason before GREEN\n- [ ] Focused, full, build/package, and required manual/live lanes pass at exact head\n- [ ] Cumulative exact-head review and CI pass\n\nDo not broaden scope, infer missing observability, or continue past a failed dependency."
+     },
+     {
+       "id": "E0B-002",
+@@ -465,7 +467,10 @@
+       "issue": 64,
+       "ticket_path": "docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md",
+       "milestone": "S0 · Name & Contracts",
+-      "dependencies": [],
++      "dependencies": [
++        "E0A-003",
++        "E0B-003"
++      ],
+       "size": "M",
+       "epic": "E0-C",
+       "kind": "executable",
+@@ -474,7 +479,7 @@
+         "phase:S0",
+         "size:M"
+       ],
+-      "body_template": "## Gate state\n\n**BLOCKED — ADR + PRD + TICKET MAINTAINER GATES REQUIRED. Product implementation is not authorized by issue creation.**\n\n- Epic: `E0-C`\n- Milestone: S0 · Name & Contracts\n- Size: M\n- Dependencies: None\n- Exact implementation contract: [docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md](/docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md)\n- Authority: [`docs/north-star/agent-operator-score-ssot-v1.0.md`](/docs/north-star/agent-operator-score-ssot-v1.0.md)\n\n## Execution rule\n\nRead the final SSOT, required ADRs, owning PRD, and the exact ticket in full. The ticket exclusively defines file/symbol ownership, forbidden scope, RED and expected failure, minimum GREEN, acceptance-to-test mapping, verification lanes, stop conditions, completion evidence, and invalidation.\n\n## Gate checklist\n\n- [ ] Required ADR set accepted at exact digest\n- [ ] Owning PRD accepted at exact digest\n- [ ] Exact ticket accepted at exact digest\n- [ ] Execution packet pins base SHA and clean ownership\n- [ ] RED captured with expected reason before GREEN\n- [ ] Focused, full, build/package, and required manual/live lanes pass at exact head\n- [ ] Cumulative exact-head review and CI pass\n\nDo not broaden scope, infer missing observability, or continue past a failed dependency."
++      "body_template": "## Gate state\n\n**BLOCKED — ADR + PRD + TICKET MAINTAINER GATES REQUIRED. Product implementation is not authorized by issue creation.**\n\n- Epic: `E0-C`\n- Milestone: S0 · Name & Contracts\n- Size: M\n- Dependencies: E0A-003,E0B-003\n- Exact implementation contract: [docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md](/docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md)\n- Authority: [`docs/north-star/agent-operator-score-ssot-v1.0.md`](/docs/north-star/agent-operator-score-ssot-v1.0.md)\n\n## Execution rule\n\nRead the final SSOT, required ADRs, owning PRD, and the exact ticket in full. The ticket exclusively defines file/symbol ownership, forbidden scope, RED and expected failure, minimum GREEN, acceptance-to-test mapping, verification lanes, stop conditions, completion evidence, and invalidation.\n\n## Gate checklist\n\n- [ ] Required ADR set accepted at exact digest\n- [ ] Owning PRD accepted at exact digest\n- [ ] Exact ticket accepted at exact digest\n- [ ] Execution packet pins base SHA and clean ownership\n- [ ] RED captured with expected reason before GREEN\n- [ ] Focused, full, build/package, and required manual/live lanes pass at exact head\n- [ ] Cumulative exact-head review and CI pass\n\nDo not broaden scope, infer missing observability, or continue past a failed dependency."
+     },
+     {
+       "id": "E0C-002",
+@@ -520,7 +525,10 @@
+       "issue": 67,
+       "ticket_path": "docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md",
+       "milestone": "S0 · Name & Contracts",
+-      "dependencies": [],
++      "dependencies": [
++        "E0A-003",
++        "E0C-003"
++      ],
+       "size": "L",
+       "epic": "E0-D",
+       "kind": "executable",
+@@ -529,7 +537,7 @@
+         "phase:S0",
+         "size:L"
+       ],
+-      "body_template": "## Gate state\n\n**BLOCKED — ADR + PRD + TICKET MAINTAINER GATES REQUIRED. Product implementation is not authorized by issue creation.**\n\n- Epic: `E0-D`\n- Milestone: S0 · Name & Contracts\n- Size: L\n- Dependencies: None\n- Exact implementation contract: [docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md](/docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md)\n- Authority: [`docs/north-star/agent-operator-score-ssot-v1.0.md`](/docs/north-star/agent-operator-score-ssot-v1.0.md)\n\n## Execution rule\n\nRead the final SSOT, required ADRs, owning PRD, and the exact ticket in full. The ticket exclusively defines file/symbol ownership, forbidden scope, RED and expected failure, minimum GREEN, acceptance-to-test mapping, verification lanes, stop conditions, completion evidence, and invalidation.\n\n## Gate checklist\n\n- [ ] Required ADR set accepted at exact digest\n- [ ] Owning PRD accepted at exact digest\n- [ ] Exact ticket accepted at exact digest\n- [ ] Execution packet pins base SHA and clean ownership\n- [ ] RED captured with expected reason before GREEN\n- [ ] Focused, full, build/package, and required manual/live lanes pass at exact head\n- [ ] Cumulative exact-head review and CI pass\n\nDo not broaden scope, infer missing observability, or continue past a failed dependency."
++      "body_template": "## Gate state\n\n**BLOCKED — ADR + PRD + TICKET MAINTAINER GATES REQUIRED. Product implementation is not authorized by issue creation.**\n\n- Epic: `E0-D`\n- Milestone: S0 · Name & Contracts\n- Size: L\n- Dependencies: E0A-003,E0C-003\n- Exact implementation contract: [docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md](/docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md)\n- Authority: [`docs/north-star/agent-operator-score-ssot-v1.0.md`](/docs/north-star/agent-operator-score-ssot-v1.0.md)\n\n## Execution rule\n\nRead the final SSOT, required ADRs, owning PRD, and the exact ticket in full. The ticket exclusively defines file/symbol ownership, forbidden scope, RED and expected failure, minimum GREEN, acceptance-to-test mapping, verification lanes, stop conditions, completion evidence, and invalidation.\n\n## Gate checklist\n\n- [ ] Required ADR set accepted at exact digest\n- [ ] Owning PRD accepted at exact digest\n- [ ] Exact ticket accepted at exact digest\n- [ ] Execution packet pins base SHA and clean ownership\n- [ ] RED captured with expected reason before GREEN\n- [ ] Focused, full, build/package, and required manual/live lanes pass at exact head\n- [ ] Cumulative exact-head review and CI pass\n\nDo not broaden scope, infer missing observability, or continue past a failed dependency."
+     },
+     {
+       "id": "E0D-002",
+diff --git a/docs/planning/AOS-EXECUTION-ROADMAP.md b/docs/planning/AOS-EXECUTION-ROADMAP.md
+index c5c6f56..9385a96 100644
+--- a/docs/planning/AOS-EXECUTION-ROADMAP.md
++++ b/docs/planning/AOS-EXECUTION-ROADMAP.md
+@@ -60,15 +60,10 @@ Dependency edges belong to the exact ticket contracts. `docs/tickets/BOARD.md` i
+ them and a non-input to the resolver, so where the two disagree the contract wins and the board is
+ the thing to correct.
+ 
+-**The board's epic-entry edges are currently narrower than the PRDs declare, and the test meant to
+-catch that cannot see it.** `PRD-E0B` declares `Dependencies: D0, E0-A`, `PRD-E0C` declares
+-`E0-A, E0-B`, and `PRD-E0D` declares `E0-A, E0-C`, while the board records `None` for E0B-001,
+-E0C-001 and E0D-001. The producer pattern that enforces a PRD basis matches the unhyphenated form
+-`E0A` and not the hyphenated `E0-A` the PRDs actually use, so those edges read as undeclared and
+-were removed as such. Correcting this is not one edit under one owner: the pattern and its case belong to D0-004A, the
+-generated board to D0-004C, and each dependency edge to its own exact ticket. Until that happens the
+-epic order in the PRDs and the north-star SSOT is the higher authority, and this file sequences by
+-it: `D0 → E0-A → E0-B → E0-C → E0-D`.
++PRD epic dependencies are compared using the canonical ticket-epic identity: `E0-A` in PRD prose
++provides the same cross-epic basis as `E0A` in ticket IDs. The static validator rejects a
++cross-epic ticket dependency with no declared PRD basis. The E0 routes therefore follow the
++declared order: `D0 → E0-A → E0-B → E0-C → E0-D`.
+ 
+ ## Records that cannot enter a ready set
+ 
+@@ -145,15 +140,15 @@ After D0, in epic order:
+ - E0-C: `#64 E0C-001 → #65 E0C-002 → #66 E0C-003`
+ - E0-D: `#67 E0D-001 → #68 E0D-002 → #69 E0D-003`
+ 
+-`#63 E0B-003` is not a peer of the D0 records. `PRD-E0B` declares `Dependencies: D0, E0-A` and the
+-north-star SSOT orders `D0 → E0-A → E0-B`, so E0-B follows the whole of D0, not E0-A alone. It also
+-carries the fixture-admission condition below. The chains above are epic order; each record's own
+-dependencies are in its contract, and where the board disagrees the contract wins.
++`#63 E0B-003` is not a peer of the D0 records. `E0B-001` depends on `E0A-002`, preserving the
++`PRD-E0B` route through E0-A and therefore its declared D0 prerequisite. It also carries the
++fixture-admission condition below. The chains above are epic order; each record's own dependencies
++are in its contract, and where the board disagrees the contract wins.
+ 
+ `#182 D0-011` sits with the D0 records and unblocks on verified `#55 D0-002` and `#57 D0-004`.
+ 
+-`PRD-E0C` declares `E0-A, E0-B` and `PRD-E0D` declares `E0-A, E0-C`. Reading `None` from the board
+-for E0C-001 or E0D-001 and starting either early contradicts the owning PRD, which outranks it.
++`E0C-001` records the `PRD-E0C` bases `E0A-003,E0B-003`, and `E0D-001` records the `PRD-E0D` bases
++`E0A-003,E0C-003`. The owning PRD remains the higher authority for each edge.
+ 
+ S0 exit requires every S0 record verified. D0-010 is included: authoring and accepting its contract
+ makes it executable, and it must then be executed and verified like any other record. An accepted
+diff --git a/docs/tickets/BOARD.md b/docs/tickets/BOARD.md
+index 2a662ed..6a32367 100644
+--- a/docs/tickets/BOARD.md
++++ b/docs/tickets/BOARD.md
+@@ -16,13 +16,13 @@ This board owns only ticket IDs, milestone placement, size, and dependency edges
+ | [E0A-001](E0-A/E0A-001-freeze-m01-m20-metric-registry.md) | E0-A | S0 · Name & Contracts | M | D0-004 |
+ | [E0A-002](E0-A/E0A-002-freeze-eligibility-and-score-issuance-predicate.md) | E0-A | S0 · Name & Contracts | L | E0A-001 |
+ | [E0A-003](E0-A/E0A-003-freeze-formula-factor-safety-and-display-precision-contract.md) | E0-A | S0 · Name & Contracts | M | E0A-002 |
+-| [E0B-001](E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md) | E0-B | S0 · Name & Contracts | L | None |
++| [E0B-001](E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md) | E0-B | S0 · Name & Contracts | L | E0A-002 |
+ | [E0B-002](E0-B/E0B-002-define-controlled-and-imported-session-classification.md) | E0-B | S0 · Name & Contracts | M | E0B-001 |
+ | [E0B-003](E0-B/E0B-003-specify-capability-doctor-output-and-verdict-fixtures.md) | E0-B | S0 · Name & Contracts | M | E0B-001,E0B-002 |
+-| [E0C-001](E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md) | E0-C | S0 · Name & Contracts | M | None |
++| [E0C-001](E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md) | E0-C | S0 · Name & Contracts | M | E0A-003,E0B-003 |
+ | [E0C-002](E0-C/E0C-002-implement-deterministic-pack-budget-and-eligibility-simulator.md) | E0-C | S0 · Name & Contracts | L | E0C-001 |
+ | [E0C-003](E0-C/E0C-003-emit-preflight-decision-report-and-freeze-gate.md) | E0-C | S0 · Name & Contracts | S | E0C-002 |
+-| [E0D-001](E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md) | E0-D | S0 · Name & Contracts | L | None |
++| [E0D-001](E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md) | E0-D | S0 · Name & Contracts | L | E0A-003,E0C-003 |
+ | [E0D-002](E0-D/E0D-002-freeze-treatment-registry-and-safety-remediation.md) | E0-D | S0 · Name & Contracts | M | E0D-001 |
+ | [E0D-003](E0-D/E0D-003-implement-deterministic-one-lever-selector-contract.md) | E0-D | S0 · Name & Contracts | M | E0D-001,E0D-002 |
+ | [E1-001](E1/E1-001-define-aos-trace-schema-and-canonical-event-registry.md) | E1 | S1 · G0 Scorer Truth | L | None |
+diff --git a/docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md b/docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md
+index aca2567..ea94183 100644
+--- a/docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md
++++ b/docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md
+@@ -5,7 +5,7 @@
+ - Milestone: S0 · Name & Contracts
+ - Owning PRD: [E0-B](../../prd/PRD-E0B-adapter-observability-contract.md)
+ - Size: L
+-- Dependencies: None
++- Dependencies: E0A-002
+ 
+ ## Goal
+ 
+diff --git a/docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md b/docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md
+index abee58f..196a6c0 100644
+--- a/docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md
++++ b/docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md
+@@ -5,7 +5,7 @@
+ - Milestone: S0 · Name & Contracts
+ - Owning PRD: [E0-C](../../prd/PRD-E0C-pack-time-and-eligibility-simulation.md)
+ - Size: M
+-- Dependencies: None
++- Dependencies: E0A-003,E0B-003
+ 
+ ## Goal
+ 
+diff --git a/docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md b/docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md
+index 526add5..d0177c8 100644
+--- a/docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md
++++ b/docs/tickets/E0-D/E0D-001-define-prescription-input-formulas-and-missing-rules.md
+@@ -5,7 +5,7 @@
+ - Milestone: S0 · Name & Contracts
+ - Owning PRD: [E0-D](../../prd/PRD-E0D-deterministic-prescription-input-contract.md)
+ - Size: L
+-- Dependencies: None
++- Dependencies: E0A-003,E0C-003
+ 
+ ## Goal
+ 
+diff --git a/scripts/validate-planning.mjs b/scripts/validate-planning.mjs
+index b51e028..803de4d 100644
+--- a/scripts/validate-planning.mjs
++++ b/scripts/validate-planning.mjs
+@@ -81,6 +81,14 @@ const readJson = (path, label) => {
+   }
+ };
+ const rel = (path) => relative(root, path).split(sep).join("/");
++const ticketEpicKey = (ticketId) => ticketId.match(/^(E0[A-D]|E\d+|D0)-/)?.[1];
++// PRD prose names the E0 epics with a hyphen (`E0-A`), while ticket IDs omit it
++// (`E0A-001`). The dependency graph always stores the ticket spelling.
++const prdDependencyEpicKey = (dependency) => {
++  const hyphenatedE0Epic = dependency.match(/^E0-([A-D])$/)?.[1];
++  if (hyphenatedE0Epic) return `E0${hyphenatedE0Epic}`;
++  return dependency.match(/^(E0[A-D]|E\d+|D0)$/)?.[1];
++};
+ // Only skip package/VCS trees. media/ and state/ are walked so source-extension
+ // files cannot hide from the product-code census via a top-level ignore.
+ const ignoredTopLevel = new Set([".git", "node_modules"]);
+@@ -365,6 +373,27 @@ const visit = (id) => {
+ };
+ for (const id of dependencyGraph.keys()) visit(id);
+ 
++const declaredPrdEpicDependencies = new Set();
++for (const prd of prds.values()) {
++  const consumerEpic = prdDependencyEpicKey(prd.id);
++  if (!consumerEpic) continue;
++  for (const dependency of (prd.dependencies ?? "").split(/[;,]/).map((entry) => entry.trim())) {
++    const producerEpic = prdDependencyEpicKey(dependency);
++    if (producerEpic) declaredPrdEpicDependencies.add(`${consumerEpic}<-${producerEpic}`);
++  }
++}
++for (const ticket of tickets.values()) {
++  const consumerEpic = ticketEpicKey(ticket.id);
++  for (const dependency of ticket.dependencies) {
++    const producerEpic = ticketEpicKey(dependency);
++    if (!consumerEpic || !producerEpic || consumerEpic === producerEpic) continue;
++    const edge = `${consumerEpic}<-${producerEpic}`;
++    if (!declaredPrdEpicDependencies.has(edge)) {
++      pushError(`semantic graph ${ticket.id} cross-epic dependency ${dependency} lacks PRD basis ${edge}`);
++    }
++  }
++}
++
+ const traceability = readText("docs/TRACEABILITY.md");
+ const catalogText = traceability.match(/<!-- AOS_SEMANTIC_CATALOG_V2_START -->\s*```json\s*([\s\S]*?)\s*```\s*<!-- AOS_SEMANTIC_CATALOG_V2_END -->/m)?.[1];
+ let catalog;
+diff --git a/tests/planning-contract.test.mjs b/tests/planning-contract.test.mjs
+index a4e18ed..35dd733 100644
+--- a/tests/planning-contract.test.mjs
++++ b/tests/planning-contract.test.mjs
+@@ -14,6 +14,11 @@ const ticketEpicKey = (ticketId) => {
+   assert.ok(epic, `ticket lacks a canonical epic key: ${ticketId}`);
+   return epic;
+ };
++const prdEpicKey = (epicId) => {
++  const hyphenatedE0Epic = epicId.match(/^E0-([A-D])$/)?.[1];
++  if (hyphenatedE0Epic) return `E0${hyphenatedE0Epic}`;
++  return epicId.match(/^(E0[A-D]|E\d+|D0)$/)?.[1];
++};
+ const declaredPrdEpicDependencies = () => {
+   const prdDirectory = resolve(root, "docs/prd");
+   const declared = new Set();
+@@ -24,8 +29,7 @@ const declaredPrdEpicDependencies = () => {
+       .match(/^- Dependencies: (.+)$/m)?.[1];
+     assert.ok(dependencyLine, `${filename} lacks a Dependencies line`);
+     for (const dependency of dependencyLine.split(/[;,]/).map((entry) => entry.trim())) {
+-      // Only an exact canonical ticket-epic key declares an edge in the ticket graph.
+-      const producerEpic = dependency.match(/^(E0[A-D]|E\d+|D0)$/)?.[1];
++      const producerEpic = prdEpicKey(dependency);
+       if (producerEpic) declared.add(`${consumerEpic}<-${producerEpic}`);
+     }
+   }
+@@ -1288,6 +1292,29 @@ test("cross-epic-ticket-dependencies-have-declared-prd-basis", () => {
+   const manifest = JSON.parse(readFileSync(resolve(root, "docs/issues.json"), "utf8"));
+   const unsupported = [];
+ 
++  for (const edge of ["E0B<-E0A", "E0C<-E0A", "E0C<-E0B", "E0D<-E0A", "E0D<-E0C"]) {
++    assert.ok(declared.has(edge), `missing canonical PRD epic dependency ${edge}`);
++  }
++  assert.deepEqual(
++    Object.fromEntries(["E0B-001", "E0C-001", "E0D-001"].map((id) => [
++      id,
++      manifest.tickets.find((ticket) => ticket.id === id)?.dependencies
++    ])),
++    {
++      "E0B-001": ["E0A-002"],
++      "E0C-001": ["E0A-003", "E0B-003"],
++      "E0D-001": ["E0A-003", "E0C-003"]
++    }
++  );
++  for (const [id, dependencies] of Object.entries({
++    "E0B-001": "E0A-002",
++    "E0C-001": "E0A-003,E0B-003",
++    "E0D-001": "E0A-003,E0C-003"
++  })) {
++    const record = manifest.tickets.find((ticket) => ticket.id === id);
++    assert.ok(record?.body_template.includes(`- Dependencies: ${dependencies}`), `${id} public dependency display is stale`);
++  }
++
+   for (const ticket of manifest.tickets) {
+     const consumerEpic = ticketEpicKey(ticket.id);
+     for (const dependency of ticket.dependencies) {
+@@ -1305,6 +1332,68 @@ test("cross-epic-ticket-dependencies-have-declared-prd-basis", () => {
+   );
+ });
+ 
++test("planning validator accepts hyphenated E0 PRD dependency bases", () => {
++  const parent = mkdtempSync(join(tmpdir(), "aos hyphenated epic dependency "));
++  const fixture = join(parent, "repository");
++  try {
++    cpSync(root, fixture, {
++      recursive: true,
++      filter: (source) => ![".git", "node_modules"].includes(basename(source))
++    });
++    setPendingGateRegistry(fixture);
++    assert.doesNotThrow(() => execFileSync(process.execPath, ["scripts/validate-planning.mjs"], {
++      cwd: fixture,
++      encoding: "utf8",
++      stdio: ["ignore", "pipe", "pipe"]
++    }));
++  } finally {
++    rmSync(parent, { recursive: true, force: true });
++  }
++});
++
++test("planning validator rejects a cross-epic dependency without PRD basis", () => {
++  const parent = mkdtempSync(join(tmpdir(), "aos unsupported epic dependency "));
++  const fixture = join(parent, "repository");
++  try {
++    cpSync(root, fixture, {
++      recursive: true,
++      filter: (source) => ![".git", "node_modules"].includes(basename(source))
++    });
++    const ticketPath = join(fixture, "docs/tickets/E0-C/E0C-001-preregister-pack-simulation-inputs-and-invariants.md");
++    const unsupportedDependencies = "E0A-003,E0B-003,E0D-001";
++    writeFileSync(
++      ticketPath,
++      readFileSync(ticketPath, "utf8").replace("- Dependencies: E0A-003,E0B-003", `- Dependencies: ${unsupportedDependencies}`)
++    );
++    const manifestPath = join(fixture, "docs/issues.json");
++    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
++    const entry = manifest.tickets.find((ticket) => ticket.id === "E0C-001");
++    entry.dependencies = ["E0A-003", "E0B-003", "E0D-001"];
++    entry.body_template = entry.body_template.replace("- Dependencies: E0A-003,E0B-003", `- Dependencies: ${unsupportedDependencies}`);
++    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
++    const boardPath = join(fixture, "docs/tickets/BOARD.md");
++    writeFileSync(
++      boardPath,
++      readFileSync(boardPath, "utf8").replace("| E0-C | S0 · Name & Contracts | M | E0A-003,E0B-003 |", `| E0-C | S0 · Name & Contracts | M | ${unsupportedDependencies} |`)
++    );
++
++    let error;
++    try {
++      execFileSync(process.execPath, ["scripts/validate-planning.mjs"], {
++        cwd: fixture,
++        encoding: "utf8",
++        stdio: ["ignore", "pipe", "pipe"]
++      });
++    } catch (caught) {
++      error = caught;
++    }
++    assert.ok(error, "unsupported cross-epic dependency unexpectedly passed validation");
++    assert.match(error.stderr, /semantic graph E0C-001 cross-epic dependency E0D-001 lacks PRD basis E0C<-E0D/);
++  } finally {
++    rmSync(parent, { recursive: true, force: true });
++  }
++});
++
+ test("banned-wording-guard-is-load-bearing", () => {
+   // The prohibition on two phrasings — one asserting the absence of code, one framing this
+   // repository as a mere planning exercise — was violated seven times in one day while it lived

@@ -1,0 +1,6 @@
+embed the canonical reports in specs/doctor-output.v0.json
+
+the ticket grants fixtures/doctor/*.json, and sibling precedent does not override a path the ticket names
+
+scope: {'path_count': 11, 'paths': ['fixtures/doctor/blocked-and-imported.json', 'fixtures/doctor/blocked.json', 'fixtures/doctor/complete.json', 'fixtures/doctor/degraded.json', 'fixtures/doctor/imported-and-degraded.json', 'fixtures/doctor/imported-only.json', 'packages/schema/src/doctor-contract.ts', 'packages/schema/test/doctor-contract.test.ts', 'specs/doctor-output.v0.json', 'tests/planning-contract.test.mjs', 'tests/planning/workspace-skeleton.test.mjs'], 'screen': {'acceptance_runner': 'npm test', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 11, 'scope_paths_total': 11}}
+lifecycle: active

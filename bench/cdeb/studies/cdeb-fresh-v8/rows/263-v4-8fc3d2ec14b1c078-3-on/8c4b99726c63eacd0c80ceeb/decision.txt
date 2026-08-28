@@ -1,0 +1,6 @@
+retrying on a bare 403
+
+half of them are permissions errors and no amount of waiting fixes those
+
+scope: {'path_count': 4, 'paths': ['gitseed/collect/__init__.py', 'gitseed/collect/ratelimit.py', 'gitseed/collect/search.py', 'tests/test_collect.py'], 'screen': {'acceptance_runner': 'pytest', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 4, 'scope_paths_total': 4}}
+lifecycle: active

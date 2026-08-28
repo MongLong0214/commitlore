@@ -1,0 +1,6 @@
+a separate evidence-kind allowlist
+
+a literal detached from the producer methods can silently accept evidence no collector emits
+
+scope: {'path_count': 2, 'paths': ['gitseed/category.py', 'tests/test_category.py'], 'screen': {'acceptance_runner': 'pytest', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 2, 'scope_paths_total': 2}}
+lifecycle: active

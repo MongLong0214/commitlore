@@ -1,0 +1,6 @@
+letting a grading failure end the run
+
+it makes one flaky model call discard every candidate already screened
+
+scope: {'path_count': 3, 'paths': ['gitseed/pipeline/__init__.py', 'gitseed/pipeline/run.py', 'tests/test_pipeline.py'], 'screen': {'acceptance_runner': 'pytest', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 3, 'scope_paths_total': 3}}
+lifecycle: active

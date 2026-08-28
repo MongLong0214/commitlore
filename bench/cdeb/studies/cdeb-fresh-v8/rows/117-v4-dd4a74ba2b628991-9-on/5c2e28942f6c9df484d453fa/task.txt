@@ -1,0 +1,17 @@
+Make the metric-registry validator enforce the complete frozen registry envelope.
+
+A registry is valid only when `registry_id` is present and exactly `metrics.v0`, and `source_contract` is present and exactly `docs/contracts/metric-scoring-contract-v1.md`.
+
+Its `consumers` value must contain each of these strings exactly once, contain no other values, and contain only strings:
+
+- `factor.F1`
+- `factor.F2`
+- `factor.F3`
+- `factor.F4`
+- `factor.F5`
+- `factor.F6`
+- `outcome_index.O`
+- `process_index.P`
+- `safety_gate.M19`
+
+The validator must reject registries with either identity/provenance field removed or changed, and registries whose consumer collection has a missing, added, duplicate, or non-string member. The unchanged frozen registry must remain valid. Consumer ordering is not significant.

@@ -1,0 +1,3 @@
+Make manifest-based category evidence precise. For the supported manifest files (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, and `requirements.txt`), detect the MCP and local-AI signals from declared dependency or configuration entry names. A normalized entry named exactly `mcp` must produce the `manifest_entries` value `mcp`; one named exactly `ollama` must produce the `dependencies` value `ollama`.
+
+Do not produce either signal merely because those words appear elsewhere in a manifest, including comments, descriptive metadata, or longer dependency names such as `mcp-tools` and `ollama-client`. Preserve the existing evidence basis and category-pack behavior.

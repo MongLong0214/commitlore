@@ -1,0 +1,67 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..a41ab27 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -153,7 +153,7 @@ def execute(
+     for candidate in collected.candidates:
+         try:
+             evidence = (
+-                absent_evidence()
++                absent_evidence(ports.evidence.evidence_names)
+                 if candidate.repo not in files
+                 else ports.evidence.read_evidence(candidate, files[candidate.repo], metadata[candidate.repo])
+             )
+@@ -161,7 +161,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = absent_evidence(ports.evidence.evidence_names)
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..4db9e3f 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -93,8 +93,13 @@ def satisfiable_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -
+     return reader.evidence_names
+ 
+ 
+-def absent_evidence() -> tuple[Evidence, ...]:
+-    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
++def absent_evidence(evidence_names: frozenset[str] | None = None) -> tuple[Evidence, ...]:
++    """Return explicit absent evidence for every advertised source."""
++    names = satisfiable_evidence() if evidence_names is None else evidence_names
++    return tuple(
++        Evidence(name, frozenset(), ClaimBasis.ABSENT)
++        for name in sorted(names)
++    )
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+diff --git a/tests/test_seam.py b/tests/test_seam.py
+index cc155de..230fda8 100644
+--- a/tests/test_seam.py
++++ b/tests/test_seam.py
+@@ -367,7 +367,7 @@ def test_run_records_categories_and_can_rederive_them_from_its_artifact() -> Non
+ 
+ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+     class BrokenEvidence:
+-        evidence_names = frozenset({"files", "manifest_entries", "dependencies", "source"})
++        evidence_names = frozenset({"filesystem", "package-index"})
+ 
+         def read_evidence(self, candidate, files, metadata):
+             raise RuntimeError("category reader deliberately unavailable")
+@@ -380,4 +380,11 @@ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+ 
+     assert artifact.scores[0].recommendation.status.value == "review"
+     assert artifact.repositories[0].categories[0].basis is ClaimBasis.ABSENT
++    assert {
++        (item.evidence, item.values, item.basis)
++        for item in artifact.repositories[0].category_evidence
++    } == {
++        ("filesystem", frozenset(), ClaimBasis.ABSENT),
++        ("package-index", frozenset(), ClaimBasis.ABSENT),
++    }
+     assert any(failure.port == "category" for failure in artifact.failures)

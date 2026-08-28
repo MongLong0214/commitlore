@@ -1,0 +1,109 @@
+{
+  "agent_substituted": false,
+  "arm": "SUPPRESSED",
+  "base_tree": "222378defcb5d2d519184b6f23146abac631faba",
+  "candidate_id": "v4-377f04276465b59d",
+  "changed_files": [
+    ".github/workflows/ci.yml"
+  ],
+  "completion": {
+    "completed": true,
+    "exit_code": 0,
+    "pre_start_failure": false,
+    "reached_a_model": true,
+    "retry_eligible_under_section_20": false,
+    "seconds": 41,
+    "timed_out": false,
+    "why": null
+  },
+  "delivered_sha256": "fbdb62b8fc141c786f61cbacf34bd920cebbc01a23897015f36d1be86242d95e",
+  "delivery_manipulation": {
+    "arm": "SUPPRESSED",
+    "identity_kind": "record-id",
+    "records_after": 8,
+    "records_before": 9,
+    "removal_is_exact": true,
+    "removed": 1,
+    "removed_ids": [
+      "r-gsb108"
+    ],
+    "survivors": [
+      "r-relcigate",
+      "r-chlog030",
+      "r-rel020devsync",
+      "r-rel020main",
+      "r-rel020ver",
+      "r-c24wire",
+      "r-gsc209",
+      "r-gs0004"
+    ]
+  },
+  "episode_index": 291,
+  "final_diff_bytes": 603,
+  "final_diff_sha256": "4210fd9de20ecba8d061c386056bf916e3659169294dfea127cd35bc8fdd55ce",
+  "first_mutation": {
+    "event_index": 13,
+    "kind": "update",
+    "path": ".github/workflows/ci.yml"
+  },
+  "functional_pass": true,
+  "judge_packet": {
+    "arm_cue_hit_count": 0,
+    "arm_cue_hits": [],
+    "arm_cue_present": false,
+    "arm_cue_scope": "the diff and the files the agent changed; the base tree is identical across arms and cannot carry the assignment",
+    "base_tree_marker_count": 71,
+    "base_tree_markers_are_not_cues": "Both repositories use CommitLore, so their tracked files carry Ruled-out: and Record-Id text of their own. It is the same text in both arms.",
+    "excluded_from_packet": [],
+    "excludes_git": true,
+    "files_in_packet": 108,
+    "packet_id": "194a633e56a4301e628c8693",
+    "packet_sha256": "41397dabe1653166af61ef309dd139f65dadfbca4af13048544f5a5472e026e8"
+  },
+  "manual_discovery": null,
+  "not_yet_judged": true,
+  "packet_id": "194a633e56a4301e628c8693",
+  "pair_position": 145,
+  "regression_acceptance": {
+    "baseline_expected_failures": 0,
+    "baseline_failures_that_passed": [],
+    "command": "python3 -m pytest -q",
+    "exit_code": 0,
+    "new_failures": [],
+    "observed_failures": 0,
+    "pass": true,
+    "scored_as": "no failure outside the frozen baseline",
+    "tail": [
+      "318 passed, 3 skipped in 2.52s"
+    ]
+  },
+  "repetition": 5,
+  "repository_id": "gitseed",
+  "retry_lineage": null,
+  "runtime": {
+    "model_matches_pin": true,
+    "model_requested": "gpt-5.6-terra",
+    "model_resolved": "gpt-5.6-terra",
+    "model_resolved_from": ".codex/sessions/2026/08/29/rollout-2026-08-29T02-21-13-01a04963-cf2f-7c42-a77f-dd1056cdf665.jsonl",
+    "product_matches_pin": true,
+    "product_sha256": "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528"
+  },
+  "schema_version": 1,
+  "slot_in_pair": 1,
+  "study_id": "cdeb-fresh-v8",
+  "task_acceptance": {
+    "command": "python3 -m pytest tests/test_ci_action_pinning.py -q",
+    "exit_code": 0,
+    "hidden_during_the_run": true,
+    "pass": true,
+    "recorded_how_to_run": "python3 -m pytest tests/test_ci_action_pinning.py -q",
+    "source_sha256": "1e79ef1abe48dbf7277ebdead64fe51ae19a02f7599d25916f279ceb348b201a",
+    "tail": [
+      "1 passed in 0.01s"
+    ],
+    "was_present_in_the_snapshot": false
+  },
+  "usage": {
+    "seconds": 41
+  }
+}

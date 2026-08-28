@@ -1,0 +1,1 @@
+Make the exported `MetricDefinition` contract include every required metric-registry field. Typed consumers must be able to read `observation_key` from a `MetricDefinition` as a required string-valued field; an omitted, optional, unknown, or untyped value must not satisfy that public contract. Add a compile-checked public consumer proving this contract.

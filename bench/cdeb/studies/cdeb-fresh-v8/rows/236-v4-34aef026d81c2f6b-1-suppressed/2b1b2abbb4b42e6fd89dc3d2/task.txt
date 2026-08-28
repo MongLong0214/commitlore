@@ -1,0 +1,13 @@
+Repair the static planning graph so PRD epic prerequisites use the same canonical epic identity as ticket dependencies. In particular, a PRD dependency written as `E0-A` must provide the declared cross-epic basis for ticket IDs in epic `E0A`; the equivalent rule applies to the other hyphenated E0 epics. Dependencies between epics that have no declared PRD basis must remain rejected.
+
+Add regression coverage for the valid hyphenated PRD form and preserve rejection of an unsupported cross-epic dependency.
+
+Correct the entry-ticket dependencies to exactly:
+
+- `E0B-001`: `E0A-002`
+- `E0C-001`: `E0A-003,E0B-003`
+- `E0D-001`: `E0A-003,E0C-003`
+
+Keep each affected ticket contract and its public catalog representation consistent, including any rendered issue metadata that displays dependencies. Regenerate the board so those three rows display the corrected dependencies and the generated-view check reports no drift. The E0-B route also preserves its declared D0 prerequisite transitively through its E0-A dependency.
+
+Update active planning prose so it no longer describes the repaired board or validation as currently defective. Do not change the PRD-declared dependency authority or treat the board as an operational readiness input.

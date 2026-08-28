@@ -1,0 +1,1 @@
+Ensure every GitHub Actions job that runs the Python test suite resolves both `actions/checkout` and `actions/setup-python` to immutable, full commit SHA references. Each reference must include an inline comment identifying the corresponding released action version. Preserve the test job’s existing test execution behavior.

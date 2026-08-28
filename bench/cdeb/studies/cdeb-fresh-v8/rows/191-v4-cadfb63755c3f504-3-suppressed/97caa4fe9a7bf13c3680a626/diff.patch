@@ -1,0 +1,27 @@
+diff --git a/gitseed/pipeline/run.py b/gitseed/pipeline/run.py
+index e6af978..55760e6 100644
+--- a/gitseed/pipeline/run.py
++++ b/gitseed/pipeline/run.py
+@@ -165,6 +165,10 @@ def run(
+             incomplete_because.append(why)
+ 
+     if not collected.complete:
++        # Search collection has no structured rate-limit flag; its stop reason
++        # is the collection contract. Keep the exact reason below while making
++        # the run-level remedy available to callers.
++        rate_limited = rate_limited or (collected.stopped_because or "").startswith("rate limit")
+         mark_incomplete(
+             f"collection stopped early: {collected.stopped_because or 'reason not recorded'}"
+         )
+diff --git a/tests/test_pipeline.py b/tests/test_pipeline.py
+index 28e26a0..f508e55 100644
+--- a/tests/test_pipeline.py
++++ b/tests/test_pipeline.py
+@@ -215,6 +215,7 @@ def test_a_truncated_collection_makes_the_whole_run_incomplete() -> None:
+     )
+     assert result.complete is False
+     assert "rate limit" in " ".join(result.incomplete_because)
++    assert result.rate_limited is True
+ 
+ 
+ def test_a_complete_run_that_found_nothing_is_still_complete() -> None:

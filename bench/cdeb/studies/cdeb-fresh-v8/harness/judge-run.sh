@@ -35,8 +35,13 @@ mkdir -p "$RESULTS/$PID"
 OUT=$RESULTS/$PID/out.$JUDGE.json
 [ -f "$OUT" ] && { echo "$PID/$JUDGE done"; exit 0; }
 
-PROMPT=$(cat "$SP/v8run/judge-prompt.txt")
-SCHEMA=$SP/v8run/judge-schema.json
+# The committed prompt and schema, not a scratch copy. panel-freeze.json pins these
+# two by digest, so reading them from anywhere else would mean the panel was frozen
+# against one thing and run against another -- and the scratch copy was in fact
+# missing when the measured judging started.
+HARNESS=$(cd "$(dirname "$0")" && pwd)
+PROMPT=$(cat "$HARNESS/judge-prompt.txt")
+SCHEMA=$HARNESS/judge-schema.json
 
 # A scratch copy carrying only what a packet is allowed to contain. Copying
 # rather than reading in place means a stray write by a judge cannot alter what
@@ -54,15 +59,37 @@ rm -rf "$RESULTS/$PID/work.$JUDGE"; mkdir -p "$WORK"
   mkdir -p "$WORK/$(dirname "$f")"
   cp "$PACKET/$f" "$WORK/$f"
 done
-LEAKED=$(cd "$PACKET" && find . -type f \( -name 'out.*' -o -name 'events.*' -o -name 'raw.*' \) | wc -l | tr -d ' ')
+# Only the packet's own top level. A judgement artifact is written beside
+# decision.txt, never inside the tree -- and the tree is a repository, which is
+# entitled to hold a file called `specs/events.v0.json`. Searching it found exactly
+# that and refused a sound packet.
+LEAKED=$(cd "$PACKET" && find . -maxdepth 1 -type f \( -name 'out.*' -o -name 'events.*' -o -name 'raw.*' \) | wc -l | tr -d ' ')
 if [ "$LEAKED" != "0" ]; then
   echo "$PID/$JUDGE REFUSED: packet contains $LEAKED judgement artifact(s)" >&2
   exit 2
 fi
 
+# Section 21.2 wants a fresh session per packet, and the two families reach it by
+# different routes.
+#
+# codex keeps session state under $HOME/.codex and its credential in a file, so a
+# fresh HOME both isolates the session and can carry the credential.
+#
+# claude does not: `claude -p` opens a new session on every invocation -- three
+# consecutive probes returned three distinct session ids -- and its credential lives
+# in the user keychain, which a fresh HOME cuts it off from. Overriding HOME there
+# bought nothing and returned "Not logged in" for every judgement.
+#
+# So the fresh HOME is applied where it is the isolation mechanism and skipped where
+# it is not. The packet-level isolation -- a scratch copy holding only the packet's
+# own files -- is the same for both.
 HOME_DIR=$RESULTS/$PID/home.$JUDGE
-rm -rf "$HOME_DIR"; mkdir -p "$HOME_DIR/.codex"
-cp ~/.codex/auth.json "$HOME_DIR/.codex/auth.json" 2>/dev/null
+if [ "$FAMILY" = "codex" ]; then
+  rm -rf "$HOME_DIR"; mkdir -p "$HOME_DIR/.codex"
+  cp ~/.codex/auth.json "$HOME_DIR/.codex/auth.json" 2>/dev/null
+else
+  HOME_DIR=$HOME
+fi
 
 cd "$WORK" || exit 1
 case "$FAMILY" in
@@ -134,7 +161,8 @@ else:
   *) echo "unknown family $FAMILY"; exit 1 ;;
 esac
 
-rm -rf "$RESULTS/$PID/work.$JUDGE" "$HOME_DIR"
+rm -rf "$RESULTS/$PID/work.$JUDGE"
+[ "$FAMILY" = "codex" ] && rm -rf "$RESULTS/$PID/home.$JUDGE"
 
 python3 -c "
 import json

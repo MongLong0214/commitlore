@@ -1,0 +1,191 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..5988022 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ from dataclasses import dataclass
+ from datetime import datetime
+ 
+-from .category import absent_evidence, classify_all, selected_packs
++from .category import absent_evidence, classify_all, selected_packs, validate_pack
+ from .artifact import (
+     ENGINE_VERSIONS,
+     ArtifactCollection,
+@@ -42,6 +42,8 @@ def execute(
+     source_mode: SourceMode = "digest",
+ ) -> RunArtifact:
+     packs = selected_packs(request.categories)
++    for pack in packs:
++        validate_pack(pack, ports.evidence)
+     failures: list[PortFailure] = []
+     trace_failures: dict[str, list[PortFailure]] = {}
+     metadata: dict[str, RepositoryMetadata | None] = {}
+@@ -153,7 +155,7 @@ def execute(
+     for candidate in collected.candidates:
+         try:
+             evidence = (
+-                absent_evidence()
++                absent_evidence(ports.evidence)
+                 if candidate.repo not in files
+                 else ports.evidence.read_evidence(candidate, files[candidate.repo], metadata[candidate.repo])
+             )
+@@ -161,7 +163,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = absent_evidence(ports.evidence)
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..2a75538 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -2,7 +2,7 @@ from __future__ import annotations
+ 
+ import re
+ from dataclasses import dataclass
+-from typing import TYPE_CHECKING, Final
++from typing import TYPE_CHECKING, Final, Protocol
+ 
+ from .evidence import ClaimBasis
+ 
+@@ -25,6 +25,10 @@ class Evidence:
+     basis: ClaimBasis
+ 
+ 
++class EvidenceVocabulary(Protocol):
++    evidence_names: frozenset[str]
++
++
+ class FileEvidenceReader:
+     """Extract the small, deterministic evidence vocabulary category packs use."""
+ 
+@@ -89,12 +93,15 @@ class FileEvidenceReader:
+ DEFAULT_EVIDENCE_READER: Final = FileEvidenceReader()
+ 
+ 
+-def satisfiable_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
++def satisfiable_evidence(reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
+     return reader.evidence_names
+ 
+ 
+-def absent_evidence() -> tuple[Evidence, ...]:
+-    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
++def absent_evidence(reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> tuple[Evidence, ...]:
++    return tuple(
++        Evidence(name, frozenset(), ClaimBasis.ABSENT)
++        for name in sorted(satisfiable_evidence(reader))
++    )
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+@@ -161,7 +168,7 @@ class CategoryMatch:
+ Categorization = CategoryMatch
+ 
+ 
+-def validate_pack(pack: CategoryPack, reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> None:
++def validate_pack(pack: CategoryPack, reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> None:
+     missing = tuple(
+         requirement.evidence
+         for requirement in pack.evidence
+diff --git a/tests/test_seam.py b/tests/test_seam.py
+index cc155de..79673cf 100644
+--- a/tests/test_seam.py
++++ b/tests/test_seam.py
+@@ -367,7 +367,7 @@ def test_run_records_categories_and_can_rederive_them_from_its_artifact() -> Non
+ 
+ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+     class BrokenEvidence:
+-        evidence_names = frozenset({"files", "manifest_entries", "dependencies", "source"})
++        evidence_names = frozenset({"files", "manifest_entries", "dependencies", "source", "repository_topics"})
+ 
+         def read_evidence(self, candidate, files, metadata):
+             raise RuntimeError("category reader deliberately unavailable")
+@@ -379,5 +379,84 @@ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+     )
+ 
+     assert artifact.scores[0].recommendation.status.value == "review"
+-    assert artifact.repositories[0].categories[0].basis is ClaimBasis.ABSENT
++    trace = artifact.repositories[0]
++    assert trace.categories[0].basis is ClaimBasis.ABSENT
++    assert {(item.evidence, item.values, item.basis) for item in trace.category_evidence} == {
++        ("files", frozenset(), ClaimBasis.ABSENT),
++        ("manifest_entries", frozenset(), ClaimBasis.ABSENT),
++        ("dependencies", frozenset(), ClaimBasis.ABSENT),
++        ("source", frozenset(), ClaimBasis.ABSENT),
++        ("repository_topics", frozenset(), ClaimBasis.ABSENT),
++    }
+     assert any(failure.port == "category" for failure in artifact.failures)
++
++
++def test_unreadable_repository_files_use_the_configured_evidence_vocabulary() -> None:
++    class CustomEvidence:
++        evidence_names = frozenset({"files", "source", "repository_topics"})
++
++        def read_evidence(self, candidate, files, metadata):
++            raise AssertionError("evidence reader must not run without files")
++
++    artifact = execute(
++        RunRequest("small tools", 1, ("coding-agents",)),
++        RunPorts(Repository(), Files(OSError("offline")), Model(), Clock(), CustomEvidence()),
++        model_smoke=SmokeResult(True, "fixture"),
++    )
++
++    trace = artifact.repositories[0]
++    assert trace.categories[0].basis is ClaimBasis.ABSENT
++    assert trace.categories[0].missing_evidence == ("files", "source")
++    assert {item.evidence for item in trace.category_evidence} == {
++        "files",
++        "source",
++        "repository_topics",
++    }
++    assert all(item.values == frozenset() and item.basis is ClaimBasis.ABSENT for item in trace.category_evidence)
++
++
++def test_unsupported_category_pack_fails_before_operational_ports_are_invoked() -> None:
++    calls: list[str] = []
++
++    class RecordingRepository:
++        def search(self, query, limit):
++            calls.append("repository.search")
++            return CollectResult()
++
++        def metadata(self, candidate, at):
++            calls.append("repository.metadata")
++            return RepositoryMetadata(ScoreInputs(True, True, True))
++
++    class RecordingFiles:
++        def read(self, candidate):
++            calls.append("files.read")
++            return FetchedFiles(())
++
++    class RecordingModel:
++        def evaluate(self, digest):
++            calls.append("model.evaluate")
++            return GradeResult(8, 7, "", "", 0.0, "")
++
++        def flags_malicious(self, digest):
++            calls.append("model.flags_malicious")
++            return False
++
++    class RecordingClock:
++        def now(self):
++            calls.append("clock.now")
++            return AT
++
++    class IncompleteEvidence:
++        evidence_names = frozenset({"files"})
++
++        def read_evidence(self, candidate, files, metadata):
++            calls.append("evidence.read_evidence")
++            return ()
++
++    with pytest.raises(ValueError, match="category pack 'coding-agents' names unavailable evidence: source"):
++        execute(
++            RunRequest("small tools", 1, ("coding-agents",)),
++            RunPorts(RecordingRepository(), RecordingFiles(), RecordingModel(), RecordingClock(), IncompleteEvidence()),
++        )
++
++    assert calls == []

@@ -1,0 +1,268 @@
+Recorded decisions for the files you are about to change:
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+    Limit: Exact ownership names only the two simulation symbols; Verification at zero failure required the planning-census pin update and nothing else
+    Ruled-out: leave census pins at 37 | npm test then fails four planning cases and the ticket Verification forbids standing failures
+    Ruled-out: add a test script to packages/scorer/package.json to make the ticket's verbatim focused command run | the manifest is outside Exact ownership
+    Ruled-out: take median_minutes as the empirical p50 of the seeded rows | it kills valid-pack, double-count and no-prescription on 0.87 standard errors of sampling noise against an exact analytic median of 40
+
+  record None (active)
+
+  record None (active)
+    Limit: Exact ownership names only the selector and its fixtures; Verification at zero failure plus the packet census guard required the pin and README updates
+    Ruled-out: leave census pins at 33 | npm test fails and the ticket Verification forbids standing failures
+    Ruled-out: add a test script to packages/scorer/package.json to make the ticket's verbatim focused command run | the manifest is outside Exact ownership
+
+  record None (active)
+    Warn: on rebase, treat README.md and tests/planning/workspace-skeleton.test.mjs as merges, never as a side to pick; only the census literals in tests/planning-contract.test.mjs survive --ours because they are re-measured
+
+  record None (active)
+
+  record None (active)
+    Warn: resolve tests/planning/workspace-skeleton.test.mjs by re-measuring every lane and confirming each packet's entry survived, never by taking one side
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+    Warn: every remaining E-series ticket that materializes a package the README calls absent must move this line and this pin in the same packet
+
+  record None (active)
+
+  record None (active)
+    Warn: check for conflict markers before committing a resolved rebase; git add -A once committed a file with markers still in it and the whole test file stopped parsing
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+    Limit: Exact ownership names only the spec and the validator; Verification plus the packet census guard required the pin updates
+    Ruled-out: leave census pins at 14 | npm test fails and the ticket Verification forbids standing failures
+
+  record None (active)
+    Warn: parallel implementation lanes will keep colliding on these two literals; resolve by re-measuring, never by picking a side
+
+  record None (active)
+
+  record None (active)
+    Warn: these literals are pinned exactly, so any packet that adds an owned or allowlisted file must re-measure rather than predict
+
+  record None (active)
+
+  record None (active)
+    Limit: collectArtifactManifestV3Facts and validateArtifactManifestV3ForResolution are defined but never consulted by the live resolver; wiring them into collectLiveExecutionFacts or ready-set derivation is out of this packet
+
+  record None (active)
+    Limit: applyEffectiveGateStateToGateFacts is defined and tested but never consulted by the live resolver; wiring it into findAcceptedGate or evaluateTicketGates empties readySet until D0-009 activation
+    Warn: the ticket's Minimum GREEN asks to exclude LEGACY_UNAUTHENTICATED from ready-set calculations, which contradicts keeping a non-empty live ready set; Exact ownership does not make the function live, and that boundary was followed
+
+  record None (active)
+
+  record None (active)
+    Limit: a glob is a declaration only when it heads its ownership item; a later quotation in the same item stays a reference, which is what keeps D0-011's own mention of D0-004 from admitting anything
+
+  record None (active)
+    Limit: this case observes the census test by name, so renaming root-private-scripts-and-runnable-surface fails here rather than silently decoupling
+    Warn: do not move the probe into the live fixtures/doctor tree; sibling tests copy this repository and would capture it
+
+  record r-d0013executionviews (active)
+    Warn: the census pins intentionally require any future ownership change to update both accepted and pending expectations
+
+  record r-nestedtapreporter (active)
+    Warn: this pins a Node CLI flag, so a future runtime that renames or drops `--test-reporter=tap` breaks this case rather than degrading it
+
+  record None (active)
+
+  record None (active)
+
+  record None (active)
+
+  record r-redfileperiod (active)
+    Ruled-out: remove the trailing period from the six tickets instead | the pattern would stay unable to read ordinary prose and the next ticket written with a period would fail the same way
+
+  record r-d0004ccatalog (active)
+    Ruled-out: treat an empty or unreadable catalog as a catalog with no records | write mode would then read it as instruction to empty every surface derived from it
+    Warn: board block validation now depends on the catalog's identifier set, so a board rendered against a different catalog is refused rather than repaired
+
+  record r-d0004cshape (active)
+    Limit: the writability probe is redundant with writing every temporary file before any rename, so removing it changes no observable behaviour; the ordering is what prevents a partial write
+    Warn: the block shape check assumes generated content stays table rows and one fixed paragraph; a future surface with another shape must extend it or it will refuse its own output
+
+  record r-d0004c (active)
+    Ruled-out: repair a missing ticket contract or a duplicate declaration as ordinary drift | the catalog would then outrank the contract it is derived from, and an ambiguous contract would be approved as agreeing
+    Warn: cross-file atomicity is not achievable here, so a failed rename is recovered by rollback; a rollback that also fails leaves one surface modified and reports it
+    Limit: marker text is fixed, so changing it requires updating both surfaces and the renderer in one change
+
+  record r-e0b003c (active)
+    Limit: the equivalence of the two surviving controls is argued from local facts -- a declared binding cannot be undefined-by-absence, and an array length is a non-negative integer -- not from a sibling contract constraining the input
+    Ruled-out: add a second case beside the ineffective inventory guard | the original proved a property of the frozen matrix rather than of the function, so leaving it in place would keep a test that looks like coverage and is not
+    Warn: a guard that asserts a property of the current fixtures is not a guard on the code; exercise the function with the input the mutant would change
+    Warn: codex sandboxes cannot write .git/worktrees, so maintainer-gate-digest-invalidation fails there; that is an environment limit and its result must be re-measured outside the sandbox before it is quoted as evidence
+
+  record r-e0b003 (active)
+    Limit: assessment_mode is membership-checked but is not evidence; nothing here distinguishes a wrapped session from one labelled that way, and a passing case promotes an imported report to COMPLETE to show it
+    Limit: the three capability-digest version fields are checked for shape only, so a well-formed lie is accepted, which a passing case also demonstrates
+    Limit: exit code values, verdict severity order and the projection format are this contract's readings; SSOT names none of them, and each is frozen and derived rather than asserted in prose
+    Ruled-out: embed the canonical reports in specs/doctor-output.v0.json | the ticket grants fixtures/doctor/*.json, and sibling precedent does not override a path the ticket names
+    Ruled-out: add a second hardcoded fixture directory beside fixtures/operational-state | the next ticket needs a third, and a derived rule costs the same once
+    Ruled-out: keep the unreachable secondary sort key in reasonsOf | only two cells can reach UNAVAILABLE in v0 and they carry different reason codes, so the tiebreaker could not be reached and four mutants of it survived
+    Warn: a mutant that survives because a sibling contract constrains the input is not equivalent; the source-class inventory case fails the moment a runtime stops using all three classes, so the assumption is guarded rather than trusted
+    Warn: fixture directories are admitted by ticket declaration, so moving or renaming one without amending its ticket fails the skeleton census
+
+  record r-e0b003b (active)
+    Limit: nine statement fields are declared prose the derivation never reads, labelled in the same words session-class.ts uses, with a test asserting the two labels stay identical
+    Limit: a derivation proof is pinned only where a runtime cell anchors it, so a group whose every cell is unproven is refused rather than checked
+    Ruled-out: keep the required-observed filter with a canary | it is dead by construction rather than constrained by a sibling, so deleting it is honest where the source-class survivor's canary is not
+    Ruled-out: let a refused report keep its derived exit code | exit codes are this ticket's minimum GREEN, and a caller cannot tell refusal from success if refusal exits zero
+    Warn: adding an error code without a named case now fails, because the inventory is re-derived from the module source
+    Warn: the ownership amendment here adds a governance rule to workspace-skeleton.test.mjs, not only census constants; it is not the same grant E0B-002 took
+
+  record r-completioneffect (active)
+    Limit: ADR-0003 and D0-002 still say Node 20 because both are digest-bound to the only ACCEPTED gate batch, and editing a byte invalidates it, removing the repository's only planning acceptance and the sole executable proof that the gate detects artifact drift
+    Limit: SSOT 9.4, three PRDs and the copilot stack note carry the same stale Node 20 claim and need the same governance act, so the prose sweep is one coherent change rather than six
+    Limit: a later ticket that legitimately moves or renames a file an earlier completion introduced will trip COMPLETION_EFFECT_REVERTED; that fails closed and is the intended direction, but it is a real cost
+    Ruled-out: detect revert pull requests by their commit message | a revert is only the commonest way an effect disappears, and matching prose would miss a plain deletion while claiming to cover it
+    Ruled-out: derive the effect set from the ticket's declared ownership | that prose contains paths asserted to be absent, so the check would demand the existence of files the contract forbids
+    Warn: added_paths must be collected for legacy HISTORICAL_IMPLEMENTATION_LINKAGE receipts as well; the first cut of this fix missed that collector and reported a false COMPLETION_EFFECT_UNKNOWN for D0-001 and D0-002
+    Warn: any fixture modelling the merged-receipt search must now also answer commits/<sha> and git/trees/<tip>?recursive=1
+
+  record r-e0b002 (active)
+    Limit: CONTROLLED_VERIFIED means the record claims a controlled session completely and consistently; no issuer may read it as evidence that the run was observed
+    Limit: redaction states and the 2048-character payload bound are this contract's reading of SSOT 9.5 and 9.6, not quotations, and are labelled as readings in both the module and the document
+    Limit: a mid-trace gap between two legitimate events is not detectable from trace content, so completeness here is group coverage and bracket containment, never continuity
+    Ruled-out: verify a wrapper attestation signature | the SSOT requires none, the signing key had no custody or rotation story, and freezing signatures over fixture content would have made every canonical session permanently unamendable
+    Ruled-out: treat actor "wrapper" as evidence | it is a string the record's author chose, so it shows only what the record says, and calling it attestation overstated what the contract can derive
+    Ruled-out: keep EVENT_ORDER_BROKEN as a shape-stage invariant | array order has no SSOT basis, and it masked a genuinely inverted bracket by failing all four gates instead of the one that was actually wrong
+    Warn: the honesty paragraph in the module docblock is asserted by a test; deleting it fails the suite on purpose
+    Warn: a self-reported mutation sweep is a claim; this module's first sweep reported zero survivors because the driver scored kills against a hard-coded case list, and an independent re-run found thirty-three
+
+  record r-e0a003c (active)
+    Warn: a focused lane's pass total counts non-matching test files, so adding any test file to the workspace moves every lane count, not just the new one
+
+  record r-e0b001b (active)
+    Limit: the forbidden-source scan is a literal substring match against three SSOT phrases, so it stops an author who copies the SSOT's wording and nothing else; six paraphrases naming private session databases and internal trace files all pass
+    Limit: evidence_locator, derivation_proof and each status definition are validated as non-blank prose only, so AC-E0B-001-3 and AC-E0B-001-4 prove the field is present, not that it names a real source
+    Limit: the derived unconditional required set matches the issuance contract's by construction, not by a cross-file assertion; drift needs two coordinated edits and each side is independently pinned
+    Ruled-out: keep the wildcard census and rely on the focused-lane guard | the guard catches deletion only, and the review demonstrated growth passing 230/230 with an unreviewed product file present
+    Ruled-out: keep the lane counts as a floor | two cases of slack let whole test cases and five allowlists be removed without a failure
+    Ruled-out: derive PRIMARY versus SECONDARY from the capture prose by keyword | the phrasing is not systematic enough to classify reliably, and a wrong derivation would be worse than a frozen table because it would look derived
+    Warn: adding a product file now requires updating the literal census string and the focused-lane count; that is deliberate, so unreviewed product code cannot land silently
+    Warn: source class is frozen per cell, so a genuine capture-surface change needs the frozen table updated alongside the matrix
+
+  record r-e0b001 (active)
+    Limit: the SSOT names Codex's primary and forbidden source classes but no secondary class, so the Codex secondary inventory is declared by symmetry with Claude Code rather than quoted
+    Limit: PRIMARY versus SECONDARY for 24 of the 28 cells is a faithful reading of the capture prose, not a mechanical derivation; only the DERIVED to RUNNER_DERIVED biconditional is derivable from the contract column
+    Limit: evidence_locator is not determinable from the matrix, so it is validated as non-empty plus a substring scan against each runtime's frozen forbidden-source list
+    Ruled-out: pin the census ticket-owned path list literally | every remaining product ticket then needs a census edit, and the deletion it was meant to catch is already caught by the focused-lane count guard
+    Ruled-out: treat human active time as unconditionally REQUIRED | it would enter the issuance contract's required event set and block issuance for runs that never exercised M18 or M20
+    Ruled-out: default a derived cell with no proof to its declared status | SSOT 9.2 requires it to fall to UNAVAILABLE, and defaulting would let a runtime claim a capability it never demonstrated
+    Warn: the effect classes and scope vocabulary are a derived classification, not SSOT text; the prose they are derived from is pinned and remains the authority
+    Warn: a derived cell whose derivation proof is blank falls to UNAVAILABLE and must then appear in that runtime's known-missing events; the two must stay consistent
+
+  record r-e0a002b (active)
+    Limit: SSOT 6.1 gate 8 requires the complete REQUIRED adapter event set; the SSOT event table marks human active time as REQUIRED only for M18/M20, so the unconditional core set is the seven other REQUIRED rows
+    Limit: the SSOT states the ten gates as Korean prose with no machine-readable form, so each requirement carries its verbatim source clause and the validator pins that clause and the predicate exactly
+    Ruled-out: trust the declared expected verdict and check only its shape | a frozen document could then declare a coverage-only candidate issuable and the contract would agree, which is the failure this ticket exists to prevent
+    Ruled-out: derive factor opportunities from scored observations only | gate 4 and gate 5 would collapse into each other, since a factor with no scored metric would also have no opportunities, and neither could be tested in isolation
+    Ruled-out: keep the census assertion as a wildcard | a review reproduced the loss: deleting both owned product files still passed, so the assertion constrained nothing
+    Warn: an opportunity exists whether or not it produced a score, which is what keeps the F1-F4 coverage gate and the F1-F5 opportunity gate separable
+    Warn: failed_gates is always reported in canonical 6.1 order and compared by deep equality
+    Warn: evidence coverage is an exact rational bounded to [0,1] with a positive denominator; do not reintroduce a float threshold, since 0.7 is not exactly representable
+
+  record r-e0a002 (active)
+    Limit: SSOT 6.1 gate 8 requires the complete REQUIRED adapter event set; the SSOT event table marks human active time as REQUIRED only for M18/M20, so the unconditional core set is the seven other REQUIRED rows
+    Limit: the SSOT states the ten gates in Korean prose with no machine-readable form, so each requirement record carries its verbatim source clause to keep the translation auditable
+    Ruled-out: trust the declared expected verdict and only check its shape | a frozen document could then declare a coverage-only candidate issuable and the contract would agree with it, which is the exact failure this ticket exists to prevent
+    Ruled-out: count INVALID observations toward pack eligibility | eligibility would rise on observations that produced no usable value, which inflates the denominator in the direction that favours issuance
+    Ruled-out: keep pinning the census ticket-owned path list literally | every one of the remaining product tickets would need a census amendment, reintroducing the per-ticket bottleneck E0A-001 removed
+    Warn: failed_gates is always reported in canonical 6.1 order; callers compare it by deep equality, so an unordered push would silently break every negative case
+    Warn: evidence coverage is compared as an exact rational against 7/10; do not reintroduce a float threshold, since 0.7 is not exactly representable
+
+  record r-e0a001d (active)
+    Limit: several tests copy the whole repository, so the suite stays sensitive to anything that mutates the tree while it runs; no test may write into the live root
+    Ruled-out: filter the transient filename out of every cpSync call | treats the symptom at three call sites and leaves the next live-tree write to reintroduce it
+    Warn: keep probes that need a mutated repository in a temp copy; the validator takes its root from cwd, so a fixture copy is always available
+
+  record r-e0a001c (active)
+    Limit: Node 20 is still in support upstream, but it cannot execute this repository's product code at all, so keeping it in the matrix buys a green check that proves nothing
+    Ruled-out: compile TypeScript to JavaScript before testing so Node 20 can run it | adds a build step, a devDependency and an emitted-artifact surface to a workspace whose manifest is pinned to name, version and private
+    Ruled-out: keep Node 20 and accept the .ts files being skipped there | that is exactly the vacuous-evidence failure the focused-lane guard exists to prevent
+    Warn: any test that copies the repository must filter transient fixtures, or it will intermittently capture another test's in-flight file
+    Warn: raising the engine floor is a consumer-visible change; a Node 20 install now fails engine checks rather than silently under-testing
+
+  record r-e0a001b (active)
+    Limit: a focused lane whose pattern matches no test name still exits 0, so a mistyped pattern could be quoted as a passing receipt; the repository suite now pins the real case count to make that visible
+    Limit: the census checks that a ticket claims a path, not that the ticket passed its gates, because every ticket in the tree is currently BLOCKED and a status gate would admit nothing at all
+    Ruled-out: pin every prose field by literal digest | freezing the full text duplicates the contract into the validator and makes any editorial fix a false failure, so only fields the contract derives or fixes numerically are pinned
+    Ruled-out: keep the invented {key,total} grader shape and amend the contract rows | the contract is the authority the ticket freezes, so the encoding is what was wrong
+    Ruled-out: assert the clamp with a normal fixture | no valid vector leaves the unit interval, so the clamp is only reachable through a raw value that is itself refused
+    Warn: grader output shape is now exact; adding a field to a metric's grader_output list without adding it to all four vectors fails every case for that metric
+    Warn: the em dash in an ownership bullet is no longer load-bearing, but the separator must still be a dash surrounded by spaces
+    Warn: a nested test runner inherits NODE_TEST_CONTEXT and emits no summary counts; strip it before spawning one
+
+  record r-e0a001 (active)
+    Limit: this is the repository's first product code, and the census previously rejected every non-control-plane source file, so E0A-001 could not land without amending the gate
+    Limit: node 24 strips TypeScript types natively, so the package needs no build step and no devDependency, which keeps the forbidden manifest fields empty
+    Ruled-out: add the two paths to controlPlaneAllowlist | mislabels product code as control plane and drives control_plane_code_files up as a disguise for a growing product surface
+    Ruled-out: validate caller-supplied M10 and M20 derived values against the frozen table | a well-formed but self-serving denominator still passes, so the caller still picks its own score
+    Ruled-out: hand-maintained product-code allowlist per ticket | each of the 60 remaining tickets would need a coordinated census amendment, and the list drifts from the tickets it mirrors
+    Warn: the census admits any path an accepted ticket names, including tickets that are not yet in the ready set; readiness stays the resolver's gate, not the census
+    Warn: precision is vacuously 1 only when the predicted and required positive sets are both empty; a missed required positive leaves precision 0, not 1, or the fail vectors score 1
+    Warn: a zero-range M20 coordinate is diagnosed as ZERO_RANGE_COORDINATE_MISMATCH before the bounds check, which it also always violates
+
+  record None (active)
+    Limit: projections must never be readable as resolution inputs, so the renderer declares its input set positively instead of excluding known outputs
+    Ruled-out: filtering the roadmap and Board out of a broad input scan | an exclusion list silently readmits any projection added later, so the input set is declared positively and closed
+    Ruled-out: adding a YAML parser to assert workflow shape | a runtime dependency is forbidden scope for this ticket, so the workflow assertions read the declared shape with anchored matches
+    Warn: adding a package.json script requires updating the pinned surface in tests/planning/workspace-skeleton.test.mjs and both census literals in tests/planning-contract.test.mjs, or the build fails closed on unallowlisted product code
+    Warn: this merge disables Bootstrap; from here a missing resolver, workflow, or named check fails closed rather than falling back
+
+
+TASK
+Make the metric-registry validator enforce the complete frozen registry envelope.
+
+A registry is valid only when `registry_id` is present and exactly `metrics.v0`, and `source_contract` is present and exactly `docs/contracts/metric-scoring-contract-v1.md`.
+
+Its `consumers` value must contain each of these strings exactly once, contain no other values, and contain only strings:
+
+- `factor.F1`
+- `factor.F2`
+- `factor.F3`
+- `factor.F4`
+- `factor.F5`
+- `factor.F6`
+- `outcome_index.O`
+- `process_index.P`
+- `safety_gate.M19`
+
+The validator must reject registries with either identity/provenance field removed or changed, and registries whose consumer collection has a missing, added, duplicate, or non-string member. The unchanged frozen registry must remain valid. Consumer ordering is not significant.

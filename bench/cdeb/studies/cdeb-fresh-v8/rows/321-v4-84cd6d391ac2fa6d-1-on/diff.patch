@@ -1,0 +1,74 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..2561756 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -76,13 +76,23 @@ class SQLiteRunStore:
+             except sqlite3.Error as error:
+                 raise ObservationWriteError(str(error)) from error
+ 
+-    def load(self, run_id: str) -> RunArtifact:
++    def get(self, run_id: str) -> StoredRun:
+         row = self._connection.execute(
+-            "SELECT artifact FROM run_artifacts WHERE run_id = ?", (run_id,)
++            "SELECT run_id, corrects_run_id, artifact FROM run_artifacts "
++            "WHERE run_id = ?",
++            (run_id,),
+         ).fetchone()
+         if row is None:
+             raise KeyError(run_id)
+-        return RunArtifact.from_bytes(bytes(row[0]))
++        stored_run_id, corrects_run_id, artifact = row
++        return StoredRun(
++            str(stored_run_id),
++            None if corrects_run_id is None else str(corrects_run_id),
++            RunArtifact.from_bytes(bytes(artifact)),
++        )
++
++    def load(self, run_id: str) -> RunArtifact:
++        return self.get(run_id).artifact
+ 
+     def history(self) -> tuple[StoredRun, ...]:
+         return tuple(
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..d940742 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -14,7 +14,7 @@ from gitseed.grade.types import GradeResult
+ from gitseed.pipeline.run import FetchedFiles
+ from gitseed.ports import RepositoryMetadata, RunPorts, RunRequest
+ from gitseed.scoring import ALL_FEATURES, ScoreInputs
+-from gitseed.storage import SQLiteRunStore
++from gitseed.storage import SQLiteRunStore, StoredRun
+ from gitseed.storage_schema import SCHEMA_VERSION, SchemaVersionError, migrate
+ 
+ AT = datetime(2026, 7, 27, 12, 0, tzinfo=timezone.utc)
+@@ -170,6 +170,29 @@ def test_partial_artifact_and_correction_history_are_preserved(tmp_path) -> None
+     assert loaded.to_bytes() == partial.to_bytes()
+ 
+ 
++def test_get_returns_the_requested_stored_run_and_correction_lineage(tmp_path) -> None:
++    # Given: an immutable correction points at a previous stored run.
++    original = artifact(Files(OSError("offline")))
++    correction = artifact()
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("run-1", original)
++        store.save("run-2", correction, corrects_run_id="run-1")
++
++        # When: the correction is looked up directly.
++        stored = store.get("run-2")
++
++        # Then: it retains both its own artifact and the correction relationship.
++        assert stored == StoredRun("run-2", "run-1", correction)
++
++
++def test_get_unknown_run_raises_key_error_with_the_requested_identifier(tmp_path) -> None:
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        with pytest.raises(KeyError) as error:
++            store.get("missing-run")
++
++    assert error.value.args == ("missing-run",)
++
++
+ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     # Given: the store records the same repository again with a later count.
+     later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)

@@ -1,0 +1,6 @@
+artifact storage port
+
+pathlib is the only current storage shape and replay does not need another
+
+scope: {'path_count': 1, 'paths': ['gitseed/ports.py'], 'screen': {'acceptance_runner': 'pytest', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 1, 'scope_paths_total': 1}}
+lifecycle: active

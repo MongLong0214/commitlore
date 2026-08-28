@@ -1,0 +1,3 @@
+Expose a public point-lookup operation for stored runs. Given one run identifier, it must return that run’s `StoredRun`, including the persisted `RunArtifact` and its `corrects_run_id` value. Consumers must be able to retrieve correction metadata for one known run without enumerating history.
+
+A lookup of a correction must return the correction artifact itself and the identifier of the run it corrects. A lookup of an unknown run identifier must raise `KeyError` containing that identifier. Existing artifact-only lookup behaviour may be retained.

@@ -1,0 +1,56 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..a03d6df 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -101,7 +101,8 @@ class SQLiteRunStore:
+                 int(stars),
+             )
+             for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++                "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++                "ORDER BY observed_at, observation_id"
+             )
+         )
+ 
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..b714066 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -170,22 +170,26 @@ def test_partial_artifact_and_correction_history_are_preserved(tmp_path) -> None
+     assert loaded.to_bytes() == partial.to_bytes()
+ 
+ 
+-def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+-    # Given: the store records the same repository again with a later count.
++def test_observations_are_ordered_by_time_then_recording_sequence(tmp_path) -> None:
++    # Given: newer observations are stored before backfilled and equal-time ones.
++    earlier = datetime(2026, 7, 26, 12, 0, tzinfo=timezone.utc)
+     later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
+     with SQLiteRunStore(tmp_path / "runs.db") as store:
+-        store.save("first", artifact(stars=4, at=AT))
+-        first = store.observations()[0]
++        store.save("newer", artifact(stars=9, at=later))
++        store.save("same-time-first", artifact(stars=4, at=AT))
++        store.save("backfill", artifact(stars=2, at=earlier))
++        store.save("same-time-second", artifact(stars=5, at=AT))
+ 
+-        # When: a later run observes more stars.
+-        store.save("second", artifact(stars=9, at=later))
++        # When: observations are read after runs were saved out of time order.
+         observations = store.observations()
+ 
+-    # Then: the new raw observation is appended without changing the first one.
+-    assert observations == (
+-        first,
+-        replace(first, run_id="second", observed_at=later, stars=9),
+-    )
++    # Then: observations are chronological, preserving save sequence for equal times.
++    assert [(item.run_id, item.observed_at, item.stars) for item in observations] == [
++        ("backfill", earlier, 2),
++        ("same-time-first", AT, 4),
++        ("same-time-second", AT, 5),
++        ("newer", later, 9),
++    ]
+ 
+ 
+ def test_previous_store_schema_opens_and_migrates_additively(tmp_path) -> None:

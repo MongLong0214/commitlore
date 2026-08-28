@@ -1,0 +1,58 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..f8bede2 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -161,7 +161,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = absent_evidence(ports.evidence)
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..350dbcd 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -93,8 +93,8 @@ def satisfiable_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -
+     return reader.evidence_names
+ 
+ 
+-def absent_evidence() -> tuple[Evidence, ...]:
+-    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
++def absent_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> tuple[Evidence, ...]:
++    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence(reader))
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+diff --git a/tests/test_seam.py b/tests/test_seam.py
+index cc155de..455f84f 100644
+--- a/tests/test_seam.py
++++ b/tests/test_seam.py
+@@ -8,6 +8,7 @@ import pytest
+ 
+ from gitseed.application import execute, render, replay
+ from gitseed.artifact import EngineVersionMismatch
++from gitseed.category import Evidence
+ from gitseed.collect.search import Candidate, CollectResult
+ from gitseed.evidence import ClaimBasis
+ from gitseed.grade.smoke import SmokeResult
+@@ -367,7 +368,7 @@ def test_run_records_categories_and_can_rederive_them_from_its_artifact() -> Non
+ 
+ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+     class BrokenEvidence:
+-        evidence_names = frozenset({"files", "manifest_entries", "dependencies", "source"})
++        evidence_names = frozenset({"custom-files", "custom-source"})
+ 
+         def read_evidence(self, candidate, files, metadata):
+             raise RuntimeError("category reader deliberately unavailable")
+@@ -380,4 +381,8 @@ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+ 
+     assert artifact.scores[0].recommendation.status.value == "review"
+     assert artifact.repositories[0].categories[0].basis is ClaimBasis.ABSENT
++    assert set(artifact.repositories[0].category_evidence) == {
++        Evidence("custom-files", frozenset(), ClaimBasis.ABSENT),
++        Evidence("custom-source", frozenset(), ClaimBasis.ABSENT),
++    }
+     assert any(failure.port == "category" for failure in artifact.failures)

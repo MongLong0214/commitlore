@@ -1,0 +1,43 @@
+diff --git a/gitseed/pipeline/run.py b/gitseed/pipeline/run.py
+index e6af978..125a8b5 100644
+--- a/gitseed/pipeline/run.py
++++ b/gitseed/pipeline/run.py
+@@ -165,9 +165,14 @@ def run(
+             incomplete_because.append(why)
+ 
+     if not collected.complete:
++        stopped_because = collected.stopped_because or "reason not recorded"
+         mark_incomplete(
+-            f"collection stopped early: {collected.stopped_because or 'reason not recorded'}"
++            f"collection stopped early: {stopped_because}"
+         )
++        # Collection records a human-readable stop reason rather than a separate
++        # limit flag. Its rate-limit reasons always begin with this phrase;
++        # forbidden and other collection failures remain distinct.
++        rate_limited = rate_limited or stopped_because.lower().startswith("rate limit")
+ 
+     for candidate in collected.candidates:
+         try:
+diff --git a/tests/test_pipeline.py b/tests/test_pipeline.py
+index 28e26a0..0a47645 100644
+--- a/tests/test_pipeline.py
++++ b/tests/test_pipeline.py
+@@ -215,6 +215,18 @@ def test_a_truncated_collection_makes_the_whole_run_incomplete() -> None:
+     )
+     assert result.complete is False
+     assert "rate limit" in " ".join(result.incomplete_because)
++    assert result.rate_limited is True
++
++
++def test_a_non_rate_limited_collection_stop_does_not_request_the_limit_remedy() -> None:
++    result = run(
++        CollectResult(candidates=[candidate("a/one")], complete=False,
++                      stopped_because="forbidden — a permissions problem, not a budget one"),
++        fetch_files=files_for({"a/one": CLEAN}),
++        grader=Grader(),
++    )
++    assert result.complete is False
++    assert result.rate_limited is False
+ 
+ 
+ def test_a_complete_run_that_found_nothing_is_still_complete() -> None:

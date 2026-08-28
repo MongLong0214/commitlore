@@ -1,0 +1,41 @@
+diff --git a/gitseed/pipeline/run.py b/gitseed/pipeline/run.py
+index e6af978..bf6dc0c 100644
+--- a/gitseed/pipeline/run.py
++++ b/gitseed/pipeline/run.py
+@@ -157,7 +157,10 @@ def run(
+     """
+     reviewed: list[Reviewed] = []
+     incomplete_because: list[str] = []
+-    rate_limited = False
++    rate_limited = (
++        not collected.complete
++        and (collected.stopped_because or "").lower().startswith("rate limit")
++    )
+     grading_basis = ClaimBasis.MODEL if grader is not None else ClaimBasis.ABSENT
+ 
+     def mark_incomplete(why: str) -> None:
+diff --git a/tests/test_pipeline.py b/tests/test_pipeline.py
+index 28e26a0..99106d9 100644
+--- a/tests/test_pipeline.py
++++ b/tests/test_pipeline.py
+@@ -215,6 +215,20 @@ def test_a_truncated_collection_makes_the_whole_run_incomplete() -> None:
+     )
+     assert result.complete is False
+     assert "rate limit" in " ".join(result.incomplete_because)
++    assert result.rate_limited is True
++
++
++def test_a_non_rate_limited_truncated_collection_does_not_report_rate_limiting() -> None:
++    result = run(
++        CollectResult(candidates=[candidate("a/one")], complete=False,
++                      stopped_because="HTTP 500"),
++        fetch_files=files_for({"a/one": CLEAN}),
++        grader=Grader(),
++    )
++
++    assert result.complete is False
++    assert "HTTP 500" in " ".join(result.incomplete_because)
++    assert result.rate_limited is False
+ 
+ 
+ def test_a_complete_run_that_found_nothing_is_still_complete() -> None:

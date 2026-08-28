@@ -1,0 +1,5 @@
+Extend the public SQLite run-store read APIs so callers can request a bounded recent slice of both stored runs and repository observations.
+
+`SQLiteRunStore.history(limit=N)` and `SQLiteRunStore.observations(limit=N)` must accept a positive `limit` and return at most the N most recently appended records. Results must retain chronological append order within the returned slice: for example, after records 1, 2, and 3 are appended, a limit of 2 returns records 2 then 3. Calls without `limit` must retain their current complete-history behavior and ordering.
+
+The bounded reads must work for real persisted run artifacts and their derived observations, including their existing returned record values. Add focused tests for both APIs.

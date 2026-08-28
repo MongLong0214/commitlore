@@ -1,0 +1,90 @@
+diff --git a/packages/schema/src/capability.ts b/packages/schema/src/capability.ts
+index ff35c57..552b104 100644
+--- a/packages/schema/src/capability.ts
++++ b/packages/schema/src/capability.ts
+@@ -162,6 +162,35 @@ const frozenSourceClassOf = (eventGroup: string, runtimeId: string): string | nu
+   return runtimeId === "codex" ? row[1] : runtimeId === "claude-code" ? row[2] : null;
+ };
+ 
++/**
++ * The approved evidence locator for each event group and runtime, frozen with the source
++ * class above. A non-empty locator is not evidence merely because it avoids the forbidden
++ * phrases: it must name the declared source for the cell that consumes it.
++ *
++ * [event_group, codex, claude-code]
++ */
++const FROZEN_EVIDENCE_LOCATOR: [string, string, string][] = [
++  ["run_lifecycle", "controlled wrapper process supervisor record for task.started and task.ended", "controlled wrapper process supervisor record for task.started and task.ended"],
++  ["runtime_identity", "app-server stdio JSON-RPC runtime query response and the exact installed generated schema digest", "official TypeScript SDK runtime query response and the resolved settings digest"],
++  ["user_instruction", "app-server stdio JSON-RPC user turn events correlated with the controlled wrapper prompt record", "official TypeScript SDK user SDKMessage turns carried over stream-json"],
++  ["tool_call", "supported app-server stdio JSON-RPC tool call, tool result and tool error events", "official TypeScript SDK tool use and tool result SDKMessage entries carried over stream-json"],
++  ["workspace_diff", "runner filesystem snapshot pair taken by the isolated runner", "runner filesystem snapshot pair taken by the isolated runner"],
++  ["evidence_claim", "controlled wrapper evidence ledger joined to the scorer evidence and completion claim events", "controlled wrapper evidence ledger joined to the scorer evidence and completion claim events"],
++  ["approval_safety", "controlled wrapper sandbox and approval decision record", "official permission/tool surface hook decisions joined to the controlled wrapper approval record"],
++  ["context_selection", "documented configuration snapshot and controlled wrapper context ledger", "official hook record and controlled wrapper context ledger"],
++  ["retrieval_memory", "intercepted tool and MCP call events on the app-server stdio JSON-RPC surface", "intercepted tool and MCP call events on the official permission/tool surface"],
++  ["delegation_handoff", "controlled wrapper subagent spawn, return, handoff and join record", "controlled wrapper subagent hook record for spawn, return, handoff and join"],
++  ["plan_state", "runner state artifacts and the runner stall watchdog timeline", "runner state artifacts and the runner stall watchdog timeline"],
++  ["token_cost", "provider and runtime usage metadata on the app-server stdio JSON-RPC surface", "provider and runtime usage metadata on the official TypeScript SDK result message"],
++  ["human_active_time", "controlled wrapper explicit intervention event and takeover timer", "controlled wrapper explicit intervention event and takeover timer"],
++  ["actor_attribution", "controlled wrapper actor field correlated with runner workspace authorship", "official TypeScript SDK message actor correlated with runner workspace authorship"]
++];
++const frozenEvidenceLocatorOf = (eventGroup: string, runtimeId: string): string | null => {
++  const row = FROZEN_EVIDENCE_LOCATOR.find(([group]) => group === eventGroup);
++  if (!row) return null;
++  return runtimeId === "codex" ? row[1] : runtimeId === "claude-code" ? row[2] : null;
++};
++
+ /**
+  * The SSOT §9.2 "v0 event coverage matrix" (lines 951-966), verbatim.
+  * [event_group, Event group, 계약, Codex adapter v0, Claude Code adapter v0, 누락 처리]
+@@ -548,7 +577,8 @@ const validateCell = (
+   }
+ 
+   // A cell that names no source is not a capability. SSOT 9.2 also bars named source
+-  // classes outright, so naming a forbidden one is worse than naming none.
++  // classes outright, and an otherwise non-forbidden locator is still refused unless it
++  // is the approved source for this event group, runtime and frozen source class.
+   const locator = cell.evidence_locator;
+   if (Object.hasOwn(cell, "evidence_locator")) {
+     if (!isFilledString(locator)) {
+@@ -559,6 +589,11 @@ const validateCell = (
+           add(`FORBIDDEN_SOURCE ${eventGroup} ${runtimeId} ${forbidden} is forbidden by SSOT 9.2`);
+         }
+       }
++      const frozenClass = frozenSourceClassOf(eventGroup, runtimeId);
++      const approvedLocator = frozenEvidenceLocatorOf(eventGroup, runtimeId);
++      if (approvedLocator === null || locator !== approvedLocator) {
++        add(`UNAPPROVED_EVIDENCE_LOCATOR ${eventGroup} ${runtimeId} ${frozenClass ?? "UNKNOWN"}`);
++      }
+     }
+   }
+ 
+diff --git a/packages/schema/test/capability.test.ts b/packages/schema/test/capability.test.ts
+index cfcb01c..496fcc4 100644
+--- a/packages/schema/test/capability.test.ts
++++ b/packages/schema/test/capability.test.ts
+@@ -307,6 +307,23 @@ describe("adapter-capability-matrix", () => {
+       }
+     }
+ 
++    // A locator must identify one of the frozen, approved sources for this exact runtime
++    // and source class. The complete-matrix case above proves every declared locator remains
++    // accepted; this vector closes the gap where arbitrary, non-forbidden prose was accepted.
++    for (const eventGroup of EVENT_GROUPS) {
++      for (const runtimeId of RUNTIME_IDS) {
++        const doc = frozen();
++        const cell = cellOf(doc, eventGroup, runtimeId);
++        cell.evidence_locator = "external observability endpoint";
++        const result = validateCapabilityMatrix(doc);
++        assert.equal(result.ok, false, `${eventGroup}/${runtimeId} accepted an unapproved locator`);
++        assert.ok(
++          has(result, `UNAPPROVED_EVIDENCE_LOCATOR ${eventGroup} ${runtimeId} ${cell.source_class}`),
++          result.errors.join("; ")
++        );
++      }
++    }
++
+     // The runtime source declarations themselves are frozen prose the guards depend on.
+     const clauseTamper = frozen();
+     runtimeOf(clauseTamper, "codex").source_clause = "Codex v0 primary는 무엇이든 된다.";

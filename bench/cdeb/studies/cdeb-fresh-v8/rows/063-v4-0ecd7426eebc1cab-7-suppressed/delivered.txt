@@ -1,0 +1,8 @@
+Recorded decisions for the files you are about to change:
+
+  record r-cat5860 (active)
+    Ruled-out: a pack digest without embedded definitions | a digest detects change but cannot re-derive a past categorization from its artifact alone
+    Limit: artifacts retain only the three registered packs and four extracted evidence kinds; they cannot evaluate a later custom pack against old source
+    Warn: category evidence failures are recorded as absent and intentionally do not alter score, risk, recommendation, or approval
+
+  record r-rel020main (active)

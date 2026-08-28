@@ -1,0 +1,55 @@
+diff --git a/gitseed/collect/search.py b/gitseed/collect/search.py
+index e5c3212..2d8ca4f 100644
+--- a/gitseed/collect/search.py
++++ b/gitseed/collect/search.py
+@@ -149,6 +149,11 @@ def collect(
+     library call is a decision for the caller, not for us. Either way the result
+     says what happened.
+     """
++    if pages < 1:
++        raise ValueError("pages must be at least 1")
++    if not 1 <= per_page <= 100:
++        raise ValueError("per_page must be between 1 and 100")
++
+     candidates: list[Candidate] = []
+     complete = True
+     stopped_because: str | None = None
+diff --git a/tests/test_collect.py b/tests/test_collect.py
+index ad9f7ed..724e1a8 100644
+--- a/tests/test_collect.py
++++ b/tests/test_collect.py
+@@ -308,6 +308,34 @@ class TestWaiting:
+ 
+ 
+ class TestPaging:
++    @pytest.mark.parametrize(
++        "kwargs",
++        [
++            {"pages": 0},
++            {"pages": -1},
++            {"per_page": 0},
++            {"per_page": -1},
++            {"per_page": 101},
++        ],
++    )
++    def test_invalid_paging_is_rejected_before_contacting_the_transport(
++        self, kwargs: dict[str, int]
++    ) -> None:
++        transport = FakeTransport([(200, OK, page([]))])
++
++        with pytest.raises(ValueError):
++            collect("q", transport=transport, **kwargs)
++
++        assert transport.urls == []
++
++    @pytest.mark.parametrize("per_page", [1, 100])
++    def test_github_per_page_boundaries_are_accepted(self, per_page: int) -> None:
++        transport = FakeTransport([(200, OK, page([]))])
++
++        collect("q", transport=transport, per_page=per_page)
++
++        assert len(transport.urls) == 1
++
+     def test_default_ordering_is_recorded_and_sent(self) -> None:
+         transport = FakeTransport([(200, OK, page([]))])
+ 

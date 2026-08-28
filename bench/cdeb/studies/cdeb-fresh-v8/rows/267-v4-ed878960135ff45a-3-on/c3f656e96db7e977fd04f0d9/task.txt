@@ -1,0 +1,1 @@
+Update the run-store observation history so `SQLiteRunStore.observations()` returns observations oldest to newest by their recorded `observed_at` value, even when a backfilled older run is saved after a newer run. Observations with the same recorded time must retain their recording sequence, yielding a consistent result order. Add coverage for runs saved out of timestamp order.

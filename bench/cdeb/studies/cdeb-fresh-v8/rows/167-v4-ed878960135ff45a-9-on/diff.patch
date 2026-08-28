@@ -1,0 +1,56 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..a03d6df 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -101,7 +101,8 @@ class SQLiteRunStore:
+                 int(stars),
+             )
+             for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++                "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++                "ORDER BY observed_at, observation_id"
+             )
+         )
+ 
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..b7882bd 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ import json
+ import sqlite3
+ from dataclasses import fields, replace
+-from datetime import datetime, timezone
++from datetime import datetime, timedelta, timezone
+ 
+ import pytest
+ 
+@@ -188,6 +188,28 @@ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     )
+ 
+ 
++def test_observations_sort_by_recorded_time_then_recording_sequence(tmp_path) -> None:
++    # Given: runs are saved out of timestamp order, including two at the same time.
++    older = AT - timedelta(days=1)
++    later = AT + timedelta(days=1)
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("newest", artifact(stars=20, at=later))
++        store.save("first-at", artifact(stars=10, at=AT))
++        store.save("backfilled", artifact(stars=4, at=older))
++        store.save("second-at", artifact(stars=12, at=AT))
++
++        # When: observation history is read after the backfill.
++        observations = store.observations()
++
++    # Then: time determines the order, while equal times keep insertion sequence.
++    assert tuple((item.run_id, item.observed_at, item.stars) for item in observations) == (
++        ("backfilled", older, 4),
++        ("first-at", AT, 10),
++        ("second-at", AT, 12),
++        ("newest", later, 20),
++    )
++
++
+ def test_previous_store_schema_opens_and_migrates_additively(tmp_path) -> None:
+     # Given: a store written by schema version 1, before observations existed.
+     path = tmp_path / "runs.db"

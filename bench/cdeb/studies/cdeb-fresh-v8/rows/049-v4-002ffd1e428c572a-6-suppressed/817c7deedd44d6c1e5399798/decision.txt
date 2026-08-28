@@ -1,0 +1,6 @@
+pin the census ticket-owned path list literally
+
+every remaining product ticket then needs a census edit, and the deletion it was meant to catch is already caught by the focused-lane count guard
+
+scope: {'path_count': 6, 'paths': ['docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md', 'packages/schema/src/capability.ts', 'packages/schema/test/capability.test.ts', 'specs/adapter-capabilities.v0.json', 'tests/planning-contract.test.mjs', 'tests/planning/workspace-skeleton.test.mjs'], 'screen': {'acceptance_runner': 'npm test', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 6, 'scope_paths_total': 6}}
+lifecycle: active

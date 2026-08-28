@@ -1,0 +1,9 @@
+Make contract-v1 registry validation treat the registry root as a complete, required contract.
+
+A valid registry must contain all and only these root fields: `registry_id`, `contract_version`, `source_contract`, `consumers`, `route_tables`, `frontiers`, and `metrics`. Missing or malformed root fields must invalidate the registry and produce a diagnostic that identifies the affected root field.
+
+Validate the frozen identity and provenance values: `registry_id` must be `metrics.v0`, `contract_version` must be `metric-scoring-contract-v1`, and `source_contract` must be `docs/contracts/metric-scoring-contract-v1.md`. The existing shipped registry must remain valid.
+
+`route_tables` and `frontiers` must be present as valid root-level contract values. Do not treat an absent or malformed value as an empty value; reject it as a root-contract violation. Preserve the existing validation of their referenced route and frontier contents.
+
+Add coverage that deletes and type-tampers every root field, and that changes the registry identity and source-contract strings. Each altered registry must be rejected with a diagnostic tied to the affected root field.

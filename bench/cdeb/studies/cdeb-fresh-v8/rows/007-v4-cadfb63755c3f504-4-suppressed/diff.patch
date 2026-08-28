@@ -1,0 +1,53 @@
+diff --git a/gitseed/pipeline/run.py b/gitseed/pipeline/run.py
+index e6af978..8acce30 100644
+--- a/gitseed/pipeline/run.py
++++ b/gitseed/pipeline/run.py
+@@ -165,9 +165,13 @@ def run(
+             incomplete_because.append(why)
+ 
+     if not collected.complete:
++        collection_reason = collected.stopped_because or "reason not recorded"
+         mark_incomplete(
+-            f"collection stopped early: {collected.stopped_because or 'reason not recorded'}"
++            f"collection stopped early: {collection_reason}"
+         )
++        # Search reports quota exhaustion in its stop reason. Preserve that
++        # operator remedy alongside the incomplete collection result.
++        rate_limited = "rate limit" in collection_reason.lower().replace("-", " ")
+ 
+     for candidate in collected.candidates:
+         try:
+diff --git a/tests/test_pipeline.py b/tests/test_pipeline.py
+index 28e26a0..fea7742 100644
+--- a/tests/test_pipeline.py
++++ b/tests/test_pipeline.py
+@@ -207,14 +207,27 @@ def test_oversized_model_evidence_structure_is_an_incomplete_candidate() -> None
+ 
+ 
+ def test_a_truncated_collection_makes_the_whole_run_incomplete() -> None:
++    stop_reason = "rate limited after 1 page(s); resets in 60s"
+     result = run(
+         CollectResult(candidates=[candidate("a/one")], complete=False,
+-                      stopped_because="rate limit"),
++                      stopped_because=stop_reason),
+         fetch_files=files_for({"a/one": CLEAN}),
+         grader=Grader(),
+     )
+     assert result.complete is False
+-    assert "rate limit" in " ".join(result.incomplete_because)
++    assert result.incomplete_because == (f"collection stopped early: {stop_reason}",)
++    assert result.rate_limited is True
++
++
++def test_a_non_rate_limited_collection_stop_does_not_claim_quota_exhaustion() -> None:
++    result = run(
++        CollectResult(candidates=[], complete=False, stopped_because="forbidden"),
++        fetch_files=files_for({}),
++        grader=Grader(),
++    )
++
++    assert result.complete is False
++    assert result.rate_limited is False
+ 
+ 
+ def test_a_complete_run_that_found_nothing_is_still_complete() -> None:

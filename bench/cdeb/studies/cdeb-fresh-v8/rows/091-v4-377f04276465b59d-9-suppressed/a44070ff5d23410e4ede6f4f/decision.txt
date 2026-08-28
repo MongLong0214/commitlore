@@ -1,0 +1,6 @@
+adding coverage gates or a badge
+
+one workflow that tells the truth is worth more than five nobody reads
+
+scope: {'path_count': 3, 'paths': ['.github/workflows/ci.yml', 'pyproject.toml', 'tests/conftest.py'], 'screen': {'acceptance_runner': 'pytest', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 3, 'scope_paths_total': 3}}
+lifecycle: active

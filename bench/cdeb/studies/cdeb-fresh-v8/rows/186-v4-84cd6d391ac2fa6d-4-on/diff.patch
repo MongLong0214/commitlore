@@ -1,0 +1,66 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..77798fe 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -76,13 +76,22 @@ class SQLiteRunStore:
+             except sqlite3.Error as error:
+                 raise ObservationWriteError(str(error)) from error
+ 
+-    def load(self, run_id: str) -> RunArtifact:
++    def get(self, run_id: str) -> StoredRun:
+         row = self._connection.execute(
+-            "SELECT artifact FROM run_artifacts WHERE run_id = ?", (run_id,)
++            "SELECT run_id, corrects_run_id, artifact FROM run_artifacts WHERE run_id = ?",
++            (run_id,),
+         ).fetchone()
+         if row is None:
+             raise KeyError(run_id)
+-        return RunArtifact.from_bytes(bytes(row[0]))
++        stored_run_id, corrects_run_id, artifact = row
++        return StoredRun(
++            str(stored_run_id),
++            str(corrects_run_id) if corrects_run_id is not None else None,
++            RunArtifact.from_bytes(bytes(artifact)),
++        )
++
++    def load(self, run_id: str) -> RunArtifact:
++        return self.get(run_id).artifact
+ 
+     def history(self) -> tuple[StoredRun, ...]:
+         return tuple(
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..d5b864f 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -170,6 +170,31 @@ def test_partial_artifact_and_correction_history_are_preserved(tmp_path) -> None
+     assert loaded.to_bytes() == partial.to_bytes()
+ 
+ 
++def test_point_lookup_returns_a_correction_with_its_lineage(tmp_path) -> None:
++    # Given: a correction points to an earlier immutable run.
++    original = artifact(Files(OSError("offline")))
++    correction = artifact()
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("original", original)
++        store.save("correction", correction, corrects_run_id="original")
++
++        # When: a consumer retrieves the correction by its known identifier.
++        stored = store.get("correction")
++
++    # Then: the correction artifact and its lineage are both available.
++    assert stored.run_id == "correction"
++    assert stored.corrects_run_id == "original"
++    assert stored.artifact.to_bytes() == correction.to_bytes()
++
++
++def test_point_lookup_of_an_unknown_run_raises_key_error_with_its_identifier(tmp_path) -> None:
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        with pytest.raises(KeyError) as error:
++            store.get("unknown-run")
++
++    assert error.value.args == ("unknown-run",)
++
++
+ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     # Given: the store records the same repository again with a later count.
+     later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)

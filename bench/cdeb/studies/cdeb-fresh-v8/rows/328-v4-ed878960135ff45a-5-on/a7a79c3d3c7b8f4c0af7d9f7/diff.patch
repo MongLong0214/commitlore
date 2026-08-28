@@ -1,0 +1,45 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..a03d6df 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -101,7 +101,8 @@ class SQLiteRunStore:
+                 int(stars),
+             )
+             for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++                "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++                "ORDER BY observed_at, observation_id"
+             )
+         )
+ 
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..5e6a1e2 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -188,6 +188,26 @@ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     )
+ 
+ 
++def test_observations_order_backfilled_runs_by_recorded_time(tmp_path) -> None:
++    # Given: a newer observation is stored before an older backfill, then a tie.
++    earlier = datetime(2026, 7, 26, 12, 0, tzinfo=timezone.utc)
++    later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("newer", artifact(stars=4, at=later))
++        store.save("backfilled", artifact(stars=2, at=earlier))
++        store.save("same-time", artifact(stars=9, at=later))
++
++        # When: the observation history is read.
++        observations = store.observations()
++
++    # Then: recorded time is primary and recording sequence breaks ties.
++    assert [(item.run_id, item.observed_at, item.stars) for item in observations] == [
++        ("backfilled", earlier, 2),
++        ("newer", later, 4),
++        ("same-time", later, 9),
++    ]
++
++
+ def test_previous_store_schema_opens_and_migrates_additively(tmp_path) -> None:
+     # Given: a store written by schema version 1, before observations existed.
+     path = tmp_path / "runs.db"

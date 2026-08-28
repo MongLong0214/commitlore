@@ -1,0 +1,116 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..6413bc2 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -84,15 +84,42 @@ class SQLiteRunStore:
+             raise KeyError(run_id)
+         return RunArtifact.from_bytes(bytes(row[0]))
+ 
+-    def history(self) -> tuple[StoredRun, ...]:
++    def history(self, limit: int | None = None) -> tuple[StoredRun, ...]:
++        if limit is not None and limit <= 0:
++            raise ValueError("limit must be positive")
++        query = "SELECT run_id, corrects_run_id, artifact FROM run_artifacts ORDER BY rowid"
++        parameters: tuple[int, ...] = ()
++        if limit is not None:
++            query = (
++                "SELECT run_id, corrects_run_id, artifact FROM ("
++                "SELECT rowid AS append_id, run_id, corrects_run_id, artifact "
++                "FROM run_artifacts ORDER BY rowid DESC LIMIT ?"
++                ") ORDER BY append_id"
++            )
++            parameters = (limit,)
+         return tuple(
+             StoredRun(str(run_id), corrects_run_id, RunArtifact.from_bytes(bytes(artifact)))
+             for run_id, corrects_run_id, artifact in self._connection.execute(
+-                "SELECT run_id, corrects_run_id, artifact FROM run_artifacts ORDER BY rowid"
++                query, parameters
+             )
+         )
+ 
+-    def observations(self) -> tuple[StoredObservation, ...]:
++    def observations(self, limit: int | None = None) -> tuple[StoredObservation, ...]:
++        if limit is not None and limit <= 0:
++            raise ValueError("limit must be positive")
++        query = (
++            "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++            "ORDER BY observation_id"
++        )
++        parameters: tuple[int, ...] = ()
++        if limit is not None:
++            query = (
++                "SELECT run_id, repo, observed_at, stars FROM ("
++                "SELECT observation_id AS append_id, run_id, repo, observed_at, stars "
++                "FROM repository_observations ORDER BY observation_id DESC LIMIT ?"
++                ") ORDER BY append_id"
++            )
++            parameters = (limit,)
+         return tuple(
+             StoredObservation(
+                 str(run_id),
+@@ -101,7 +128,7 @@ class SQLiteRunStore:
+                 int(stars),
+             )
+             for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++                query, parameters
+             )
+         )
+ 
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..cc8cbb9 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -188,6 +188,52 @@ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     )
+ 
+ 
++def test_history_and_observations_return_a_recent_chronological_slice(tmp_path) -> None:
++    # Given: three persisted artifacts and their derived observations were appended.
++    middle_at = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
++    latest_at = datetime(2026, 7, 29, 12, 0, tzinfo=timezone.utc)
++    first = artifact(stars=4, at=AT)
++    middle = artifact(stars=6, at=middle_at)
++    latest = artifact(stars=9, at=latest_at)
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("first", first)
++        store.save("middle", middle)
++        store.save("latest", latest)
++
++        # When: callers request all records and the two most recent records.
++        history = store.history()
++        recent_history = store.history(limit=2)
++        observations = store.observations()
++        recent_observations = store.observations(limit=2)
++
++    # Then: complete reads retain append order and slices retain values and chronology.
++    assert [(record.run_id, record.artifact.to_bytes()) for record in history] == [
++        ("first", first.to_bytes()),
++        ("middle", middle.to_bytes()),
++        ("latest", latest.to_bytes()),
++    ]
++    assert [(record.run_id, record.artifact.to_bytes()) for record in recent_history] == [
++        ("middle", middle.to_bytes()),
++        ("latest", latest.to_bytes()),
++    ]
++    assert [(record.run_id, record.observed_at, record.stars) for record in observations] == [
++        ("first", AT, 4),
++        ("middle", middle_at, 6),
++        ("latest", latest_at, 9),
++    ]
++    assert [(record.run_id, record.observed_at, record.stars) for record in recent_observations] == [
++        ("middle", middle_at, 6),
++        ("latest", latest_at, 9),
++    ]
++
++
++@pytest.mark.parametrize("method", ["history", "observations"])
++def test_history_and_observations_reject_nonpositive_limits(tmp_path, method: str) -> None:
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        with pytest.raises(ValueError, match="limit must be positive"):
++            getattr(store, method)(limit=0)
++
++
+ def test_previous_store_schema_opens_and_migrates_additively(tmp_path) -> None:
+     # Given: a store written by schema version 1, before observations existed.
+     path = tmp_path / "runs.db"

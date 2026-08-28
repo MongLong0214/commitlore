@@ -1,0 +1,54 @@
+Recorded decisions for the files you are about to change:
+
+  record r-32bgrade (active)
+
+  record r-replay57 (active)
+    Ruled-out: embedding prior engine code in an artifact to reproduce old behavior | stored port responses can be recomputed, but they cannot supply the prior pipeline implementation
+    Limit: --allow-engine-mismatch recomputes with current code and cannot reproduce the prior result
+
+  record r-metadata52 (active)
+    Ruled-out: treating every metadata 403 as forbidden | a quota-exhausted 403 needs the rate-limit remedy, which that status-only check discarded
+    Limit: a metadata 403 is rate-limited only when GitHub response metadata shows the quota is exhausted; otherwise it remains forbidden
+    Warn: ad hoc status checks were losing the quota-exhausted 403 versus forbidden 403 distinction; PipelineResult.rate_limited is now set from the metadata path
+
+  record None (active)
+    Ruled-out: falling back to a zero or midpoint grade when the model misbehaves | the number would rank a repository on evidence that does not exist, and nothing downstream could tell it from a real grade
+    Limit: validation confirms the shape of a grade, not its quality; a model returning 7 and 6 for everything passes every check here
+
+  record r-gs45p48fix (active)
+    Ruled-out: broadening SOURCE_EXTENSIONS with .json/.yaml/.lock/.toml entries instead of a separate priority-filename list | would let arbitrary non-manifest data files compete for the same 20-file/500KB budget as real source, not just the handful of build-time inputs a supply-chain attack targets
+    Ruled-out: applying the 20-file count cap to priority filenames too | the issue asks for priority selection before the count budget, not merely early within it; capping them would leave the padding attack this fixes unfixed
+    Ruled-out: implementing GS-P0-006's RecommendationStatus enum (BLOCKED/INSUFFICIENT_EVIDENCE/REVIEW/NOT_PRIORITY, ADR-0010) in this change | that ADR scopes the enum to GS-P0-006, only cross-referenced (not required) from #48's own issue text; this change lands the SourceCoverage.complete_for_policy signal the ADR says it depends on, and stops there
+    Ruled-out: sorting all eligible non-priority files by a general risk heuristic ahead of the count cap | that is GS-P1-018 (#49)'s explicit scope; this change only exempts the named priority-filename allow-list, tree order is unchanged for everything else
+    Ruled-out: complete_for_policy/complete_for_repository as constructor-supplied booleans, as the issue's own illustrative dataclass sketches them | computed properties derived from the counts they describe cannot drift out of sync with them
+    Warn: GS-P0-006 and GS-P1-018 both build on SourceCoverage/priority-selection landed here; neither is implemented by this change
+    Warn: FixtureTransport (cli.py, --fixtures replay) still reads a directory directly and never populates FetchedFiles.coverage; the new tests reach GitHubClient.fetch_files() directly or through a live-shaped transport double for exactly that reason
+    Limit: commitlore guard --proposal matched 3 unrelated "JSON files on disk" Ruled-out records (r-f8replay/r-f8adapter/r-f8schema, jaccard 0.03) on the "json" substring in "package.json"; verified those concern gitseed/storage.py's SQLite run-history store, not this change or the pre-existing RunArtifact JSON format, and proceeded
+
+  record r-rel020main (active)
+
+  record r-gsb006 (active)
+    Warn: classify() has no not-found kind; 404 falls into the generic "error" bucket with any other unexpected status
+
+  record r-modelgate9 (active)
+    Ruled-out: treating a missing model as a complete zero-grade run | it would make deterministic-only output indistinguishable from a verified run
+    Limit: degraded runs retain deterministic signals but emit no model grades
+    Warn: schema 3 artifacts require the current release
+
+  record r-f11trust (active)
+    Ruled-out: model security findings | a model opinion cannot manufacture a security finding
+    Limit: unreadable source has absent security coverage | no clean claim is made without screened files
+    Warn: run artifact schema 2 carries claim bases and screened paths; schema 1 artifacts require the prior release
+
+  record r-gs8e05 (active)
+    Warn: a live run with a query containing a space — which is every real GitHub search — dies with an unhandled `http.client.InvalidURL`. The query is interpolated into the URL unencoded. Found immediately after this work and filed as the next task; the earlier live run passed only because its query had no space in it
+
+  record r-gs5b02 (active)
+    Ruled-out: a numeric sentinel for "not graded" | -1 and 0 are both safe only while GradeResult enforces 1..10, and both stop being safe the moment that range opens downward — silently. A mutation swapping -1 for 0 survived the suite, which is what a sentinel chosen against a range looks like from the outside. `score` is now `int | None` and `ranked` states where None goes
+    Ruled-out: dropping blocked or ungraded entries from the ranking | a reviewer who sees only the gradeable ones cannot tell a quiet day from a broken grader
+    Ruled-out: letting a grading failure end the run | it makes one flaky model call discard every candidate already screened
+    Warn: `complete` covers stages this module runs. It cannot speak for a candidate whose repository changed between collection and grading
+
+
+TASK
+Make a pipeline run report rate limiting when its candidate collection was truncated because of a rate limit. For a collection marked incomplete with a rate-limit stop reason, the returned PipelineResult must have rate_limited set to true, while continuing to report the run as incomplete and retaining its incomplete reason.

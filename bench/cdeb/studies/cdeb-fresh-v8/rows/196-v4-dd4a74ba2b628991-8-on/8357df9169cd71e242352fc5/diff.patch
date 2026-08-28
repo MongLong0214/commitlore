@@ -1,0 +1,98 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..3dada7d 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -57,6 +57,19 @@ type RouteRow = { route_id: string; eligible: boolean; quality: boolean; safety:
+ type Coordinate = { name: string; lower: number; upper: number; weight: number; frontier: number };
+ 
+ const CONTRACT_VERSION = "metric-scoring-contract-v1";
++const REGISTRY_ID = "metrics.v0";
++const SOURCE_CONTRACT = "docs/contracts/metric-scoring-contract-v1.md";
++const FROZEN_CONSUMERS = [
++  "factor.F1",
++  "factor.F2",
++  "factor.F3",
++  "factor.F4",
++  "factor.F5",
++  "factor.F6",
++  "outcome_index.O",
++  "process_index.P",
++  "safety_gate.M19"
++];
+ 
+ const REQUIRED_FIELDS = [
+   "metric_id", "label", "factor", "question", "observation_type", "eligible_opportunity",
+@@ -141,14 +154,36 @@ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+   }
+   const metrics = rawMetrics as MetricDefinition[];
+ 
+-  const consumers = Array.isArray(input.consumers) ? (input.consumers as string[]) : [];
+-  if (consumers.length === 0) add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
++  const consumers = Array.isArray(input.consumers) ? input.consumers : [];
+   const routeTables = isPlainRecord(input.route_tables) ? input.route_tables : {};
+   const frontiers = isPlainRecord(input.frontiers) ? input.frontiers : {};
+ 
++  if (input.registry_id !== REGISTRY_ID) {
++    add(`REGISTRY_ID expected ${REGISTRY_ID}`);
++  }
+   if (input.contract_version !== CONTRACT_VERSION) {
+     add(`REGISTRY_CONTRACT_VERSION expected ${CONTRACT_VERSION}`);
+   }
++  if (input.source_contract !== SOURCE_CONTRACT) {
++    add(`REGISTRY_SOURCE_CONTRACT expected ${SOURCE_CONTRACT}`);
++  }
++  if (!Array.isArray(input.consumers) || consumers.length === 0) {
++    add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
++  }
++  const consumerCounts = new Map<string, number>();
++  for (const consumer of consumers) {
++    if (typeof consumer !== "string") {
++      add(`REGISTRY_CONSUMER_NOT_A_STRING ${String(consumer)}`);
++      continue;
++    }
++    const count = (consumerCounts.get(consumer) ?? 0) + 1;
++    consumerCounts.set(consumer, count);
++    if (count > 1) add(`REGISTRY_CONSUMER_DUPLICATE ${consumer}`);
++    if (!FROZEN_CONSUMERS.includes(consumer)) add(`REGISTRY_UNKNOWN_CONSUMER ${consumer}`);
++  }
++  for (const consumer of FROZEN_CONSUMERS) {
++    if (!consumerCounts.has(consumer)) add(`REGISTRY_CONSUMER_MISSING ${consumer}`);
++  }
+   for (const field of Object.keys(input)) {
+     if (!REGISTRY_FIELDS.includes(field)) add(`REGISTRY_DEAD_FIELD ${field} is not part of contract v1`);
+   }
+diff --git a/packages/schema/test/metric-registry.test.ts b/packages/schema/test/metric-registry.test.ts
+index 3e7d2cc..690f5e0 100644
+--- a/packages/schema/test/metric-registry.test.ts
++++ b/packages/schema/test/metric-registry.test.ts
+@@ -85,6 +85,30 @@ describe("metric-registry", () => {
+     assert.ok(codes(short).includes("METRIC_COUNT_NOT_20"), short.errors.join("; "));
+   });
+ 
++  test("frozen-registry-envelope", () => {
++    const clean = validateMetricRegistry(frozen());
++    assert.deepEqual(clean.errors, [], "the unchanged frozen registry must validate");
++
++    const mutations: [string, (registry: any) => void, string][] = [
++      ["missing registry identity", (registry) => { delete registry.registry_id; }, "REGISTRY_ID"],
++      ["changed registry identity", (registry) => { registry.registry_id = "metrics.v1"; }, "REGISTRY_ID"],
++      ["missing registry provenance", (registry) => { delete registry.source_contract; }, "REGISTRY_SOURCE_CONTRACT"],
++      ["changed registry provenance", (registry) => { registry.source_contract = "docs/contracts/other.md"; }, "REGISTRY_SOURCE_CONTRACT"],
++      ["missing consumer", (registry) => { registry.consumers = registry.consumers.slice(1); }, "REGISTRY_CONSUMER_MISSING"],
++      ["added consumer", (registry) => { registry.consumers.push("factor.F7"); }, "REGISTRY_UNKNOWN_CONSUMER"],
++      ["duplicate consumer", (registry) => { registry.consumers.push("factor.F1"); }, "REGISTRY_CONSUMER_DUPLICATE"],
++      ["non-string consumer", (registry) => { registry.consumers[0] = 1; }, "REGISTRY_CONSUMER_NOT_A_STRING"]
++    ];
++
++    for (const [label, mutate, expectedCode] of mutations) {
++      const registry = frozen();
++      mutate(registry);
++      const result = validateMetricRegistry(registry);
++      assert.equal(result.ok, false, `accepted ${label}`);
++      assert.ok(codes(result).includes(expectedCode), `${label}: ${result.errors.join("; ")}`);
++    }
++  });
++
+   test("reject-M21", () => {
+     const registry = frozen();
+     const clone = JSON.parse(JSON.stringify(metricOf(registry, "M20")));

@@ -1,0 +1,84 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..37e5a66 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -153,7 +153,7 @@ def execute(
+     for candidate in collected.candidates:
+         try:
+             evidence = (
+-                absent_evidence()
++                absent_evidence(ports.evidence)
+                 if candidate.repo not in files
+                 else ports.evidence.read_evidence(candidate, files[candidate.repo], metadata[candidate.repo])
+             )
+@@ -161,7 +161,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = absent_evidence(ports.evidence)
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..b10fd4a 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -9,7 +9,7 @@ from .evidence import ClaimBasis
+ if TYPE_CHECKING:
+     from .collect.search import Candidate
+     from .pipeline.run import FetchedFiles
+-    from .ports import RepositoryMetadata
++    from .ports import EvidenceReader, RepositoryMetadata
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+@@ -89,12 +89,16 @@ class FileEvidenceReader:
+ DEFAULT_EVIDENCE_READER: Final = FileEvidenceReader()
+ 
+ 
+-def satisfiable_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
++def satisfiable_evidence(reader: EvidenceReader = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
+     return reader.evidence_names
+ 
+ 
+-def absent_evidence() -> tuple[Evidence, ...]:
+-    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
++def absent_evidence(reader: EvidenceReader = DEFAULT_EVIDENCE_READER) -> tuple[Evidence, ...]:
++    """Represent every evidence kind a reader advertises as unavailable."""
++    return tuple(
++        Evidence(name, frozenset(), ClaimBasis.ABSENT)
++        for name in sorted(satisfiable_evidence(reader))
++    )
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+@@ -161,7 +165,7 @@ class CategoryMatch:
+ Categorization = CategoryMatch
+ 
+ 
+-def validate_pack(pack: CategoryPack, reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> None:
++def validate_pack(pack: CategoryPack, reader: EvidenceReader = DEFAULT_EVIDENCE_READER) -> None:
+     missing = tuple(
+         requirement.evidence
+         for requirement in pack.evidence
+diff --git a/tests/test_seam.py b/tests/test_seam.py
+index cc155de..c0da037 100644
+--- a/tests/test_seam.py
++++ b/tests/test_seam.py
+@@ -367,7 +367,7 @@ def test_run_records_categories_and_can_rederive_them_from_its_artifact() -> Non
+ 
+ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+     class BrokenEvidence:
+-        evidence_names = frozenset({"files", "manifest_entries", "dependencies", "source"})
++        evidence_names = frozenset({"reader_alpha", "reader_beta"})
+ 
+         def read_evidence(self, candidate, files, metadata):
+             raise RuntimeError("category reader deliberately unavailable")
+@@ -381,3 +381,6 @@ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+     assert artifact.scores[0].recommendation.status.value == "review"
+     assert artifact.repositories[0].categories[0].basis is ClaimBasis.ABSENT
+     assert any(failure.port == "category" for failure in artifact.failures)
++    evidence = artifact.repositories[0].category_evidence
++    assert tuple(item.evidence for item in evidence) == ("reader_alpha", "reader_beta")
++    assert all(item.values == frozenset() and item.basis is ClaimBasis.ABSENT for item in evidence)

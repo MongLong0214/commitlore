@@ -1,0 +1,37 @@
+diff --git a/gitseed/pipeline/run.py b/gitseed/pipeline/run.py
+index e6af978..f6e2884 100644
+--- a/gitseed/pipeline/run.py
++++ b/gitseed/pipeline/run.py
+@@ -168,6 +168,9 @@ def run(
+         mark_incomplete(
+             f"collection stopped early: {collected.stopped_because or 'reason not recorded'}"
+         )
++        rate_limited = rate_limited or "rate limit" in (
++            collected.stopped_because or ""
++        ).lower()
+ 
+     for candidate in collected.candidates:
+         try:
+diff --git a/tests/test_pipeline.py b/tests/test_pipeline.py
+index 28e26a0..cacff8b 100644
+--- a/tests/test_pipeline.py
++++ b/tests/test_pipeline.py
+@@ -207,14 +207,16 @@ def test_oversized_model_evidence_structure_is_an_incomplete_candidate() -> None
+ 
+ 
+ def test_a_truncated_collection_makes_the_whole_run_incomplete() -> None:
++    stopped_because = "rate limited after 1 page(s); resets in 60s"
+     result = run(
+         CollectResult(candidates=[candidate("a/one")], complete=False,
+-                      stopped_because="rate limit"),
++                      stopped_because=stopped_because),
+         fetch_files=files_for({"a/one": CLEAN}),
+         grader=Grader(),
+     )
+     assert result.complete is False
+-    assert "rate limit" in " ".join(result.incomplete_because)
++    assert result.incomplete_because == (f"collection stopped early: {stopped_because}",)
++    assert result.rate_limited is True
+ 
+ 
+ def test_a_complete_run_that_found_nothing_is_still_complete() -> None:

@@ -1,0 +1,59 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..d6ca739 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -77,12 +77,16 @@ class SQLiteRunStore:
+                 raise ObservationWriteError(str(error)) from error
+ 
+     def load(self, run_id: str) -> RunArtifact:
++        return self.get(run_id).artifact
++
++    def get(self, run_id: str) -> StoredRun:
+         row = self._connection.execute(
+-            "SELECT artifact FROM run_artifacts WHERE run_id = ?", (run_id,)
++            "SELECT corrects_run_id, artifact FROM run_artifacts WHERE run_id = ?", (run_id,)
+         ).fetchone()
+         if row is None:
+             raise KeyError(run_id)
+-        return RunArtifact.from_bytes(bytes(row[0]))
++        corrects_run_id, artifact = row
++        return StoredRun(run_id, corrects_run_id, RunArtifact.from_bytes(bytes(artifact)))
+ 
+     def history(self) -> tuple[StoredRun, ...]:
+         return tuple(
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..cae002e 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -170,6 +170,31 @@ def test_partial_artifact_and_correction_history_are_preserved(tmp_path) -> None
+     assert loaded.to_bytes() == partial.to_bytes()
+ 
+ 
++def test_get_returns_a_stored_correction_with_its_lineage(tmp_path) -> None:
++    # Given: a correction has been saved after the run it corrects.
++    corrected = artifact()
++    correction = artifact(stars=9)
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("run-1", corrected)
++        store.save("run-2", correction, corrects_run_id="run-1")
++
++        # When: the correction is retrieved directly by its known identifier.
++        stored = store.get("run-2")
++
++        # Then: it retains both its own artifact and its immutable correction link.
++        assert stored.run_id == "run-2"
++        assert stored.corrects_run_id == "run-1"
++        assert stored.artifact.to_bytes() == correction.to_bytes()
++
++
++def test_get_raises_key_error_for_an_unknown_run(tmp_path) -> None:
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        with pytest.raises(KeyError) as error:
++            store.get("unknown-run")
++
++    assert error.value.args == ("unknown-run",)
++
++
+ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     # Given: the store records the same repository again with a later count.
+     later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)

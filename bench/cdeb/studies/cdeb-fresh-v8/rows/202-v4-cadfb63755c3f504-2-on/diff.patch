@@ -1,0 +1,36 @@
+diff --git a/gitseed/pipeline/run.py b/gitseed/pipeline/run.py
+index e6af978..b5af8e6 100644
+--- a/gitseed/pipeline/run.py
++++ b/gitseed/pipeline/run.py
+@@ -165,6 +165,7 @@ def run(
+             incomplete_because.append(why)
+ 
+     if not collected.complete:
++        rate_limited = rate_limited or _is_rate_limited_stop(collected.stopped_because)
+         mark_incomplete(
+             f"collection stopped early: {collected.stopped_because or 'reason not recorded'}"
+         )
+@@ -310,6 +311,11 @@ def run(
+     return PipelineResult(tuple(reviewed), not incomplete_because, tuple(incomplete_because), rate_limited, grading_basis)
+ 
+ 
++def _is_rate_limited_stop(reason: str | None) -> bool:
++    """Whether collection's retained stop reason identifies a quota stop."""
++    return reason is not None and "rate limit" in reason.lower().replace("-", " ")
++
++
+ def _digest(candidate: Candidate, files: Sequence[tuple[str, str]]) -> str:
+     """What the grader sees: bounded, declared evidence without popularity.
+ 
+diff --git a/tests/test_pipeline.py b/tests/test_pipeline.py
+index 28e26a0..9861ea7 100644
+--- a/tests/test_pipeline.py
++++ b/tests/test_pipeline.py
+@@ -214,6 +214,7 @@ def test_a_truncated_collection_makes_the_whole_run_incomplete() -> None:
+         grader=Grader(),
+     )
+     assert result.complete is False
++    assert result.rate_limited is True
+     assert "rate limit" in " ".join(result.incomplete_because)
+ 
+ 

@@ -1,0 +1,17 @@
+Recorded decisions for the files you are about to change:
+
+  record r-evid610 (active)
+    Ruled-out: a separate evidence-kind allowlist | a literal detached from the producer methods can silently accept evidence no collector emits
+    Warn: add a producer method before adding a category requirement for a new evidence kind
+
+  record r-cat5860 (active)
+    Ruled-out: a pack digest without embedded definitions | a digest detects change but cannot re-derive a past categorization from its artifact alone
+    Limit: artifacts retain only the three registered packs and four extracted evidence kinds; they cannot evaluate a later custom pack against old source
+    Warn: category evidence failures are recorded as absent and intentionally do not alter score, risk, recommendation, or approval
+
+  record r-rel020main (active)
+
+  record r-category10 (active)
+    Ruled-out: model-assigned categories | a model opinion cannot manufacture a category assignment
+    Limit: unreadable category evidence remains ABSENT and names its missing source
+    Warn: categorization results from different pack versions cannot be ordered

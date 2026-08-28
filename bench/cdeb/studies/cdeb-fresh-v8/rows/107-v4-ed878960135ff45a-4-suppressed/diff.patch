@@ -1,0 +1,46 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..a03d6df 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -101,7 +101,8 @@ class SQLiteRunStore:
+                 int(stars),
+             )
+             for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++                "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++                "ORDER BY observed_at, observation_id"
+             )
+         )
+ 
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..c29c5e0 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -188,6 +188,27 @@ def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+     )
+ 
+ 
++def test_observations_are_ordered_by_recorded_time_then_recording_sequence(tmp_path) -> None:
++    # Given: a newer observation is saved before an older backfilled run, with
++    # another observation recorded at the same newer time.
++    earlier = datetime(2026, 7, 26, 12, 0, tzinfo=timezone.utc)
++    later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
++    with SQLiteRunStore(tmp_path / "runs.db") as store:
++        store.save("newer-first", artifact(stars=9, at=later))
++        store.save("older-backfill", artifact(stars=4, at=earlier))
++        store.save("newer-second", artifact(stars=10, at=later))
++
++        # When: observation history is read after saves arrived out of time order.
++        observations = store.observations()
++
++    # Then: time order wins, while equal times retain the insert sequence.
++    assert [(observation.run_id, observation.observed_at, observation.stars) for observation in observations] == [
++        ("older-backfill", earlier, 4),
++        ("newer-first", later, 9),
++        ("newer-second", later, 10),
++    ]
++
++
+ def test_previous_store_schema_opens_and_migrates_additively(tmp_path) -> None:
+     # Given: a store written by schema version 1, before observations existed.
+     path = tmp_path / "runs.db"

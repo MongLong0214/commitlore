@@ -1,0 +1,6 @@
+filtering the roadmap and Board out of a broad input scan
+
+an exclusion list silently readmits any projection added later, so the input set is declared positively and closed
+
+scope: {'path_count': 11, 'paths': ['.github/workflows/operational-state.yml', 'AGENTS.md', 'docs/planning/AOS-EXECUTION-ROADMAP.md', 'docs/planning/issue-resolution-ledger-2026-08-06.md', 'docs/tickets/BOARD.md', 'package.json', 'scripts/render-execution-views.mjs', 'scripts/validate-planning.mjs', 'tests/execution-views.test.mjs', 'tests/planning-contract.test.mjs', 'tests/planning/workspace-skeleton.test.mjs'], 'screen': {'acceptance_runner': 'npm test', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 11, 'scope_paths_total': 11}}
+lifecycle: active

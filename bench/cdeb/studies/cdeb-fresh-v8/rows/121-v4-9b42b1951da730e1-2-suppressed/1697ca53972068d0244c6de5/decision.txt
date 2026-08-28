@@ -1,0 +1,6 @@
+add the two paths to controlPlaneAllowlist
+
+mislabels product code as control plane and drives control_plane_code_files up as a disguise for a growing product surface
+
+scope: {'path_count': 7, 'paths': ['packages/schema/package.json', 'packages/schema/src/metric-registry.ts', 'packages/schema/test/metric-registry.test.ts', 'scripts/validate-planning.mjs', 'specs/metrics.v0.json', 'tests/planning-contract.test.mjs', 'tests/planning/workspace-skeleton.test.mjs'], 'screen': {'acceptance_runner': 'npm test', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 7, 'scope_paths_total': 7}}
+lifecycle: active

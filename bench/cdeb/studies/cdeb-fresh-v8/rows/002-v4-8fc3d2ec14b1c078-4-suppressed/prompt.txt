@@ -1,0 +1,39 @@
+Recorded decisions for the files you are about to change:
+
+  record r-search67 (active)
+    Ruled-out: low-star, creation-date, or multi-bucket targeting | their thresholds and merge rules would add policy choices without a visible outcome to tune against
+    Limit: no attention baseline or time-separated outcome exists, so this change can claim only an update-recency collection preference
+    Warn: pre-change best-match sets and updated-descending sets are not population-comparable; reissuing recorded parameters later cannot recreate GitHub's historical index
+
+  record r-replay57 (active)
+    Ruled-out: embedding prior engine code in an artifact to reproduce old behavior | stored port responses can be recomputed, but they cannot supply the prior pipeline implementation
+    Limit: --allow-engine-mismatch recomputes with current code and cannot reproduce the prior result
+
+  record None (active)
+    Ruled-out: keeping one accessor and capping inside it | it cannot distinguish an observation from a policy, and the version that tried recorded a reset time the server never stated
+    Limit: the cap is reported but the run still stops rather than waiting longer, so a genuinely long limit ends the run instead of resuming after it clears
+
+  record None (active)
+    Ruled-out: refusing a run whose search was truncated | that is a product decision outside this ticket, and a silent behaviour change smuggled in with an observability fix is harder to find than the missing field was
+    Limit: total_count is GitHub's own estimate, so a retrieved count matching it is evidence of completeness rather than proof of it
+
+  record r-rel020main (active)
+
+  record r-gsb006 (active)
+    Warn: classify() has no not-found kind; 404 falls into the generic "error" bucket with any other unexpected status
+
+  record r-gs9f06 (active)
+    Warn: a live run now reaches file fetching and takes HTTP 403 on every candidate, because this machine's unauthenticated GitHub quota is exhausted (0 of 60). The tool behaves correctly — it reports each failure, withholds those candidates with a reason, and exits 2 — but the message says only "GitHub returned HTTP 403". Rate-limited and forbidden are different facts and a user can act on only one of them. `collect/ratelimit.py` already separates them; the file-fetch path does not use it. Filed, not fixed here
+
+  record r-gs6c03 (active)
+    Ruled-out: a --non-interactive flag so this runs in CI | it would be switched on in CI, and a CI job that stars repositories is exactly the automation the AUP forbids. A non-interactive run without --dry-run exits 1, verified
+    Ruled-out: dropping withheld candidates from the table | a reviewer who sees only the gradeable ones cannot tell a quiet day from a broken screener
+    Warn: the real transport is now reachable from the CLI. Nothing in the test suite touches it, and no live GitHub call has been made from this repository
+
+
+TASK
+Make the public `gitseed.collect.search.collect` API reject invalid paging arguments before it issues any request through its supplied transport.
+
+`pages` must be at least 1. `per_page` must be within GitHub's supported inclusive range of 1 through 100. For an invalid value, `collect` must raise `ValueError` and must not contact the transport. Valid boundary values (`per_page=1` and `per_page=100`) must remain accepted.
+
+Add automated coverage for zero, negative, and oversized values.

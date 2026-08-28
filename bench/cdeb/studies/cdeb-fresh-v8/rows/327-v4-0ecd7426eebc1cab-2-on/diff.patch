@@ -1,0 +1,262 @@
+diff --git a/gitseed/application.py b/gitseed/application.py
+index 0fa4a1d..5988022 100644
+--- a/gitseed/application.py
++++ b/gitseed/application.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ from dataclasses import dataclass
+ from datetime import datetime
+ 
+-from .category import absent_evidence, classify_all, selected_packs
++from .category import absent_evidence, classify_all, selected_packs, validate_pack
+ from .artifact import (
+     ENGINE_VERSIONS,
+     ArtifactCollection,
+@@ -42,6 +42,8 @@ def execute(
+     source_mode: SourceMode = "digest",
+ ) -> RunArtifact:
+     packs = selected_packs(request.categories)
++    for pack in packs:
++        validate_pack(pack, ports.evidence)
+     failures: list[PortFailure] = []
+     trace_failures: dict[str, list[PortFailure]] = {}
+     metadata: dict[str, RepositoryMetadata | None] = {}
+@@ -153,7 +155,7 @@ def execute(
+     for candidate in collected.candidates:
+         try:
+             evidence = (
+-                absent_evidence()
++                absent_evidence(ports.evidence)
+                 if candidate.repo not in files
+                 else ports.evidence.read_evidence(candidate, files[candidate.repo], metadata[candidate.repo])
+             )
+@@ -161,7 +163,7 @@ def execute(
+             failure = PortFailure("category", "read", candidate.repo, str(error))
+             failures.append(failure)
+             trace_failures[candidate.repo].append(failure)
+-            evidence = absent_evidence()
++            evidence = absent_evidence(ports.evidence)
+         category_evidence[candidate.repo] = evidence
+         categories[candidate.repo] = classify_all(packs, evidence)
+     repositories = tuple(
+diff --git a/gitseed/category.py b/gitseed/category.py
+index 518d6b1..deb62f7 100644
+--- a/gitseed/category.py
++++ b/gitseed/category.py
+@@ -2,7 +2,7 @@ from __future__ import annotations
+ 
+ import re
+ from dataclasses import dataclass
+-from typing import TYPE_CHECKING, Final
++from typing import TYPE_CHECKING, Final, Protocol
+ 
+ from .evidence import ClaimBasis
+ 
+@@ -25,6 +25,12 @@ class Evidence:
+     basis: ClaimBasis
+ 
+ 
++class EvidenceVocabulary(Protocol):
++    """The evidence names an injected reader can produce."""
++
++    evidence_names: frozenset[str]
++
++
+ class FileEvidenceReader:
+     """Extract the small, deterministic evidence vocabulary category packs use."""
+ 
+@@ -89,12 +95,15 @@ class FileEvidenceReader:
+ DEFAULT_EVIDENCE_READER: Final = FileEvidenceReader()
+ 
+ 
+-def satisfiable_evidence(reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
++def satisfiable_evidence(reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> frozenset[str]:
+     return reader.evidence_names
+ 
+ 
+-def absent_evidence() -> tuple[Evidence, ...]:
+-    return tuple(Evidence(name, frozenset(), ClaimBasis.ABSENT) for name in satisfiable_evidence())
++def absent_evidence(reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> tuple[Evidence, ...]:
++    return tuple(
++        Evidence(name, frozenset(), ClaimBasis.ABSENT)
++        for name in sorted(satisfiable_evidence(reader))
++    )
+ 
+ 
+ @dataclass(frozen=True)  # noqa: SLOTS_OK -- dataclass slots require Python 3.10.
+@@ -128,7 +137,8 @@ class CategoryPack:
+     evidence: tuple[EvidenceRequirement, ...]
+ 
+     def __post_init__(self) -> None:
+-        validate_pack(self)
++        if not self.evidence:
++            raise ValueError("category pack requires deterministic evidence")
+ 
+     @property
+     def pack(self) -> PackId:
+@@ -161,11 +171,14 @@ class CategoryMatch:
+ Categorization = CategoryMatch
+ 
+ 
+-def validate_pack(pack: CategoryPack, reader: FileEvidenceReader = DEFAULT_EVIDENCE_READER) -> None:
+-    missing = tuple(
+-        requirement.evidence
+-        for requirement in pack.evidence
+-        if requirement.evidence not in satisfiable_evidence(reader)
++def validate_pack(pack: CategoryPack, reader: EvidenceVocabulary = DEFAULT_EVIDENCE_READER) -> None:
++    available = satisfiable_evidence(reader)
++    missing = _unique(
++        tuple(
++            requirement.evidence
++            for requirement in pack.evidence
++            if requirement.evidence not in available
++        )
+     )
+     if missing:
+         raise UnavailableEvidence(pack.name, missing)
+diff --git a/tests/test_category.py b/tests/test_category.py
+index fbd2ec4..ddffd00 100644
+--- a/tests/test_category.py
++++ b/tests/test_category.py
+@@ -12,6 +12,7 @@ from gitseed.category import (
+     FileEvidenceReader,
+     classify,
+     satisfiable_evidence,
++    validate_pack,
+ )
+ from gitseed.collect.search import Candidate
+ from gitseed.evidence import ClaimBasis
+@@ -74,17 +75,18 @@ def test_model_only_evidence_is_uncategorized_until_the_basis_changes() -> None:
+     assert verified.basis is ClaimBasis.DETERMINISTIC
+ 
+ 
+-def test_pack_rejects_evidence_the_collector_cannot_produce() -> None:
++def test_pack_validation_rejects_evidence_the_reader_cannot_produce() -> None:
+     # Given/When: a pack asks the collector for a non-existent evidence source.
++    pack = CategoryPack(
++        name="webhook-driven",
++        version="v1",
++        evidence=(EvidenceRequirement("webhooks", "receiver"),),
++    )
+     with pytest.raises(
+         ValueError,
+         match="category pack 'webhook-driven' names unavailable evidence: webhooks",
+     ):
+-        CategoryPack(
+-            name="webhook-driven",
+-            version="v1",
+-            evidence=(EvidenceRequirement("webhooks", "receiver"),),
+-        )
++        validate_pack(pack)
+ 
+ 
+ def test_satisfiable_evidence_is_derived_from_reader_output() -> None:
+diff --git a/tests/test_seam.py b/tests/test_seam.py
+index cc155de..2729237 100644
+--- a/tests/test_seam.py
++++ b/tests/test_seam.py
+@@ -8,6 +8,7 @@ import pytest
+ 
+ from gitseed.application import execute, render, replay
+ from gitseed.artifact import EngineVersionMismatch
++from gitseed.category import CategoryPack, Evidence, EvidenceRequirement
+ from gitseed.collect.search import Candidate, CollectResult
+ from gitseed.evidence import ClaimBasis
+ from gitseed.grade.smoke import SmokeResult
+@@ -381,3 +382,97 @@ def test_broken_category_reader_does_not_change_the_approval_inputs() -> None:
+     assert artifact.scores[0].recommendation.status.value == "review"
+     assert artifact.repositories[0].categories[0].basis is ClaimBasis.ABSENT
+     assert any(failure.port == "category" for failure in artifact.failures)
++
++
++def test_unsupported_category_evidence_stops_before_any_port_is_invoked() -> None:
++    calls = []
++
++    class IncompatibleEvidence:
++        evidence_names = frozenset({"files"})
++
++        def read_evidence(self, candidate, files, metadata):
++            calls.append("evidence")
++
++    class GuardedRepository:
++        def search(self, query, limit):
++            calls.append("search")
++
++        def metadata(self, candidate, at):
++            calls.append("metadata")
++
++    class GuardedFiles:
++        def read(self, candidate):
++            calls.append("files")
++
++    class GuardedModel:
++        def evaluate(self, digest):
++            calls.append("evaluate")
++
++        def flags_malicious(self, digest):
++            calls.append("malicious")
++
++    class GuardedClock:
++        def now(self):
++            calls.append("clock")
++
++    with pytest.raises(ValueError, match="category pack 'coding-agents' names unavailable evidence: source"):
++        execute(
++            RunRequest("small tools", 1, ("coding-agents",)),
++            RunPorts(
++                GuardedRepository(),
++                GuardedFiles(),
++                GuardedModel(),
++                GuardedClock(),
++                IncompatibleEvidence(),
++            ),
++        )
++
++    assert calls == []
++
++
++def test_custom_evidence_vocabulary_records_absence_when_files_are_unreadable(monkeypatch) -> None:
++    pack = CategoryPack("custom", "v1", (EvidenceRequirement("custom", "marker"),))
++    monkeypatch.setattr("gitseed.category.CATEGORY_PACKS", (pack,))
++
++    class CustomEvidence:
++        evidence_names = frozenset({"custom"})
++
++        def read_evidence(self, candidate, files, metadata):
++            raise AssertionError("evidence must not be read without repository files")
++
++    artifact = execute(
++        RunRequest("small tools", 1, ("custom",)),
++        RunPorts(
++            Repository(), Files(OSError("offline")), Model(), Clock(), CustomEvidence()
++        ),
++        model_smoke=SmokeResult(True, "fixture"),
++    )
++    trace = artifact.repositories[0]
++
++    assert trace.category_evidence == (Evidence("custom", frozenset(), ClaimBasis.ABSENT),)
++    assert trace.categories[0].basis is ClaimBasis.ABSENT
++    assert trace.categories[0].missing_evidence == ("custom",)
++
++
++def test_custom_evidence_vocabulary_records_absence_when_reader_fails(monkeypatch) -> None:
++    pack = CategoryPack("custom", "v1", (EvidenceRequirement("custom", "marker"),))
++    monkeypatch.setattr("gitseed.category.CATEGORY_PACKS", (pack,))
++
++    class BrokenCustomEvidence:
++        evidence_names = frozenset({"custom"})
++
++        def read_evidence(self, candidate, files, metadata):
++            raise RuntimeError("custom evidence unavailable")
++
++    artifact = execute(
++        RunRequest("small tools", 1, ("custom",)),
++        RunPorts(
++            Repository(), Files(), Model(), Clock(), BrokenCustomEvidence()
++        ),
++        model_smoke=SmokeResult(True, "fixture"),
++    )
++    trace = artifact.repositories[0]
++
++    assert trace.category_evidence == (Evidence("custom", frozenset(), ClaimBasis.ABSENT),)
++    assert trace.categories[0].basis is ClaimBasis.ABSENT
++    assert trace.categories[0].missing_evidence == ("custom",)

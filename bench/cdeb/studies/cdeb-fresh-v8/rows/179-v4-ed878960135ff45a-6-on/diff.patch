@@ -1,0 +1,52 @@
+diff --git a/gitseed/storage.py b/gitseed/storage.py
+index 8111a7b..a03d6df 100644
+--- a/gitseed/storage.py
++++ b/gitseed/storage.py
+@@ -101,7 +101,8 @@ class SQLiteRunStore:
+                 int(stars),
+             )
+             for run_id, repo, observed_at, stars in self._connection.execute(
+-                "SELECT run_id, repo, observed_at, stars FROM repository_observations ORDER BY observation_id"
++                "SELECT run_id, repo, observed_at, stars FROM repository_observations "
++                "ORDER BY observed_at, observation_id"
+             )
+         )
+ 
+diff --git a/tests/test_storage.py b/tests/test_storage.py
+index 02a01cc..9682025 100644
+--- a/tests/test_storage.py
++++ b/tests/test_storage.py
+@@ -170,22 +170,21 @@ def test_partial_artifact_and_correction_history_are_preserved(tmp_path) -> None
+     assert loaded.to_bytes() == partial.to_bytes()
+ 
+ 
+-def test_observations_append_without_moving_first_seen(tmp_path) -> None:
+-    # Given: the store records the same repository again with a later count.
++def test_observations_order_by_recorded_time_with_stable_timestamp_ties(tmp_path) -> None:
++    # Given: a newer run is saved before two runs recorded at the same earlier time.
+     later = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
+     with SQLiteRunStore(tmp_path / "runs.db") as store:
+-        store.save("first", artifact(stars=4, at=AT))
+-        first = store.observations()[0]
+-
+-        # When: a later run observes more stars.
+-        store.save("second", artifact(stars=9, at=later))
++        store.save("newer", artifact(stars=9, at=later))
++        store.save("older-first", artifact(stars=4, at=AT))
++        store.save("older-second", artifact(stars=5, at=AT))
+         observations = store.observations()
+ 
+-    # Then: the new raw observation is appended without changing the first one.
+-    assert observations == (
+-        first,
+-        replace(first, run_id="second", observed_at=later, stars=9),
+-    )
++    # Then: timestamps define history order and equal timestamps retain save order.
++    assert [(entry.run_id, entry.observed_at, entry.stars) for entry in observations] == [
++        ("older-first", AT, 4),
++        ("older-second", AT, 5),
++        ("newer", later, 9),
++    ]
+ 
+ 
+ def test_previous_store_schema_opens_and_migrates_additively(tmp_path) -> None:

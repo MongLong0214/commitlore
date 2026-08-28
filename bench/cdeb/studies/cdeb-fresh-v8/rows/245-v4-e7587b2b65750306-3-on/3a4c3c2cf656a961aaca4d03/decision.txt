@@ -1,0 +1,6 @@
+pin every prose field by literal digest
+
+freezing the full text duplicates the contract into the validator and makes any editorial fix a false failure, so only fields the contract derives or fixes numerically are pinned
+
+scope: {'path_count': 6, 'paths': ['docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md', 'packages/schema/src/metric-registry.ts', 'packages/schema/test/metric-registry.test.ts', 'scripts/validate-planning.mjs', 'specs/metrics.v0.json', 'tests/planning/workspace-skeleton.test.mjs'], 'screen': {'acceptance_runner': 'npm test', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 6, 'scope_paths_total': 6}}
+lifecycle: active

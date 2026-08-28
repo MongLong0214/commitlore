@@ -1,0 +1,18 @@
+Recorded decisions for the files you are about to change:
+
+  record r-cat5860 (active)
+    Ruled-out: a pack digest without embedded definitions | a digest detects change but cannot re-derive a past categorization from its artifact alone
+    Limit: artifacts retain only the three registered packs and four extracted evidence kinds; they cannot evaluate a later custom pack against old source
+    Warn: category evidence failures are recorded as absent and intentionally do not alter score, risk, recommendation, or approval
+
+  record r-rel020main (active)
+
+  record r-gsf501 (active)
+    Ruled-out: external-write port | writes remain reachable only through review actions that require Approval
+    Ruled-out: scoring and screening ports | both are pure deterministic domain functions with no outside capability to supply
+    Ruled-out: artifact storage port | pathlib is the only current storage shape and replay does not need another
+    Limit: Python 3.9 support prevents dataclass slots
+
+
+TASK
+Ensure evidence-extraction failures preserve the vocabulary of the evidence reader supplied for the run. When that reader fails, the returned run artifact must contain one absent, valueless evidence item for each of that reader’s advertised evidence names, rather than evidence names belonging to a different reader. Continue recording the category-read failure and keep the run safely degraded.

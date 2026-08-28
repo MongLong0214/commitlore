@@ -1,0 +1,57 @@
+Recorded decisions for the files you are about to change:
+
+  record r-search67 (active)
+    Ruled-out: low-star, creation-date, or multi-bucket targeting | their thresholds and merge rules would add policy choices without a visible outcome to tune against
+    Limit: no attention baseline or time-separated outcome exists, so this change can claim only an update-recency collection preference
+    Warn: pre-change best-match sets and updated-descending sets are not population-comparable; reissuing recorded parameters later cannot recreate GitHub's historical index
+
+  record r-cat5860 (active)
+    Ruled-out: a pack digest without embedded definitions | a digest detects change but cannot re-derive a past categorization from its artifact alone
+    Limit: artifacts retain only the three registered packs and four extracted evidence kinds; they cannot evaluate a later custom pack against old source
+    Warn: category evidence failures are recorded as absent and intentionally do not alter score, risk, recommendation, or approval
+
+  record r-rawmeta64 (active)
+    Ruled-out: adding a growth or momentum signal | issue #63 owns new signals; this change only preserves observations
+    Limit: exact GitHub counts require following metadata pagination links
+    Warn: schema 6 reads schema-5 boolean inputs and records pipeline-v2 for raw metadata artifacts
+
+  record r-obs065 (active)
+    Ruled-out: silently dropping an observation write failure | a history gap needs an explicit warning when the run completes
+    Limit: the approval/action outcome is user-facing; observations are bookkeeping about it
+    Warn: a printed observation-write failure leaves the stored run without observations; do not treat that history gap as a run that never happened
+
+  record r-stars65 (active)
+    Ruled-out: storing star deltas | raw timestamp and count observations remain correct as later rows arrive
+    Limit: observations begin when this version writes a store; earlier surfaced repositories have no backfilled first observation
+    Warn: history labels the baseline as the first recorded observation, not a repository discovery date
+
+  record r-store62 (active)
+    Ruled-out: updating or deleting a prior run to correct it | corrections remain new immutable rows linked by corrects_run_id
+    Limit: the default store is ./.gitseed/runs.db so run history stays visibly local to the working project
+    Warn: incomplete execution results still save after execute; reviewed runs save after approval/action flow so a broken store cannot bypass the GitHub-write gate
+
+  record None (active)
+    Ruled-out: refusing a run whose search was truncated | that is a product decision outside this ticket, and a silent behaviour change smuggled in with an observability fix is harder to find than the missing field was
+    Limit: total_count is GitHub's own estimate, so a retrieved count matching it is evidence of completeness rather than proof of it
+
+  record r-gsart54 (active)
+    Ruled-out: converting CollectResult.candidates to a tuple at its own definition | the pipeline mutates it while collecting, and freezing there would force a rebuild per candidate
+    Limit: artifacts written before this change carry no engine versions and are rejected rather than guessed at
+
+  record r-rel020main (active)
+
+  record r-modelgate9 (active)
+    Ruled-out: treating a missing model as a complete zero-grade run | it would make deterministic-only output indistinguishable from a verified run
+    Limit: degraded runs retain deterministic signals but emit no model grades
+    Warn: schema 3 artifacts require the current release
+
+  record r-f8replay (active)
+    Ruled-out: JSON files on disk | SQLite keeps a single durable, constrained run history
+    Ruled-out: storage replay as deserialization | replay must recompute output from recorded port responses
+    Limit: replay reconstructs only the existing read-only RunPorts seam
+    Warn: stored replay has no review or external-write port
+
+  record r-f8schema (active)
+    Ruled-out: JSON files on disk | SQLite provides atomic constraints, version gating, and immutable correction lineage
+    Limit: run records retain canonical artifacts without new runtime dependencies
+    Warn: only an empty version-0 database is initialized; a nonempty older schema is refused

@@ -1,0 +1,20 @@
+Recorded decisions for the files you are about to change:
+
+  record r-cat5860 (active)
+    Ruled-out: a pack digest without embedded definitions | a digest detects change but cannot re-derive a past categorization from its artifact alone
+    Limit: artifacts retain only the three registered packs and four extracted evidence kinds; they cannot evaluate a later custom pack against old source
+    Warn: category evidence failures are recorded as absent and intentionally do not alter score, risk, recommendation, or approval
+
+  record r-rel020main (active)
+
+  record r-gsf501 (active)
+    Ruled-out: external-write port | writes remain reachable only through review actions that require Approval
+    Ruled-out: scoring and screening ports | both are pure deterministic domain functions with no outside capability to supply
+    Ruled-out: artifact storage port | pathlib is the only current storage shape and replay does not need another
+    Limit: Python 3.9 support prevents dataclass slots
+
+
+TASK
+Make injected EvidenceReader implementations fully supported by application execution. Before any operational port is invoked, verify that every evidence name required by each selected category pack is advertised by ports.evidence.evidence_names. If a selected pack cannot be supported, fail with a ValueError that identifies the pack and its unavailable requirement(s).
+
+When repository files cannot be read, or when the configured evidence reader cannot read evidence, record absent category evidence using the configured reader's vocabulary. Those absence records must have empty values and an absent basis, and category results must remain absent rather than being treated as ordinary non-matches. This must work for a custom reader whose vocabulary includes a non-default evidence name.

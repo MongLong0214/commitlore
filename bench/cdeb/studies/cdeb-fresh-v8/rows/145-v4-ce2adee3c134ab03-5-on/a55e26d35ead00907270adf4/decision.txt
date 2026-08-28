@@ -1,0 +1,6 @@
+keep the wildcard census and rely on the focused-lane guard
+
+the guard catches deletion only, and the review demonstrated growth passing 230/230 with an unreviewed product file present
+
+scope: {'path_count': 4, 'paths': ['packages/schema/src/capability.ts', 'packages/schema/test/capability.test.ts', 'tests/planning-contract.test.mjs', 'tests/planning/workspace-skeleton.test.mjs'], 'screen': {'acceptance_runner': 'npm test', 'acceptance_runner_present': True, 'base_tree_resolvable': True, 'scope_paths_present': 4, 'scope_paths_total': 4}}
+lifecycle: active

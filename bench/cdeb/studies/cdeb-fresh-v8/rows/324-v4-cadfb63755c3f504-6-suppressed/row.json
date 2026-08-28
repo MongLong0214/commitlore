@@ -1,0 +1,112 @@
+{
+  "agent_substituted": false,
+  "arm": "SUPPRESSED",
+  "base_tree": "222378defcb5d2d519184b6f23146abac631faba",
+  "candidate_id": "v4-cadfb63755c3f504",
+  "changed_files": [
+    "gitseed/pipeline/run.py",
+    "tests/test_pipeline.py"
+  ],
+  "completion": {
+    "completed": true,
+    "exit_code": 0,
+    "pre_start_failure": false,
+    "reached_a_model": true,
+    "retry_eligible_under_section_20": false,
+    "seconds": 121,
+    "timed_out": false,
+    "why": null
+  },
+  "delivered_sha256": "8bdc729307884f32fe84ceb1a3cdbe774d5426cd211f126b3b1aee1abbb70f8d",
+  "delivery_manipulation": {
+    "arm": "SUPPRESSED",
+    "identity_kind": "record-id",
+    "records_after": 10,
+    "records_before": 11,
+    "removal_is_exact": true,
+    "removed": 1,
+    "removed_ids": [
+      "r-gs5b02"
+    ],
+    "survivors": [
+      "r-32bgrade",
+      "r-replay57",
+      "r-metadata52",
+      "commit:959e6b3d6ee4",
+      "r-gs45p48fix",
+      "r-rel020main",
+      "r-gsb006",
+      "r-modelgate9",
+      "r-f11trust",
+      "r-gs8e05"
+    ]
+  },
+  "episode_index": 324,
+  "final_diff_bytes": 1152,
+  "final_diff_sha256": "5a06f6e7f528e5dfddea01a684f6469d8088c06e8af362f2959a8f2f669d9261",
+  "first_mutation": {
+    "event_index": 17,
+    "kind": "update",
+    "path": "gitseed/pipeline/run.py"
+  },
+  "functional_pass": true,
+  "judge_packet": {
+    "arm_cue_hit_count": 0,
+    "arm_cue_hits": [],
+    "arm_cue_present": false,
+    "arm_cue_scope": "the diff and the files the agent changed; the base tree is identical across arms and cannot carry the assignment",
+    "base_tree_marker_count": 71,
+    "base_tree_markers_are_not_cues": "Both repositories use CommitLore, so their tracked files carry Ruled-out: and Record-Id text of their own. It is the same text in both arms.",
+    "excluded_from_packet": [],
+    "excludes_git": true,
+    "files_in_packet": 108,
+    "packet_id": "8c9840915911c9a7c55605ce",
+    "packet_sha256": "c465975b2804dd47e716e0c258d6f1e86cdd89d9ae0d8a0f08bc0cba0dfcf63b"
+  },
+  "manual_discovery": null,
+  "not_yet_judged": true,
+  "packet_id": "8c9840915911c9a7c55605ce",
+  "pair_position": 162,
+  "regression_acceptance": {
+    "baseline_expected_failures": 0,
+    "baseline_failures_that_passed": [],
+    "command": "python3 -m pytest -q",
+    "exit_code": 0,
+    "new_failures": [],
+    "observed_failures": 0,
+    "pass": true,
+    "scored_as": "no failure outside the frozen baseline",
+    "tail": [
+      "318 passed, 3 skipped in 2.49s"
+    ]
+  },
+  "repetition": 6,
+  "repository_id": "gitseed",
+  "retry_lineage": null,
+  "runtime": {
+    "model_matches_pin": true,
+    "model_requested": "gpt-5.6-terra",
+    "model_resolved": "gpt-5.6-terra",
+    "model_resolved_from": ".codex/sessions/2026/08/29/rollout-2026-08-29T03-00-09-01a04987-7427-7163-b906-7664e3d5e86f.jsonl",
+    "product_matches_pin": true,
+    "product_sha256": "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528"
+  },
+  "schema_version": 1,
+  "slot_in_pair": 0,
+  "study_id": "cdeb-fresh-v8",
+  "task_acceptance": {
+    "command": "python3 -m pytest -q tests/test_pipeline_collection_rate_limit.py",
+    "exit_code": 0,
+    "hidden_during_the_run": true,
+    "pass": true,
+    "recorded_how_to_run": "python -m pytest -q tests/test_pipeline_collection_rate_limit.py",
+    "source_sha256": "4bf1908e4553282096215e42878bc8bbd373e5b7dc1172db82f49d3ef79b28a3",
+    "tail": [
+      "1 passed in 0.02s"
+    ],
+    "was_present_in_the_snapshot": false
+  },
+  "usage": {
+    "seconds": 121
+  }
+}

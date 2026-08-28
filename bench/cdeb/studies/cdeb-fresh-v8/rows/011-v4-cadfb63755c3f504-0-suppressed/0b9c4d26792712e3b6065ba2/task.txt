@@ -1,0 +1,1 @@
+Make a pipeline run report rate limiting when its candidate collection was truncated because of a rate limit. For a collection marked incomplete with a rate-limit stop reason, the returned PipelineResult must have rate_limited set to true, while continuing to report the run as incomplete and retaining its incomplete reason.

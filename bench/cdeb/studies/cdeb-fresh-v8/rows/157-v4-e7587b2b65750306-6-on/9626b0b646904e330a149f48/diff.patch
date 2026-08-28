@@ -1,0 +1,64 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..c783f4f 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -49,6 +49,7 @@ export interface MetricDefinition {
+   gaming_guard: string;
+   treatment: string;
+   consumer_routes: string[];
++  observation_key: string;
+ }
+ 
+ type ValidationResult = { ok: boolean; errors: string[]; metrics: MetricDefinition[] };
+diff --git a/packages/schema/test/metric-registry.test.ts b/packages/schema/test/metric-registry.test.ts
+index 3e7d2cc..49aac6d 100644
+--- a/packages/schema/test/metric-registry.test.ts
++++ b/packages/schema/test/metric-registry.test.ts
+@@ -20,6 +20,34 @@ const metricOf = (registry: any, id: string) =>
+ const vectorOf = (registry: any, id: string, vectorId: string) =>
+   metricOf(registry, id).canonical_vectors.find((vector: any) => vector.vector_id === vectorId);
+ 
++// This is an external consumer of the exported interface, rather than a check
++// against the validator's private field inventory.  TypeScript must reject a
++// missing, optional, unknown, or untyped observation key at this boundary.
++type PublicMetricConsumer = Pick<MetricDefinition, "observation_key">;
++type IsAssignableToPublicConsumer<Value> = [Value] extends [PublicMetricConsumer] ? true : false;
++type Expect<Condition extends true> = Condition;
++type Not<Condition extends boolean> = Condition extends true ? false : true;
++type IsAny<Value> = 0 extends (1 & Value) ? true : false;
++type IsExactlyString<Value> = IsAny<Value> extends true
++  ? false
++  : [Value] extends [string]
++    ? [string] extends [Value]
++      ? true
++      : false
++    : false;
++
++type _ObservationKeyIsRequiredString = Expect<IsExactlyString<MetricDefinition["observation_key"]>>;
++type _MissingObservationKeyIsRejected = Expect<Not<IsAssignableToPublicConsumer<{}>>>;
++type _OptionalObservationKeyIsRejected = Expect<
++  Not<IsAssignableToPublicConsumer<{ observation_key?: string }>>
++>;
++type _UnknownObservationKeyIsRejected = Expect<Not<IsAssignableToPublicConsumer<unknown>>>;
++type _UntypedObservationKeyIsRejected = Expect<
++  Not<IsAssignableToPublicConsumer<Record<string, unknown>>>
++>;
++
++const consumePublicMetric = (metric: MetricDefinition): string => metric.observation_key;
++
+ // Every contract-v1 field the ticket's Minimum GREEN enumerates, plus identity.
+ const REQUIRED_FIELDS = [
+   "metric_id",
+@@ -65,6 +93,12 @@ const CONSUMERS = [
+ const ratio = (n: number, d: number) => ({ n, d });
+ 
+ describe("metric-registry", () => {
++  test("public MetricDefinition consumer requires observation_key as a string", () => {
++    const result = validateMetricRegistry(frozen());
++    assert.equal(result.ok, true, result.errors.join("; "));
++    assert.equal(consumePublicMetric(result.metrics[0]), "satisfied");
++  });
++
+   test("exact-20", () => {
+     const registry = frozen();
+     const result = validateMetricRegistry(registry);
