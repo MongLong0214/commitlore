@@ -280,7 +280,15 @@ def first_mutation(events_path, tree):
     return None
 
 
-def run(assignment, out_dir, scratch):
+def run(assignment, out_dir, scratch, agent=None):
+    """One episode. `agent` is injectable so the harness can be exercised end to end.
+
+    A substitute agent receives (tree, prompt, env) and returns (stdout, stderr,
+    exit code) exactly as the real invocation does. It exists so every step except
+    the model call can be run and checked -- materialise, payload, hide, regression,
+    install, acceptance, row, packet, teardown. Running the real agent on a
+    benchmark task to check the harness would be the pilot section 33 forbids.
+    """
     cl = os.path.join(scratch, "v8run/cl120/dist/commitlore.mjs")
     product_digest = verify_product(cl)
 
@@ -318,7 +326,11 @@ def run(assignment, out_dir, scratch):
     env = dict(os.environ, HOME=home)
     started = time.time()
     timed_out = False
-    try:
+    if agent is not None:
+        stdout, stderr, code = agent(tree, prompt, env)
+        seconds = round(time.time() - started)
+    else:
+      try:
         proc = subprocess.run(
             ["codex", "exec", "-m", PINNED_MODEL,
              "-c", 'model_reasoning_effort="high"',
@@ -326,18 +338,20 @@ def run(assignment, out_dir, scratch):
             cwd=tree, capture_output=True, text=True, env=env,
             timeout=EPISODE_TIMEOUT_SECONDS)
         stdout, stderr, code = proc.stdout, proc.stderr, proc.returncode
-    except subprocess.TimeoutExpired as expired:
+      except subprocess.TimeoutExpired as expired:
         timed_out = True
         stdout = (expired.stdout or b"").decode(errors="replace") if isinstance(expired.stdout, bytes) else (expired.stdout or "")
         stderr = (expired.stderr or b"").decode(errors="replace") if isinstance(expired.stderr, bytes) else (expired.stderr or "")
         code = None
-    seconds = round(time.time() - started)
+      seconds = round(time.time() - started)
     events_path = os.path.join(out_dir, "events.jsonl")
     open(events_path, "w").write(stdout)
     open(os.path.join(out_dir, "err.txt"), "w").write(stderr)
 
     resolved_model, rollout = resolved_model_id(home)
-    started = reached_a_model(events_path)
+    # Not `started` -- that name already holds the wall-clock stamp above, and the
+    # only reason overwriting it works today is that `seconds` is computed first.
+    reached_model = reached_a_model(events_path)
     mutation = first_mutation(events_path, tree)
     diff = subprocess.run(["git", "-C", tree, "diff"], capture_output=True, text=True).stdout
     changed = [c[3:] for c in subprocess.run(
@@ -386,7 +400,7 @@ def run(assignment, out_dir, scratch):
     # that an arm-independent infrastructure failure and allows one retry; recording
     # it as a failed episode would put a zero in the data for something that was
     # never measured, which is the same shape as the three defects already found.
-    pre_start_failure = not started and not completed
+    pre_start_failure = not reached_model and not completed
     functional_pass = completed and task_acc.returncode == 0 and regression_pass
 
     row = {
@@ -415,7 +429,7 @@ def run(assignment, out_dir, scratch):
         "changed_files": changed,
         "completion": {"exit_code": code, "timed_out": timed_out,
                        "seconds": seconds, "completed": completed,
-                       "reached_a_model": started,
+                       "reached_a_model": reached_model,
                        "pre_start_failure": pre_start_failure,
                        "retry_eligible_under_section_20": pre_start_failure,
                        "why": ("no agent_message, command_execution or file_change "
@@ -451,6 +465,7 @@ def run(assignment, out_dir, scratch):
         "usage": {"seconds": seconds},
         "retry_lineage": None,
         "not_yet_judged": True,
+        "agent_substituted": agent is not None,
     }
 
     # Step 15, before step 16. The packet needs the final tree and the tree does
