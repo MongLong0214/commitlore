@@ -1423,6 +1423,21 @@ manual-discovery difference
 token/wall-time difference
 ```
 
+RBDR is defined as follows (owner ruling 2026-08-28, v8-d012). The specification
+named it and section 27 gated it twice without ever defining it; an independent
+analyst reading only this plan returned null.
+
+```text
+RBDR = |{pairs : SUPPRESSED functionally revived AND ON did not}|
+       --------------------------------------------------------
+              |{pairs : SUPPRESSED functionally revived}|
+```
+
+Pairs whose SUPPRESSED arm did not revive have nothing to block and are not in the
+denominator. The lower bound is the 2.5th percentile of a bootstrap over the
+revived pairs. When no suppressed arm revived, RBDR is undefined and the section 27
+conditions on it fail rather than defaulting.
+
 ### 23.7 Judge sensitivity
 
 각 judge를 단독 instrument로 사용한:
@@ -1476,11 +1491,18 @@ Match:
 raw counts exact
 panel labels exact
 point estimates <= 1e-12
-bootstrap quantiles <= 1e-6
-permutation p <= 1e-6
 reliability metrics <= 1e-6
 claim gate identical
 ```
+
+Bootstrap quantiles and the permutation p are compared but not required to match to
+a fixed tolerance (owner ruling 2026-08-28, v8-d013). They are Monte Carlo
+estimates, and two independent implementations consume the random stream in
+different orders from the same seed, so agreement to 1e-6 would mean the two
+analysts wrote the same code -- the opposite of what this section asks for. The
+comparison reports the gap against Monte Carlo error at the registered replicate
+count. Measured on a synthetic seal, two independent implementations differed by
+2.8e-3 on the interval and 1.5e-3 on the p.
 
 Mismatch unresolved:
 

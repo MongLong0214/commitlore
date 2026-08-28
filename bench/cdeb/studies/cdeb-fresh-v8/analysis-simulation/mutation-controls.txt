@@ -12,7 +12,8 @@ baseline unmutated: all controls pass
   caught       interval uses the extremes, not percentiles  <- interval sits at the 2.5/97.5 percentiles
   caught       randomization never swaps labels  <- randomization p small under a real effect
   caught       randomization always swaps labels  <- randomization p small under a real effect
-  caught       RBDR divides by a zero denominator  <- crashed: ZeroDivisionError: float division by zero
+  caught       RBDR counts every pair, not the revived ones  <- RBDR undefined when nothing revived, RBDR counts pairs that revived an
+  caught       RBDR treats no revival as a perfect score  <- crashed: ZeroDivisionError: division by zero
   caught       gate passes when any condition holds  <- strong claim fails one gate at a time, missing input is a failure, not
   caught       gate treats a missing input as a pass  <- missing input is a failure, not a pass
   caught       gate answers without a stated input origin  <- the gate refuses inputs with no stated origin
@@ -20,5 +21,5 @@ baseline unmutated: all controls pass
   caught       three-way agreement counts non-unanimous episodes  <- three-way agreement counts only unanimous episodes
   caught       Fleiss kappa drops the chance correction  <- Fleiss kappa collapses on the same data
 
-20/20 mutations caught
-code pinned: analysis.py 27df529d9999385e
+21/21 mutations caught
+code pinned: analysis.py 1fc6cfb70cb667a2

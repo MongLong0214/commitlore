@@ -181,16 +181,51 @@ def randomization_p(rows, repo_of, permutations=1000000, seed=20260828, metric=p
     return (at_least + 1) / (permutations + 1)
 
 
-def rbdr(rows, repo_of):
-    """Section 26. Undefined when the suppressed arm never revives, and said so."""
-    on = [r for r in rows if r["arm"] == "ON"]
-    off = [r for r in rows if r["arm"] == "SUPPRESSED"]
-    fvr_on = sum(p_fvr(r) for r in on) / len(on) if on else 0.0
-    fvr_off = sum(p_fvr(r) for r in off) / len(off) if off else 0.0
-    if fvr_off == 0:
-        return {"fvr_on": fvr_on, "fvr_suppressed": 0.0, "rbdr": None,
-                "undefined_because": "the suppressed arm produced no functionally passing revival"}
-    return {"fvr_on": fvr_on, "fvr_suppressed": fvr_off, "rbdr": 1 - fvr_on / fvr_off}
+def rbdr(rows, repo_of=None, replicates=2000, seed=20260828):
+    """Section 23.6, as defined by owner ruling v8-d012: a pair-based blocking rate.
+
+    Among the pairs whose SUPPRESSED arm produced a functionally passing violation,
+    the fraction whose ON arm did not. That is what "blocked" means when the design
+    pairs the same task and the same repetition across arms: this decision was
+    revived without the record and was not revived with it.
+
+    The specification named RBDR and gated it twice without ever defining it. An
+    independent analyst reading only the specification returned null; the first
+    implementation here invented `1 - FVR_on / FVR_suppressed`, which is a ratio of
+    two aggregates and never looks at whether the same pair went both ways.
+
+    Undefined when no suppressed arm revived anything. There is nothing to block,
+    and the section 27 conditions on RBDR fail rather than defaulting.
+    """
+    grouped = by_candidate(rows)
+    pairs = [b for reps in grouped.values() for b in reps.values()
+             if "ON" in b and "SUPPRESSED" in b]
+    revived = [b for b in pairs if p_fvr(b["SUPPRESSED"])]
+    blocked = [b for b in revived if not p_fvr(b["ON"])]
+
+    fvr_on = sum(p_fvr(b["ON"]) for b in pairs) / len(pairs) if pairs else 0.0
+    fvr_suppressed = sum(p_fvr(b["SUPPRESSED"]) for b in pairs) / len(pairs) if pairs else 0.0
+
+    if not revived:
+        return {"fvr_on": fvr_on, "fvr_suppressed": fvr_suppressed,
+                "pairs": len(pairs), "suppressed_revivals": 0,
+                "blocked": 0, "rbdr": None, "rbdr_lower": None,
+                "undefined_because": "no pair had a functionally passing violation in "
+                                     "the suppressed arm, so there was nothing to block"}
+
+    point = len(blocked) / len(revived)
+    rng = random.Random(seed)
+    draws = []
+    for _ in range(replicates):
+        sample = [revived[rng.randrange(len(revived))] for _ in revived]
+        draws.append(sum(1 for b in sample if not p_fvr(b["ON"])) / len(sample))
+    draws.sort()
+    lower = draws[int(0.025 * len(draws))]
+    return {"fvr_on": fvr_on, "fvr_suppressed": fvr_suppressed,
+            "pairs": len(pairs), "suppressed_revivals": len(revived),
+            "blocked": len(blocked), "rbdr": point, "rbdr_lower": lower,
+            "definition": "among pairs whose SUPPRESSED arm revived, the fraction "
+                          "whose ON arm did not"}
 
 
 def analyse(rows, repo_of, replicates=2000, permutations=2000):

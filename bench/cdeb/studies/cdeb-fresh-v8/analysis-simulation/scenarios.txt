@@ -1,4 +1,4 @@
-  known_positive       delta=+0.305 ci=[+0.208,+0.411] p=0.0005 ok  blocked:rbdr_point
+  known_positive       delta=+0.305 ci=[+0.208,+0.411] p=0.0005 ok  CLAIM
   exact_null           delta=+0.023 ci=[-0.075,+0.126] p=0.6927 ok  blocked:dsfps_ci_lower_positive,randomization_
   known_negative       delta=-0.183 ci=[-0.283,-0.084] p=0.0010 ok  blocked:aos_positive,dsfps_ci_lower_positive,g
   completion_degraded  delta=-0.052 ci=[-0.154,+0.057] p=0.3618 ok  blocked:completion_not_degraded,dsfps_ci_lower

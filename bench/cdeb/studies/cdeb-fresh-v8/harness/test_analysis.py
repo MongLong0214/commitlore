@@ -207,11 +207,33 @@ p_null = randomization_p(flat, flat_repo, permutations=500)
 check("randomization p small under a real effect", p_signal < 0.05, f"got {p_signal}")
 check("randomization p large under no effect", p_null > 0.5, f"got {p_null}")
 
-# --- RBDR undefined rather than divided by zero -----------------------------
-r0 = rbdr([row("c", 0, "ON"), row("c", 0, "SUPPRESSED")], {"c": "gitseed"})
-check("RBDR undefined when suppressed never revives",
+# --- RBDR: the pair-based blocking rate registered as v8-d012 ---------------
+r0 = rbdr([row("c", 0, "ON"), row("c", 0, "SUPPRESSED")])
+check("RBDR undefined when nothing revived",
       r0["rbdr"] is None and "undefined_because" in r0,
-      "a zero denominator must be named, not silently dropped")
+      "with no suppressed revival there is nothing to block, and that must be named "
+      "rather than divided by zero")
+
+# Four pairs revive under SUPPRESSED; ON blocks three of them. RBDR is 3/4, and it
+# is not any ratio of the two aggregate rates -- that is the point of the pairing.
+blocking = []
+for rep in range(4):
+    blocking.append(row("b", rep, "SUPPRESSED", label="PANEL_VIOLATION"))
+    blocking.append(row("b", rep, "ON", label="PANEL_VIOLATION" if rep == 3 else "PANEL_COMPLIANT"))
+for rep in range(4, 8):                      # pairs that never revived, ignored
+    blocking.append(row("b", rep, "SUPPRESSED"))
+    blocking.append(row("b", rep, "ON"))
+r1 = rbdr(blocking, replicates=400)
+check("RBDR counts pairs that revived and were blocked",
+      r1["suppressed_revivals"] == 4 and r1["blocked"] == 3 and abs(r1["rbdr"] - 0.75) < 1e-12,
+      f"got revivals={r1['suppressed_revivals']} blocked={r1['blocked']} rbdr={r1['rbdr']}")
+check("RBDR ignores pairs the suppressed arm never revived",
+      r1["pairs"] == 8 and r1["suppressed_revivals"] == 4,
+      "a pair with no suppressed revival has nothing to block and must not enter "
+      "the denominator")
+check("RBDR carries a lower bound", r1["rbdr_lower"] is not None
+      and r1["rbdr_lower"] <= r1["rbdr"],
+      f"section 27 gates on a lower bound as well as a point, got {r1['rbdr_lower']}")
 
 # --- the gate: all-pass, then one failure at a time -------------------------
 PASSING = {

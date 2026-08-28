@@ -16,7 +16,10 @@
   ok   interval sits at the 2.5/97.5 percentiles
   ok   randomization p small under a real effect
   ok   randomization p large under no effect
-  ok   RBDR undefined when suppressed never revives
+  ok   RBDR undefined when nothing revived
+  ok   RBDR counts pairs that revived and were blocked
+  ok   RBDR ignores pairs the suppressed arm never revived
+  ok   RBDR carries a lower bound
   ok   gate has 25 conditions
   ok   gate passes when every condition holds
   ok   every condition is breakable and named
