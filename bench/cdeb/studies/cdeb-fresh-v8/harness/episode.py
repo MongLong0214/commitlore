@@ -38,8 +38,87 @@ it pass. Do not modify the test.
 """
 
 
+PINNED_DIST_SHA256 = "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528"
+PINNED_MODEL = "gpt-5.6-terra"
+
+
 def sha(text):
     return hashlib.sha256(text.encode(errors="replace")).hexdigest()
+
+
+def sha_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_product():
+    """The build under test lives outside the repository, so check it every time.
+
+    `CL` points into a scratch directory: not tracked, not backed up, and lost at
+    a session boundary once already. If it is missing the run must stop rather
+    than fail in some other way later, and if it is a different build the study
+    would be measuring something other than what product-lock.json pins.
+    """
+    if not os.path.exists(CL):
+        raise SystemExit(f"product under test is missing: {CL}")
+    digest = sha_file(CL)
+    if digest != PINNED_DIST_SHA256:
+        raise SystemExit(
+            f"product under test is not the pinned build\n"
+            f"  pinned {PINNED_DIST_SHA256}\n  found  {digest}")
+    return digest
+
+
+def resolved_model_id(home):
+    """What the runtime resolved, read from the rollout it wrote.
+
+    Not the `-m` argument. Echoing that back would confirm the flag arrived and
+    say nothing about which model served the request, which is the drift section
+    16.2 exists to catch. The `--json` event stream carries no model id at all,
+    so the rollout under $HOME/.codex/sessions is the only place the resolved id
+    appears.
+
+    Returns None when no rollout is found, and the caller records that as a
+    missing verification rather than as a pass.
+    """
+    root = os.path.join(home, ".codex", "sessions")
+    newest, newest_at = None, -1
+    for dirpath, _, filenames in os.walk(root):
+        for name in filenames:
+            if not name.endswith(".jsonl"):
+                continue
+            path = os.path.join(dirpath, name)
+            stamp = os.path.getmtime(path)
+            if stamp > newest_at:
+                newest, newest_at = path, stamp
+    if newest is None:
+        return None, None
+
+    found = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in ("model", "model_id", "modelId") and isinstance(value, str):
+                    found.add(value)
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    for line in open(newest, encoding="utf8", errors="ignore"):
+        try:
+            walk(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    if len(found) != 1:
+        # More than one distinct id in one rollout is not something to average
+        # over; it is a question the row has to carry unanswered.
+        return sorted(found) or None, os.path.relpath(newest, home)
+    return found.pop(), os.path.relpath(newest, home)
 
 
 def payload_for(tree, target_record, arm):
@@ -118,6 +197,7 @@ def run(arm, model, out_dir):
     prompt = f"{delivered}\n\nTASK\n{TASK}\n"
     open(f"{out_dir}/prompt.txt", "w").write(prompt)
 
+    product_digest = verify_product()
     env = dict(os.environ, HOME=home)
     started = time.time()
     p = subprocess.run(
@@ -136,10 +216,22 @@ def run(arm, model, out_dir):
                              capture_output=True, text=True).stdout.splitlines()
     diff = subprocess.run(["git", "-C", tree, "diff"], capture_output=True, text=True).stdout
 
+    # Read before the fresh HOME is destroyed below; the rollout lives inside it.
+    resolved_model, rollout_path = resolved_model_id(home)
+
     row = {
         "schema_version": 1, "study_id": "cdeb-fresh-v8", "kind": "synthetic-smoke",
         "not_a_product_effect_row": True,
-        "arm": arm, "model": model,
+        "arm": arm, "model_requested": model,
+        "model_resolved": resolved_model,
+        "model_resolved_from": rollout_path,
+        "model_matches_pin": resolved_model == PINNED_MODEL,
+        "model_verification": (
+            "missing rollout" if resolved_model is None
+            else "ambiguous rollout" if isinstance(resolved_model, list)
+            else "read from the session rollout, not from the -m argument"),
+        "product_sha256": product_digest,
+        "product_matches_pin": product_digest == PINNED_DIST_SHA256,
         "fresh_home": home != os.environ.get("HOME"),
         "fresh_home_carries_only_credential": sorted(
             os.path.relpath(os.path.join(dp, f), home)
@@ -174,6 +266,8 @@ def run(arm, model, out_dir):
 if __name__ == "__main__":
     arm, model, out = sys.argv[1], sys.argv[2], sys.argv[3]
     r = run(arm, model, out)
-    print("  {} records={} removed={} acceptance={} first_mutation={} {}s".format(
-        r["arm"], r["payload_records"], r["target_blocks_removed"],
-        r["acceptance_pass"], bool(r["first_mutation"]), r["seconds"]))
+    print("  {} records={} removed={} acceptance={} first_mutation={} {}s "
+          "model={} pin={}".format(
+              r["arm"], r["payload_records"], r["target_blocks_removed"],
+              r["acceptance_pass"], bool(r["first_mutation"]), r["seconds"],
+              r["model_resolved"], r["model_matches_pin"]))

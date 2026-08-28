@@ -1,42 +1,33 @@
 {
-  "schema_version": 1,
-  "study_id": "cdeb-fresh-v8",
+  "budgets": {
+    "max_meaningful_turns": 60,
+    "max_tool_calls": 80,
+    "wall_clock_seconds": 1800
+  },
+  "digests": {
+    "acceptance_runner": "python3 -m pytest -q <acceptance path> for gitseed; node --test <path> for agent-operator-score",
+    "episode.py": "57a985690d4fe5fd88a3fd29b237eb3c5db36e1457e693c02cd93facff429922",
+    "episode_harness_sha256": "a46a5d4df50903f042c8b37fe29d2ba49324ccd5cc85193eab99fd4c44ec32d1",
+    "judge_prompt_sha256": "0ff977259722837d88295f315842ad7011212c2bb0a318d8dd2152fd736a59fb",
+    "judge_runner_sha256": "101d9db4c0e2b850cc5ddce533f74dd57e03dcfc888e57bb40d77020c5098dae",
+    "judge_schema_sha256": "8423972e7753fdcb2794d0d366e4028685b7301f40c4e0744ac9023ff2776d32",
+    "model-probe.sh": "9fea36fbe6ca1ef467504a60bd4745aeff2d47fb55122f761164c0a068f34d46",
+    "packet_builder_sha256": "e8f2e9e9a5ad61861f372bb56352d880fd78efa15497529ef86c1649df140b3d",
+    "product_dist_sha256": "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528",
+    "suppression_is_in": "harness/episode.py payload_for()"
+  },
   "document_id": "cdeb-fresh-v8-runtime-lock",
+  "environment_observation": "the fresh HOME changes shell initialisation: pytest and python are not on PATH inside an episode and only python3 -m pytest resolves. It applies to both arms equally, so it is not a bias, but it costs an agent two failed tool calls before it finds the working invocation.",
   "harness": {
+    "binary_bytes": 214716336,
+    "binary_sha256": "b0308517b20543012fa2171aa3d46ce455a7456c4eb2a552ab9468ba4eeb1e50",
     "name": "Codex CLI",
     "version": "codex-cli 0.148.0",
     "wrapper": "/Users/isaac/.local/bin/codex",
-    "wrapper_sha256": "134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477",
-    "binary_sha256": "b0308517b20543012fa2171aa3d46ce455a7456c4eb2a552ab9468ba4eeb1e50",
-    "binary_bytes": 214716336
-  },
-  "model": {
-    "pinned": "gpt-5.6-terra",
-    "pin_supported": true,
-    "probes": 3,
-    "probe_results": [
-      "gpt-5.6-terra",
-      "gpt-5.6-terra",
-      "gpt-5.6-terra"
-    ],
-    "probes_agree": true,
-    "where_the_resolved_id_is_read": "the --json event stream does not report a model id at all -- its events carry type, thread_id, item and usage and nothing else. The resolved id is in the session rollout the run writes under $HOME/.codex/sessions.",
-    "why_that_reading_is_not_an_echo": "invoking with no -m at all makes the rollout record gpt-5.6-sol, which is not a value passed in. The file records what the runtime resolved rather than what was requested, so a pinned alias that routed elsewhere would show the elsewhere.",
-    "per_row_verification": "every episode row carries the resolved id read from its own rollout",
-    "drift_policy": "any episode whose resolved id differs from the pin is TERMINAL_HOLD_FINAL"
-  },
-  "budgets": {
-    "wall_clock_seconds": 1800,
-    "max_meaningful_turns": 60,
-    "max_tool_calls": 80
+    "wrapper_sha256": "134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477"
   },
   "isolation": {
-    "fresh_worktree_per_episode": true,
-    "worktree_destroyed_after": true,
-    "fresh_home_per_episode": true,
-    "fresh_home_seeded_with": [
-      ".codex/auth.json"
-    ],
+    "cross_run_memory": "forbidden -- HOME and worktree are both new and both destroyed",
     "fresh_home_gains_during_run": [
       ".codex/models_cache.json",
       ".codex/cache/**",
@@ -44,28 +35,51 @@
       ".codex/plugins/cache/**",
       ".codex/.sandbox_migration"
     ],
+    "fresh_home_per_episode": true,
+    "fresh_home_seeded_with": [
+      ".codex/auth.json"
+    ],
+    "fresh_worktree_per_episode": true,
     "why_seeded": "an empty HOME is unauthenticated; codex answers 401 and exits in seconds",
-    "cross_run_memory": "forbidden -- HOME and worktree are both new and both destroyed"
+    "worktree_destroyed_after": true
   },
-  "permissions": {
-    "sandbox": "workspace-write",
-    "network_for_agent": "not granted by the harness",
-    "ordinary_git": "available",
-    "manual_commitlore_query_tools": "not installed in the episode tree",
-    "commitlore_capture_write_side": "not installed in the episode tree"
-  },
-  "digests": {
-    "product_dist_sha256": "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528",
-    "episode_harness_sha256": "a46a5d4df50903f042c8b37fe29d2ba49324ccd5cc85193eab99fd4c44ec32d1",
-    "suppression_is_in": "harness/episode.py payload_for()",
-    "judge_prompt_sha256": "0ff977259722837d88295f315842ad7011212c2bb0a318d8dd2152fd736a59fb",
-    "judge_schema_sha256": "8423972e7753fdcb2794d0d366e4028685b7301f40c4e0744ac9023ff2776d32",
-    "judge_runner_sha256": "101d9db4c0e2b850cc5ddce533f74dd57e03dcfc888e57bb40d77020c5098dae",
-    "packet_builder_sha256": "e8f2e9e9a5ad61861f372bb56352d880fd78efa15497529ef86c1649df140b3d",
-    "acceptance_runner": "python3 -m pytest -q <acceptance path> for gitseed; node --test <path> for agent-operator-score"
+  "model": {
+    "correction_2026_08_28": "The committed probe previously walked the --json event stream, which this lock itself records as carrying no model id. It could not have produced the recorded result, and episode.py did not read a rollout at all, so the registered per-episode drift policy had no implementation. A hostile review found both. Both are now implemented and demonstrated.",
+    "drift_policy": "any episode whose resolved id differs from the pin is TERMINAL_HOLD_FINAL",
+    "negative_control_differs_from_pin": true,
+    "negative_control_no_model_flag": "gpt-5.6-sol",
+    "per_row_verification": "episode.py:resolved_model_id reads the resolved id from each episode's own fresh-HOME rollout and the row carries model_resolved, model_resolved_from and model_matches_pin",
+    "per_row_verification_demonstrated": {
+      "episode": "ON / gpt-5.6-terra",
+      "model_resolved": "gpt-5.6-terra",
+      "negative_control": "the same code path with no -m resolves gpt-5.6-sol",
+      "read_from_the_episode_rollout": true
+    },
+    "pin_supported": true,
+    "pinned": "gpt-5.6-terra",
+    "probe_reads": "session rollout under $HOME/.codex/sessions",
+    "probe_results": [
+      "gpt-5.6-terra",
+      "gpt-5.6-terra",
+      "gpt-5.6-terra"
+    ],
+    "probe_script": "bench/cdeb/studies/cdeb-fresh-v8/harness/model-probe.sh",
+    "probe_script_sha256": "9fea36fbe6ca1ef467504a60bd4745aeff2d47fb55122f761164c0a068f34d46",
+    "probes": 3,
+    "probes_agree": true,
+    "where_the_resolved_id_is_read": "the --json event stream does not report a model id at all -- its events carry type, thread_id, item and usage and nothing else. The resolved id is in the session rollout the run writes under $HOME/.codex/sessions.",
+    "why_that_reading_is_not_an_echo": "invoking with no -m at all makes the rollout record gpt-5.6-sol, which is not a value passed in. The file records what the runtime resolved rather than what was requested, so a pinned alias that routed elsewhere would show the elsewhere."
   },
   "not_captured": {
     "system_prompt_digest": "the provider's system prompt is not observable from the CLI. Recorded as provider_managed_unobservable, with the CLI binary digest and the resolved model id standing in for it, which is what section 14.3 of the v7 SSOT allowed for the same gap."
   },
-  "environment_observation": "the fresh HOME changes shell initialisation: pytest and python are not on PATH inside an episode and only python3 -m pytest resolves. It applies to both arms equally, so it is not a bias, but it costs an agent two failed tool calls before it finds the working invocation."
+  "permissions": {
+    "commitlore_capture_write_side": "not installed in the episode tree",
+    "manual_commitlore_query_tools": "not installed in the episode tree",
+    "network_for_agent": "not granted by the harness",
+    "ordinary_git": "available",
+    "sandbox": "workspace-write"
+  },
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8"
 }

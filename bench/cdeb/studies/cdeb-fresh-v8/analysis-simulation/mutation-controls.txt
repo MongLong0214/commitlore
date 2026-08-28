@@ -13,3 +13,4 @@ baseline unmutated: all controls pass
   caught       gate treats a missing input as a pass  <- missing input is a failure, not a pass
 
 12/12 mutations caught
+code pinned: analysis.py ebb61af65c2761ea

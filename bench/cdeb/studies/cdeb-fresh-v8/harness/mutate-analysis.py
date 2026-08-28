@@ -14,6 +14,8 @@ rewritten until they caught it. That is what this file is for.
 
 Runs each mutation in a throwaway copy so the real analysis is never edited.
 """
+import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -74,6 +76,41 @@ def run(where):
     return "survived", []
 
 
+def stamp_code_pin():
+    """Bind the recorded results to the exact code that produced them.
+
+    "12/12 caught" in a committed text file describes whatever analysis.py said
+    when it was written. Editing the analysis afterwards leaves that sentence
+    standing and true of nothing, and no amount of reading the file reveals it.
+    The digest is the only thing that does.
+    """
+    def digest(name):
+        h = hashlib.sha256()
+        with open(os.path.join(HERE, name), "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    pin = {
+        "schema_version": 1,
+        "study_id": "cdeb-fresh-v8",
+        "document_id": "cdeb-fresh-v8-analysis-code-pin",
+        "what_this_is":
+            "Digests of the analysis and its controls at the moment the recorded "
+            "simulation and mutation results were produced. A test asserts the "
+            "files still hash to these, so an edit without a rerun fails.",
+        "analysis_sha256": digest("analysis.py"),
+        "test_analysis_sha256": digest("test_analysis.py"),
+        "simulate_sha256": digest("simulate.py"),
+        "mutate_analysis_sha256": digest("mutate-analysis.py"),
+    }
+    dest = os.path.join(HERE, "..", "analysis-simulation", "code-pin.json")
+    with open(dest, "w") as fh:
+        json.dump(pin, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+    return pin
+
+
 def main():
     src = open(os.path.join(HERE, "analysis.py")).read()
     survivors, lines = [], []
@@ -105,7 +142,13 @@ def main():
         lines += [f"  {s}" for s in survivors]
     out = "\n".join(lines)
     print(out)
-    return 0 if base_ok and not survivors else 1
+    ok = base_ok and not survivors
+    if ok:
+        # Only stamp a clean run. Pinning a run with survivors would bind the
+        # results to code the controls demonstrably cannot check.
+        pin = stamp_code_pin()
+        print(f"code pinned: analysis.py {pin['analysis_sha256'][:16]}")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

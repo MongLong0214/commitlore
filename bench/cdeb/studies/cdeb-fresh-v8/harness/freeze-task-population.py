@@ -22,6 +22,7 @@ a population whose boundary column disagrees with the study it came from.
 import hashlib
 import json
 import os
+import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -41,9 +42,24 @@ def sha256_file(rel):
     return h.hexdigest()
 
 
+def tracked(rel):
+    """Whether a fresh clone would have this file."""
+    return subprocess.run(["git", "-C", ROOT, "ls-files", "--error-unmatch", rel],
+                          capture_output=True, text=True).returncode == 0
+
+
+UNTRACKED_VERIFIED = []
+
+
 def verify(rel, expected, drift, label):
     """Open it. A recorded digest is a claim about a file until the file is read."""
     actual = sha256_file(rel)
+    if actual is not None and not tracked(rel):
+        # Verified against bytes a clone will not have. Not drift -- the digest
+        # matched -- but a different claim from one checked against a tracked
+        # file, and rendering the two identically is what let `import_valid: true`
+        # read as reproducible when it is not.
+        UNTRACKED_VERIFIED.append({"what": label, "path": rel})
     if actual is None:
         drift.append({"kind": "missing", "what": label, "path": rel})
     elif expected and actual != expected:
@@ -181,7 +197,15 @@ def main():
             "and they are unrecoverable; see cdeb-fresh-v7/control-availability.json. "
             "Only the seventeen Bad A patches survive as bytes.",
         "drift": drift,
+        "verified_against_untracked_files": UNTRACKED_VERIFIED,
         "import_valid": not drift and counts_agree,
+        "what_import_valid_means_here":
+            "That every referenced path was opened on this machine and its digest "
+            "matched. It is not a claim a clone can repeat: the snapshot bundles "
+            "under bench/cdeb/studies/*/corpus/bundles/ are gitignored by a "
+            "deliberate policy (r-v3sealedcensus), so the digests above guarantee "
+            "integrity, not availability. snapshot-lock.json carries the detail "
+            "and what a clone can still check.",
         "candidates": population,
     }
 

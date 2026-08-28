@@ -1556,5 +1556,76 @@
     "sha256": "3b6dae25d6fc2beb790546234438d68b1260d55ee5921d52008cf901f9790f38"
   },
   "study_id": "cdeb-fresh-v8",
+  "verified_against_untracked_files": [
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-002ffd1e428c572a snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-0ecd7426eebc1cab snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-34aef026d81c2f6b snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-377f04276465b59d snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-77e1745655a235ce snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-84cd6d391ac2fa6d snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-8f24735524874167 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-8fc3d2ec14b1c078 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-9b42b1951da730e1 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-c61d7c943edd8cff snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-cadfb63755c3f504 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-ce2adee3c134ab03 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-dd4a74ba2b628991 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-e7587b2b65750306 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-ed878960135ff45a snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-f3c960a48273132c snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-f901052615fa3aee snapshot bundle"
+    }
+  ],
+  "what_import_valid_means_here": "That every referenced path was opened on this machine and its digest matched. It is not a claim a clone can repeat: the snapshot bundles under bench/cdeb/studies/*/corpus/bundles/ are gitignored by a deliberate policy (r-v3sealedcensus), so the digests above guarantee integrity, not availability. snapshot-lock.json carries the detail and what a clone can still check.",
   "what_this_is": "The seventeen tasks frozen for measurement, with every referenced artifact rehashed from the file rather than copied from v7's manifest."
 }

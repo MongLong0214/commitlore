@@ -16,10 +16,18 @@
   "panel_frozen": true,
   "phase": "schedule-frozen",
   "product_effect_rows": 0,
+  "red_team_p0_open": 0,
+  "red_team_p1_open": 1,
+  "red_team_p1_open_detail": "calibration label/origin confound, raised by round A. Preregistered as a known limitation before the panel was frozen; severity and whether it gates PR-A is an owner decision, not settled here.",
+  "red_team_rounds_complete": [
+    "A: population and product integrity"
+  ],
   "runtime_locked": true,
   "schedule_frozen": true,
+  "schedule_refrozen_after_red_team": true,
   "scheduled_episodes": 340,
   "schema_version": 1,
+  "section_13_artifacts_complete": true,
   "state_machine_position": "SCHEDULE_FROZEN",
   "study_id": "cdeb-fresh-v8",
   "successor_required": false,
