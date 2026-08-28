@@ -235,6 +235,28 @@ def regression_failures(output):
     return sorted(set(names))
 
 
+def reached_a_model(events_path):
+    """Whether a meaningful model turn happened, from the agent's own events.
+
+    Section 20 allows a retry only before a meaningful model turn, and forbids
+    replacing anything after one. The runner therefore has to be able to tell the
+    two apart, and an exit code cannot: a 401, a rate limit and a model that ran
+    and produced a bad tree all exit non-zero.
+
+    A run that reached a model emits agent_message, command_execution or
+    file_change. One that did not emits thread.started and turn.started and stops.
+    """
+    for line in open(events_path, encoding="utf8", errors="ignore"):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (event.get("item") or {}).get("type") in (
+                "agent_message", "command_execution", "file_change"):
+            return True
+    return False
+
+
 def first_mutation(events_path, tree):
     """Step 9, from the agent's own event stream rather than a file mtime."""
     tracked = subprocess.run(["git", "-C", tree, "ls-files"],
@@ -315,6 +337,7 @@ def run(assignment, out_dir, scratch):
     open(os.path.join(out_dir, "err.txt"), "w").write(stderr)
 
     resolved_model, rollout = resolved_model_id(home)
+    started = reached_a_model(events_path)
     mutation = first_mutation(events_path, tree)
     diff = subprocess.run(["git", "-C", tree, "diff"], capture_output=True, text=True).stdout
     changed = [c[3:] for c in subprocess.run(
@@ -359,6 +382,11 @@ def run(assignment, out_dir, scratch):
     regression_pass = not new_failures
 
     completed = code == 0 and not timed_out
+    # A run that never reached a model is not an episode outcome. Section 20 calls
+    # that an arm-independent infrastructure failure and allows one retry; recording
+    # it as a failed episode would put a zero in the data for something that was
+    # never measured, which is the same shape as the three defects already found.
+    pre_start_failure = not started and not completed
     functional_pass = completed and task_acc.returncode == 0 and regression_pass
 
     row = {
@@ -386,7 +414,13 @@ def run(assignment, out_dir, scratch):
         "final_diff_bytes": len(diff),
         "changed_files": changed,
         "completion": {"exit_code": code, "timed_out": timed_out,
-                       "seconds": seconds, "completed": completed},
+                       "seconds": seconds, "completed": completed,
+                       "reached_a_model": started,
+                       "pre_start_failure": pre_start_failure,
+                       "retry_eligible_under_section_20": pre_start_failure,
+                       "why": ("no agent_message, command_execution or file_change "
+                               "event, so the run never reached a model")
+                              if pre_start_failure else None},
         "task_acceptance": {
             "command": acceptance_command,
             "recorded_how_to_run": task["how_to_run"],
