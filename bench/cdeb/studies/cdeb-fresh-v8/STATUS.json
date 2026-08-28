@@ -2,6 +2,7 @@
   "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
   "calibration_complete": true,
+  "manipulation_preflight": "17/17",
   "measured_run_allowed": false,
   "no_automatic_v9": true,
   "panel": [
@@ -10,12 +11,14 @@
     "gpt-5.6-terra"
   ],
   "panel_frozen": true,
-  "phase": "panel-frozen",
+  "phase": "runtime-locked",
   "product_effect_rows": 0,
+  "runtime_locked": true,
   "schema_version": 1,
-  "state_machine_position": "PANEL_FROZEN",
+  "state_machine_position": "RUNTIME_LOCKED",
   "study_id": "cdeb-fresh-v8",
   "successor_required": false,
+  "synthetic_smoke": "pass",
   "updated_at": "2026-08-28T00:00:00Z",
   "verdict": null,
   "verdict_basis": null
