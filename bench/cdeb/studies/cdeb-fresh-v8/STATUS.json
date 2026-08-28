@@ -1,17 +1,22 @@
 {
-  "calibration_candidates_completed": 1,
+  "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
-  "calibration_complete": false,
+  "calibration_complete": true,
   "measured_run_allowed": false,
   "no_automatic_v9": true,
-  "panel_frozen": false,
-  "phase": "judge-calibration",
+  "panel": [
+    "claude-sonnet-4-5",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra"
+  ],
+  "panel_frozen": true,
+  "phase": "panel-frozen",
   "product_effect_rows": 0,
   "schema_version": 1,
-  "state_machine_position": "JUDGE_CALIBRATION",
+  "state_machine_position": "PANEL_FROZEN",
   "study_id": "cdeb-fresh-v8",
   "successor_required": false,
-  "updated_at": "2026-08-26T00:00:00Z",
+  "updated_at": "2026-08-28T00:00:00Z",
   "verdict": null,
   "verdict_basis": null
 }
