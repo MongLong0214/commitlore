@@ -31,6 +31,7 @@ how a schedule stops meaning anything.
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -219,6 +220,21 @@ def render(doc):
     return "\n".join(lines)
 
 
+TAP_FAIL = re.compile(r"^not ok \d+ - (.*)$", re.M)
+PYTEST_FAIL = re.compile(r"^FAILED (\S+)", re.M)
+
+
+def regression_failures(output):
+    """Failing test names from either runner, so the comparison is by name.
+
+    Counting failures would compare 11 against 11 and miss a swap; comparing names
+    catches a new failure that arrives while a baseline one happens to pass.
+    """
+    names = [m.strip() for m in TAP_FAIL.findall(output)]
+    names += [m.strip() for m in PYTEST_FAIL.findall(output)]
+    return sorted(set(names))
+
+
 def first_mutation(events_path, tree):
     """Step 9, from the agent's own event stream rather than a file mtime."""
     tracked = subprocess.run(["git", "-C", tree, "ls-files"],
@@ -315,8 +331,21 @@ def run(assignment, out_dir, scratch):
                              cwd=os.path.join(tree, regression.get("cwd", ".")),
                              capture_output=True, text=True, timeout=1800)
 
+    # Regression acceptance is "no failure outside the baseline", not "exit 0".
+    # agent-operator-score's pristine snapshot fails 11 of its 604 tests, stably
+    # across three runs. Scored by exit code, every one of that repository's 160
+    # episodes would fail regression whatever the agent did -- P-DSFPS zero in both
+    # arms, the equal-weight estimand halved, and section 27's AOS condition
+    # unreachable. gitseed is green at baseline, so the defect would have been
+    # invisible in half the data.
+    baseline = json.load(open(os.path.join(V8, "regression-baseline.json")))
+    expected = set(baseline["repositories"][assignment["repository_id"]]["expected_failures"])
+    observed = set(regression_failures(reg_acc.stdout + "\n" + reg_acc.stderr))
+    new_failures = sorted(observed - expected)
+    regression_pass = not new_failures
+
     completed = code == 0 and not timed_out
-    functional_pass = completed and task_acc.returncode == 0 and reg_acc.returncode == 0
+    functional_pass = completed and task_acc.returncode == 0 and regression_pass
 
     row = {
         "schema_version": 1,
@@ -352,7 +381,14 @@ def run(assignment, out_dir, scratch):
             "was_present_in_the_snapshot": acceptance_was_present,
         },
         "regression_acceptance": {
-            "command": regression["command"], "pass": reg_acc.returncode == 0,
+            "command": regression["command"],
+            "pass": regression_pass,
+            "scored_as": "no failure outside the frozen baseline",
+            "exit_code": reg_acc.returncode,
+            "baseline_expected_failures": len(expected),
+            "observed_failures": len(observed),
+            "new_failures": new_failures,
+            "baseline_failures_that_passed": sorted(expected - observed),
             "tail": (reg_acc.stdout or reg_acc.stderr).strip().splitlines()[-1:] or [],
         },
         "functional_pass": functional_pass,

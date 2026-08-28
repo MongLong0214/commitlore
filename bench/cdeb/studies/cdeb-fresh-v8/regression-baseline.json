@@ -1,0 +1,39 @@
+{
+  "document_id": "cdeb-fresh-v8-regression-baseline",
+  "repositories": {
+    "agent-operator-score": {
+      "command": "node --test",
+      "exit_code": 1,
+      "expected_failure_count": 10,
+      "expected_failures": [
+        "ADR-0003 correction invalidates the D0-001 bounded-RED planning acceptance",
+        "D0 identity control-plane paths are allowed while unrelated source is rejected",
+        "D0-002 RED census correction invalidates the prior acceptance and renews exact prerequisites",
+        "banned-wording-guard-covers-commit-messages",
+        "banned-wording-guard-is-load-bearing",
+        "current registry invalidates the stale D0-001 batch and requires renewed external review",
+        "planning contract validator reports the truthful structural census",
+        "removeTempFixture refuses a path outside the OS temp root",
+        "removeTempFixture refuses when an INTERMEDIATE component symlinks out of the temp root",
+        "skeleton-source-requires-an-owning-ticket"
+      ],
+      "green_at_baseline": false,
+      "recorded_total": 604,
+      "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d"
+    },
+    "gitseed": {
+      "command": "python3 -m pytest -q",
+      "exit_code": 0,
+      "expected_failure_count": 0,
+      "expected_failures": [],
+      "green_at_baseline": true,
+      "recorded_total": 321,
+      "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba"
+    }
+  },
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "what_this_is": "The tests already failing on each repository's pristine snapshot. Regression acceptance means no failure outside this set; a new one is a regression and one of these is the snapshot.",
+  "why_it_is_frozen_rather_than_recomputed": "Recomputing per episode would let a flaky test join the baseline the first time it failed, which is the same as having no baseline.",
+  "why_it_is_needed": "The frozen population records the command and the test total and nothing about the baseline's own failures. Scored by exit code, every agent-operator-score episode fails regression whatever the agent does, which would zero that repository in an equal-weight estimand and make section 27's AOS condition unreachable."
+}
