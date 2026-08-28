@@ -85,6 +85,24 @@ def worker(repository, assignments, rows_root, results, failures):
 
 
 def main():
+    # `--plan` prints what would run and exits. It exists because checking that this
+    # starts is the same act as starting it: verifying the refusal is safe, and
+    # verifying the other half once began two real episodes against the pinned model
+    # before a timeout killed them. See incidents/2026-08-28-accidental-episode-start.
+    if "--plan" in sys.argv:
+        schedule = json.load(open(os.path.join(V8, "schedule.json")))
+        by_repository = {}
+        for episode in schedule["episodes"]:
+            by_repository.setdefault(episode["repository_id"], []).append(episode)
+        print(f"  would run {len(schedule['episodes'])} episodes, "
+              f"{len(by_repository)} workers, max 1 per repository")
+        for repo, episodes in sorted(by_repository.items()):
+            print(f"    {repo:22} {len(episodes)} episodes, first "
+                  f"{episodes[0]['candidate_id']} {episodes[0]['arm']}")
+        print(f"  measured_run_allowed is "
+              f"{json.load(open(os.path.join(V8, 'STATUS.json'))).get('measured_run_allowed')}")
+        return 0
+
     status = json.load(open(os.path.join(V8, "STATUS.json")))
     if not status.get("measured_run_allowed"):
         print("  refusing to start: STATUS.measured_run_allowed is false.")
