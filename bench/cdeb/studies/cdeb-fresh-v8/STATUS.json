@@ -1,6 +1,6 @@
 {
   "analysis_code_frozen": true,
-  "analysis_simulation": "6/6 scenarios, 20 unit controls, 12/12 mutations caught",
+  "analysis_simulation": "6/6 scenarios, 23 unit controls, 15/15 mutations caught",
   "arm_mapping_concealment": "role separation, per owner ruling v8-d005; not cryptographic",
   "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
@@ -21,10 +21,11 @@
   "product_effect_rows": 0,
   "red_team_p0_open": 0,
   "red_team_p1_open": 1,
-  "red_team_p1_open_detail": "calibration label/origin confound, raised by round A. Preregistered as a known limitation before the panel was frozen; severity and whether it gates PR-A is an owner decision, not settled here.",
+  "red_team_p1_open_detail": "two, both owner decisions rather than defects: the calibration label/origin confound preregistered before the panel freeze, and the section 27 headline wording. Neither is a code fix.",
   "red_team_rounds_complete": [
     "A: population and product integrity",
-    "B: blinding and judging"
+    "B: blinding and judging",
+    "C: analysis and the claim gate"
   ],
   "runtime_locked": true,
   "schedule_frozen": true,

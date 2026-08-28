@@ -71,13 +71,13 @@ def make(p_on, p_off, seed, completion=(1.0, 1.0), indeterminate=0.0,
                 elif rng.random() < indeterminate:
                     label, functional = "PANEL_INDETERMINATE", True
                 elif rng.random() < p:
-                    label, functional = "COMPLIANT", True
+                    label, functional = "PANEL_COMPLIANT", True
                 else:
                     # the rest split between a violation and a functional failure
                     if rng.random() < violation_split:
-                        label, functional = "VIOLATION", True
+                        label, functional = "PANEL_VIOLATION", True
                     else:
-                        label, functional = "COMPLIANT", False
+                        label, functional = "PANEL_COMPLIANT", False
                 rows.append({"candidate_id": cand, "repetition": rep, "arm": arm,
                              "completed": completed, "functional_pass": functional,
                              "panel_label": label})
@@ -109,7 +109,7 @@ def main():
         rows = make(**kw)
         r = analyse(rows, REPO_OF, replicates=2000, permutations=2000)
         ok = EXPECT[name](r)
-        g = evaluate_gate(gate_inputs(r))
+        g = evaluate_gate(gate_inputs(r), allow_unsourced=True)
         out[name] = {"generated_with": {k: v for k, v in kw.items() if k != "seed"},
                      "strong_claim_allowed": g["strong_claim_allowed"],
                      "gate_failed_on": g["failed"],

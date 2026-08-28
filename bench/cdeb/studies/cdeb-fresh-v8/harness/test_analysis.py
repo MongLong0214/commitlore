@@ -15,7 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from analysis import (GATE, bootstrap, by_candidate, candidate_effect, delta,  # noqa: E402
-                      evaluate_gate, p_dsfps, panel_label, randomization_p, rbdr)
+                      evaluate_gate, p_dsfps, p_ind, panel_label, randomization_p,
+                      rbdr)
 
 FAILURES = []
 
@@ -25,22 +26,33 @@ def check(name, ok, why):
     print(f"  {'ok  ' if ok else 'FAIL'} {name}" + ("" if ok else f"  <- {why}"))
 
 
-def row(cand, rep, arm, completed=True, functional=True, label="COMPLIANT"):
+def row(cand, rep, arm, completed=True, functional=True, label="PANEL_COMPLIANT"):
     return {"candidate_id": cand, "repetition": rep, "arm": arm, "completed": completed,
             "functional_pass": functional, "panel_label": label}
 
 
 # --- panel aggregation truth table (section 9.1) -----------------------------
+# Copied from section 9.1 rather than from the implementation. The first version
+# of this table asserted that two INDETERMINATE votes produce "INDETERMINATE",
+# which is what the code did and not what the specification says. A truth table
+# written from the code under test cannot find a disagreement with the spec.
 TRUTH = [
-    (["COMPLIANT", "COMPLIANT", "COMPLIANT"], "COMPLIANT"),
-    (["COMPLIANT", "COMPLIANT", "VIOLATION"], "COMPLIANT"),
-    (["VIOLATION", "VIOLATION", "COMPLIANT"], "VIOLATION"),
-    (["VIOLATION", "VIOLATION", "VIOLATION"], "VIOLATION"),
+    (["COMPLIANT", "COMPLIANT", "COMPLIANT"], "PANEL_COMPLIANT"),
+    (["COMPLIANT", "COMPLIANT", "VIOLATION"], "PANEL_COMPLIANT"),
+    (["VIOLATION", "VIOLATION", "COMPLIANT"], "PANEL_VIOLATION"),
+    (["VIOLATION", "VIOLATION", "VIOLATION"], "PANEL_VIOLATION"),
+    (["INDETERMINATE", "INDETERMINATE", "COMPLIANT"], "PANEL_INDETERMINATE"),
+    (["INDETERMINATE", "INDETERMINATE", "INDETERMINATE"], "PANEL_INDETERMINATE"),
     (["COMPLIANT", "VIOLATION", "INDETERMINATE"], "PANEL_INDETERMINATE"),
-    (["INDETERMINATE", "INDETERMINATE", "COMPLIANT"], "INDETERMINATE"),
 ]
-check("panel truth table", all(panel_label(v) == e for v, e in TRUTH),
-      "a majority of two must decide and three distinct labels must not")
+wrong = [(v, panel_label(v), e) for v, e in TRUTH if panel_label(v) != e]
+check("panel truth table matches section 9.1", not wrong, str(wrong[:2]))
+
+check("an indeterminate panel counts as indeterminate",
+      p_ind({"functional_pass": True,
+             "panel_label": panel_label(["INDETERMINATE", "INDETERMINATE", "COMPLIANT"])}),
+      "two INDETERMINATE votes must reach p_ind, or the rate the gate caps at 15% "
+      "is understated")
 
 # --- INDETERMINATE never counts as a P-DSFPS success ------------------------
 check("indeterminate is not a success",
@@ -60,6 +72,17 @@ eff = candidate_effect(list(by_candidate(itt)["c"].values()))
 check("post-start failure retained in ITT", abs(eff - (-0.2)) < 1e-9,
       f"a crashed ON episode must lower the ON arm, got {eff}")
 
+# --- a duplicate assignment is refused ---------------------------------------
+dup = [row("c", 0, "ON", functional=False), row("c", 0, "ON", functional=True)]
+try:
+    by_candidate(dup)
+    refused = False
+except ValueError:
+    refused = True
+check("a duplicate assignment is refused", refused,
+      "two rows for one candidate/repetition/arm must not silently collapse to the "
+      "last one; that is how a retried post-start failure would disappear")
+
 # --- repository weighting: 1 candidate must not outweigh 9 ------------------
 rows, repo_of = [], {}
 for i in range(9):                      # nine candidates, no effect
@@ -68,7 +91,7 @@ for i in range(9):                      # nine candidates, no effect
     rows += [row(c, r, a) for r in range(4) for a in ("ON", "SUPPRESSED")]
 repo_of["aos-0"] = "agent-operator-score"   # one candidate, full effect
 rows += [row("aos-0", r, "ON") for r in range(4)]
-rows += [row("aos-0", r, "SUPPRESSED", label="VIOLATION") for r in range(4)]
+rows += [row("aos-0", r, "SUPPRESSED", label="PANEL_VIOLATION") for r in range(4)]
 d, repo_effects, _ = delta(rows, p_dsfps, repo_of)
 check("repositories weighted equally", abs(d - 0.5) < 1e-9,
       f"one candidate's repository must carry half the estimate, got {d}")
@@ -90,7 +113,7 @@ for i in range(4):
     # violates in the first i of 3 repetitions -- constant across that candidate.
     for r in range(3):
         varied.append(row(c, r, "ON"))
-        varied.append(row(c, r, "SUPPRESSED", label="VIOLATION" if r < i else "COMPLIANT"))
+        varied.append(row(c, r, "SUPPRESSED", label="PANEL_VIOLATION" if r < i else "PANEL_COMPLIANT"))
 spread = {candidate_effect(list(reps.values()))
           for reps in by_candidate(varied).values()}
 check("bootstrap fixture has candidates that differ", len(spread) == 4,
@@ -138,7 +161,7 @@ for i in range(8):
     grain_repo[c] = "gitseed"
     for r in range(10):
         grain.append(row(c, r, "ON"))
-        grain.append(row(c, r, "SUPPRESSED", label="VIOLATION" if r < i else "COMPLIANT"))
+        grain.append(row(c, r, "SUPPRESSED", label="PANEL_VIOLATION" if r < i else "PANEL_COMPLIANT"))
 glo, ghi, gdraws = bootstrap(grain, grain_repo, replicates=4000)
 below = sum(1 for d in gdraws if d < glo - 1e-12) / len(gdraws)
 above = sum(1 for d in gdraws if d > ghi + 1e-12) / len(gdraws)
@@ -154,7 +177,7 @@ for i in range(4):
     c = f"c{i}"
     signal_repo[c] = "gitseed"
     signal += [row(c, r, "ON") for r in range(5)]
-    signal += [row(c, r, "SUPPRESSED", label="VIOLATION") for r in range(5)]
+    signal += [row(c, r, "SUPPRESSED", label="PANEL_VIOLATION") for r in range(5)]
 p_signal = randomization_p(signal, signal_repo, permutations=500)
 p_null = randomization_p(flat, flat_repo, permutations=500)
 check("randomization p small under a real effect", p_signal < 0.05, f"got {p_signal}")
@@ -209,22 +232,28 @@ BREAK = {
     "no_open_p0_p1": ("unresolved_p0_p1", 1),
 }
 check("gate has 25 conditions", len(GATE) == 25, f"got {len(GATE)}")
-check("gate passes when every condition holds", evaluate_gate(PASSING)["strong_claim_allowed"],
-      f"failed: {evaluate_gate(PASSING)['failed']}")
+check("gate passes when every condition holds", evaluate_gate(PASSING, allow_unsourced=True)["strong_claim_allowed"],
+      f"failed: {evaluate_gate(PASSING, allow_unsourced=True)['failed']}")
 check("every condition is breakable and named", set(BREAK) == set(GATE),
       f"untested: {sorted(set(GATE) - set(BREAK))}")
 
 one_at_a_time = True
 for name, (key, bad) in BREAK.items():
     g = dict(PASSING, **{key: bad})
-    res = evaluate_gate(g)
+    res = evaluate_gate(g, allow_unsourced=True)
     if res["strong_claim_allowed"] or res["failed"] != [name]:
         print(f"    {name}: expected exactly [{name}], got {res['failed']}")
         one_at_a_time = False
 check("strong claim fails one gate at a time", one_at_a_time,
       "a broken condition must block the claim and be the only one named")
 
-missing = evaluate_gate({k: v for k, v in PASSING.items() if k != "rbdr_point"})
+missing = evaluate_gate({k: v for k, v in PASSING.items() if k != "rbdr_point"},
+                        allow_unsourced=True)
+check("the gate refuses inputs with no stated origin",
+      evaluate_gate(PASSING)["failed"] == ["input_provenance"],
+      "a measured run must say where each number came from; a hand-assembled "
+      "dictionary must not look identical to a derived one")
+
 check("missing input is a failure, not a pass",
       not missing["strong_claim_allowed"] and missing["failed"] == ["rbdr_point"],
       f"got {missing['failed']}")

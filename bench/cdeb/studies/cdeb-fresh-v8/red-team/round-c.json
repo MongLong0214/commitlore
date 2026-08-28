@@ -1,0 +1,106 @@
+{
+  "could_not_refute": [
+    "Indeterminate counted as a P-DSFPS success: `p_dsfps` requires completed, functional and exactly `panel_label == \"COMPLIANT\"`; both `INDETERMINATE` and `PANEL_INDETERMINATE` evaluate false. The unit test and mutation control also exercise this exclusion.",
+    "Apart from the registered removal of the target record\u2014and its intended prompt/token-load consequence\u2014I could not find a budget, tooling, task, permission, or starting-tree difference between arms in the protocol and available episode harness. The remaining asymmetry is sequential timing, reported above.",
+    "I could not refute the bootstrap mechanics themselves: the code resamples whole ON/SUPPRESSED repetition blocks together and holds the candidate and repository sets fixed, matching the preregistration. The defect is only overgeneralizing what that conditional interval means.",
+    "The 25 individual gate predicates fail on missing inputs and the one-condition-at-a-time tests pass. The unsupported part is provenance: the gate does not establish that its inputs came from sealed data."
+  ],
+  "disposition": {
+    "asymmetry between arms - timing": {
+      "resolution": "already recorded; the reviewer quoted schedule.json's own what_this_does_not_control",
+      "severity_as_raised": "P2",
+      "verified": true
+    },
+    "claim-gate input provenance": {
+      "resolution": "partial. evaluate_gate now refuses to answer without a provenance map naming where each input came from; the simulation and unit controls pass allow_unsourced=True because their inputs are invented. This does not derive the numbers from sealed artifacts -- that builder belongs with the measured rows, which do not exist -- but a hand-assembled run can no longer look identical to a derived one.",
+      "severity_as_raised": "P1",
+      "verified": true
+    },
+    "headline overgeneralization": {
+      "resolution": "NOT CHANGED HERE -- the headline and its footnote are SSOT text (section 27). The gate already blocks the claim on 25 conditions and no synthetic scenario reached it. Whether the headline wording should change is an owner decision.",
+      "severity_as_raised": "P1",
+      "verified": true
+    },
+    "panel aggregation bug": {
+      "effect_on_the_gate": "the section 27 condition caps panel indeterminate rate at 15%, and the defect understated exactly that number",
+      "reproduced": "panel_label(['INDETERMINATE','INDETERMINATE','COMPLIANT']) returned 'INDETERMINATE' where section 9.1 registers 'PANEL_INDETERMINATE', and p_ind looked for the PANEL_ form, so an indeterminate panel was not counted as indeterminate",
+      "resolution": "panel_label returns the registered PANEL_* labels; every predicate and both fixtures use them; the truth table is now copied from section 9.1; a mutation covers the regression",
+      "severity_as_raised": "P1",
+      "verified": true,
+      "why_nothing_else_caught_it": "the truth table in test_analysis.py had been written from the implementation, so it asserted the wrong mapping"
+    },
+    "post-start retry loophole": {
+      "reproduced": "two rows for the same candidate/repetition/arm collapsed to the last one silently",
+      "resolution": "by_candidate raises on a duplicate assignment; a mutation covers it",
+      "severity_as_raised": "P1",
+      "verified": true
+    },
+    "wrong bootstrap unit / inferential scope": {
+      "resolution": "already recorded; the reviewer quoted analysis.py's own module docstring",
+      "severity_as_raised": "P2",
+      "verified": true
+    }
+  },
+  "document_id": "cdeb-fresh-v8-red-team-round-c",
+  "findings": [
+    {
+      "claim": "The registered budget, tools, tree, task, runtime and non-target payload are common, and the prompt-length difference is explicitly part of the target-delivery treatment. Timing is not common: paired arms execute sequentially on one machine. Randomized first-arm order and adjacency mitigate temporal drift but do not eliminate it.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/schedule.json:4622",
+      "evidence_quote": "\"Both arms of a pair still run in sequence on one machine, so anything that drifts with time is shared between them rather than eliminated. Adjacency bounds how much can drift; it does not make the arms independent of when they ran.\"",
+      "severity": "P2",
+      "surface": "asymmetry between arms \u2014 timing",
+      "why_it_breaks_the_study": "This is a stated limitation rather than a fatal defect. Short-lived provider, machine-load, or environment drift can differ between the two sequential episodes. The randomized order reduces systematic arm bias, but the estimate is not fully insulated from within-pair time effects."
+    },
+    {
+      "claim": "The protocol forbids replacing a post-start failure, but the analysis neither validates meaningful-start/retry lineage nor rejects duplicate assignments. by_candidate silently overwrites an earlier row with the last row for the same candidate, repetition and arm. The test only substitutes one failed row; it never supplies an original plus a retry.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/PRD.md:1257-1277; bench/cdeb/studies/cdeb-fresh-v8/harness/analysis.py:42-47; bench/cdeb/studies/cdeb-fresh-v8/harness/test_analysis.py:56-61",
+      "evidence_quote": "PRD.md: \"Allowed retry: meaningful model turn \uc774\uc804 ... maximum 1\" and deletion/exclusion is forbidden for \"provider failure after start\". analysis.py: `out.setdefault(r[\"candidate_id\"], {}).setdefault(r[\"repetition\"], {})[r[\"arm\"]] = r`. test_analysis.py: `itt[0] = row(\"c\", 0, \"ON\", completed=False, functional=False, label=\"PANEL_INDETERMINATE\")`.",
+      "severity": "P1",
+      "surface": "post-start retry loophole",
+      "why_it_breaks_the_study": "A successful retry can replace a failed started episode while leaving the submitted row count at 340. The claim gate checks only the asserted count, so the omitted failure can inflate the ITT estimate and still permit the headline."
+    },
+    {
+      "claim": "panel_label returns the raw majority label rather than the registered PANEL_* label. Consequently two or three INDETERMINATE votes return `INDETERMINATE`, while p_ind recognizes only `PANEL_INDETERMINATE`. The test truth table encodes and blesses this wrong result.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/PRD.md:749-756; bench/cdeb/studies/cdeb-fresh-v8/harness/analysis.py:22-25,38-39; bench/cdeb/studies/cdeb-fresh-v8/harness/test_analysis.py:39-43",
+      "evidence_quote": "PRD.md: \"2 or 3 `INDETERMINATE` \u2192 `PANEL_INDETERMINATE`\". analysis.py: `if n >= 2: return label` and `row[\"panel_label\"] == \"PANEL_INDETERMINATE\"`. test_analysis.py expects `([\"INDETERMINATE\", \"INDETERMINATE\", \"COMPLIANT\"], \"INDETERMINATE\")`.",
+      "severity": "P1",
+      "surface": "panel aggregation bug",
+      "why_it_breaks_the_study": "Majority-indeterminate episodes are omitted from the reported indeterminate rate. That can falsely clear the gate's 15% ceiling and allow a strong headline from an instrument that actually failed its reliability condition."
+    },
+    {
+      "claim": "The frozen claim gate is only a predicate checker over a caller-supplied dictionary. It does not derive or validate row counts, reliability, delivery, analyst agreement, retry handling, or unresolved findings from sealed artifacts; its tests pass a hand-authored `PASSING` dictionary.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/harness/analysis.py:191-198; bench/cdeb/studies/cdeb-fresh-v8/harness/test_analysis.py:169-183",
+      "evidence_quote": "analysis.py: `def evaluate_gate(g):` followed by `results[name] = bool(pred(g))`. test_analysis.py: `PASSING = { \"coding_rows\": 340, \"judge_rows\": 1020, ... \"analyst_ab_match\": True, \"unresolved_p0_p1\": 0 }`.",
+      "severity": "P1",
+      "surface": "claim-gate input provenance",
+      "why_it_breaks_the_study": "`strong_claim_allowed` proves only that supplied assertions meet thresholds, not that the assertions came from the sealed study. A caller can pass favorable summaries\u2014including a false 340-row ITT count\u2014and obtain authorization for an unsupported headline."
+    },
+    {
+      "claim": "The implementation correctly resamples paired repetition blocks within each candidate and holds candidates and repositories fixed. The resulting interval is therefore conditional on these exact 17 tasks, two repositories and pinned agent; it is not sampling uncertainty for other tasks or repositories.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/harness/analysis.py:7-11",
+      "evidence_quote": "\"the bootstrap resamples repetition blocks *inside* each candidate and never resamples candidates or repositories. That makes the interval a statement about running this exact benchmark again with the same pinned agent, and not about how the effect would look on other tasks.\"",
+      "severity": "P2",
+      "surface": "wrong bootstrap unit / inferential scope",
+      "why_it_breaks_the_study": "This does not invalidate the fixed-benchmark estimate, and the limitation is stated. It does mean a narrow interval cannot support task-, repository-, or agent-general claims; it measures only rerun stochasticity conditional on the frozen benchmark."
+    },
+    {
+      "claim": "The headline says only `R% fewer repeated bad decisions`, which reads as a general product-effect claim. The footnote reveals that the evidence concerns an exact 17-task benchmark in two author-operated repositories with one pinned coding agent and a three-agent semantic panel. A headline reader would wrongly conclude that CommitLore generally reduces repeated bad decisions across agents, tasks and repositories.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/PRD.md:1552-1588",
+      "evidence_quote": "Headline: \"R% fewer repeated bad decisions\". Footnote: \"Exact 17-task fixed benchmark in two author-operated repositories; one pinned coding agent; CommitLore v1.2.0 artifact a0c542\u2026; automatic target delivery versus structured suppression; final trees judged by a frozen three-agent blind semantic panel.\"",
+      "severity": "P1",
+      "surface": "headline overgeneralization",
+      "why_it_breaks_the_study": "The claim gate can establish, at most, a conditional fixed-benchmark result. Moving the actual population and instrument into a footnote does not make the unqualified headline externally valid; the headline would overstate both the population and the causal generality of the result."
+    }
+  ],
+  "reviewer": {
+    "coverage_note": "42 of 69 target files neither read nor declared; most belong to the population and blinding groups this reviewer was not asked about",
+    "coverage_verdict": "PARTIAL",
+    "files_declared_not_read": 0,
+    "files_read": 28,
+    "ref": "5578063",
+    "tool_events": 34
+  },
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "surface_group": "analysis and the claim gate"
+}

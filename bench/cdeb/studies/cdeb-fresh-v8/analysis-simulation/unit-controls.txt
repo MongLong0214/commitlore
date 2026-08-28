@@ -1,8 +1,10 @@
-  ok   panel truth table
+  ok   panel truth table matches section 9.1
+  ok   an indeterminate panel counts as indeterminate
   ok   indeterminate is not a success
   ok   incomplete is not a success
   ok   functional failure is not a success
   ok   post-start failure retained in ITT
+  ok   a duplicate assignment is refused
   ok   repositories weighted equally
   ok   per-repository effects reported
   ok   bootstrap fixture has candidates that differ
@@ -17,6 +19,7 @@
   ok   gate passes when every condition holds
   ok   every condition is breakable and named
   ok   strong claim fails one gate at a time
+  ok   the gate refuses inputs with no stated origin
   ok   missing input is a failure, not a pass
 
   all passing

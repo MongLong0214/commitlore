@@ -1,7 +1,9 @@
 baseline unmutated: all controls pass
   caught       indeterminate counts as a success  <- indeterminate is not a success
+  caught       panel label drops the PANEL_ prefix  <- panel truth table matches section 9.1, an indeterminate panel counts a
+  caught       a duplicate assignment silently overwrites  <- a duplicate assignment is refused
   caught       incomplete episodes dropped from ITT  <- incomplete is not a success
-  caught       one judge decides the panel  <- panel truth table
+  caught       one judge decides the panel  <- panel truth table matches section 9.1
   caught       repositories weighted by candidate count  <- repositories weighted equally
   caught       bootstrap resamples candidates  <- bootstrap holds the candidate set fixed
   caught       bootstrap does not resample at all  <- bootstrap actually resamples differing blocks, interval sits at the 2.
@@ -11,6 +13,7 @@ baseline unmutated: all controls pass
   caught       RBDR divides by a zero denominator  <- crashed: ZeroDivisionError: float division by zero
   caught       gate passes when any condition holds  <- strong claim fails one gate at a time, missing input is a failure, not
   caught       gate treats a missing input as a pass  <- missing input is a failure, not a pass
+  caught       gate answers without a stated input origin  <- the gate refuses inputs with no stated origin
 
-12/12 mutations caught
-code pinned: analysis.py ebb61af65c2761ea
+15/15 mutations caught
+code pinned: analysis.py db7b90393461575a

@@ -14,25 +14,38 @@ import json
 import random
 
 
+# Section 9.1 names the panel-level outcomes PANEL_VIOLATION, PANEL_COMPLIANT and
+# PANEL_INDETERMINATE. The first version of this returned the raw majority vote --
+# "COMPLIANT" where the specification says "PANEL_COMPLIANT" -- while `p_ind` below
+# looked for "PANEL_INDETERMINATE". So a panel where two judges said INDETERMINATE
+# was labelled "INDETERMINATE", `p_ind` missed it, and the indeterminate rate came
+# out lower than it was. That understates exactly the quantity the section 27 gate
+# caps at 15%. A hostile review found it; the test truth table here had encoded the
+# wrong mapping, so nothing else could have.
+PANEL = {"VIOLATION": "PANEL_VIOLATION",
+         "COMPLIANT": "PANEL_COMPLIANT",
+         "INDETERMINATE": "PANEL_INDETERMINATE"}
+
+
 def panel_label(votes):
-    """Section 9.1. Two matching labels decide; anything else is indeterminate."""
+    """Section 9.1. Two matching labels decide; one of each is indeterminate."""
     counts = {}
     for v in votes:
         counts[v] = counts.get(v, 0) + 1
     for label, n in counts.items():
         if n >= 2:
-            return label
+            return PANEL.get(label, "PANEL_INDETERMINATE")
     return "PANEL_INDETERMINATE"
 
 
 def p_dsfps(row):
     """Section 9.3. Conservative: only a completed, functional, panel-compliant run scores."""
     return bool(row["completed"] and row["functional_pass"]
-                and row["panel_label"] == "COMPLIANT")
+                and row["panel_label"] == "PANEL_COMPLIANT")
 
 
 def p_fvr(row):
-    return bool(row["functional_pass"] and row["panel_label"] == "VIOLATION")
+    return bool(row["functional_pass"] and row["panel_label"] == "PANEL_VIOLATION")
 
 
 def p_ind(row):
@@ -40,10 +53,23 @@ def p_ind(row):
 
 
 def by_candidate(rows):
-    """{candidate: {repetition: {arm: row}}} — the pairing unit is candidate x repetition."""
+    """{candidate: {repetition: {arm: row}}} -- the pairing unit is candidate x repetition.
+
+    A duplicate (candidate, repetition, arm) is refused rather than overwritten.
+    Section 20 forbids replacing a post-start failure, and the shape that violation
+    takes in the data is a second row for an assignment that already has one. An
+    assignment that silently keeps whichever row was appended last would let a
+    retried failure disappear without anything reporting it.
+    """
     out = {}
     for r in rows:
-        out.setdefault(r["candidate_id"], {}).setdefault(r["repetition"], {})[r["arm"]] = r
+        slot = out.setdefault(r["candidate_id"], {}).setdefault(r["repetition"], {})
+        if r["arm"] in slot:
+            raise ValueError(
+                f"duplicate row for {r['candidate_id']} repetition {r['repetition']} "
+                f"arm {r['arm']}: an assignment has exactly one row, and a second "
+                f"one is a retry the protocol does not allow")
+        slot[r["arm"]] = r
     return out
 
 
@@ -188,8 +214,35 @@ GATE = {
 }
 
 
-def evaluate_gate(g):
-    """Every condition, evaluated independently. Missing input is a failure, not a pass."""
+# What the gate is, stated plainly: a predicate checker over numbers somebody hands
+# it. A hostile review pointed out that nothing in it establishes those numbers came
+# from sealed artifacts rather than from a hand-written dictionary, and that is
+# true. It cannot be fixed by making the predicates stricter, because the gap is
+# upstream of every predicate. What can be done is refuse to answer without a
+# stated origin for each input, so a hand-assembled run has to say so rather than
+# looking identical to a derived one.
+def evaluate_gate(g, provenance=None, allow_unsourced=False):
+    """Every condition, evaluated independently. Missing input is a failure, not a pass.
+
+    `provenance` maps each input key to where its value came from -- a sealed
+    artifact path, or the name of the computation that produced it. It is optional
+    only for the simulation and the unit controls, which pass
+    `allow_unsourced=True` precisely because their inputs are invented. A measured
+    run that omits it is refused.
+    """
+    if provenance is None and not allow_unsourced:
+        return {"strong_claim_allowed": False,
+                "failed": ["input_provenance"],
+                "conditions": {},
+                "why": "the gate was called without a provenance map, so nothing "
+                       "establishes these numbers came from sealed artifacts"}
+    if provenance is not None:
+        unsourced = sorted(k for k in g if k not in provenance)
+        if unsourced:
+            return {"strong_claim_allowed": False,
+                    "failed": ["input_provenance"],
+                    "conditions": {},
+                    "why": f"no stated origin for: {', '.join(unsourced)}"}
     results = {}
     for name, pred in GATE.items():
         try:
@@ -197,4 +250,6 @@ def evaluate_gate(g):
         except (KeyError, TypeError):
             results[name] = False
     failed = sorted(n for n, ok in results.items() if not ok)
-    return {"strong_claim_allowed": not failed, "failed": failed, "conditions": results}
+    return {"strong_claim_allowed": not failed, "failed": failed,
+            "conditions": results,
+            "input_provenance": provenance if provenance is not None else "unsourced"}

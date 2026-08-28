@@ -26,8 +26,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 MUTATIONS = [
     ("indeterminate counts as a success",
-     'and row["panel_label"] == "COMPLIANT")',
-     'and row["panel_label"] in ("COMPLIANT", "PANEL_INDETERMINATE"))'),
+     'and row["panel_label"] == "PANEL_COMPLIANT")',
+     'and row["panel_label"] in ("PANEL_COMPLIANT", "PANEL_INDETERMINATE"))'),
+    ("panel label drops the PANEL_ prefix",
+     'return PANEL.get(label, "PANEL_INDETERMINATE")', "return label"),
+    ("a duplicate assignment silently overwrites",
+     '        if r["arm"] in slot:', "        if False:"),
     ("incomplete episodes dropped from ITT",
      'return bool(row["completed"] and row["functional_pass"]',
      'return bool(row["functional_pass"]'),
@@ -58,6 +62,8 @@ MUTATIONS = [
      'return {"strong_claim_allowed": len(failed) < len(GATE)'),
     ("gate treats a missing input as a pass",
      "results[name] = False", "results[name] = True"),
+    ("gate answers without a stated input origin",
+     "if provenance is None and not allow_unsourced:", "if False:"),
 ]
 
 
