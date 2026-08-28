@@ -1,0 +1,634 @@
+{
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "document_id": "cdeb-fresh-v8-manipulation-preflight",
+  "status": "INCOMPLETE \u2014 two candidates cannot be suppressed as specified",
+  "product": {
+    "tag": "v1.2.0",
+    "dist_sha256": "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528",
+    "command": "context --json <path scope>",
+    "verified_digest_matches": true
+  },
+  "counts": {
+    "candidates": 17,
+    "passes": 15,
+    "fails": 2
+  },
+  "what_pass_means": "the frozen build emits a payload carrying the decision's ruling and reason for the recorded path scope, removing the target record by identity drops both from the payload, and every unrelated record block is byte-identical between the arms",
+  "harness_faults_found_and_fixed": [
+    {
+      "fault": "required notes:present everywhere",
+      "truth": "agent-operator-score's sealed bundle carries no refs/notes/commitlore because that repository never had one, so unfetched there is the state of the repository rather than a step skipped. gitseed's bundle does carry it and fetching changes only the timestamp, the notes field and one diagnostic -- the record set is identical.",
+      "cost": "failed all 8 agent-operator-score candidates"
+    },
+    {
+      "fault": "treated a non-zero exit as a refusal",
+      "truth": "asking for six paths at once exits 3 with a note that rename following needs one pathspec, and prints the complete answer on stdout regardless",
+      "cost": "failed 8 candidates a second time, for a different wrong reason"
+    },
+    {
+      "fault": "quoted repository paths into a shell command line",
+      "truth": "path scope entries are data; the harness now passes an argument array",
+      "cost": "masked the exit-code fault while it was present"
+    }
+  ],
+  "genuine_failures": [
+    {
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "repository_id": "agent-operator-score",
+      "problem": "the source pool records no record_id for this decision",
+      "record_id": null,
+      "consequence": "suppression is specified as removal by structured record identity. With no record id there is no identity to remove, and the payload for its path scope carries 66 records that this arm would have to separate some other way.",
+      "not_attempted": "a text filter would delete whatever happens to read like the ruling"
+    },
+    {
+      "candidate_id": "v4-f901052615fa3aee",
+      "repository_id": "gitseed",
+      "problem": "removing the target record does not remove the ruling from the payload",
+      "record_id": "r-f8adapter",
+      "ruling": "JSON files on disk",
+      "found": "three separate decisions in this repository rule out the same approach for different reasons: r-f8adapter (atomic artifact constraints), r-f8replay (a single durable run history) and r-f8schema (version gating and correction lineage). Suppressing one leaves the other two, so the SUPPRESSED arm still tells the agent that JSON files on disk were ruled out.",
+      "and_one_of_them_is_another_candidate": "r-f8replay is the target record of v4-ed878960135ff45a, which is also in the seventeen. Suppressing both to clean one arm would alter the other candidate's ON payload."
+    }
+  ],
+  "why_this_is_not_a_harness_fault": "both failures reproduce with the frozen build run by hand. The first is missing data in the source pool; the second is a property of the repository, where one approach was ruled out three times.",
+  "results": [
+    {
+      "candidate_id": "v4-002ffd1e428c572a",
+      "repository_id": "agent-operator-score",
+      "target_record_id": "r-e0b001",
+      "path_scope": [
+        "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+        "packages/schema/src/capability.ts",
+        "packages/schema/test/capability.test.ts",
+        "specs/adapter-capabilities.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "notes_state": "unfetched",
+      "coverage": "complete",
+      "context_exit_code": 3,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 6 paths; query one path at a time to follow its rename chain",
+        "commitlore: the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "bundle_has_notes_ref": false,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 6 paths; query one path at a time to follow its rename chain",
+        "the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "records_in_on": 60,
+      "records_in_suppressed": 59,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "a5cbd2b958a4e6ba4f975b712cb2e55a175b8803df3796c4894b8b201d4ddc9b",
+      "suppressed_payload_sha256": "7beca60413db7d2434bff0855ece0e08bf6e92be35d513f040a1c637db12fc85",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "repository_id": "gitseed",
+      "target_record_id": "r-gsf501",
+      "path_scope": [
+        "gitseed/ports.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [],
+      "records_in_on": 3,
+      "records_in_suppressed": 2,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "fce36e688b273af6494f32503ccf84e9416aca28c28b09a381a829a973941f5e",
+      "suppressed_payload_sha256": "92d25469029f8208a38f13f2f3a543fcd21e7edc4087fa8241aebf72db2c0d8c",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "repository_id": "agent-operator-score",
+      "target_record_id": null,
+      "path_scope": [
+        ".github/workflows/operational-state.yml",
+        "AGENTS.md",
+        "docs/planning/AOS-EXECUTION-ROADMAP.md",
+        "docs/planning/issue-resolution-ledger-2026-08-06.md",
+        "docs/tickets/BOARD.md",
+        "package.json",
+        "scripts/render-execution-views.mjs",
+        "scripts/validate-planning.mjs",
+        "tests/execution-views.test.mjs",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "notes_state": "unfetched",
+      "coverage": "complete",
+      "context_exit_code": 3,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 11 paths; query one path at a time to follow its rename chain",
+        "commitlore: the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "bundle_has_notes_ref": false,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 11 paths; query one path at a time to follow its rename chain",
+        "the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "records_in_on": 66,
+      "records_in_suppressed": 66,
+      "target_blocks_removed": 0,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": false,
+      "suppressed_drops_reason": false,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "fe39b89af8eb7920239b6a9cb626fe291acc5ff38eb9932a70e937555de32c8c",
+      "suppressed_payload_sha256": "fe39b89af8eb7920239b6a9cb626fe291acc5ff38eb9932a70e937555de32c8c",
+      "notes_state_acceptable": true,
+      "passes": false
+    },
+    {
+      "candidate_id": "v4-377f04276465b59d",
+      "repository_id": "gitseed",
+      "target_record_id": "r-gsb108",
+      "path_scope": [
+        ".github/workflows/ci.yml",
+        "pyproject.toml",
+        "tests/conftest.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 3 paths; query one path at a time to follow its rename chain"
+      ],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 3 paths; query one path at a time to follow its rename chain"
+      ],
+      "records_in_on": 9,
+      "records_in_suppressed": 8,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "63afc276e2bced57637aa570f38a0ba9af53f26c856e90b4e00714b2d31f52c8",
+      "suppressed_payload_sha256": "49e7e0087c5c9a23c9b9dbe135686b6797cc24baa8d9843f187c2ffc977d2128",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-77e1745655a235ce",
+      "repository_id": "gitseed",
+      "target_record_id": "r-evid610",
+      "path_scope": [
+        "gitseed/category.py",
+        "tests/test_category.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; query one path at a time to follow its rename chain"
+      ],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; query one path at a time to follow its rename chain"
+      ],
+      "records_in_on": 4,
+      "records_in_suppressed": 3,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "02d8e0d100fba584a17fec54b478687409e4ff10977f884245021dedeca9fe33",
+      "suppressed_payload_sha256": "7ace1a6e937d15e1e43f2dc259c016ce79e729108576c47056c0f2a95bc50734",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "repository_id": "gitseed",
+      "target_record_id": "r-f8adapter",
+      "path_scope": [
+        "gitseed/storage.py",
+        "tests/test_storage.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; query one path at a time to follow its rename chain"
+      ],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; query one path at a time to follow its rename chain"
+      ],
+      "records_in_on": 13,
+      "records_in_suppressed": 12,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "ca155cd32b44e0623ca5912276f026be9f62618acb867cd82231baa45cbb5bb8",
+      "suppressed_payload_sha256": "8fc1969be123fc185e74a761b3da2fce8ce47bbf1b6b46de6bc933254af9e850",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-8f24735524874167",
+      "repository_id": "agent-operator-score",
+      "target_record_id": "r-e0b003",
+      "path_scope": [
+        "fixtures/doctor/blocked-and-imported.json",
+        "fixtures/doctor/blocked.json",
+        "fixtures/doctor/complete.json",
+        "fixtures/doctor/degraded.json",
+        "fixtures/doctor/imported-and-degraded.json",
+        "fixtures/doctor/imported-only.json",
+        "packages/schema/src/doctor-contract.ts",
+        "packages/schema/test/doctor-contract.test.ts",
+        "specs/doctor-output.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "notes_state": "unfetched",
+      "coverage": "complete",
+      "context_exit_code": 3,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 11 paths; query one path at a time to follow its rename chain",
+        "commitlore: the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "bundle_has_notes_ref": false,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 11 paths; query one path at a time to follow its rename chain",
+        "the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "records_in_on": 61,
+      "records_in_suppressed": 60,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "821372b80429fba2ddaee723473269bc46e3efa51ed3380479ea6277d9d59e01",
+      "suppressed_payload_sha256": "8b0cbbe5727435e16163208833f99d9832dce19d6b39d30ff532b0e3b3c8d0ac",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "repository_id": "gitseed",
+      "target_record_id": "r-gs0006",
+      "path_scope": [
+        "gitseed/collect/__init__.py",
+        "gitseed/collect/ratelimit.py",
+        "gitseed/collect/search.py",
+        "tests/test_collect.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 4 paths; query one path at a time to follow its rename chain"
+      ],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 4 paths; query one path at a time to follow its rename chain"
+      ],
+      "records_in_on": 9,
+      "records_in_suppressed": 8,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "60d4f7db703740defa3117e42a32df1c38268101c4d9cc3c74ea41a2b3092ace",
+      "suppressed_payload_sha256": "0e988af7410398ee13fb76fc5464bfd741b5f7446ff31694cdc404c11828bcb3",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-9b42b1951da730e1",
+      "repository_id": "agent-operator-score",
+      "target_record_id": "r-e0a001",
+      "path_scope": [
+        "packages/schema/package.json",
+        "packages/schema/src/metric-registry.ts",
+        "packages/schema/test/metric-registry.test.ts",
+        "scripts/validate-planning.mjs",
+        "specs/metrics.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "notes_state": "unfetched",
+      "coverage": "complete",
+      "context_exit_code": 3,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 7 paths; query one path at a time to follow its rename chain",
+        "commitlore: the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "bundle_has_notes_ref": false,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 7 paths; query one path at a time to follow its rename chain",
+        "the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "records_in_on": 61,
+      "records_in_suppressed": 60,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "08bdc87c3f4373610f68d8fbac1bc606d07a29cd34d2e41c66412835910bed4a",
+      "suppressed_payload_sha256": "991f5057789c6a14088786dbe62b6316bb274e69c1a3a55cf585ee14d1cc1147",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "repository_id": "agent-operator-score",
+      "target_record_id": "r-e0b001b",
+      "path_scope": [
+        "packages/schema/src/capability.ts",
+        "packages/schema/test/capability.test.ts",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "notes_state": "unfetched",
+      "coverage": "complete",
+      "context_exit_code": 3,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 4 paths; query one path at a time to follow its rename chain",
+        "commitlore: the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "bundle_has_notes_ref": false,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 4 paths; query one path at a time to follow its rename chain",
+        "the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "records_in_on": 60,
+      "records_in_suppressed": 59,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "ec2382a3fbb8482794ad4a5eb1173d4259815bc3c5c00156f9e5efe5a347963e",
+      "suppressed_payload_sha256": "c87793bc7fd17d959faee812414096478c22784dc2f7af0cfc80bfe967f50ed8",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-cadfb63755c3f504",
+      "repository_id": "gitseed",
+      "target_record_id": "r-gs5b02",
+      "path_scope": [
+        "gitseed/pipeline/__init__.py",
+        "gitseed/pipeline/run.py",
+        "tests/test_pipeline.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 3 paths; query one path at a time to follow its rename chain"
+      ],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 3 paths; query one path at a time to follow its rename chain"
+      ],
+      "records_in_on": 11,
+      "records_in_suppressed": 10,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "76345beabd7d35f79079e33be31167c10a7d0e73ca7c4ac32928ddee322d31fa",
+      "suppressed_payload_sha256": "b4471cda529046534dff2188f5daba3a081430755dc9cbdb6294388c47baaebf",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "repository_id": "agent-operator-score",
+      "target_record_id": "r-e0b001b",
+      "path_scope": [
+        "packages/schema/src/capability.ts",
+        "packages/schema/test/capability.test.ts",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "notes_state": "unfetched",
+      "coverage": "complete",
+      "context_exit_code": 3,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 4 paths; query one path at a time to follow its rename chain",
+        "commitlore: the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "bundle_has_notes_ref": false,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 4 paths; query one path at a time to follow its rename chain",
+        "the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "records_in_on": 60,
+      "records_in_suppressed": 59,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "1afa5ba5234b7c402fb76ba3d91242152a370f79f5516abeeeeee5d1b6388af7",
+      "suppressed_payload_sha256": "38a5d2c6538faf55ef5b0877d571923205cb9fff10f7179bf480a29609d84c55",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "repository_id": "agent-operator-score",
+      "target_record_id": "r-e0a001",
+      "path_scope": [
+        "packages/schema/package.json",
+        "packages/schema/src/metric-registry.ts",
+        "packages/schema/test/metric-registry.test.ts",
+        "scripts/validate-planning.mjs",
+        "specs/metrics.v0.json",
+        "tests/planning-contract.test.mjs",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "notes_state": "unfetched",
+      "coverage": "complete",
+      "context_exit_code": 3,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 7 paths; query one path at a time to follow its rename chain",
+        "commitlore: the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "bundle_has_notes_ref": false,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 7 paths; query one path at a time to follow its rename chain",
+        "the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "records_in_on": 61,
+      "records_in_suppressed": 60,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "b10ab45e3e5b7e8961d2a7b9f6b888fdea280684b9de9fea00aad1a799839f88",
+      "suppressed_payload_sha256": "f6fa6cd1488329559665cd2f4f049fdc9c47b212176b669f75405839566e9572",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-e7587b2b65750306",
+      "repository_id": "agent-operator-score",
+      "target_record_id": "r-e0a001b",
+      "path_scope": [
+        "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+        "packages/schema/src/metric-registry.ts",
+        "packages/schema/test/metric-registry.test.ts",
+        "scripts/validate-planning.mjs",
+        "specs/metrics.v0.json",
+        "tests/planning/workspace-skeleton.test.mjs"
+      ],
+      "notes_state": "unfetched",
+      "coverage": "complete",
+      "context_exit_code": 3,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 6 paths; query one path at a time to follow its rename chain",
+        "commitlore: the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "bundle_has_notes_ref": false,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 6 paths; query one path at a time to follow its rename chain",
+        "the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch refs/notes/commitlore by default). fix: commitlore doctor --fix, then git fetch"
+      ],
+      "records_in_on": 37,
+      "records_in_suppressed": 36,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "b59b3d57cf41e18d5a935c7ad62bf72de934eb7e9868af7b71b179ff843a73f3",
+      "suppressed_payload_sha256": "9d5f2e8cdcc5c7809561aa378a4aae030167b377600e5128c1b83d5bd036efe6",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-ed878960135ff45a",
+      "repository_id": "gitseed",
+      "target_record_id": "r-f8replay",
+      "path_scope": [
+        "gitseed/storage.py",
+        "tests/test_storage.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; query one path at a time to follow its rename chain"
+      ],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; query one path at a time to follow its rename chain"
+      ],
+      "records_in_on": 13,
+      "records_in_suppressed": 12,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "473e722203a80479e101eb023e672f5c148192a094043bddb0d83e64ac75ed5b",
+      "suppressed_payload_sha256": "687ffb6a1307fed411cdc420a63ff5f4f9451e6cb2f740faf34cf3b0a9b7b987",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-f3c960a48273132c",
+      "repository_id": "gitseed",
+      "target_record_id": "r-gsf501",
+      "path_scope": [
+        "gitseed/ports.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [],
+      "records_in_on": 3,
+      "records_in_suppressed": 2,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": true,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "654397c192089850bc867d763bf77f27c61de0016aa76332139fd3cbfcc557bb",
+      "suppressed_payload_sha256": "5fca4339865218783b2979d06c31c3e148522d9b203397a22518feac98fb37fd",
+      "notes_state_acceptable": true,
+      "passes": true
+    },
+    {
+      "candidate_id": "v4-f901052615fa3aee",
+      "repository_id": "gitseed",
+      "target_record_id": "r-f8adapter",
+      "path_scope": [
+        "gitseed/storage.py",
+        "tests/test_storage.py"
+      ],
+      "notes_state": "present",
+      "coverage": "complete",
+      "context_exit_code": 0,
+      "context_warnings": [
+        "commitlore: git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; query one path at a time to follow its rename chain"
+      ],
+      "bundle_has_notes_ref": true,
+      "diagnostics": [
+        "git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; query one path at a time to follow its rename chain"
+      ],
+      "records_in_on": 13,
+      "records_in_suppressed": 12,
+      "target_blocks_removed": 1,
+      "on_carries_ruling": true,
+      "on_carries_reason": true,
+      "suppressed_drops_ruling": false,
+      "suppressed_drops_reason": true,
+      "unrelated_blocks_identical": true,
+      "on_payload_sha256": "bc470c26ba4fb899313fcb4dc8a7765b6a234684e4c31664287e0013f456224f",
+      "suppressed_payload_sha256": "4c3526acddcfae23ce330b9bd2bc8ae6b853964c572352a784793b28a8dcbc5c",
+      "notes_state_acceptable": true,
+      "passes": false
+    }
+  ]
+}
