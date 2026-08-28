@@ -8,6 +8,20 @@
   },
   "confirmed_reads_of_another_judges_answer": 1,
   "document_id": "cdeb-fresh-v8-judge-independence-audit",
+  "fix_verified": {
+    "clean_packet_working_copy": [
+      "decision.txt",
+      "diff.patch",
+      "packet_id.txt",
+      "task.txt",
+      "tree/file.py"
+    ],
+    "exit_code": 2,
+    "how": "A packet was built carrying decision.txt, task.txt, diff.patch, packet_id.txt and tree/, plus one leftover out.cand-codex.json standing in for a previous judge's answer.",
+    "message": "packet/cand-sol REFUSED: packet contains 1 judgement artifact(s)",
+    "note": "The exit code was read directly rather than through a pipe. Piping the runner into tail reports tail's status, which is 0 whatever the runner did, and a refusal that looks like a pass is the failure this check exists to rule out.",
+    "runner_refused": true
+  },
   "fixed_in": "harness/judge-run.sh",
   "how_it_is_fixed": "Judgements are written to a results tree outside the packet. Each judge runs in a scratch copy of the packet carrying only the packet's own files, gets a fresh HOME, and the runner refuses outright if the packet directory contains any judgement artifact.",
   "method": "Every calibration judgement's own event stream was read. A judgement is counted as having had the opportunity when it ran a directory listing at a time when another judge's out.*.json already existed on disk, and as a confirmed read when a command names another judge's output file.",
