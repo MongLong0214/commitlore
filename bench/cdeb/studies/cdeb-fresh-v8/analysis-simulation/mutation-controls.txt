@@ -1,0 +1,15 @@
+baseline unmutated: all controls pass
+  caught       indeterminate counts as a success  <- indeterminate is not a success
+  caught       incomplete episodes dropped from ITT  <- incomplete is not a success
+  caught       one judge decides the panel  <- panel truth table
+  caught       repositories weighted by candidate count  <- repositories weighted equally
+  caught       bootstrap resamples candidates  <- bootstrap holds the candidate set fixed
+  caught       bootstrap does not resample at all  <- bootstrap actually resamples differing blocks, interval sits at the 2.
+  caught       interval uses the extremes, not percentiles  <- interval sits at the 2.5/97.5 percentiles
+  caught       randomization never swaps labels  <- randomization p small under a real effect
+  caught       randomization always swaps labels  <- randomization p small under a real effect
+  caught       RBDR divides by a zero denominator  <- crashed: ZeroDivisionError: float division by zero
+  caught       gate passes when any condition holds  <- strong claim fails one gate at a time, missing input is a failure, not
+  caught       gate treats a missing input as a pass  <- missing input is a failure, not a pass
+
+12/12 mutations caught

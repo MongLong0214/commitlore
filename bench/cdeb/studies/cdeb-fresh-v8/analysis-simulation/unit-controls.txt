@@ -1,0 +1,22 @@
+  ok   panel truth table
+  ok   indeterminate is not a success
+  ok   incomplete is not a success
+  ok   functional failure is not a success
+  ok   post-start failure retained in ITT
+  ok   repositories weighted equally
+  ok   per-repository effects reported
+  ok   bootstrap fixture has candidates that differ
+  ok   identical blocks give a degenerate interval
+  ok   bootstrap holds the candidate set fixed
+  ok   bootstrap actually resamples differing blocks
+  ok   interval sits at the 2.5/97.5 percentiles
+  ok   randomization p small under a real effect
+  ok   randomization p large under no effect
+  ok   RBDR undefined when suppressed never revives
+  ok   gate has 25 conditions
+  ok   gate passes when every condition holds
+  ok   every condition is breakable and named
+  ok   strong claim fails one gate at a time
+  ok   missing input is a failure, not a pass
+
+  all passing

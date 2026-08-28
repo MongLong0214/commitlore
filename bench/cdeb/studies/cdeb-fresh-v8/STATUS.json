@@ -1,4 +1,6 @@
 {
+  "analysis_code_frozen": true,
+  "analysis_simulation": "6/6 scenarios, 20 unit controls, 12/12 mutations caught",
   "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
   "calibration_complete": true,
