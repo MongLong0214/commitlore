@@ -5,6 +5,7 @@
   "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
   "calibration_complete": true,
+  "dry_run_manipulation": "17/17",
   "evidence_tier_bounded_by": "calibration label/origin confound, section 26; see v8-d010 for what it does and does not bound",
   "headline_scope_in_sentence": true,
   "judge_independence_enforced": true,
@@ -20,6 +21,13 @@
   ],
   "panel_frozen": true,
   "phase": "schedule-frozen",
+  "prb_prerequisites": {
+    "batch_runner": "batch.py, one worker per repository, refuses while measured_run_allowed is false",
+    "episode_runner": "run-episode.py, section 19's sixteen steps",
+    "gate_input_builder": "gate-inputs.py, 13 of 25 derived, the rest fail rather than default",
+    "judge_packet_builder": "episode_packet.py, built before teardown",
+    "suppression_identity": "all 17 resolved, dry-run verified against real trees"
+  },
   "product_effect_rows": 0,
   "red_team_p0_open": 0,
   "red_team_p1_open": 0,
