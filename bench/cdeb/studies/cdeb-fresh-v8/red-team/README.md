@@ -79,6 +79,16 @@ Three findings were worth the exercise on their own:
   INDETERMINATE votes produce `INDETERMINATE`. A table copied from the code under
   test cannot disagree with it.
 
-Left to the owner, none of them code defects: the calibration label/origin
-confound preregistered before the panel freeze, and the section 27 headline
-wording.
+Two findings were the owner's to settle rather than defects to fix, and both are
+ruled:
+
+- **The calibration label/origin confound stays** (v8-d010). The frozen corpus is
+  kept and the confound bounds the evidence tier under section 26. It bounds what
+  passing calibration establishes about the three seats; it does not bound the
+  measured agreement statistics, which are computed on 340 episodes whose trees
+  carry no v6/v7 origin split for a judge to detect.
+- **The headline names its benchmark** (v8-d009). Section 27 now reads *R% fewer
+  repeated bad decisions on a fixed 17-task benchmark*, because a headline is the
+  part that travels without its footnote.
+
+No P0 and no P1 remain open.

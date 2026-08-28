@@ -22,6 +22,11 @@
       "severity_as_raised": "P1",
       "verified": true
     },
+    "judge calibration overfit": {
+      "resolution": "same ruling, v8-d010",
+      "severity_as_raised": "P1",
+      "verified": true
+    },
     "judge cross-episode memory and cross-judge contamination": {
       "resolution": "fixed in harness/judge-run.sh; measured in preflight/judge-independence-audit.json -- 48 of 96 calibration judgements had the opportunity, 1 confirmed read, no selection outcome changes",
       "severity_as_raised": "P0",

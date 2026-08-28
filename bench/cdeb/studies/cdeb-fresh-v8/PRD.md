@@ -1551,7 +1551,13 @@ No V9.
 
 ## 27. Strong README claim gate
 
-> **R% fewer repeated bad decisions**
+> **R% fewer repeated bad decisions on a fixed 17-task benchmark**
+
+Amended 2026-08-28 (owner, v8-d009). The headline previously read *R% fewer
+repeated bad decisions*, with the scope carried only by the footnote. Red-team
+round C found that it reads as a general product claim on its own, and a headline
+is the part that travels without its footnote. The scope is now in the sentence
+itself; the footnote is unchanged and still required.
 
 모두 통과해야 한다.
 

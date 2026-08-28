@@ -17,7 +17,9 @@
       "verified": true
     },
     "headline overgeneralization": {
-      "resolution": "NOT CHANGED HERE -- the headline and its footnote are SSOT text (section 27). The gate already blocks the claim on 25 conditions and no synthetic scenario reached it. Whether the headline wording should change is an owner decision.",
+      "after": "R% fewer repeated bad decisions on a fixed 17-task benchmark",
+      "before": "R% fewer repeated bad decisions",
+      "resolution": "RESOLVED by owner ruling v8-d009, 2026-08-28: section 27's headline now names the benchmark in the sentence rather than only in the footnote",
       "severity_as_raised": "P1",
       "verified": true
     },

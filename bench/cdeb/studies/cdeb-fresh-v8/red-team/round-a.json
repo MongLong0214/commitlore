@@ -5,6 +5,15 @@
     "For task-population references that are present\u2014the 17 tasks, 51 control records, 17 selected semantic-judgement records, firewall evidence, and source manifest\u2014the recorded SHA-256 values match the current files. The failure is confined to the two missing bundle artifacts, which cover every candidate.",
     "All 17 calibration Bad A patch hashes match corpus.json, and each patch's bytes match its stated v7 imported-control or v7-rebuild source. The provenance records are internally accurate; the unsupported part is using a provenance-confounded corpus to validate semantic judging."
   ],
+  "disposition": {
+    "control label corruption": {
+      "resolution": "RESOLVED by owner ruling v8-d010, 2026-08-28: the frozen calibration is kept and the confound bounds the evidence tier under section 26 rather than requiring a re-run",
+      "severity_as_raised": "P1",
+      "verified": true,
+      "what_it_bounds": "selection validity -- what passing calibration establishes about the three seats",
+      "what_it_does_not_bound": "the measured agreement statistics, computed on 340 episodes whose trees carry no v6/v7 origin split"
+    }
+  },
   "document_id": "cdeb-fresh-v8-red-team-round-a",
   "findings": [
     {
