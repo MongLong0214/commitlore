@@ -64,6 +64,14 @@ MUTATIONS = [
      "results[name] = False", "results[name] = True"),
     ("gate answers without a stated input origin",
      "if provenance is None and not allow_unsourced:", "if False:"),
+    ("AC1 uses the product of marginals like kappa",
+     "p_e = sum(p * (1 - p) for p in pi.values()) / (len(categories) - 1)",
+     "p_e = sum(p * p for p in pi.values())"),
+    ("three-way agreement counts non-unanimous episodes",
+     "return sum(len(set(v.values())) == 1 for v in episodes) / len(episodes)",
+     "return sum(len(set(v.values())) <= 2 for v in episodes) / len(episodes)"),
+    ("Fleiss kappa drops the chance correction",
+     "return (p_bar - p_e) / (1 - p_e)", "return p_bar"),
 ]
 
 

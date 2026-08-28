@@ -1,6 +1,6 @@
 {
   "analysis_code_frozen": true,
-  "analysis_simulation": "6/6 scenarios, 23 unit controls, 15/15 mutations caught",
+  "analysis_simulation": "6/6 scenarios, 33 unit controls, 18/18 mutations caught",
   "arm_mapping_concealment": "role separation, per owner ruling v8-d005; not cryptographic",
   "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
@@ -32,6 +32,7 @@
   "schedule_refrozen_after_red_team": true,
   "scheduled_episodes": 340,
   "schema_version": 1,
+  "section_10_reliability_metrics_implemented": true,
   "section_13_artifacts_complete": true,
   "state_machine_position": "SCHEDULE_FROZEN",
   "study_id": "cdeb-fresh-v8",

@@ -55,9 +55,30 @@ repository, which is exactly what the finding said.
 
 | round | surfaces | result |
 |---|---|---|
-| A | v7 terminality, population drift, control labels, runtime drift, count mismatch | 2 P0 (both fixed), 1 P1 (open), 4 could-not-refute |
+| A | v7 terminality, population drift, control labels, runtime drift, count mismatch | 2 P0 fixed, 1 P1 to the owner, 4 could-not-refute |
+| B | boundary leak, calibration overfit, family diversity, arm exposure, judge memory, early reveal, reliability | 2 P0 fixed, 1 P0 ruled on by the owner, 3 P1, 1 P2 |
+| C | arm asymmetry, retry loophole, panel aggregation, indeterminate scoring, bootstrap unit, headline | 2 P1 fixed as code defects, 1 P1 partly, 1 P1 to the owner, 2 P2 already recorded |
 
-Round A's P0s are resolved in commit 622e2ca. Its P1 — calibration label and
-origin are nearly confounded — was preregistered as a known limitation before the
-panel was frozen, and whether it gates PR-A is an owner decision rather than one
-made here.
+Nineteen surfaces, all covered, 16 findings. Seven were defects in work this
+session produced and are fixed; the rest were already-recorded limitations the
+reviewers found by reading what the study says about itself, or questions that
+belong to the owner.
+
+Three findings were worth the exercise on their own:
+
+- **A judge read the other two before answering.** Not a risk — it happened, and
+  the event stream names the command. `preflight/judge-independence-audit.json`
+  measures it: 48 of 96 calibration judgements had the opportunity, one took it,
+  and no selection outcome changes.
+- **Packet ids reversed to an arm in under a millisecond.** Seventeen candidates
+  times two arms is thirty-four hashes, and the salt was committed beside the code.
+  I had written that the salt "is not a secret, it is a separator", which is the
+  flaw stated as a reassurance.
+- **The panel truth table agreed with the bug.** It had been written from the
+  implementation rather than from section 9.1, so it asserted that two
+  INDETERMINATE votes produce `INDETERMINATE`. A table copied from the code under
+  test cannot disagree with it.
+
+Left to the owner, none of them code defects: the calibration label/origin
+confound preregistered before the panel freeze, and the section 27 headline
+wording.

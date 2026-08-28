@@ -14,6 +14,9 @@ baseline unmutated: all controls pass
   caught       gate passes when any condition holds  <- strong claim fails one gate at a time, missing input is a failure, not
   caught       gate treats a missing input as a pass  <- missing input is a failure, not a pass
   caught       gate answers without a stated input origin  <- the gate refuses inputs with no stated origin
+  caught       AC1 uses the product of marginals like kappa  <- AC1 stays high where one category dominates, Fleiss kappa collapses on
+  caught       three-way agreement counts non-unanimous episodes  <- three-way agreement counts only unanimous episodes
+  caught       Fleiss kappa drops the chance correction  <- Fleiss kappa collapses on the same data
 
-15/15 mutations caught
-code pinned: analysis.py db7b90393461575a
+18/18 mutations caught
+code pinned: analysis.py 542e3618ad34b3e5

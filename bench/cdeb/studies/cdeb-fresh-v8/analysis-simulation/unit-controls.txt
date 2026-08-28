@@ -21,5 +21,15 @@
   ok   strong claim fails one gate at a time
   ok   the gate refuses inputs with no stated origin
   ok   missing input is a failure, not a pass
+  ok   three-way agreement is 1.0 when every judge agrees
+  ok   AC1 is 1.0 under perfect agreement with two categories
+  ok   Fleiss kappa is 1.0 under perfect agreement
+  ok   three-way agreement counts only unanimous episodes
+  ok   pairwise agreement differs between pairs
+  ok   AC1 stays high where one category dominates
+  ok   Fleiss kappa collapses on the same data
+  ok   AC1 is low when a judge alternates against the others
+  ok   the reliability report carries every section 10 field
+  ok   median pairwise AC1 is the median of the three pairs
 
   all passing

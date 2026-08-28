@@ -15,8 +15,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from analysis import (GATE, bootstrap, by_candidate, candidate_effect, delta,  # noqa: E402
-                      evaluate_gate, p_dsfps, p_ind, panel_label, randomization_p,
-                      rbdr)
+                      evaluate_gate, fleiss_kappa, gwet_ac1, median_pairwise_ac1,
+                      p_dsfps, p_ind, pairwise_raw_agreement, panel_label,
+                      randomization_p, rbdr, reliability,
+                      three_way_exact_agreement)
 
 FAILURES = []
 
@@ -257,6 +259,63 @@ check("the gate refuses inputs with no stated origin",
 check("missing input is a failure, not a pass",
       not missing["strong_claim_allowed"] and missing["failed"] == ["rbdr_point"],
       f"got {missing['failed']}")
+
+# --- section 10 reliability, against values worked out by hand ---------------
+def judged(rows):
+    """rows: (episode, [label, label, label]) for judges j1, j2, j3."""
+    return [{"episode_id": e, "judge": f"j{i+1}", "label": l}
+            for e, labels in rows for i, l in enumerate(labels)]
+
+C, V, I = "COMPLIANT", "VIOLATION", "INDETERMINATE"
+
+perfect = judged([(f"e{i}", [C, C, C]) for i in range(5)]
+                 + [(f"f{i}", [V, V, V]) for i in range(5)])
+check("three-way agreement is 1.0 when every judge agrees",
+      three_way_exact_agreement(perfect) == 1.0,
+      str(three_way_exact_agreement(perfect)))
+check("AC1 is 1.0 under perfect agreement with two categories",
+      abs(gwet_ac1(perfect, "j1", "j2") - 1.0) < 1e-12,
+      str(gwet_ac1(perfect, "j1", "j2")))
+check("Fleiss kappa is 1.0 under perfect agreement",
+      abs(fleiss_kappa(perfect) - 1.0) < 1e-12, str(fleiss_kappa(perfect)))
+
+# Half the episodes agree, half split two-one. Three-way exact = 0.5.
+half = judged([(f"a{i}", [C, C, C]) for i in range(5)]
+              + [(f"b{i}", [C, C, V]) for i in range(5)])
+check("three-way agreement counts only unanimous episodes",
+      three_way_exact_agreement(half) == 0.5, str(three_way_exact_agreement(half)))
+check("pairwise agreement differs between pairs",
+      pairwise_raw_agreement(half)[("j1", "j2")] == 1.0
+      and pairwise_raw_agreement(half)[("j1", "j3")] == 0.5,
+      str(pairwise_raw_agreement(half)))
+
+# The prevalence paradox: 19 of 20 episodes are COMPLIANT and the two judges
+# disagree once. Raw agreement is 0.95, but kappa collapses because chance
+# agreement under the marginals is nearly 1. AC1 is built not to.
+skewed = judged([(f"s{i}", [C, C, C]) for i in range(19)] + [("s19", [C, V, C])])
+ac1 = gwet_ac1(skewed, "j1", "j2")
+kap = fleiss_kappa(skewed)
+check("AC1 stays high where one category dominates", ac1 is not None and ac1 > 0.9,
+      f"AC1={ac1}")
+check("Fleiss kappa collapses on the same data", kap is not None and kap < ac1,
+      f"kappa={kap} is not below AC1={ac1}; the pair is reported precisely because "
+      f"they disagree under skew")
+
+# A judge that answers at random should not look like agreement.
+alt = judged([(f"r{i}", [C, V, C] if i % 2 else [V, C, V]) for i in range(20)])
+check("AC1 is low when a judge alternates against the others",
+      gwet_ac1(alt, "j1", "j2") < 0.1, str(gwet_ac1(alt, "j1", "j2")))
+
+rel = reliability(half)
+check("the reliability report carries every section 10 field",
+      all(k in rel for k in ("three_way_exact_agreement", "pairwise_raw_agreement",
+                             "pairwise_gwet_ac1", "median_pairwise_gwet_ac1",
+                             "fleiss_kappa", "panel_indeterminate_rate")),
+      str(sorted(rel)))
+check("median pairwise AC1 is the median of the three pairs",
+      abs(median_pairwise_ac1(half)
+          - sorted(gwet_ac1(half, a, b) for a, b in [("j1","j2"),("j1","j3"),("j2","j3")])[1]) < 1e-12,
+      str(median_pairwise_ac1(half)))
 
 print(f"\n  {len(FAILURES)} failing" if FAILURES else "\n  all passing")
 sys.exit(1 if FAILURES else 0)

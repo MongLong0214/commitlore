@@ -253,3 +253,132 @@ def evaluate_gate(g, provenance=None, allow_unsourced=False):
     return {"strong_claim_allowed": not failed, "failed": failed,
             "conditions": results,
             "input_provenance": provenance if provenance is not None else "unsourced"}
+
+
+# ---------------------------------------------------------------------------
+# Section 10 reliability metrics
+#
+# The gate consumes `median_pairwise_ac1` and `three_way_agreement`, and nothing
+# here computed either of them -- a hostile review pointed out that the only
+# agreement figure anywhere in the study was 43/47 on the calibration corpus,
+# which is a different population from the 340 measured episodes. Section 10 says
+# these are always reported; section 32 asks for implementation tests. Both live
+# here now.
+#
+# Gwet's AC1 sits beside Fleiss kappa on purpose. Kappa collapses toward zero when
+# one category dominates even where raters agree almost perfectly -- the
+# prevalence paradox -- and a panel judging mostly-compliant trees is exactly that
+# situation. Reporting only kappa would understate agreement; reporting only AC1
+# would hide the imbalance. The pair says more than either.
+# ---------------------------------------------------------------------------
+
+def _by_episode(judgements):
+    """{episode: {judge: label}} from a flat list of judgements."""
+    out = {}
+    for j in judgements:
+        out.setdefault(j["episode_id"], {})[j["judge"]] = j["label"]
+    return out
+
+
+def three_way_exact_agreement(judgements):
+    """Fraction of episodes where all three judges returned the same label."""
+    episodes = [v for v in _by_episode(judgements).values() if len(v) == 3]
+    if not episodes:
+        return None
+    return sum(len(set(v.values())) == 1 for v in episodes) / len(episodes)
+
+
+def pairwise_raw_agreement(judgements):
+    """{(judge, judge): fraction of shared episodes where the two agreed}."""
+    episodes = _by_episode(judgements)
+    judges = sorted({j for v in episodes.values() for j in v})
+    out = {}
+    for i, a in enumerate(judges):
+        for b in judges[i + 1:]:
+            shared = [v for v in episodes.values() if a in v and b in v]
+            if shared:
+                out[(a, b)] = sum(v[a] == v[b] for v in shared) / len(shared)
+    return out
+
+
+def gwet_ac1(judgements, left, right):
+    """Gwet's AC1 for one pair of judges.
+
+    p_e is built from the average prevalence of each category across the two
+    raters, not from the product of their marginals, which is what makes it
+    stable when one category dominates.
+    """
+    episodes = _by_episode(judgements)
+    shared = [v for v in episodes.values() if left in v and right in v]
+    if not shared:
+        return None
+    n = len(shared)
+    categories = sorted({v[left] for v in shared} | {v[right] for v in shared})
+    if len(categories) < 2:
+        # Every rating identical and one category only: agreement is perfect and
+        # chance agreement is undefined. Saying 1.0 is the honest reading.
+        return 1.0
+    p_a = sum(v[left] == v[right] for v in shared) / n
+    pi = {c: (sum(v[left] == c for v in shared) + sum(v[right] == c for v in shared))
+             / (2 * n) for c in categories}
+    p_e = sum(p * (1 - p) for p in pi.values()) / (len(categories) - 1)
+    if p_e >= 1:
+        return 1.0
+    return (p_a - p_e) / (1 - p_e)
+
+
+def median_pairwise_ac1(judgements):
+    episodes = _by_episode(judgements)
+    judges = sorted({j for v in episodes.values() for j in v})
+    values = []
+    for i, a in enumerate(judges):
+        for b in judges[i + 1:]:
+            v = gwet_ac1(judgements, a, b)
+            if v is not None:
+                values.append(v)
+    if not values:
+        return None
+    values.sort()
+    mid = len(values) // 2
+    return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
+
+
+def fleiss_kappa(judgements):
+    """Fleiss kappa over episodes rated by the same number of judges."""
+    episodes = [v for v in _by_episode(judgements).values() if len(v) == 3]
+    if not episodes:
+        return None
+    n = 3
+    categories = sorted({label for v in episodes for label in v.values()})
+    if len(categories) < 2:
+        return None      # no variation: chance agreement is 1 and kappa is 0/0
+    N = len(episodes)
+    counts = [{c: sum(1 for label in v.values() if label == c) for c in categories}
+              for v in episodes]
+    p_bar = sum((sum(c[k] ** 2 for k in categories) - n) / (n * (n - 1))
+                for c in counts) / N
+    p_j = {k: sum(c[k] for c in counts) / (N * n) for k in categories}
+    p_e = sum(p ** 2 for p in p_j.values())
+    if p_e >= 1:
+        return None
+    return (p_bar - p_e) / (1 - p_e)
+
+
+def reliability(judgements):
+    """Everything section 10 says to always report."""
+    episodes = _by_episode(judgements)
+    complete = [v for v in episodes.values() if len(v) == 3]
+    panel = [panel_label(list(v.values())) for v in complete]
+    return {
+        "episodes": len(episodes),
+        "episodes_with_three_judgements": len(complete),
+        "three_way_exact_agreement": three_way_exact_agreement(judgements),
+        "pairwise_raw_agreement": {f"{a}|{b}": v
+                                   for (a, b), v in pairwise_raw_agreement(judgements).items()},
+        "pairwise_gwet_ac1": {f"{a}|{b}": gwet_ac1(judgements, a, b)
+                              for (a, b) in pairwise_raw_agreement(judgements)},
+        "median_pairwise_gwet_ac1": median_pairwise_ac1(judgements),
+        "fleiss_kappa": fleiss_kappa(judgements),
+        "panel_indeterminate_rate": (sum(p == "PANEL_INDETERMINATE" for p in panel)
+                                     / len(panel)) if panel else None,
+    }

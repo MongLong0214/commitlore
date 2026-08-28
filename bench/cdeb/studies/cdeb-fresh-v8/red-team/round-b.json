@@ -16,6 +16,12 @@
       "what_enforces_it": "Operational isolation, implemented in harness/judge-run.sh: each judge runs in a scratch copy carrying only the packet's own files, with a fresh HOME, no repository access, and the runner refuses if the packet holds any judgement artifact. Packet ids are unreversible (v8-d004), so a judge cannot map its packet to a schedule row even if it reached one.",
       "what_this_does_not_claim": "Cryptographic concealment. Anyone holding the committed seed can recompute every arm; that is by design under this reading, and the guarantee is role separation rather than secrecy."
     },
+    "boundary status leaking to judges": {
+      "reproduced": "v7-boundary-metadata.json holds the per-candidate labels and the old runner only changed directory, so nothing stopped a judge reading the study tree",
+      "resolution": "same fix as the contamination finding: each judge runs in a scratch copy holding only the packet's own files, with a fresh HOME and no repository path in reach",
+      "severity_as_raised": "P1",
+      "verified": true
+    },
     "judge cross-episode memory and cross-judge contamination": {
       "resolution": "fixed in harness/judge-run.sh; measured in preflight/judge-independence-audit.json -- 48 of 96 calibration judgements had the opportunity, 1 confirmed read, no selection outcome changes",
       "severity_as_raised": "P0",
@@ -26,6 +32,13 @@
       "reversal_measured": "34 combinations, under a millisecond",
       "severity_as_raised": "P0",
       "verified": true
+    },
+    "reliability overclaim": {
+      "reproduced": "the gate consumed median_pairwise_ac1 and three_way_agreement and nothing in analysis.py computed either; the only agreement figure in the study was 43/47 on the calibration corpus, a different population from the 340 measured episodes",
+      "resolution": "section 10's metrics are implemented: three-way exact agreement, pairwise raw agreement, pairwise Gwet AC1, Fleiss kappa and the panel indeterminate rate, with twelve unit controls against hand-computed values and three mutations",
+      "severity_as_raised": "P1",
+      "verified": true,
+      "why_ac1_and_kappa_are_both_reported": "kappa collapses toward zero when one category dominates even where raters agree, and a panel judging mostly-compliant trees is that situation. The controls include the paradox explicitly: on 19-of-20 COMPLIANT data with one disagreement, AC1 stays above 0.9 while kappa falls below it."
     }
   },
   "document_id": "cdeb-fresh-v8-red-team-round-b",
