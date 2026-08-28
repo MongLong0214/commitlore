@@ -324,8 +324,22 @@ def run(assignment, out_dir, scratch):
 
     acceptance_sha = install_acceptance(
         tree, acceptance_path, task["acceptance_test_source"])
-    task_acc = subprocess.run(task["how_to_run"], shell=True, cwd=tree,
+    # The frozen, verified command -- not task["how_to_run"], which for four of the
+    # seventeen is prose or names an interpreter that is not on PATH. Those exit 127,
+    # which is not a failing test, and scored as one they cost those candidates all
+    # twenty of their episodes in both arms.
+    commands = {e["candidate_id"]: e for e in
+                json.load(open(os.path.join(V8, "acceptance-commands.json")))["commands"]}
+    acceptance_command = commands[assignment["candidate_id"]]["command"]
+    task_acc = subprocess.run(acceptance_command, shell=True, cwd=tree,
                               capture_output=True, text=True, timeout=900)
+    if task_acc.returncode in (126, 127):
+        # The command did not run. That is an infrastructure failure at evaluation
+        # time, not a verdict on the agent's tree, and recording it as "acceptance
+        # failed" would be recording an outcome that was never measured.
+        raise SystemExit(
+            f"task acceptance did not run for {assignment['candidate_id']}: "
+            f"exit {task_acc.returncode} from {acceptance_command!r}")
     regression = candidate["regression_acceptance"]
     reg_acc = subprocess.run(regression["command"], shell=True,
                              cwd=os.path.join(tree, regression.get("cwd", ".")),
@@ -374,7 +388,10 @@ def run(assignment, out_dir, scratch):
         "completion": {"exit_code": code, "timed_out": timed_out,
                        "seconds": seconds, "completed": completed},
         "task_acceptance": {
-            "command": task["how_to_run"], "pass": task_acc.returncode == 0,
+            "command": acceptance_command,
+            "recorded_how_to_run": task["how_to_run"],
+            "pass": task_acc.returncode == 0,
+            "exit_code": task_acc.returncode,
             "tail": (task_acc.stdout or task_acc.stderr).strip().splitlines()[-1:] or [],
             "source_sha256": acceptance_sha,
             "hidden_during_the_run": True,
