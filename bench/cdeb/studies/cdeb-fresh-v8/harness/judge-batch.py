@@ -107,6 +107,64 @@ def order_for(seat, packet_ids, seed, pair_of):
     return order, clashes
 
 
+SCHEMA = json.load(open(os.path.join(HERE, "judge-schema.json")))
+
+
+def seal(out_path, packet_id, seat, manifest_path):
+    """Section 21.3, applied to a judgement the runner has just written.
+
+    temp write, fsync, atomic rename, read back, schema validate, hash, append.
+
+    The runner writes `out.<seat>.json` directly, so the durability protocol is
+    applied here by rewriting it through a temp file. Validating before sealing is
+    the part that matters: a judgement missing a required field, or carrying a
+    label outside the enum, is not a judgement, and a seal manifest that records it
+    as one is worse than no manifest.
+    """
+    if not os.path.exists(out_path):
+        return {"packet_id": packet_id, "judge": seat, "sealed": False,
+                "why": "the runner produced no output"}
+    try:
+        answer = json.load(open(out_path))
+    except json.JSONDecodeError as error:
+        return {"packet_id": packet_id, "judge": seat, "sealed": False,
+                "why": f"not JSON: {error}"}
+
+    missing = [k for k in SCHEMA["required"] if k not in answer]
+    bad_enum = [k for k, spec in SCHEMA["properties"].items()
+                if spec.get("enum") and answer.get(k) not in spec["enum"]]
+    if missing or bad_enum:
+        return {"packet_id": packet_id, "judge": seat, "sealed": False,
+                "why": f"schema: missing {missing}, outside enum {bad_enum}"}
+    if answer.get("packet_id") != packet_id:
+        # The judge's own statement of what it judged. It reported `work.judge-1`
+        # once, which is why this is checked rather than trusted.
+        return {"packet_id": packet_id, "judge": seat, "sealed": False,
+                "why": f"the judgement claims packet {answer.get('packet_id')!r}"}
+
+    body = json.dumps(answer, indent=2, sort_keys=True) + "\n"
+    tmp = out_path + ".tmp"
+    with open(tmp, "w") as fh:
+        fh.write(body)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, out_path)
+    readback = open(out_path).read()
+    if readback != body:
+        return {"packet_id": packet_id, "judge": seat, "sealed": False,
+                "why": "the judgement did not read back as written"}
+
+    digest = hashlib.sha256(body.encode()).hexdigest()
+    entry = {"packet_id": packet_id, "judge": seat, "sealed": True,
+             "label": answer["label"], "confidence": answer["confidence"],
+             "sha256": digest, "bytes": len(body)}
+    with open(manifest_path, "a") as fh:
+        fh.write(json.dumps(entry) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    return entry
+
+
 def main():
     plan_only = "--plan" in sys.argv
     all_rows = rows()
@@ -159,21 +217,36 @@ def main():
         return 2
 
     results_root = os.path.join(SCRATCH, "v8run/judgements")
-    made = 0
+    os.makedirs(results_root, exist_ok=True)
+    manifest = os.path.join(V8, "judgements-seal-manifest.jsonl")
+    already = set()
+    if os.path.exists(manifest):
+        for line in open(manifest):
+            e = json.loads(line)
+            already.add((e["packet_id"], e["judge"]))
+    made, refused = 0, []
     for seat, model, family in SEATS:
         for pid in orders[seat]["order"]:
             out = os.path.join(results_root, pid, f"out.{seat}.json")
-            if os.path.exists(out):
+            if (pid, seat) in already:
                 made += 1
                 continue
             proc = subprocess.run(
                 ["bash", os.path.join(HERE, "judge-run.sh"),
                  packet_path(by_packet[pid]), seat, family, model, results_root],
                 capture_output=True, text=True)
-            print(f"  {seat} {pid[:12]} {proc.stdout.strip()[:60]}", flush=True)
-            made += 1
-    print(f"\n  judgements: {made}")
-    return 0
+            entry = seal(out, pid, seat, manifest)
+            if entry.get("sealed"):
+                made += 1
+                print(f"  {seat} {pid[:12]} {entry['label']} {entry['confidence']}",
+                      flush=True)
+            else:
+                refused.append(entry)
+                print(f"  {seat} {pid[:12]} NOT SEALED: {entry['why'][:70]}", flush=True)
+    print(f"\n  sealed: {made}   not sealed: {len(refused)}")
+    for r in refused[:5]:
+        print(f"    {r['judge']} {r['packet_id'][:12]}: {r['why'][:80]}")
+    return 0 if not refused else 1
 
 
 if __name__ == "__main__":
