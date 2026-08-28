@@ -1,0 +1,76 @@
+{
+  "consequence_for_the_estimand": "P-DSFPS requires a completed, functional, panel-compliant episode. An episode that changes no file is not functional, so it scores zero in both arms. At this rate agent-operator-score contributes almost nothing to an equal-weight estimand over two repositories, and section 27's condition that its point effect exceed zero becomes close to unreachable -- not by result but by construction.",
+  "document_id": "cdeb-fresh-v8-refusal-observation",
+  "for_RESULT": "RESULT.md must lead with this rather than bury it. Roughly half the design is measuring whether an agent starts work under one repository's governance, which is a different question from the one registered.",
+  "not_split_by_arm": "Deliberately. Whether refusal differs between arms is part of the effect, and section 33 forbids interim aggregate effect analysis. Everything here is pooled.",
+  "observed_at_rows": 102,
+  "per_candidate": {
+    "v4-002ffd1e428c572a": {
+      "changed_no_files": 9,
+      "episodes": 10
+    },
+    "v4-0ecd7426eebc1cab": {
+      "changed_no_files": 0,
+      "episodes": 8
+    },
+    "v4-34aef026d81c2f6b": {
+      "changed_no_files": 5,
+      "episodes": 10
+    },
+    "v4-77e1745655a235ce": {
+      "changed_no_files": 0,
+      "episodes": 7
+    },
+    "v4-8f24735524874167": {
+      "changed_no_files": 6,
+      "episodes": 8
+    },
+    "v4-8fc3d2ec14b1c078": {
+      "changed_no_files": 0,
+      "episodes": 8
+    },
+    "v4-9b42b1951da730e1": {
+      "changed_no_files": 8,
+      "episodes": 9
+    },
+    "v4-c61d7c943edd8cff": {
+      "changed_no_files": 4,
+      "episodes": 4
+    },
+    "v4-cadfb63755c3f504": {
+      "changed_no_files": 0,
+      "episodes": 10
+    },
+    "v4-ce2adee3c134ab03": {
+      "changed_no_files": 4,
+      "episodes": 4
+    },
+    "v4-dd4a74ba2b628991": {
+      "changed_no_files": 6,
+      "episodes": 6
+    },
+    "v4-e7587b2b65750306": {
+      "changed_no_files": 10,
+      "episodes": 10
+    }
+  },
+  "pooled_across_arms": {
+    "agent-operator-score": {
+      "changed_no_files": 52,
+      "episodes": 61,
+      "rate": 0.852
+    },
+    "gitseed": {
+      "changed_no_files": 0,
+      "episodes": 41,
+      "rate": 0.0
+    }
+  },
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "what": "Episodes that changed no file at all are concentrated in one repository.",
+  "what_the_agent_says": "It runs the repository's own ticket resolver, receives `unknown ticket`, and declines under the gate rules agent-operator-score publishes in AGENTS.md.",
+  "what_this_is_evidence_about": "The pinned coding agent on this repository, not CommitLore. A study of decision records cannot say much through episodes where no code was written.",
+  "why_it_is_not_the_tasks": "The v7 rebuilt goodA control for each candidate applies cleanly and passes its acceptance -- checked before the run in preflight/scoring-path-control.json. The tasks are solvable. The pinned agent is declining to start them.",
+  "why_the_run_continues": "Section 33 forbids stopping for low power. This is low power. The run continues to 340 and the observation is reported rather than acted on."
+}
