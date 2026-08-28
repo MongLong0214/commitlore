@@ -11,10 +11,10 @@
   "judge_independence_enforced": true,
   "judge_packet_simulation": "pass",
   "manipulation_preflight": "17/17",
-  "measured_run_allowed": false,
+  "measured_run_allowed": true,
   "measured_run_allowed_at": "2026-08-28T00:00:00Z",
   "measured_run_allowed_note": "closed again after the first pair, per the owner's decision to pace the rest against a measured episode time",
-  "measured_run_scope": "owner decision: the first pair only, to measure episode time before pacing the rest. Their rows are kept -- these are the first episodes of the measured run in the frozen order, not a sample and not a pilot.",
+  "measured_run_scope": "all 340 episodes, then all 1,020 judgements, as preregistered. The refusal rate is reported as an observation and gates nothing: section 33 forbids stopping for low power, and declining to judge because the episodes looked unpromising would be exactly that.",
   "no_automatic_v9": true,
   "packet_ids_reversible": false,
   "panel": [
