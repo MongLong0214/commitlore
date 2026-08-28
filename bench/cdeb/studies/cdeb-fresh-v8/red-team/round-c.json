@@ -12,7 +12,11 @@
       "verified": true
     },
     "claim-gate input provenance": {
-      "resolution": "partial. evaluate_gate now refuses to answer without a provenance map naming where each input came from; the simulation and unit controls pass allow_unsourced=True because their inputs are invented. This does not derive the numbers from sealed artifacts -- that builder belongs with the measured rows, which do not exist -- but a hand-assembled run can no longer look identical to a derived one.",
+      "half_one": "evaluate_gate refuses to answer without a provenance map naming each input's origin; the simulation and unit controls pass allow_unsourced=True because their inputs are invented",
+      "half_two": "gate-inputs.py derives 13 of the 25 conditions' inputs from sealed artifacts and returns the origin of each, and refuses a partial seal",
+      "recorded_in": "preflight/gate-input-coverage.json",
+      "remainder": "12 conditions need analysis output or operator records that do not exist before the measured run. An underived input fails the gate rather than defaulting, so a partial derivation cannot reach the claim -- on a synthetic full seal the gate failed on 15 conditions.",
+      "resolution": "addressed in two halves, with the remainder stated rather than implied",
       "severity_as_raised": "P1",
       "verified": true
     },
