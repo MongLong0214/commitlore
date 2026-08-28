@@ -42,6 +42,7 @@ V8 = os.path.join(ROOT, "bench/cdeb/studies/cdeb-fresh-v8")
 
 sys.path.insert(0, HERE)
 from packet_ids import load_or_create_salt, packet_id  # noqa: E402
+import episode_packet  # noqa: E402
 
 PINNED_DIST_SHA256 = "a0c542977f048e6b5163f581d2e4a53963b2d9845467af8949fa105b8bc0e528"
 PINNED_MODEL = "gpt-5.6-terra"
@@ -365,6 +366,11 @@ def run(assignment, out_dir, scratch):
         "not_yet_judged": True,
     }
 
+    # Step 15, before step 16. The packet needs the final tree and the tree does
+    # not survive the episode, so building it later is not an option that exists.
+    row["judge_packet"] = episode_packet.build(
+        tree, row, candidate, task, os.path.join(out_dir, "packet"), acceptance_path)
+
     tmp = os.path.join(out_dir, "row.json.tmp")
     with open(tmp, "w") as fh:
         json.dump(row, fh, indent=2, sort_keys=True)
@@ -375,6 +381,8 @@ def run(assignment, out_dir, scratch):
     if readback != row:
         raise SystemExit("the row did not read back as written")
 
+    # Step 16. The tree is gone; the packet and the row are what remain.
+    shutil.rmtree(tree, ignore_errors=True)
     shutil.rmtree(home, ignore_errors=True)
     return row
 
