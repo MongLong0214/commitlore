@@ -31,11 +31,12 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", "..", ".."))
 V8 = os.path.join(ROOT, "bench/cdeb/studies/cdeb-fresh-v8")
 SMOKE = os.path.join(V8, "preflight/synthetic-smoke")
 
-# The salt exists so a packet id cannot be reversed into a candidate by anyone
-# holding the candidate list. It is committed because the mapping has to be
-# reproducible after the judgements are sealed; it is not a secret, it is a
-# separator. Section 21.4 governs when the mapping may be revealed.
-PACKET_SALT = "cdeb-fresh-v8-packet"
+# Packet ids come from packet_ids.py, which keys an HMAC on a salt held outside
+# the repository. The previous scheme hashed candidate|arm with a salt committed
+# beside this file and called the result opaque; seventeen candidates times two
+# arms is thirty-four combinations and the reversal measured under a millisecond.
+# A public salt over a small input space is not opacity.
+from packet_ids import load_or_create_salt, packet_id as hmac_packet_id
 
 TASK_PROMPT = """Make the cache actually cache.
 
@@ -75,8 +76,14 @@ CUE_PATTERNS = [
 ]
 
 
-def opaque_id(arm, candidate):
-    return hashlib.sha256(f"{PACKET_SALT}|{candidate}|{arm}".encode()).hexdigest()[:24]
+_SALT = None
+
+
+def opaque_id(arm, candidate, repetition=0):
+    global _SALT
+    if _SALT is None:
+        _SALT = load_or_create_salt()
+    return hmac_packet_id(_SALT, candidate, arm, repetition)
 
 
 def build_tree(arm, workdir):

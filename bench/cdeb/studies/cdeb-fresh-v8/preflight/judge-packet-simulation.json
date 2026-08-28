@@ -45,8 +45,8 @@
   "fixture": "synthetic cache episode, both arms, trees reconstructed from the committed fixture script and the committed per-arm diffs",
   "not_a_product_effect_row": true,
   "packet_ids": {
-    "on": "214a3bc5672cd64be0c8174b",
-    "suppressed": "b701c1ba6eceafd26f24539d"
+    "on": "df631d228af5bb49bb42c3be",
+    "suppressed": "cd94d35c4566f43c1f0b0baf"
   },
   "packets_built": 2,
   "real_arms_produced_identical_trees": true,

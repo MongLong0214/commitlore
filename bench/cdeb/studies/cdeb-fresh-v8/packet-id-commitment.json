@@ -1,0 +1,12 @@
+{
+  "document_id": "cdeb-fresh-v8-packet-id-commitment",
+  "mapping_sha256": "2726ab0d15527d6e0cb123bf3272d0bfb6310176b1f22a531b06d2222843f025",
+  "packets": 340,
+  "reveal_condition": "coding rows sealed AND 1,020 judgements sealed (section 21.4)",
+  "salt_location_while_judging_is_open": "outside the repository, mode 0600",
+  "schema_version": 1,
+  "scheme": "HMAC-SHA256(secret salt, candidate|arm|repetition), first 24 hex chars",
+  "study_id": "cdeb-fresh-v8",
+  "what_this_is": "A commitment to the packet-id -> assignment mapping, published while the mapping itself is withheld. After section 21.4's seal the salt and the mapping are published and anyone can recompute this digest.",
+  "why_the_previous_scheme_failed": "It hashed candidate|arm with a salt committed beside the code. Seventeen candidates times two arms is 34 combinations; the reversal was measured at under a millisecond. A public salt over a small input space is not opacity."
+}

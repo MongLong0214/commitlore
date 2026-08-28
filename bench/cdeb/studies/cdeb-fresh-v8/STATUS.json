@@ -4,10 +4,12 @@
   "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
   "calibration_complete": true,
+  "judge_independence_enforced": true,
   "judge_packet_simulation": "pass",
   "manipulation_preflight": "17/17",
   "measured_run_allowed": false,
   "no_automatic_v9": true,
+  "packet_ids_reversible": false,
   "panel": [
     "claude-sonnet-4-5",
     "gpt-5.6-sol",
@@ -16,11 +18,13 @@
   "panel_frozen": true,
   "phase": "schedule-frozen",
   "product_effect_rows": 0,
-  "red_team_p0_open": 0,
+  "red_team_p0_open": 1,
+  "red_team_p0_open_detail": "assignment revealed before the judgement seal. Section 18.2 derives every arm from the seed section 18.1 commits, so the mapping is publicly recomputable; section 21.4 requires it concealed until coding rows and 1,020 judgements are sealed. The two cannot both hold as written. Owner decision, not settled here.",
   "red_team_p1_open": 1,
   "red_team_p1_open_detail": "calibration label/origin confound, raised by round A. Preregistered as a known limitation before the panel was frozen; severity and whether it gates PR-A is an owner decision, not settled here.",
   "red_team_rounds_complete": [
-    "A: population and product integrity"
+    "A: population and product integrity",
+    "B: blinding and judging"
   ],
   "runtime_locked": true,
   "schedule_frozen": true,
