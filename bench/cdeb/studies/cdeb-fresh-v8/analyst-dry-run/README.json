@@ -1,5 +1,8 @@
 {
   "analyst_b": {
+    "code": "analyst-b-code.py",
+    "code_sha256": "a9ae276c9700337f590c896ee78d388ff9fcf0637d3fc53f9a4a0e09f7ce65d2",
+    "lines": 209,
     "saw_analyst_a_code": false,
     "tool_events": 18,
     "wrote_its_own_code": true
@@ -40,8 +43,14 @@
       "why_it_matters": "A quantile depends on which resamples were drawn, and independent code consumes the random stream in a different order from the same seed. Agreement to 1e-6 would mean the two analysts wrote the same code, which is the opposite of what section 24 asks for. The gaps measured here are 2.8e-3 and 1.5e-3, which is ordinary Monte Carlo error at 2,000 replicates."
     }
   ],
+  "independence_evidence": {
+    "reading": "That literal is section 9.1's own, so the two implementations share the specification's vocabulary and nothing else. Comparing the source is weaker evidence than it looks -- two people can write the same thing independently -- but a high overlap would have been evidence against independence, and there is none.",
+    "shared_non_trivial_lines_with_analyst_a": 1,
+    "the_shared_line": "return \"PANEL_INDETERMINATE\""
+  },
   "not_a_result": "The sealed data is synthetic. Nothing here is evidence about the product; it exercises the comparison and the specification.",
   "schema_version": 1,
   "study_id": "cdeb-fresh-v8",
-  "what_this_is": "Section 24's two-analyst match, exercised on synthetic sealed data before any measured row exists. ANALYST-B was a fresh session in a different model family, given the frozen SAP text and the sealed data and no reference implementation, and wrote its own analysis. ANALYST-A's numbers were computed and written down before B's answer was read."
+  "what_this_is": "Section 24's two-analyst match, exercised on synthetic sealed data before any measured row exists. ANALYST-B was a fresh session in a different model family, given the frozen SAP text and the sealed data and no reference implementation, and wrote its own analysis. ANALYST-A's numbers were computed and written down before B's answer was read.",
+  "why_the_code_is_kept": "The claim is that a second analyst implemented the plan independently. The numbers alone cannot carry that -- they would look the same if the code had been copied. v6 lost its control implementations by keeping only the prose account of them, and the bytes are the part that is not rebuildable from anything."
 }
