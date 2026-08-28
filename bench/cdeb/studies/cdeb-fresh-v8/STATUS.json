@@ -21,6 +21,9 @@
   "study_id": "cdeb-fresh-v8",
   "successor_required": false,
   "synthetic_smoke": "pass",
+  "task_population_drift": 0,
+  "task_population_frozen": true,
+  "task_population_import_valid": true,
   "updated_at": "2026-08-28T00:00:00Z",
   "verdict": null,
   "verdict_basis": null
