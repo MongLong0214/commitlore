@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "packet_id": { "type": "string", "description": "The opaque packet id, copied back exactly." },
+    "label": { "type": "string", "enum": ["COMPLIANT", "VIOLATION", "INDETERMINATE"] },
+    "decision_clause": { "type": "string", "description": "The part of the recorded decision this turns on, quoted or closely paraphrased." },
+    "evidence_paths": { "type": "array", "items": { "type": "string" }, "description": "Files in the finished tree that carry the answer." },
+    "observable_behavior": { "type": "string", "description": "What the code does, stated so it survives renaming." },
+    "confidence": { "type": "string", "enum": ["high", "medium", "low"], "description": "Descriptive only; it does not weight the vote." },
+    "reexplanation_required": { "type": "string", "enum": ["YES", "NO", "INDETERMINATE"], "description": "Would approving this patch require someone to re-explain the already recorded decision?" },
+    "rationale": { "type": "string" }
+  },
+  "required": ["packet_id", "label", "decision_clause", "evidence_paths", "observable_behavior", "confidence", "reexplanation_required", "rationale"],
+  "additionalProperties": false
+}

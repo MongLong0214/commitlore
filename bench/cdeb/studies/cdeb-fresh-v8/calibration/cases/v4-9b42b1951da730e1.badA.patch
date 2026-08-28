@@ -1,0 +1,146 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..4318d30 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -56,7 +56,9 @@ type ValidationResult = { ok: boolean; errors: string[]; metrics: MetricDefiniti
+ type RouteRow = { route_id: string; eligible: boolean; quality: boolean; safety: boolean; route_utility: number };
+ type Coordinate = { name: string; lower: number; upper: number; weight: number; frontier: number };
+ 
++const REGISTRY_ID = "metrics.v0";
+ const CONTRACT_VERSION = "metric-scoring-contract-v1";
++const SOURCE_CONTRACT = "docs/contracts/metric-scoring-contract-v1.md";
+ 
+ const REQUIRED_FIELDS = [
+   "metric_id", "label", "factor", "question", "observation_type", "eligible_opportunity",
+@@ -135,23 +137,45 @@ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+     return { ok: false, errors: ["REGISTRY_NOT_AN_OBJECT the metric registry must be a JSON object"], metrics: [] };
+   }
+ 
+-  const rawMetrics = input.metrics;
+-  if (!Array.isArray(rawMetrics)) {
+-    return { ok: false, errors: ["REGISTRY_METRICS_MISSING the metric registry must declare a metrics array"], metrics: [] };
++  for (const field of REGISTRY_FIELDS) {
++    if (!Object.hasOwn(input, field)) add(`REGISTRY_ROOT_FIELD_MISSING ${field} is required by contract v1`);
++  }
++  for (const field of Object.keys(input)) {
++    if (!REGISTRY_FIELDS.includes(field)) add(`REGISTRY_DEAD_FIELD ${field} is not part of contract v1`);
+   }
+-  const metrics = rawMetrics as MetricDefinition[];
+ 
+-  const consumers = Array.isArray(input.consumers) ? (input.consumers as string[]) : [];
+-  if (consumers.length === 0) add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
+-  const routeTables = isPlainRecord(input.route_tables) ? input.route_tables : {};
+-  const frontiers = isPlainRecord(input.frontiers) ? input.frontiers : {};
++  if (Object.hasOwn(input, "registry_id") && input.registry_id !== REGISTRY_ID) {
++    add(`REGISTRY_REGISTRY_ID registry_id must be ${REGISTRY_ID}`);
++  }
++  if (Object.hasOwn(input, "contract_version") && input.contract_version !== CONTRACT_VERSION) {
++    add(`REGISTRY_CONTRACT_VERSION contract_version must be ${CONTRACT_VERSION}`);
++  }
++  if (Object.hasOwn(input, "source_contract") && input.source_contract !== SOURCE_CONTRACT) {
++    add(`REGISTRY_SOURCE_CONTRACT source_contract must be ${SOURCE_CONTRACT}`);
++  }
+ 
+-  if (input.contract_version !== CONTRACT_VERSION) {
+-    add(`REGISTRY_CONTRACT_VERSION expected ${CONTRACT_VERSION}`);
++  const rawConsumers = input.consumers;
++  const consumers = Array.isArray(rawConsumers) ? rawConsumers : null;
++  if (!consumers) {
++    add("REGISTRY_CONSUMERS_INVALID consumers root field must be an array");
++  } else if (consumers.length === 0) {
++    add("REGISTRY_CONSUMERS_MISSING the registry must declare its closed consumer set");
++  } else if (consumers.some((consumer) => typeof consumer !== "string")) {
++    add("REGISTRY_CONSUMERS_INVALID consumers root field must contain only strings");
+   }
+-  for (const field of Object.keys(input)) {
+-    if (!REGISTRY_FIELDS.includes(field)) add(`REGISTRY_DEAD_FIELD ${field} is not part of contract v1`);
++
++  const routeTables = isPlainRecord(input.route_tables) ? input.route_tables : undefined;
++  if (!routeTables) add("REGISTRY_ROUTE_TABLES_INVALID route_tables root field must be an object");
++
++  const frontiers = isPlainRecord(input.frontiers) ? input.frontiers : undefined;
++  if (!frontiers) add("REGISTRY_FRONTIERS_INVALID frontiers root field must be an object");
++
++  const rawMetrics = input.metrics;
++  if (!Array.isArray(rawMetrics)) {
++    add("REGISTRY_METRICS_INVALID metrics root field must be an array");
++    return { ok: false, errors, metrics: [] };
+   }
++  const metrics = rawMetrics as MetricDefinition[];
+ 
+   // --- identity: exactly M01..M20, once each, in canonical order -----------
+   if (metrics.length !== 20) add(`METRIC_COUNT_NOT_20 found ${metrics.length}`);
+@@ -269,7 +293,7 @@ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+         add(`UNROUTED_METRIC ${id} declares no consumer route`);
+       } else {
+         for (const route of declared as string[]) {
+-          if (!consumers.includes(route)) add(`DEAD_CONSUMER_ROUTE ${id} ${route} is not a declared consumer`);
++          if (!consumers?.includes(route)) add(`DEAD_CONSUMER_ROUTE ${id} ${route} is not a declared consumer`);
+         }
+       }
+     }
+@@ -285,8 +309,8 @@ export const validateMetricRegistry = (input: unknown): ValidationResult => {
+ const validateVectors = (
+   metric: MetricDefinition,
+   id: string,
+-  routeTables: Record<string, unknown>,
+-  frontiers: Record<string, unknown>,
++  routeTables: Record<string, unknown> | undefined,
++  frontiers: Record<string, unknown> | undefined,
+   add: (message: string) => void
+ ): void => {
+   const vectors = metric.canonical_vectors;
+@@ -497,9 +521,10 @@ const deriveM19 = (vectorId: string, inputs: Record<string, unknown>, add: (m: s
+ const deriveM10 = (
+   vectorId: string,
+   inputs: Record<string, unknown>,
+-  routeTables: Record<string, unknown>,
++  routeTables: Record<string, unknown> | undefined,
+   add: (m: string) => void
+ ): Derivation | null => {
++  if (!routeTables) return null;
+   const tableId = String(inputs.route_table_id);
+   const table = routeTables[tableId];
+   if (!isPlainRecord(table) || !Array.isArray(table.routes)) {
+@@ -540,9 +565,10 @@ const deriveM10 = (
+ const deriveM20 = (
+   vectorId: string,
+   inputs: Record<string, unknown>,
+-  frontiers: Record<string, unknown>,
++  frontiers: Record<string, unknown> | undefined,
+   add: (m: string) => void
+ ): Derivation | null => {
++  if (!frontiers) return null;
+   const frontierId = String(inputs.frontier_id);
+   const frontier = frontiers[frontierId];
+   if (!isPlainRecord(frontier) || !Array.isArray(frontier.coordinates)) {
+diff --git a/scripts/validate-planning.mjs b/scripts/validate-planning.mjs
+index b51e028..f436a7f 100644
+--- a/scripts/validate-planning.mjs
++++ b/scripts/validate-planning.mjs
+@@ -823,7 +823,9 @@ const controlPlaneAllowlist = new Set([
+   "tests/artifact-manifest-v3.test.mjs",
+   "scripts/derive-github-acceptance.mjs",
+   "tests/github-acceptance-derivation.test.mjs",
+-  "tests/authenticated-review-activation.test.mjs"
++  "tests/authenticated-review-activation.test.mjs",
++  "packages/schema/src/metric-registry.ts",
++  "packages/schema/test/metric-registry.test.ts"
+ ]);
+ const sourceExtensions = new Set([".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"]);
+ 
+diff --git a/tests/planning-contract.test.mjs b/tests/planning-contract.test.mjs
+index a4e18ed..8f9379a 100644
+--- a/tests/planning-contract.test.mjs
++++ b/tests/planning-contract.test.mjs
+@@ -31,8 +31,8 @@ const declaredPrdEpicDependencies = () => {
+   }
+   return declared;
+ };
+-const acceptedValidatorOutput = /PLANNING_CONTRACT_PASS adr=13 prd=20 tickets=73 milestones=6 product_code_files=0 control_plane_code_files=17 control_plane_allowlist=17 ticket_owned_code_files=64 canonical_vectors=20 semantic_checks=static_catalog_enforced gates=invalidated product_code_paths=none ticket_owned_code_paths=adapters\/claude-code\/src\/capabilities\.ts,adapters\/claude-code\/src\/identity\.ts,adapters\/claude-code\/src\/normalize\.ts,adapters\/claude-code\/src\/redact\.ts,adapters\/claude-code\/src\/wrapper\.ts,adapters\/claude-code\/test\/capabilities\.test\.ts,adapters\/claude-code\/test\/normalize\.test\.ts,conformance\/form-a\/form-a\.test\.ts,conformance\/g0\/g0\.test\.ts,packages\/reporter\/src\/preflight-report\.ts,packages\/reporter\/src\/snapshot-share\.ts,packages\/reporter\/src\/snapshot\.ts,packages\/reporter\/test\/preflight-report\.test\.ts,packages\/reporter\/test\/snapshot-share\.test\.ts,packages\/reporter\/test\/snapshot\.test\.ts,packages\/runner\/src\/assessment\.ts,packages\/schema\/src\/capability\.ts,packages\/schema\/src\/compatibility\.ts,packages\/schema\/src\/doctor-contract\.ts,packages\/schema\/src\/issuance-contract\.ts,packages\/schema\/src\/metric-registry\.ts,packages\/schema\/src\/prescription-input\.ts,packages\/schema\/src\/result\.ts,packages\/schema\/src\/scoring-contract\.ts,packages\/schema\/src\/session-class\.ts,packages\/schema\/src\/trace\.ts,packages\/schema\/src\/treatment-registry\.ts,packages\/schema\/test\/capability\.test\.ts,packages\/schema\/test\/conformance\.test\.ts,packages\/schema\/test\/doctor-contract\.test\.ts,packages\/schema\/test\/issuance-contract\.test\.ts,packages\/schema\/test\/metric-registry\.test\.ts,packages\/schema\/test\/prescription-input\.test\.ts,packages\/schema\/test\/result-schema\.test\.ts,packages\/schema\/test\/scoring-contract\.test\.ts,packages\/schema\/test\/session-class\.test\.ts,packages\/schema\/test\/trace-schema\.test\.ts,packages\/schema\/test\/treatment-registry\.test\.ts,packages\/scorer\/src\/diagnosis\/select-lever\.ts,packages\/scorer\/src\/eligibility\.ts,packages\/scorer\/src\/graders\/context\.ts,packages\/scorer\/src\/graders\/graph\.ts,packages\/scorer\/src\/graders\/intent\.ts,packages\/scorer\/src\/issuance\.ts,packages\/scorer\/src\/safety\.ts,packages\/scorer\/src\/score\.ts,packages\/scorer\/src\/simulation\/opportunity-audit\.ts,packages\/scorer\/src\/simulation\/pack-budget\.ts,packages\/scorer\/test\/eligibility\.test\.ts,packages\/scorer\/test\/fixture-corpus\.test\.ts,packages\/scorer\/test\/issuance\.test\.ts,packages\/scorer\/test\/pack-budget\.test\.ts,packages\/scorer\/test\/score\.test\.ts,packages\/scorer\/test\/select-lever\.test\.ts,packages\/scorer\/test\/simulation-input\.test\.ts,scripts\/schema-conformance\.mjs,scripts\/verify-g0\.mjs,suites\/coding-core-v0\/test\/fam1-intent\.test\.ts,suites\/coding-core-v0\/test\/fam2-context\.test\.ts,suites\/coding-core-v0\/test\/fam3-graph\.test\.ts,tests\/execution-views\.test\.mjs,tests\/planning\/fixture-directory-admission\.test\.mjs,tests\/publication\/clearance\.test\.mjs,tests\/publication\/public-surface\.test\.mjs banned_wording_scan=on\n?$/;
+-const pendingValidatorOutput = /PLANNING_CONTRACT_PASS adr=13 prd=20 tickets=73 milestones=6 product_code_files=0 control_plane_code_files=17 control_plane_allowlist=17 ticket_owned_code_files=64 canonical_vectors=20 semantic_checks=static_catalog_enforced gates=pending product_code_paths=none ticket_owned_code_paths=adapters\/claude-code\/src\/capabilities\.ts,adapters\/claude-code\/src\/identity\.ts,adapters\/claude-code\/src\/normalize\.ts,adapters\/claude-code\/src\/redact\.ts,adapters\/claude-code\/src\/wrapper\.ts,adapters\/claude-code\/test\/capabilities\.test\.ts,adapters\/claude-code\/test\/normalize\.test\.ts,conformance\/form-a\/form-a\.test\.ts,conformance\/g0\/g0\.test\.ts,packages\/reporter\/src\/preflight-report\.ts,packages\/reporter\/src\/snapshot-share\.ts,packages\/reporter\/src\/snapshot\.ts,packages\/reporter\/test\/preflight-report\.test\.ts,packages\/reporter\/test\/snapshot-share\.test\.ts,packages\/reporter\/test\/snapshot\.test\.ts,packages\/runner\/src\/assessment\.ts,packages\/schema\/src\/capability\.ts,packages\/schema\/src\/compatibility\.ts,packages\/schema\/src\/doctor-contract\.ts,packages\/schema\/src\/issuance-contract\.ts,packages\/schema\/src\/metric-registry\.ts,packages\/schema\/src\/prescription-input\.ts,packages\/schema\/src\/result\.ts,packages\/schema\/src\/scoring-contract\.ts,packages\/schema\/src\/session-class\.ts,packages\/schema\/src\/trace\.ts,packages\/schema\/src\/treatment-registry\.ts,packages\/schema\/test\/capability\.test\.ts,packages\/schema\/test\/conformance\.test\.ts,packages\/schema\/test\/doctor-contract\.test\.ts,packages\/schema\/test\/issuance-contract\.test\.ts,packages\/schema\/test\/metric-registry\.test\.ts,packages\/schema\/test\/prescription-input\.test\.ts,packages\/schema\/test\/result-schema\.test\.ts,packages\/schema\/test\/scoring-contract\.test\.ts,packages\/schema\/test\/session-class\.test\.ts,packages\/schema\/test\/trace-schema\.test\.ts,packages\/schema\/test\/treatment-registry\.test\.ts,packages\/scorer\/src\/diagnosis\/select-lever\.ts,packages\/scorer\/src\/eligibility\.ts,packages\/scorer\/src\/graders\/context\.ts,packages\/scorer\/src\/graders\/graph\.ts,packages\/scorer\/src\/graders\/intent\.ts,packages\/scorer\/src\/issuance\.ts,packages\/scorer\/src\/safety\.ts,packages\/scorer\/src\/score\.ts,packages\/scorer\/src\/simulation\/opportunity-audit\.ts,packages\/scorer\/src\/simulation\/pack-budget\.ts,packages\/scorer\/test\/eligibility\.test\.ts,packages\/scorer\/test\/fixture-corpus\.test\.ts,packages\/scorer\/test\/issuance\.test\.ts,packages\/scorer\/test\/pack-budget\.test\.ts,packages\/scorer\/test\/score\.test\.ts,packages\/scorer\/test\/select-lever\.test\.ts,packages\/scorer\/test\/simulation-input\.test\.ts,scripts\/schema-conformance\.mjs,scripts\/verify-g0\.mjs,suites\/coding-core-v0\/test\/fam1-intent\.test\.ts,suites\/coding-core-v0\/test\/fam2-context\.test\.ts,suites\/coding-core-v0\/test\/fam3-graph\.test\.ts,tests\/execution-views\.test\.mjs,tests\/planning\/fixture-directory-admission\.test\.mjs,tests\/publication\/clearance\.test\.mjs,tests\/publication\/public-surface\.test\.mjs banned_wording_scan=skipped\n?$/;
++const acceptedValidatorOutput = /PLANNING_CONTRACT_PASS adr=13 prd=20 tickets=73 milestones=6 product_code_files=0 control_plane_code_files=19 control_plane_allowlist=19 ticket_owned_code_files=62 canonical_vectors=20 semantic_checks=static_catalog_enforced gates=invalidated product_code_paths=none ticket_owned_code_paths=adapters\/claude-code\/src\/capabilities\.ts,adapters\/claude-code\/src\/identity\.ts,adapters\/claude-code\/src\/normalize\.ts,adapters\/claude-code\/src\/redact\.ts,adapters\/claude-code\/src\/wrapper\.ts,adapters\/claude-code\/test\/capabilities\.test\.ts,adapters\/claude-code\/test\/normalize\.test\.ts,conformance\/form-a\/form-a\.test\.ts,conformance\/g0\/g0\.test\.ts,packages\/reporter\/src\/preflight-report\.ts,packages\/reporter\/src\/snapshot-share\.ts,packages\/reporter\/src\/snapshot\.ts,packages\/reporter\/test\/preflight-report\.test\.ts,packages\/reporter\/test\/snapshot-share\.test\.ts,packages\/reporter\/test\/snapshot\.test\.ts,packages\/runner\/src\/assessment\.ts,packages\/schema\/src\/capability\.ts,packages\/schema\/src\/compatibility\.ts,packages\/schema\/src\/doctor-contract\.ts,packages\/schema\/src\/issuance-contract\.ts,packages\/schema\/src\/prescription-input\.ts,packages\/schema\/src\/result\.ts,packages\/schema\/src\/scoring-contract\.ts,packages\/schema\/src\/session-class\.ts,packages\/schema\/src\/trace\.ts,packages\/schema\/src\/treatment-registry\.ts,packages\/schema\/test\/capability\.test\.ts,packages\/schema\/test\/conformance\.test\.ts,packages\/schema\/test\/doctor-contract\.test\.ts,packages\/schema\/test\/issuance-contract\.test\.ts,packages\/schema\/test\/prescription-input\.test\.ts,packages\/schema\/test\/result-schema\.test\.ts,packages\/schema\/test\/scoring-contract\.test\.ts,packages\/schema\/test\/session-class\.test\.ts,packages\/schema\/test\/trace-schema\.test\.ts,packages\/schema\/test\/treatment-registry\.test\.ts,packages\/scorer\/src\/diagnosis\/select-lever\.ts,packages\/scorer\/src\/eligibility\.ts,packages\/scorer\/src\/graders\/context\.ts,packages\/scorer\/src\/graders\/graph\.ts,packages\/scorer\/src\/graders\/intent\.ts,packages\/scorer\/src\/issuance\.ts,packages\/scorer\/src\/safety\.ts,packages\/scorer\/src\/score\.ts,packages\/scorer\/src\/simulation\/opportunity-audit\.ts,packages\/scorer\/src\/simulation\/pack-budget\.ts,packages\/scorer\/test\/eligibility\.test\.ts,packages\/scorer\/test\/fixture-corpus\.test\.ts,packages\/scorer\/test\/issuance\.test\.ts,packages\/scorer\/test\/pack-budget\.test\.ts,packages\/scorer\/test\/score\.test\.ts,packages\/scorer\/test\/select-lever\.test\.ts,packages\/scorer\/test\/simulation-input\.test\.ts,scripts\/schema-conformance\.mjs,scripts\/verify-g0\.mjs,suites\/coding-core-v0\/test\/fam1-intent\.test\.ts,suites\/coding-core-v0\/test\/fam2-context\.test\.ts,suites\/coding-core-v0\/test\/fam3-graph\.test\.ts,tests\/execution-views\.test\.mjs,tests\/planning\/fixture-directory-admission\.test\.mjs,tests\/publication\/clearance\.test\.mjs,tests\/publication\/public-surface\.test\.mjs banned_wording_scan=on\n?$/;
++const pendingValidatorOutput = /PLANNING_CONTRACT_PASS adr=13 prd=20 tickets=73 milestones=6 product_code_files=0 control_plane_code_files=19 control_plane_allowlist=19 ticket_owned_code_files=62 canonical_vectors=20 semantic_checks=static_catalog_enforced gates=pending product_code_paths=none ticket_owned_code_paths=adapters\/claude-code\/src\/capabilities\.ts,adapters\/claude-code\/src\/identity\.ts,adapters\/claude-code\/src\/normalize\.ts,adapters\/claude-code\/src\/redact\.ts,adapters\/claude-code\/src\/wrapper\.ts,adapters\/claude-code\/test\/capabilities\.test\.ts,adapters\/claude-code\/test\/normalize\.test\.ts,conformance\/form-a\/form-a\.test\.ts,conformance\/g0\/g0\.test\.ts,packages\/reporter\/src\/preflight-report\.ts,packages\/reporter\/src\/snapshot-share\.ts,packages\/reporter\/src\/snapshot\.ts,packages\/reporter\/test\/preflight-report\.test\.ts,packages\/reporter\/test\/snapshot-share\.test\.ts,packages\/reporter\/test\/snapshot\.test\.ts,packages\/runner\/src\/assessment\.ts,packages\/schema\/src\/capability\.ts,packages\/schema\/src\/compatibility\.ts,packages\/schema\/src\/doctor-contract\.ts,packages\/schema\/src\/issuance-contract\.ts,packages\/schema\/src\/prescription-input\.ts,packages\/schema\/src\/result\.ts,packages\/schema\/src\/scoring-contract\.ts,packages\/schema\/src\/session-class\.ts,packages\/schema\/src\/trace\.ts,packages\/schema\/src\/treatment-registry\.ts,packages\/schema\/test\/capability\.test\.ts,packages\/schema\/test\/conformance\.test\.ts,packages\/schema\/test\/doctor-contract\.test\.ts,packages\/schema\/test\/issuance-contract\.test\.ts,packages\/schema\/test\/prescription-input\.test\.ts,packages\/schema\/test\/result-schema\.test\.ts,packages\/schema\/test\/scoring-contract\.test\.ts,packages\/schema\/test\/session-class\.test\.ts,packages\/schema\/test\/trace-schema\.test\.ts,packages\/schema\/test\/treatment-registry\.test\.ts,packages\/scorer\/src\/diagnosis\/select-lever\.ts,packages\/scorer\/src\/eligibility\.ts,packages\/scorer\/src\/graders\/context\.ts,packages\/scorer\/src\/graders\/graph\.ts,packages\/scorer\/src\/graders\/intent\.ts,packages\/scorer\/src\/issuance\.ts,packages\/scorer\/src\/safety\.ts,packages\/scorer\/src\/score\.ts,packages\/scorer\/src\/simulation\/opportunity-audit\.ts,packages\/scorer\/src\/simulation\/pack-budget\.ts,packages\/scorer\/test\/eligibility\.test\.ts,packages\/scorer\/test\/fixture-corpus\.test\.ts,packages\/scorer\/test\/issuance\.test\.ts,packages\/scorer\/test\/pack-budget\.test\.ts,packages\/scorer\/test\/score\.test\.ts,packages\/scorer\/test\/select-lever\.test\.ts,packages\/scorer\/test\/simulation-input\.test\.ts,scripts\/schema-conformance\.mjs,scripts\/verify-g0\.mjs,suites\/coding-core-v0\/test\/fam1-intent\.test\.ts,suites\/coding-core-v0\/test\/fam2-context\.test\.ts,suites\/coding-core-v0\/test\/fam3-graph\.test\.ts,tests\/execution-views\.test\.mjs,tests\/planning\/fixture-directory-admission\.test\.mjs,tests\/publication\/clearance\.test\.mjs,tests\/publication\/public-surface\.test\.mjs banned_wording_scan=skipped\n?$/;
+ 
+ const setPendingGateRegistry = (fixture) => {
+   const registryPath = join(fixture, "docs/decisions/maintainer-gate-registry.v2.json");

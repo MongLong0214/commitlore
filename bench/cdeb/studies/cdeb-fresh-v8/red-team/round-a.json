@@ -1,0 +1,66 @@
+{
+  "could_not_refute": [
+    "v7 terminality: STATUS.json records product_effect_rows 0 and verdict/state_machine_position TERMINAL_HOLD_FINAL; RESULT.md says no product-effect episode ran; transitions.jsonl records the terminal transition with zero episodes; ACTIVE-STUDY.json points to cdeb-fresh-v8 and names cdeb-fresh-v7 only as last_terminal_study_id.",
+    "Count consistency: schedule.json contains 340 unique episodes, 170 pairs, and 17 candidates with exactly 10 ON and 10 SUPPRESSED episodes each. expected-rows.json contains the exact 340-row schedule projection and declares 1,020 judgements, equal to 340 \u00d7 3. The independent verify-schedule.py check passed every count and equality check.",
+    "For task-population references that are present\u2014the 17 tasks, 51 control records, 17 selected semantic-judgement records, firewall evidence, and source manifest\u2014the recorded SHA-256 values match the current files. The failure is confined to the two missing bundle artifacts, which cover every candidate.",
+    "All 17 calibration Bad A patch hashes match corpus.json, and each patch's bytes match its stated v7 imported-control or v7-rebuild source. The provenance records are internally accurate; the unsupported part is using a provenance-confounded corpus to validate semantic judging."
+  ],
+  "disposition": {
+    "control label corruption": {
+      "resolution": "RESOLVED by owner ruling v8-d010, 2026-08-28: the frozen calibration is kept and the confound bounds the evidence tier under section 26 rather than requiring a re-run",
+      "severity_as_raised": "P1",
+      "verified": true,
+      "what_it_bounds": "selection validity -- what passing calibration establishes about the three seats",
+      "what_it_does_not_bound": "the measured agreement statistics, computed on 340 episodes whose trees carry no v6/v7 origin split"
+    }
+  },
+  "document_id": "cdeb-fresh-v8-red-team-round-a",
+  "findings": [
+    {
+      "claim": "The frozen population certifies two repository bundles as verified even though neither named bundle exists anywhere in the study tree. All 17 candidates depend on one of these two missing snapshots.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/task-population.json:45-49,1544,1552,1559",
+      "evidence_quote": "\"bundle_path\": \"bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle\" ... \"verified_bundle_sha256\": \"22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c\"; \"drift\": []; \"import_valid\": true; \"with every referenced artifact rehashed from the file\"",
+      "severity": "P0",
+      "surface": "task population drift",
+      "why_it_breaks_the_study": "The repository snapshots are the base trees for every measured episode. With both unique bundle files absent, the study cannot instantiate or independently rehash any of its 17 frozen tasks. The recorded verified digests describe unavailable bytes, so the current population lock is false and a measured run cannot be tied to the preregistered population."
+    },
+    {
+      "claim": "Calibration label and artifact origin are nearly deterministic: every COMPLIANT case is a v7 rebuild, while 16 of 17 VIOLATION cases are v6 imports. The one cross-over does not separate label from provenance.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/calibration/corpus.json:74-76",
+      "evidence_quote": "\"good_controls_are_v7_artifacts\": \"...these are the controls v7 rebuilt...\"; \"labels and origins are nearly confounded: 30 of 30 COMPLIANT cases are v7 rebuilds and 16 of 17 VIOLATION cases are v6 imports\"",
+      "severity": "P1",
+      "surface": "control label corruption",
+      "why_it_breaks_the_study": "Panel calibration cannot establish that selected judges recognize semantic violations rather than v6/v7 construction cues. The study acknowledges size alone reaches 80.85% accuracy, but its negative control does not exclude other origin-specific stylistic or structural cues. Because this calibrated panel supplies the primary endpoint for all 340 episodes, a headline causal claim would rest on an instrument whose construct validity was never demonstrated."
+    },
+    {
+      "claim": "The frozen runtime evidence does not read the resolved model id. The probe searches the JSON event stream that runtime-lock.json itself says contains no model id, while the frozen episode row records the same model string passed to the -m flag.",
+      "evidence_path": "bench/cdeb/studies/cdeb-fresh-v8/runtime-lock.json:23-25; bench/cdeb/studies/cdeb-fresh-v8/harness/model-probe.sh:35-45; bench/cdeb/studies/cdeb-fresh-v8/harness/episode.py:123-125,139-143",
+      "evidence_quote": "runtime-lock.json: \"the --json event stream does not report a model id at all\" and \"The resolved id is in the session rollout\". model-probe.sh: \"for line in open(f\\\"{out}/probe{i}.jsonl\\\"...)\" and \"if k in (\\\"model\\\", \\\"model_id\\\", \\\"modelId\\\")\". episode.py: \"[\\\"codex\\\", \\\"exec\\\", \\\"-m\\\", model ...]\" followed by \"\\\"arm\\\": arm, \\\"model\\\": model\".",
+      "severity": "P0",
+      "surface": "runtime drift",
+      "why_it_breaks_the_study": "No frozen code opens a session rollout to recover runtime resolution. A routed alias or backend drift would therefore be written as the requested model and pass the claimed per-row check. The registered terminal drift policy cannot operate, so the study cannot prove that its 340 episodes used the locked model."
+    }
+  ],
+  "reviewer": {
+    "coverage_note": "39 of 68 target files were neither read nor declared unread. Most belong to the blinding and analysis groups this reviewer was not asked about, so the target list was mine to scope and not the reviewer's to cover.",
+    "coverage_verdict": "PARTIAL",
+    "how": "fresh session, no context from the authoring session, read-only sandbox, detached git worktree at the exact branch head so the tree read is the tree that would merge",
+    "liveness": {
+      "files_declared_not_read": 2,
+      "files_read": 152,
+      "tool_events": 52,
+      "why_this_is_checked": "a schema-complete answer is not evidence anything was read; a run with one turn and no tool calls produces the same shape as a real review"
+    },
+    "ref": "173246e"
+  },
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "surface_group": "population and product integrity",
+  "surfaces_attacked": [
+    "v7 not truly terminal",
+    "17-task population drift",
+    "control label corruption",
+    "model/runtime drift",
+    "packet/judgement count mismatch"
+  ]
+}

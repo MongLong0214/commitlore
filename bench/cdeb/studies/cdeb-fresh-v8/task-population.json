@@ -1,0 +1,1631 @@
+{
+  "boundary_counts_match_v7_result": true,
+  "boundary_derivation": "v7 published the split as counts only. Derived here: readers agreeing a boundary is settled; both declaring it undrawable is unresolved; otherwise the third reading's own unresolvable flag decides.",
+  "boundary_status_is_descriptive_only": "Section 23.8 reports these separately. They do not split or reselect the primary population, and BOUNDARY_UNRESOLVED is neither an exclusion nor a hold reason in v8.",
+  "candidates": [
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-002ffd1e428c572a-badA.json",
+        "recorded_sha256": "bcc3eba74300697d0eca0f5ccb14ca6abbafb54cf6f4764d39889945800f0f31",
+        "verified_sha256": "bcc3eba74300697d0eca0f5ccb14ca6abbafb54cf6f4764d39889945800f0f31"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "tests": 1
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-002ffd1e428c572a",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-002ffd1e428c572a.badA.json",
+          "recorded_sha256": "ebd6a110e526b8c28f67087247c356db5ff7cef3e651b69511b087da4b902adb",
+          "verified_sha256": "ebd6a110e526b8c28f67087247c356db5ff7cef3e651b69511b087da4b902adb"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-002ffd1e428c572a.goodA.json",
+          "recorded_sha256": "f06a0e85f069e5f7827dddb8c1ef2bff389fb95397f2e042f4a63e019e770dfe",
+          "verified_sha256": "f06a0e85f069e5f7827dddb8c1ef2bff389fb95397f2e042f4a63e019e770dfe"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-002ffd1e428c572a.goodB.json",
+          "recorded_sha256": "4ff262b64603fde0414ca5e142d38e2c249ed6654f25d1533dc3d0834ef49bed",
+          "verified_sha256": "4ff262b64603fde0414ca5e142d38e2c249ed6654f25d1533dc3d0834ef49bed"
+        }
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "cwd": ".",
+        "repository_baseline_total": 604
+      },
+      "repository_id": "agent-operator-score",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+        "bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c",
+        "repository_id": "agent-operator-score",
+        "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d",
+        "verified_bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "002ffd1e428c572aa96f1ecc2616c00fb7e90580c334db9e064dd0b824c95607",
+        "lifecycle": "active",
+        "path_scope": [
+          "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+          "packages/schema/src/capability.ts",
+          "packages/schema/test/capability.test.ts",
+          "specs/adapter-capabilities.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "reason": "every remaining product ticket then needs a census edit, and the deletion it was meant to catch is already caught by the focused-lane count guard",
+        "record_id": "r-e0b001",
+        "ruling": "pin the census ticket-owned path list literally",
+        "scope": {
+          "path_count": 6,
+          "paths": [
+            "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+            "packages/schema/src/capability.ts",
+            "packages/schema/test/capability.test.ts",
+            "specs/adapter-capabilities.v0.json",
+            "tests/planning-contract.test.mjs",
+            "tests/planning/workspace-skeleton.test.mjs"
+          ],
+          "screen": {
+            "acceptance_runner": "npm test",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 6,
+            "scope_paths_total": 6
+          }
+        },
+        "source_commit_sha": "27a027adf42115f097ae82fd18901e25a62df539"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-002ffd1e428c572a.json",
+        "recorded_sha256": "e8ab5d1397bb158bed91e2a7b2a1dcbd7457b51ae82b545f10b974a564cf9667",
+        "task_prompt_sha256": "2dd7eca3dd09203f618729a18837849f18d9102015144447a362bf38abdb0b67",
+        "verified_sha256": "e8ab5d1397bb158bed91e2a7b2a1dcbd7457b51ae82b545f10b974a564cf9667"
+      },
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+        "path_in_repository": "packages/schema/test/capability-evidence-locator-allowlist.acceptance.test.ts",
+        "source_sha256": "f60a08dcb0459ea1d32a18514703f9e23a82ce5accc5642b41fa13630812c688"
+      },
+      "v7_boundary_derived_from": "the third reading found the rule does not settle it",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-0ecd7426eebc1cab-badA.json",
+        "recorded_sha256": "49499ec4d87cf58a018a0e2f06da0790c686c71d8e616b90e155dd64ff68b1cf",
+        "verified_sha256": "49499ec4d87cf58a018a0e2f06da0790c686c71d8e616b90e155dd64ff68b1cf"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "passed": 0
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-0ecd7426eebc1cab.badA.json",
+          "recorded_sha256": "22092d85699ebc92a52741b3f7f1daa25436b6c040c799280899f9403084e6f3",
+          "verified_sha256": "22092d85699ebc92a52741b3f7f1daa25436b6c040c799280899f9403084e6f3"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-0ecd7426eebc1cab.goodA.json",
+          "recorded_sha256": "28765214b832bbe72ae0de1537c178b51e9922283f74cf3358fe4830567d158a",
+          "verified_sha256": "28765214b832bbe72ae0de1537c178b51e9922283f74cf3358fe4830567d158a"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-0ecd7426eebc1cab.goodB.json",
+          "recorded_sha256": "7f94f88f8ab7c51523d4901c9af95dde67d890055a25bb681d30f378d443ab30",
+          "verified_sha256": "7f94f88f8ab7c51523d4901c9af95dde67d890055a25bb681d30f378d443ab30"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "0ecd7426eebc1cab55e7d10a9d4e1bc844f482ff3a2f0997461828463cd70adf",
+        "lifecycle": "active",
+        "path_scope": [
+          "gitseed/ports.py"
+        ],
+        "reason": "pathlib is the only current storage shape and replay does not need another",
+        "record_id": "r-gsf501",
+        "ruling": "artifact storage port",
+        "scope": {
+          "path_count": 1,
+          "paths": [
+            "gitseed/ports.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 1,
+            "scope_paths_total": 1
+          }
+        },
+        "source_commit_sha": "fe69ce9d153a1f198252e945b6656679b8930f05"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-0ecd7426eebc1cab.json",
+        "recorded_sha256": "7ed5e30d118899dd066b792d99c0cd2bea3985ebfea13c241e05e76ce46e3890",
+        "task_prompt_sha256": "5bbbf570f3879fb527dd8e57bbe8a984344f385ce0d9b16d52242826027acbcf",
+        "verified_sha256": "7ed5e30d118899dd066b792d99c0cd2bea3985ebfea13c241e05e76ce46e3890"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_custom_evidence_reader_acceptance.py",
+        "path_in_repository": "tests/test_custom_evidence_reader_acceptance.py",
+        "source_sha256": "3a4903964f14981312dc8e20028fba160b95144bd06432dcdb3095671d1c0ba5"
+      },
+      "v7_boundary_derived_from": "the third reading resolved the split",
+      "v7_boundary_status": "BOUNDARY_SETTLED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-34aef026d81c2f6b-badA.json",
+        "recorded_sha256": "1ff7aa2c1bb3be64f5b2e34d2a3f5172e711be4da19fe8d0eccee7303d0dd826",
+        "verified_sha256": "1ff7aa2c1bb3be64f5b2e34d2a3f5172e711be4da19fe8d0eccee7303d0dd826"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "tests": 1
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-34aef026d81c2f6b.badA.json",
+          "recorded_sha256": "5951c72dbd3ce50e3304659cb003a9d67d592a150c150c4d9a0a16777ed19350",
+          "verified_sha256": "5951c72dbd3ce50e3304659cb003a9d67d592a150c150c4d9a0a16777ed19350"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-34aef026d81c2f6b.goodA.json",
+          "recorded_sha256": "5bad6113072e12403df8b3a27ee06e78bdda2f26eac8b72fd21926ba10b547b5",
+          "verified_sha256": "5bad6113072e12403df8b3a27ee06e78bdda2f26eac8b72fd21926ba10b547b5"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-34aef026d81c2f6b.goodB.json",
+          "recorded_sha256": "f1af05a20143070a7174e2fb40a362dd67ed91e384e26005b6802ffb0180d8d9",
+          "verified_sha256": "f1af05a20143070a7174e2fb40a362dd67ed91e384e26005b6802ffb0180d8d9"
+        }
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "cwd": ".",
+        "repository_baseline_total": 604
+      },
+      "repository_id": "agent-operator-score",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+        "bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c",
+        "repository_id": "agent-operator-score",
+        "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d",
+        "verified_bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "34aef026d81c2f6bec36561f17c344f419dda3fdeb697dd7a1ea247c90fd1d71",
+        "lifecycle": "active",
+        "path_scope": [
+          ".github/workflows/operational-state.yml",
+          "AGENTS.md",
+          "docs/planning/AOS-EXECUTION-ROADMAP.md",
+          "docs/planning/issue-resolution-ledger-2026-08-06.md",
+          "docs/tickets/BOARD.md",
+          "package.json",
+          "scripts/render-execution-views.mjs",
+          "scripts/validate-planning.mjs",
+          "tests/execution-views.test.mjs",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "reason": "an exclusion list silently readmits any projection added later, so the input set is declared positively and closed",
+        "record_id": null,
+        "ruling": "filtering the roadmap and Board out of a broad input scan",
+        "scope": {
+          "path_count": 11,
+          "paths": [
+            ".github/workflows/operational-state.yml",
+            "AGENTS.md",
+            "docs/planning/AOS-EXECUTION-ROADMAP.md",
+            "docs/planning/issue-resolution-ledger-2026-08-06.md",
+            "docs/tickets/BOARD.md",
+            "package.json",
+            "scripts/render-execution-views.mjs",
+            "scripts/validate-planning.mjs",
+            "tests/execution-views.test.mjs",
+            "tests/planning-contract.test.mjs",
+            "tests/planning/workspace-skeleton.test.mjs"
+          ],
+          "screen": {
+            "acceptance_runner": "npm test",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 11,
+            "scope_paths_total": 11
+          }
+        },
+        "source_commit_sha": "f9a62917a0964ba95e23e8a89b868caae28db356"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-34aef026d81c2f6b.json",
+        "recorded_sha256": "7adb0740f4472229da8a1903d84ebd219257a4b2845508d3d9f5e7acb8e4ae8c",
+        "task_prompt_sha256": "334ad69f43ccdd6349f4ae7f0ce6e93c4aa8a5f4eb05434980fe382b758d71f9",
+        "verified_sha256": "7adb0740f4472229da8a1903d84ebd219257a4b2845508d3d9f5e7acb8e4ae8c"
+      },
+      "task_acceptance": {
+        "command": "node --test tests/epic-dependency-normalization.acceptance.test.mjs",
+        "path_in_repository": "tests/epic-dependency-normalization.acceptance.test.mjs",
+        "source_sha256": "71fc3b7dd396759782faabd522541f663d80800484f2047bf8178214a46bca6d"
+      },
+      "v7_boundary_derived_from": "the third reading resolved the split",
+      "v7_boundary_status": "BOUNDARY_SETTLED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-377f04276465b59d-badA.json",
+        "recorded_sha256": "d54d897fa700817092a1fa90c6ab63b3ce41aba33aeedf2de68ccaed2265d480",
+        "verified_sha256": "d54d897fa700817092a1fa90c6ab63b3ce41aba33aeedf2de68ccaed2265d480"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "passed": 0
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-377f04276465b59d",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-377f04276465b59d.badA.json",
+          "recorded_sha256": "7c7bb20308125cef22a2301c2bec2451c82ab805216addbd21f35acc4ce0305a",
+          "verified_sha256": "7c7bb20308125cef22a2301c2bec2451c82ab805216addbd21f35acc4ce0305a"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-377f04276465b59d.goodA.json",
+          "recorded_sha256": "a7fc18c73e75d8a9f9e166151fc9c3049d4efa23767df86e03be730e647a1e90",
+          "verified_sha256": "a7fc18c73e75d8a9f9e166151fc9c3049d4efa23767df86e03be730e647a1e90"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-377f04276465b59d.goodB.json",
+          "recorded_sha256": "4abc0efef148d0639ce781370b33524ee96ec23cc9e87513c922c9ba72c189cd",
+          "verified_sha256": "4abc0efef148d0639ce781370b33524ee96ec23cc9e87513c922c9ba72c189cd"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "377f04276465b59d3a08b0958ba5d84accdc43e73e92abf326179e89addd1af6",
+        "lifecycle": "active",
+        "path_scope": [
+          ".github/workflows/ci.yml",
+          "pyproject.toml",
+          "tests/conftest.py"
+        ],
+        "reason": "one workflow that tells the truth is worth more than five nobody reads",
+        "record_id": "r-gsb108",
+        "ruling": "adding coverage gates or a badge",
+        "scope": {
+          "path_count": 3,
+          "paths": [
+            ".github/workflows/ci.yml",
+            "pyproject.toml",
+            "tests/conftest.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 3,
+            "scope_paths_total": 3
+          }
+        },
+        "source_commit_sha": "4d99a4858e1b459306c8fe3d2626746a5a720224"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-377f04276465b59d.json",
+        "recorded_sha256": "fa35b70ecc8ac835b5f19614d6ce908a5c76767e6bab099b772c844b0f92d05f",
+        "task_prompt_sha256": "42f8fac9a260267bccc34291b67a9d3ae4e38f3b610cfc663ea75090484c364d",
+        "verified_sha256": "fa35b70ecc8ac835b5f19614d6ce908a5c76767e6bab099b772c844b0f92d05f"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_ci_action_pinning.py",
+        "path_in_repository": "tests/test_ci_action_pinning.py",
+        "source_sha256": "1e79ef1abe48dbf7277ebdead64fe51ae19a02f7599d25916f279ceb348b201a"
+      },
+      "v7_boundary_derived_from": "both readers declared the boundary undrawable",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-77e1745655a235ce-badA.json",
+        "recorded_sha256": "0956c3be3e665a458576c3ced4378838b0f981851d4f9f48f8240bd0a511e6eb",
+        "verified_sha256": "0956c3be3e665a458576c3ced4378838b0f981851d4f9f48f8240bd0a511e6eb"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 5,
+          "passed": 5
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-77e1745655a235ce",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-77e1745655a235ce.badA.json",
+          "recorded_sha256": "11f705df6671612cec36afbb3b2111bb1519c31157a243e9b2923cb9b6e6362b",
+          "verified_sha256": "11f705df6671612cec36afbb3b2111bb1519c31157a243e9b2923cb9b6e6362b"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-77e1745655a235ce.goodA.json",
+          "recorded_sha256": "fce751ec2992a94595550cb1dfa16ee38133d225e31b6215a0da1c483080cb14",
+          "verified_sha256": "fce751ec2992a94595550cb1dfa16ee38133d225e31b6215a0da1c483080cb14"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-77e1745655a235ce.goodB.json",
+          "recorded_sha256": "3d2354af70ce443cd3d8174642d8d9939ff9871ea5fd3680b4761c3c370e2b41",
+          "verified_sha256": "3d2354af70ce443cd3d8174642d8d9939ff9871ea5fd3680b4761c3c370e2b41"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "77e1745655a235ce75339fae3518ec72beb33a824d4e5a8882d06f170d30ab17",
+        "lifecycle": "active",
+        "path_scope": [
+          "gitseed/category.py",
+          "tests/test_category.py"
+        ],
+        "reason": "a literal detached from the producer methods can silently accept evidence no collector emits",
+        "record_id": "r-evid610",
+        "ruling": "a separate evidence-kind allowlist",
+        "scope": {
+          "path_count": 2,
+          "paths": [
+            "gitseed/category.py",
+            "tests/test_category.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 2,
+            "scope_paths_total": 2
+          }
+        },
+        "source_commit_sha": "ee15d86253bec1fac944e0d4e71d803dd1092e2d"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-77e1745655a235ce.json",
+        "recorded_sha256": "51cc71320eb9d952b547a6f18af157e0c6843fc659fd8274273bc81854d72f46",
+        "task_prompt_sha256": "1bb8f91de73c2557087c99a52332d261b3331c97eda188a9164e8deef021b6d2",
+        "verified_sha256": "51cc71320eb9d952b547a6f18af157e0c6843fc659fd8274273bc81854d72f46"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_category_manifest_evidence.py",
+        "path_in_repository": "tests/test_category_manifest_evidence.py",
+        "source_sha256": "b14c8726c51f3c808bd72028efdee55fbce3e929bda42b3e752097ca8a16a1b5"
+      },
+      "v7_boundary_derived_from": "both readers drew the same boundary",
+      "v7_boundary_status": "BOUNDARY_SETTLED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-84cd6d391ac2fa6d-badA.json",
+        "recorded_sha256": "445d260ccce4aca626a49999d3359f0dd1dbd916c9dd98cede5a2e2d6382f33d",
+        "verified_sha256": "445d260ccce4aca626a49999d3359f0dd1dbd916c9dd98cede5a2e2d6382f33d"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "passed": 0
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-84cd6d391ac2fa6d.badA.json",
+          "recorded_sha256": "5c80de86a1344a202a563db6332740001abe0882e2a91f082efc0804efda5f22",
+          "verified_sha256": "5c80de86a1344a202a563db6332740001abe0882e2a91f082efc0804efda5f22"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-84cd6d391ac2fa6d.goodA.json",
+          "recorded_sha256": "023dffd8a059d12a1c95425fe78fcb2b682629b00152a424f31e3e3d3df23c68",
+          "verified_sha256": "023dffd8a059d12a1c95425fe78fcb2b682629b00152a424f31e3e3d3df23c68"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-84cd6d391ac2fa6d.goodB.json",
+          "recorded_sha256": "a659c4648159c349dad5bc114e8fecf4899187abef0aa0d5f3f948c38f100fbb",
+          "verified_sha256": "a659c4648159c349dad5bc114e8fecf4899187abef0aa0d5f3f948c38f100fbb"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "84cd6d391ac2fa6de4c15e04994aee9c09aa0b005ae3f3a0e2964f7c753b4976",
+        "lifecycle": "active",
+        "path_scope": [
+          "gitseed/storage.py",
+          "tests/test_storage.py"
+        ],
+        "reason": "canonical artifact bytes already preserve the replay contract without duplicating serializers",
+        "record_id": "r-f8adapter",
+        "ruling": "normalized per-port tables",
+        "scope": {
+          "path_count": 2,
+          "paths": [
+            "gitseed/storage.py",
+            "tests/test_storage.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 2,
+            "scope_paths_total": 2
+          }
+        },
+        "source_commit_sha": "d2a3431840b234959bddf008ad8bbfdc2fb0da95"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-84cd6d391ac2fa6d.json",
+        "recorded_sha256": "76697ba890e9c11c9127007d2863c6471ffca69a1d2840f697e4e0091b962178",
+        "task_prompt_sha256": "41c46ea07348c17a4d44969b9c6fe3802018d6ca7f340cdd6a22f1a3bc9f8456",
+        "verified_sha256": "76697ba890e9c11c9127007d2863c6471ffca69a1d2840f697e4e0091b962178"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_correction_point_lookup_acceptance.py",
+        "path_in_repository": "tests/test_correction_point_lookup_acceptance.py",
+        "source_sha256": "1df4a339e0892acf87cd246a950af20743f4af7ff0ad68645e0a715394965de6"
+      },
+      "v7_boundary_derived_from": "the third reading found the rule does not settle it",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-8f24735524874167-badA.json",
+        "recorded_sha256": "42c8a11fdf091f968d88c9b9dff739683ad839f2f9e220022004892207930a8e",
+        "verified_sha256": "42c8a11fdf091f968d88c9b9dff739683ad839f2f9e220022004892207930a8e"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "tests": 1
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-8f24735524874167",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-8f24735524874167.badA.json",
+          "recorded_sha256": "f7faa65031cb2b9b764881921087d271c7a9102a3515564f6348a9b03ccbb2ae",
+          "verified_sha256": "f7faa65031cb2b9b764881921087d271c7a9102a3515564f6348a9b03ccbb2ae"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-8f24735524874167.goodA.json",
+          "recorded_sha256": "9118949b62827fea4f58e923e831c7df7b15789355ccc3ccd14aff9d629ee406",
+          "verified_sha256": "9118949b62827fea4f58e923e831c7df7b15789355ccc3ccd14aff9d629ee406"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-8f24735524874167.goodB.json",
+          "recorded_sha256": "6f0954aebe8104613874fc7ea0da49819f81ac823bd6b4ed1c119f18525f6d83",
+          "verified_sha256": "6f0954aebe8104613874fc7ea0da49819f81ac823bd6b4ed1c119f18525f6d83"
+        }
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "cwd": ".",
+        "repository_baseline_total": 604
+      },
+      "repository_id": "agent-operator-score",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+        "bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c",
+        "repository_id": "agent-operator-score",
+        "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d",
+        "verified_bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "8f247355248741672de0bfa76c5dfe9ba5fd0571c4efb9ef3a529dbc9fa4bb19",
+        "lifecycle": "active",
+        "path_scope": [
+          "fixtures/doctor/blocked-and-imported.json",
+          "fixtures/doctor/blocked.json",
+          "fixtures/doctor/complete.json",
+          "fixtures/doctor/degraded.json",
+          "fixtures/doctor/imported-and-degraded.json",
+          "fixtures/doctor/imported-only.json",
+          "packages/schema/src/doctor-contract.ts",
+          "packages/schema/test/doctor-contract.test.ts",
+          "specs/doctor-output.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "reason": "the ticket grants fixtures/doctor/*.json, and sibling precedent does not override a path the ticket names",
+        "record_id": "r-e0b003",
+        "ruling": "embed the canonical reports in specs/doctor-output.v0.json",
+        "scope": {
+          "path_count": 11,
+          "paths": [
+            "fixtures/doctor/blocked-and-imported.json",
+            "fixtures/doctor/blocked.json",
+            "fixtures/doctor/complete.json",
+            "fixtures/doctor/degraded.json",
+            "fixtures/doctor/imported-and-degraded.json",
+            "fixtures/doctor/imported-only.json",
+            "packages/schema/src/doctor-contract.ts",
+            "packages/schema/test/doctor-contract.test.ts",
+            "specs/doctor-output.v0.json",
+            "tests/planning-contract.test.mjs",
+            "tests/planning/workspace-skeleton.test.mjs"
+          ],
+          "screen": {
+            "acceptance_runner": "npm test",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 11,
+            "scope_paths_total": 11
+          }
+        },
+        "source_commit_sha": "c1d8b6630e66a9dc6033567d7f7d3704e5c7ca22"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-8f24735524874167.json",
+        "recorded_sha256": "8718572639bae3b4aa0c3bc8f119401661c93875cca0e5b37862d52f4eae3aba",
+        "task_prompt_sha256": "884f55d69d0e1c6493fc0e5f2946ca941ea0018c30c834776b2b8f75925d0c97",
+        "verified_sha256": "8718572639bae3b4aa0c3bc8f119401661c93875cca0e5b37862d52f4eae3aba"
+      },
+      "task_acceptance": {
+        "command": "node --test tests/acceptance/schema-doctor-lane.test.mjs",
+        "path_in_repository": "tests/acceptance/schema-doctor-lane.test.mjs",
+        "source_sha256": "c923ae389a9ee9eb7307669f3e0b2af787797cfa8b9bd160f8705fa2721df785"
+      },
+      "v7_boundary_derived_from": "the third reading found the rule does not settle it",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-8fc3d2ec14b1c078-badA.json",
+        "recorded_sha256": "dd8acf08aeff084d66174e86194e59fd371fdf456b72d5f5d45fb544c94d796c",
+        "verified_sha256": "dd8acf08aeff084d66174e86194e59fd371fdf456b72d5f5d45fb544c94d796c"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 5,
+          "passed": 2
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-8fc3d2ec14b1c078.badA.json",
+          "recorded_sha256": "318e385ae17bc19732ad10bb97a7169d275642e1a9b17b77561b29544fbf4bb1",
+          "verified_sha256": "318e385ae17bc19732ad10bb97a7169d275642e1a9b17b77561b29544fbf4bb1"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-8fc3d2ec14b1c078.goodA.json",
+          "recorded_sha256": "eebb2bf257446b8dc24a4bd7a27c7bfd8d7ed00bb2917d9fffed1a4ef2057065",
+          "verified_sha256": "eebb2bf257446b8dc24a4bd7a27c7bfd8d7ed00bb2917d9fffed1a4ef2057065"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-8fc3d2ec14b1c078.goodB.json",
+          "recorded_sha256": "bf2fb76b6bdbc345d706d5315c404dcb68b47b5be5078b0119e1251c36fd015d",
+          "verified_sha256": "bf2fb76b6bdbc345d706d5315c404dcb68b47b5be5078b0119e1251c36fd015d"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "8fc3d2ec14b1c078125a65b40754012ade635b300f0f9224638a31983c254a2a",
+        "lifecycle": "active",
+        "path_scope": [
+          "gitseed/collect/__init__.py",
+          "gitseed/collect/ratelimit.py",
+          "gitseed/collect/search.py",
+          "tests/test_collect.py"
+        ],
+        "reason": "half of them are permissions errors and no amount of waiting fixes those",
+        "record_id": "r-gs0006",
+        "ruling": "retrying on a bare 403",
+        "scope": {
+          "path_count": 4,
+          "paths": [
+            "gitseed/collect/__init__.py",
+            "gitseed/collect/ratelimit.py",
+            "gitseed/collect/search.py",
+            "tests/test_collect.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 4,
+            "scope_paths_total": 4
+          }
+        },
+        "source_commit_sha": "976ccfac8c0e3343504a6233abf98f67f2628dfa"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-8fc3d2ec14b1c078.json",
+        "recorded_sha256": "4f377bdac5240c6d100bf34048a8ed7a916e01286930101e54ca1aeaf2c86775",
+        "task_prompt_sha256": "bfd4e4f5d83f80ce63191d6992c7cf969aacbb31bbdf2293363167ef329dd362",
+        "verified_sha256": "4f377bdac5240c6d100bf34048a8ed7a916e01286930101e54ca1aeaf2c86775"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_collect_paging_validation_acceptance.py",
+        "path_in_repository": "tests/test_collect_paging_validation_acceptance.py",
+        "source_sha256": "e377f8af02050a7edf4c73c405d5ef3d7ffa0d6edfeff787af1faa88926f1cbe"
+      },
+      "v7_boundary_derived_from": "the third reading resolved the split",
+      "v7_boundary_status": "BOUNDARY_SETTLED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-9b42b1951da730e1-badA.json",
+        "recorded_sha256": "f3be741ffbd870b2f43d8c0d8c8d0091874642e8c047db92d67bc0ee886ce266",
+        "verified_sha256": "f3be741ffbd870b2f43d8c0d8c8d0091874642e8c047db92d67bc0ee886ce266"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "tests": 1
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-9b42b1951da730e1",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-9b42b1951da730e1.badA.json",
+          "recorded_sha256": "f977996eff0dd70fbae0dadffd6a8bce02419b3bbd9d7d104d7cfdcedb9e29d6",
+          "verified_sha256": "f977996eff0dd70fbae0dadffd6a8bce02419b3bbd9d7d104d7cfdcedb9e29d6"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-9b42b1951da730e1.goodA.json",
+          "recorded_sha256": "57927be135819069c0c5ba92a8b571afacd89a667868328ef6fb50e9af7937a6",
+          "verified_sha256": "57927be135819069c0c5ba92a8b571afacd89a667868328ef6fb50e9af7937a6"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-9b42b1951da730e1.goodB.json",
+          "recorded_sha256": "9fa026156283d366cda0652a931d2b8174e5a92334e5e5fb002b4fdc66f319a1",
+          "verified_sha256": "9fa026156283d366cda0652a931d2b8174e5a92334e5e5fb002b4fdc66f319a1"
+        }
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "cwd": ".",
+        "repository_baseline_total": 604
+      },
+      "repository_id": "agent-operator-score",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+        "bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c",
+        "repository_id": "agent-operator-score",
+        "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d",
+        "verified_bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "9b42b1951da730e12ccd20742fca92da1461703c628ea5da580db39544ec0103",
+        "lifecycle": "active",
+        "path_scope": [
+          "packages/schema/package.json",
+          "packages/schema/src/metric-registry.ts",
+          "packages/schema/test/metric-registry.test.ts",
+          "scripts/validate-planning.mjs",
+          "specs/metrics.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "reason": "mislabels product code as control plane and drives control_plane_code_files up as a disguise for a growing product surface",
+        "record_id": "r-e0a001",
+        "ruling": "add the two paths to controlPlaneAllowlist",
+        "scope": {
+          "path_count": 7,
+          "paths": [
+            "packages/schema/package.json",
+            "packages/schema/src/metric-registry.ts",
+            "packages/schema/test/metric-registry.test.ts",
+            "scripts/validate-planning.mjs",
+            "specs/metrics.v0.json",
+            "tests/planning-contract.test.mjs",
+            "tests/planning/workspace-skeleton.test.mjs"
+          ],
+          "screen": {
+            "acceptance_runner": "npm test",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 7,
+            "scope_paths_total": 7
+          }
+        },
+        "source_commit_sha": "cc67b62673392d764f257422ee313b2853aa7ed2"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-9b42b1951da730e1.json",
+        "recorded_sha256": "1792a28bd62e8c7cf8bd1f05f29243e591bc702c33b64823269a7ab8eb14cccd",
+        "task_prompt_sha256": "258c793d46c07a5a4f5439c989e43e9cd4201b8453f877fd8d22ebafa4be0841",
+        "verified_sha256": "1792a28bd62e8c7cf8bd1f05f29243e591bc702c33b64823269a7ab8eb14cccd"
+      },
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/metric-registry.contract-fields.acceptance.test.ts",
+        "path_in_repository": "packages/schema/test/metric-registry.contract-fields.acceptance.test.ts",
+        "source_sha256": "255263f0390814b5297b2de8717b997cd869fd09aa0b8def6fc32a55ca2490e0"
+      },
+      "v7_boundary_derived_from": "both readers declared the boundary undrawable",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-c61d7c943edd8cff-badA.json",
+        "recorded_sha256": "6e7c81e21bd8cb5a14a772de456cde0900ee493b7a01be14d029de9aa11efbd5",
+        "verified_sha256": "6e7c81e21bd8cb5a14a772de456cde0900ee493b7a01be14d029de9aa11efbd5"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "tests": 1
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-c61d7c943edd8cff.badA.json",
+          "recorded_sha256": "3da1e2d200ebf4c143e316190d8bcf5c68a3de348aedb6c8fc42583c9348833b",
+          "verified_sha256": "3da1e2d200ebf4c143e316190d8bcf5c68a3de348aedb6c8fc42583c9348833b"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-c61d7c943edd8cff.goodA.json",
+          "recorded_sha256": "92f043d8a62570957fcac74e1c63537143ae0f8870cb9a014e631162829d6fc3",
+          "verified_sha256": "92f043d8a62570957fcac74e1c63537143ae0f8870cb9a014e631162829d6fc3"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-c61d7c943edd8cff.goodB.json",
+          "recorded_sha256": "0829a4eb767af41e93cbcfd7ead5b5b4342a99125e65d8448bc6c52f4a9ce4ab",
+          "verified_sha256": "0829a4eb767af41e93cbcfd7ead5b5b4342a99125e65d8448bc6c52f4a9ce4ab"
+        }
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "cwd": ".",
+        "repository_baseline_total": 604
+      },
+      "repository_id": "agent-operator-score",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+        "bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c",
+        "repository_id": "agent-operator-score",
+        "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d",
+        "verified_bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "c61d7c943edd8cffdba8a2c124db469368e2262f941771a461d88388420b006a",
+        "lifecycle": "active",
+        "path_scope": [
+          "packages/schema/src/capability.ts",
+          "packages/schema/test/capability.test.ts",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "reason": "two cases of slack let whole test cases and five allowlists be removed without a failure",
+        "record_id": "r-e0b001b",
+        "ruling": "keep the lane counts as a floor",
+        "scope": {
+          "path_count": 4,
+          "paths": [
+            "packages/schema/src/capability.ts",
+            "packages/schema/test/capability.test.ts",
+            "tests/planning-contract.test.mjs",
+            "tests/planning/workspace-skeleton.test.mjs"
+          ],
+          "screen": {
+            "acceptance_runner": "npm test",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 4,
+            "scope_paths_total": 4
+          }
+        },
+        "source_commit_sha": "40ed33efa0b693a9fbc683837b653fc26c5157bd"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-c61d7c943edd8cff.json",
+        "recorded_sha256": "d24922d7292920c3c3dcf16efe0b847d68f93deafced346d4b193a6d8cc1de0a",
+        "task_prompt_sha256": "12b2c23476d42696b730a4e9cee21fa5b9c17cbbb3ff1a8b10fada1863931bc6",
+        "verified_sha256": "d24922d7292920c3c3dcf16efe0b847d68f93deafced346d4b193a6d8cc1de0a"
+      },
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/capability-derivation-proof.acceptance.test.ts",
+        "path_in_repository": "packages/schema/test/capability-derivation-proof.acceptance.test.ts",
+        "source_sha256": "af026e479e6090984ecd12f7027e47447ebaa3cce067bcb8ce75abb177eddde1"
+      },
+      "v7_boundary_derived_from": "the third reading found the rule does not settle it",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-cadfb63755c3f504-badA.json",
+        "recorded_sha256": "7f5a73ab86e657d18951bb5af948c78a3290f05c1ef6df01878debe336de38b0",
+        "verified_sha256": "7f5a73ab86e657d18951bb5af948c78a3290f05c1ef6df01878debe336de38b0"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "passed": 0
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-cadfb63755c3f504",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-cadfb63755c3f504.badA.json",
+          "recorded_sha256": "34968dc72a81b349ab4aec3b4d445d66913379b1d5fb0b9d156874f9dca09e96",
+          "verified_sha256": "34968dc72a81b349ab4aec3b4d445d66913379b1d5fb0b9d156874f9dca09e96"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-cadfb63755c3f504.goodA.json",
+          "recorded_sha256": "4b3368c957053b25bba0f2a66e1f9ae4d5b6e4d7ddc7ab092542c6b94282f534",
+          "verified_sha256": "4b3368c957053b25bba0f2a66e1f9ae4d5b6e4d7ddc7ab092542c6b94282f534"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-cadfb63755c3f504.goodB.json",
+          "recorded_sha256": "83eaab8674d1e94501e538fb0f6e1b26b54389694e9f16bf1b9fe7cd412be74b",
+          "verified_sha256": "83eaab8674d1e94501e538fb0f6e1b26b54389694e9f16bf1b9fe7cd412be74b"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "cadfb63755c3f5046cddc8b502821218f92bf863fe0c42206a81ca6892402e21",
+        "lifecycle": "active",
+        "path_scope": [
+          "gitseed/pipeline/__init__.py",
+          "gitseed/pipeline/run.py",
+          "tests/test_pipeline.py"
+        ],
+        "reason": "it makes one flaky model call discard every candidate already screened",
+        "record_id": "r-gs5b02",
+        "ruling": "letting a grading failure end the run",
+        "scope": {
+          "path_count": 3,
+          "paths": [
+            "gitseed/pipeline/__init__.py",
+            "gitseed/pipeline/run.py",
+            "tests/test_pipeline.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 3,
+            "scope_paths_total": 3
+          }
+        },
+        "source_commit_sha": "c8ce4385e6222dae3f30847a83037ea7e9919b1f"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-cadfb63755c3f504.json",
+        "recorded_sha256": "570de4db4b0e07015d6d505598907f44ee242a4631b3a8b1c2a8304fbc80f7d5",
+        "task_prompt_sha256": "4b361d6814402154bf38dd086f5d6c46f8196dd9f6963ebc5c56d956e074ed3b",
+        "verified_sha256": "570de4db4b0e07015d6d505598907f44ee242a4631b3a8b1c2a8304fbc80f7d5"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_pipeline_collection_rate_limit.py",
+        "path_in_repository": "tests/test_pipeline_collection_rate_limit.py",
+        "source_sha256": "4bf1908e4553282096215e42878bc8bbd373e5b7dc1172db82f49d3ef79b28a3"
+      },
+      "v7_boundary_derived_from": "both readers drew the same boundary",
+      "v7_boundary_status": "BOUNDARY_SETTLED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-ce2adee3c134ab03-badA.json",
+        "recorded_sha256": "35d216e1ee5b21f3811d663e18387bbf6afacbf2809289b23bc24c218f9c5a38",
+        "verified_sha256": "35d216e1ee5b21f3811d663e18387bbf6afacbf2809289b23bc24c218f9c5a38"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 2,
+          "tests": 2
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-ce2adee3c134ab03.badA.json",
+          "recorded_sha256": "db57e352466c31f7531602ebadf2963eaca9c68651f18643768d8a4c6517e078",
+          "verified_sha256": "db57e352466c31f7531602ebadf2963eaca9c68651f18643768d8a4c6517e078"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-ce2adee3c134ab03.goodA.json",
+          "recorded_sha256": "35cba402a69c0d68ea85910311ebd5061d205256f410b7878c4edeb5c72d6820",
+          "verified_sha256": "35cba402a69c0d68ea85910311ebd5061d205256f410b7878c4edeb5c72d6820"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-ce2adee3c134ab03.goodB.json",
+          "recorded_sha256": "50a7c3f468ea777bdebc247b955e7c9080c4d5b2122b5c9049e0b8050588f0bf",
+          "verified_sha256": "50a7c3f468ea777bdebc247b955e7c9080c4d5b2122b5c9049e0b8050588f0bf"
+        }
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "cwd": ".",
+        "repository_baseline_total": 604
+      },
+      "repository_id": "agent-operator-score",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+        "bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c",
+        "repository_id": "agent-operator-score",
+        "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d",
+        "verified_bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "ce2adee3c134ab0397fc9c561104abd30935cb317a26ca7a53befbeec555bb8f",
+        "lifecycle": "active",
+        "path_scope": [
+          "packages/schema/src/capability.ts",
+          "packages/schema/test/capability.test.ts",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "reason": "the guard catches deletion only, and the review demonstrated growth passing 230/230 with an unreviewed product file present",
+        "record_id": "r-e0b001b",
+        "ruling": "keep the wildcard census and rely on the focused-lane guard",
+        "scope": {
+          "path_count": 4,
+          "paths": [
+            "packages/schema/src/capability.ts",
+            "packages/schema/test/capability.test.ts",
+            "tests/planning-contract.test.mjs",
+            "tests/planning/workspace-skeleton.test.mjs"
+          ],
+          "screen": {
+            "acceptance_runner": "npm test",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 4,
+            "scope_paths_total": 4
+          }
+        },
+        "source_commit_sha": "40ed33efa0b693a9fbc683837b653fc26c5157bd"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-ce2adee3c134ab03.json",
+        "recorded_sha256": "11f78b8c6e19de659ebbc12494b3c2792aa9c4a38e62ab69a8c886ccc56cdbd6",
+        "task_prompt_sha256": "b3d678e0b1d4b1ce042a9ea6f98499d622fcd2183f13b8224f8d748db31c1d8c",
+        "verified_sha256": "11f78b8c6e19de659ebbc12494b3c2792aa9c4a38e62ab69a8c886ccc56cdbd6"
+      },
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/capability-validation-result.acceptance.test.ts",
+        "path_in_repository": "packages/schema/test/capability-validation-result.acceptance.test.ts",
+        "source_sha256": "a0a532e6f40eb95d1c8ea21ffd61978f9ae043b5231097428229aa0f547c78c2"
+      },
+      "v7_boundary_derived_from": "the third reading found the rule does not settle it",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-dd4a74ba2b628991-badA.json",
+        "recorded_sha256": "921ab308b251b499eb516ecc2c3cd1e1439eb2139fbc7e22d705504fdcf8cb55",
+        "verified_sha256": "921ab308b251b499eb516ecc2c3cd1e1439eb2139fbc7e22d705504fdcf8cb55"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 7,
+          "tests": 9
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-dd4a74ba2b628991.badA.json",
+          "recorded_sha256": "1628a2f8bcde07358762a194b09411785c79635ffe5afa37257ec73ba9914504",
+          "verified_sha256": "1628a2f8bcde07358762a194b09411785c79635ffe5afa37257ec73ba9914504"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-dd4a74ba2b628991.goodA.json",
+          "recorded_sha256": "6e55b64a38601af75f79de2a7fcd7d947a70ba5e1500b6351938bed3767322f2",
+          "verified_sha256": "6e55b64a38601af75f79de2a7fcd7d947a70ba5e1500b6351938bed3767322f2"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-dd4a74ba2b628991.goodB.json",
+          "recorded_sha256": "313ccb28e4e11b0c35f275e65fa642bb5fa27b0d1e0d59484c80dba34e4cc64d",
+          "verified_sha256": "313ccb28e4e11b0c35f275e65fa642bb5fa27b0d1e0d59484c80dba34e4cc64d"
+        }
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "cwd": ".",
+        "repository_baseline_total": 604
+      },
+      "repository_id": "agent-operator-score",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+        "bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c",
+        "repository_id": "agent-operator-score",
+        "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d",
+        "verified_bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "dd4a74ba2b628991f1b5d4f8a8a3d4290e3b60a2f2a39deea8c94f2893fc12cf",
+        "lifecycle": "active",
+        "path_scope": [
+          "packages/schema/package.json",
+          "packages/schema/src/metric-registry.ts",
+          "packages/schema/test/metric-registry.test.ts",
+          "scripts/validate-planning.mjs",
+          "specs/metrics.v0.json",
+          "tests/planning-contract.test.mjs",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "reason": "each of the 60 remaining tickets would need a coordinated census amendment, and the list drifts from the tickets it mirrors",
+        "record_id": "r-e0a001",
+        "ruling": "hand-maintained product-code allowlist per ticket",
+        "scope": {
+          "path_count": 7,
+          "paths": [
+            "packages/schema/package.json",
+            "packages/schema/src/metric-registry.ts",
+            "packages/schema/test/metric-registry.test.ts",
+            "scripts/validate-planning.mjs",
+            "specs/metrics.v0.json",
+            "tests/planning-contract.test.mjs",
+            "tests/planning/workspace-skeleton.test.mjs"
+          ],
+          "screen": {
+            "acceptance_runner": "npm test",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 7,
+            "scope_paths_total": 7
+          }
+        },
+        "source_commit_sha": "cc67b62673392d764f257422ee313b2853aa7ed2"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-dd4a74ba2b628991.json",
+        "recorded_sha256": "f5d608a193797389e34f70fd857f2578c30474b8af02e6da1d563598a9072519",
+        "task_prompt_sha256": "28ecde8a54b71e712dd0cf51344ff0044a480e2d03493457c60e1ba42f2b97f0",
+        "verified_sha256": "f5d608a193797389e34f70fd857f2578c30474b8af02e6da1d563598a9072519"
+      },
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/metric-registry-envelope.acceptance.test.ts",
+        "path_in_repository": "packages/schema/test/metric-registry-envelope.acceptance.test.ts",
+        "source_sha256": "0d4d2d76a11dada4cf58590965619787f436cf4d129546f0e5a010aa8ca4ac4f"
+      },
+      "v7_boundary_derived_from": "both readers declared the boundary undrawable",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-e7587b2b65750306-badA.json",
+        "recorded_sha256": "98cb1d4dd8892e2f6ac9fb83ac5dbb79d6d843d9fa88ba90624fd81198f23dde",
+        "verified_sha256": "98cb1d4dd8892e2f6ac9fb83ac5dbb79d6d843d9fa88ba90624fd81198f23dde"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "tests": 1
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-e7587b2b65750306",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-e7587b2b65750306.badA.json",
+          "recorded_sha256": "49f78accce5b616cd5333cf85f8060a4f0f39f642ac5b40a2d84af4d932289e9",
+          "verified_sha256": "49f78accce5b616cd5333cf85f8060a4f0f39f642ac5b40a2d84af4d932289e9"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-e7587b2b65750306.goodA.json",
+          "recorded_sha256": "076c25c1fd9af04c35fcfec61a9b2779f00ab9af1f9c82ca39574661062f90a3",
+          "verified_sha256": "076c25c1fd9af04c35fcfec61a9b2779f00ab9af1f9c82ca39574661062f90a3"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-e7587b2b65750306.goodB.json",
+          "recorded_sha256": "c363ae13abf3a775ed4891392d6f1ffeab6c61feba38b9d2045b253926ef9825",
+          "verified_sha256": "c363ae13abf3a775ed4891392d6f1ffeab6c61feba38b9d2045b253926ef9825"
+        }
+      },
+      "regression_acceptance": {
+        "command": "node --test",
+        "command_sha256": "717c3c1c7642970343c213a9540ebb052aa4d4364a895bea0354e7ddad3eeabb",
+        "cwd": ".",
+        "repository_baseline_total": 604
+      },
+      "repository_id": "agent-operator-score",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+        "bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c",
+        "repository_id": "agent-operator-score",
+        "snapshot_commit": "2faafc35bfb26d5b276be1ded4742b24607d247d",
+        "verified_bundle_sha256": "22a5e5a2ac8e9b060c4fe720f7942e660a9dda3c43bb21b2026128110015c32c"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "e7587b2b65750306c08cff733f9963dc6e64fca32e0e0161652b4a1a8bcd7d95",
+        "lifecycle": "active",
+        "path_scope": [
+          "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+          "packages/schema/src/metric-registry.ts",
+          "packages/schema/test/metric-registry.test.ts",
+          "scripts/validate-planning.mjs",
+          "specs/metrics.v0.json",
+          "tests/planning/workspace-skeleton.test.mjs"
+        ],
+        "reason": "freezing the full text duplicates the contract into the validator and makes any editorial fix a false failure, so only fields the contract derives or fixes numerically are pinned",
+        "record_id": "r-e0a001b",
+        "ruling": "pin every prose field by literal digest",
+        "scope": {
+          "path_count": 6,
+          "paths": [
+            "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md",
+            "packages/schema/src/metric-registry.ts",
+            "packages/schema/test/metric-registry.test.ts",
+            "scripts/validate-planning.mjs",
+            "specs/metrics.v0.json",
+            "tests/planning/workspace-skeleton.test.mjs"
+          ],
+          "screen": {
+            "acceptance_runner": "npm test",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 6,
+            "scope_paths_total": 6
+          }
+        },
+        "source_commit_sha": "e18a8b9156260b04c66eaacb91a1d607a277b77c"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-e7587b2b65750306.json",
+        "recorded_sha256": "6e9c28122c6335043e3c0d75bc83ff9c590af73994e96460e9b25117efd9d7da",
+        "task_prompt_sha256": "970ec05cc6bb04b7d602de9c84c8847e2d8f8ecf6097d9201bc1a0c6ca65d56c",
+        "verified_sha256": "6e9c28122c6335043e3c0d75bc83ff9c590af73994e96460e9b25117efd9d7da"
+      },
+      "task_acceptance": {
+        "command": "node --test packages/schema/test/metric-definition.public-contract.test.mjs",
+        "path_in_repository": "packages/schema/test/metric-definition.public-contract.test.mjs",
+        "source_sha256": "47de2c6d9fd6bb245ec19e7453f40e028dbfe3d911bcddee4f9c6034bf8920c4"
+      },
+      "v7_boundary_derived_from": "both readers declared the boundary undrawable",
+      "v7_boundary_status": "BOUNDARY_UNRESOLVED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-ed878960135ff45a-badA.json",
+        "recorded_sha256": "8d45a0d3e50fc0b9146c34354f4cdcf432fe1e5e2abd94d17ecc531b7a927748",
+        "verified_sha256": "8d45a0d3e50fc0b9146c34354f4cdcf432fe1e5e2abd94d17ecc531b7a927748"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "passed": 0
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-ed878960135ff45a",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-ed878960135ff45a.badA.json",
+          "recorded_sha256": "7526b7467bc72767d996039061a3a395971438000350d2fe5d14430c083df9cc",
+          "verified_sha256": "7526b7467bc72767d996039061a3a395971438000350d2fe5d14430c083df9cc"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-ed878960135ff45a.goodA.json",
+          "recorded_sha256": "98e753b7f99961ddd84c44bcbeec80352cedde37719bccf6bf88bd9993724052",
+          "verified_sha256": "98e753b7f99961ddd84c44bcbeec80352cedde37719bccf6bf88bd9993724052"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-ed878960135ff45a.goodB.json",
+          "recorded_sha256": "f56eca5d9b42efd2cad56298b3342c28d6d0bc41a83291f7b61aa07baf9c8ccd",
+          "verified_sha256": "f56eca5d9b42efd2cad56298b3342c28d6d0bc41a83291f7b61aa07baf9c8ccd"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "ed878960135ff45a538992a4f04bd2afecd8d77c6a9aa20e8817511c9406a7bc",
+        "lifecycle": "active",
+        "path_scope": [
+          "gitseed/storage.py",
+          "tests/test_storage.py"
+        ],
+        "reason": "replay must recompute output from recorded port responses",
+        "record_id": "r-f8replay",
+        "ruling": "storage replay as deserialization",
+        "scope": {
+          "path_count": 2,
+          "paths": [
+            "gitseed/storage.py",
+            "tests/test_storage.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 2,
+            "scope_paths_total": 2
+          }
+        },
+        "source_commit_sha": "3c7f566053805c56aa946e1035de217b4b64d71b"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-ed878960135ff45a.json",
+        "recorded_sha256": "f6d0acf820469476e98930136d68a9fd3ae7341bad0bb315e047d86f0b081a63",
+        "task_prompt_sha256": "81997781f0cd45df13d30e087188822030fe6728c34650333f46246474b09477",
+        "verified_sha256": "f6d0acf820469476e98930136d68a9fd3ae7341bad0bb315e047d86f0b081a63"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_observation_ordering_acceptance.py",
+        "path_in_repository": "tests/test_observation_ordering_acceptance.py",
+        "source_sha256": "204047420ba2b12e0b9346ea4102adc0790f1fe838a0a7d8452d93001fc29aeb"
+      },
+      "v7_boundary_derived_from": "both readers drew the same boundary",
+      "v7_boundary_status": "BOUNDARY_SETTLED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-f3c960a48273132c-badA.json",
+        "recorded_sha256": "0ddda781770bb32fe04d53c4c6cbe363b16f9026bfcd3f835a4ade48c9c6988b",
+        "verified_sha256": "0ddda781770bb32fe04d53c4c6cbe363b16f9026bfcd3f835a4ade48c9c6988b"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "passed": 0
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-f3c960a48273132c",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-f3c960a48273132c.badA.json",
+          "recorded_sha256": "f15d5d39dae401d4ec9f587e6ea9b395b00b43fe3323828dde4d7cf05600dc8a",
+          "verified_sha256": "f15d5d39dae401d4ec9f587e6ea9b395b00b43fe3323828dde4d7cf05600dc8a"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-f3c960a48273132c.goodA.json",
+          "recorded_sha256": "8d53fb0ab413a84e8e10a537c5840636c74c0fdc53c3fd2c6e1721e9a6fca571",
+          "verified_sha256": "8d53fb0ab413a84e8e10a537c5840636c74c0fdc53c3fd2c6e1721e9a6fca571"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-f3c960a48273132c.goodB.json",
+          "recorded_sha256": "870427cd2f3ae9c9aefc7d2af8be71b33e5cbbd31708b24d0813730e916d27e7",
+          "verified_sha256": "870427cd2f3ae9c9aefc7d2af8be71b33e5cbbd31708b24d0813730e916d27e7"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "f3c960a48273132ce1ebd32695e43e87ffbc856109223ff1805d147134be60da",
+        "lifecycle": "active",
+        "path_scope": [
+          "gitseed/ports.py"
+        ],
+        "reason": "both are pure deterministic domain functions with no outside capability to supply",
+        "record_id": "r-gsf501",
+        "ruling": "scoring and screening ports",
+        "scope": {
+          "path_count": 1,
+          "paths": [
+            "gitseed/ports.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 1,
+            "scope_paths_total": 1
+          }
+        },
+        "source_commit_sha": "fe69ce9d153a1f198252e945b6656679b8930f05"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-f3c960a48273132c.json",
+        "recorded_sha256": "1c08f85e9ab03103085e6675281e22e4efc5a63ba594d55e4b3b04986e0b9be2",
+        "task_prompt_sha256": "3cfd9b7e2a181b6e86ee3e96ef218c1b669b0e6c450f163070c835c95e6297a0",
+        "verified_sha256": "1c08f85e9ab03103085e6675281e22e4efc5a63ba594d55e4b3b04986e0b9be2"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_evidence_reader_fallback.py",
+        "path_in_repository": "tests/test_evidence_reader_fallback.py",
+        "source_sha256": "911042b1a8c638c7b1057be4154e0f734d8d7cc6de5f2f154bddc3429cc9dc42"
+      },
+      "v7_boundary_derived_from": "the third reading resolved the split",
+      "v7_boundary_status": "BOUNDARY_SETTLED"
+    },
+    {
+      "bad_a_semantic_judgement": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/judgements/v4-f901052615fa3aee-badA.json",
+        "recorded_sha256": "5c6db9f8dd1cfef5d2ae39eefcadff6c5331f321c03c70d353c78b2f669d3ac7",
+        "verified_sha256": "5c6db9f8dd1cfef5d2ae39eefcadff6c5331f321c03c70d353c78b2f669d3ac7"
+      },
+      "baseline_evidence": {
+        "detail": {
+          "failed": 1,
+          "passed": 0
+        },
+        "verified_fails_on_base": true
+      },
+      "candidate_id": "v4-f901052615fa3aee",
+      "controls": {
+        "badA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-f901052615fa3aee.badA.json",
+          "recorded_sha256": "001b9cc421a5dd3752e6c97f2b9aef14a74042f608fc93ce559f468c34d9062a",
+          "verified_sha256": "001b9cc421a5dd3752e6c97f2b9aef14a74042f608fc93ce559f468c34d9062a"
+        },
+        "goodA": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-f901052615fa3aee.goodA.json",
+          "recorded_sha256": "51dcae555029c0f16f6f8058e65c1be0119a89ecf7c155d296805f7e229b3b4a",
+          "verified_sha256": "51dcae555029c0f16f6f8058e65c1be0119a89ecf7c155d296805f7e229b3b4a"
+        },
+        "goodB": {
+          "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/controls/v4-f901052615fa3aee.goodB.json",
+          "recorded_sha256": "87894a801e68193d66cfb68503af9c9205ae78640333dcec34b321630721df7f",
+          "verified_sha256": "87894a801e68193d66cfb68503af9c9205ae78640333dcec34b321630721df7f"
+        }
+      },
+      "regression_acceptance": {
+        "command": "python3 -m pytest -q",
+        "command_sha256": "340b595818d9902e9103a955d6d8194afde00b522624580190cd0e97960d88a1",
+        "cwd": ".",
+        "repository_baseline_total": 321
+      },
+      "repository_id": "gitseed",
+      "snapshot": {
+        "bundle_path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+        "bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6",
+        "repository_id": "gitseed",
+        "snapshot_commit": "222378defcb5d2d519184b6f23146abac631faba",
+        "verified_bundle_sha256": "76fcb0980cdab46a253f9bb34ccba20e73dada3051cf81e7818d953fa89ebce6"
+      },
+      "source_decision_packet": {
+        "decision_audit_anchor": "f901052615fa3aeebaf8e88125df7752265befe73484d76d00d633ae5073946c",
+        "lifecycle": "active",
+        "path_scope": [
+          "gitseed/storage.py",
+          "tests/test_storage.py"
+        ],
+        "reason": "SQLite keeps each artifact atomically constrained with its correction lineage",
+        "record_id": "r-f8adapter",
+        "ruling": "JSON files on disk",
+        "scope": {
+          "path_count": 2,
+          "paths": [
+            "gitseed/storage.py",
+            "tests/test_storage.py"
+          ],
+          "screen": {
+            "acceptance_runner": "pytest",
+            "acceptance_runner_present": true,
+            "base_tree_resolvable": true,
+            "scope_paths_present": 2,
+            "scope_paths_total": 2
+          }
+        },
+        "source_commit_sha": "d2a3431840b234959bddf008ad8bbfdc2fb0da95"
+      },
+      "task": {
+        "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/tasks/v4-f901052615fa3aee.json",
+        "recorded_sha256": "d5b36778a0d0436a2f6049cd1c51a774d6230c5cf856a0aa5129cf156fd561ef",
+        "task_prompt_sha256": "964f9ab6cbd897465fd026fdc439f5c69e3671d4e4e98b6017f6bf27d009d536",
+        "verified_sha256": "d5b36778a0d0436a2f6049cd1c51a774d6230c5cf856a0aa5129cf156fd561ef"
+      },
+      "task_acceptance": {
+        "command": "python3 -m pytest -q tests/test_bounded_storage_reads.py",
+        "path_in_repository": "tests/test_bounded_storage_reads.py",
+        "source_sha256": "55207ce3038ed0f0b3b7e21c8cb4e5734a6059e10875678b4151b991769ee805"
+      },
+      "v7_boundary_derived_from": "the third reading resolved the split",
+      "v7_boundary_status": "BOUNDARY_SETTLED"
+    }
+  ],
+  "counts": {
+    "agent-operator-score": 8,
+    "boundary_settled": 8,
+    "boundary_unresolved": 9,
+    "gitseed": 9,
+    "total": 17
+  },
+  "document_id": "cdeb-fresh-v8-task-population",
+  "drift": [],
+  "firewall_evidence": {
+    "path": "bench/cdeb/studies/cdeb-fresh-v6/buildability/firewall-leak-adjudication.json",
+    "recorded_sha256": "445cdb5bab2c676fd536c4232057edb2c9fe13b828f9abf994f85533a44e1321",
+    "verified_sha256": "445cdb5bab2c676fd536c4232057edb2c9fe13b828f9abf994f85533a44e1321"
+  },
+  "good_control_bytes_exist": false,
+  "good_control_caveat": "goodA and goodB hashes are digests of v6's prose account of each control, not of patch bytes. v6 never wrote the Good A/B implementations to a file and they are unrecoverable; see cdeb-fresh-v7/control-availability.json. Only the seventeen Bad A patches survive as bytes.",
+  "import_valid": true,
+  "schema_version": 1,
+  "source_manifest": {
+    "path": "bench/cdeb/studies/cdeb-fresh-v7/benchmark-manifest.json",
+    "sha256": "3b6dae25d6fc2beb790546234438d68b1260d55ee5921d52008cf901f9790f38"
+  },
+  "study_id": "cdeb-fresh-v8",
+  "verified_against_untracked_files": [
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-002ffd1e428c572a snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-0ecd7426eebc1cab snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-34aef026d81c2f6b snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-377f04276465b59d snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-77e1745655a235ce snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-84cd6d391ac2fa6d snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-8f24735524874167 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-8fc3d2ec14b1c078 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-9b42b1951da730e1 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-c61d7c943edd8cff snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-cadfb63755c3f504 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-ce2adee3c134ab03 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-dd4a74ba2b628991 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/agent-operator-score.bundle",
+      "what": "v4-e7587b2b65750306 snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-ed878960135ff45a snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-f3c960a48273132c snapshot bundle"
+    },
+    {
+      "path": "bench/cdeb/studies/cdeb-fresh-v4/corpus/bundles/gitseed.bundle",
+      "what": "v4-f901052615fa3aee snapshot bundle"
+    }
+  ],
+  "what_import_valid_means_here": "That every referenced path was opened on this machine and its digest matched. It is not a claim a clone can repeat: the snapshot bundles under bench/cdeb/studies/*/corpus/bundles/ are gitignored by a deliberate policy (r-v3sealedcensus), so the digests above guarantee integrity, not availability. snapshot-lock.json carries the detail and what a clone can still check.",
+  "what_this_is": "The seventeen tasks frozen for measurement, with every referenced artifact rehashed from the file rather than copied from v7's manifest."
+}

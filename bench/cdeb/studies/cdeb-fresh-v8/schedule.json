@@ -1,0 +1,4623 @@
+{
+  "adjacency_rule": "The two episodes of a pair run adjacent, in the recorded slot order.",
+  "concurrency": {
+    "max_active_coding_episodes": 2,
+    "max_active_per_repository": 1,
+    "same_pair_concurrent": false
+  },
+  "counts": {
+    "candidates": 17,
+    "episodes": 340,
+    "paired_blocks": 170,
+    "pairs_leading_with_suppressed": 75,
+    "repeat_blocks_per_candidate": 10,
+    "unique_assignments": 340
+  },
+  "document_id": "cdeb-fresh-v8-schedule",
+  "episodes": [
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 0,
+      "pair_position": 0,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 1,
+      "pair_position": 0,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 2,
+      "pair_position": 1,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 3,
+      "pair_position": 1,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 4,
+      "pair_position": 2,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 5,
+      "pair_position": 2,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 6,
+      "pair_position": 3,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 7,
+      "pair_position": 3,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 8,
+      "pair_position": 4,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 9,
+      "pair_position": 4,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 10,
+      "pair_position": 5,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 11,
+      "pair_position": 5,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 12,
+      "pair_position": 6,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 13,
+      "pair_position": 6,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 14,
+      "pair_position": 7,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 15,
+      "pair_position": 7,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 16,
+      "pair_position": 8,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 17,
+      "pair_position": 8,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 18,
+      "pair_position": 9,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 19,
+      "pair_position": 9,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 20,
+      "pair_position": 10,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 21,
+      "pair_position": 10,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 22,
+      "pair_position": 11,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 23,
+      "pair_position": 11,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 24,
+      "pair_position": 12,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 25,
+      "pair_position": 12,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 26,
+      "pair_position": 13,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 27,
+      "pair_position": 13,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 28,
+      "pair_position": 14,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 29,
+      "pair_position": 14,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 30,
+      "pair_position": 15,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 31,
+      "pair_position": 15,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 32,
+      "pair_position": 16,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 33,
+      "pair_position": 16,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 34,
+      "pair_position": 17,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 35,
+      "pair_position": 17,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 36,
+      "pair_position": 18,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 37,
+      "pair_position": 18,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 38,
+      "pair_position": 19,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 39,
+      "pair_position": 19,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 40,
+      "pair_position": 20,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 41,
+      "pair_position": 20,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 42,
+      "pair_position": 21,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 43,
+      "pair_position": 21,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 44,
+      "pair_position": 22,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 45,
+      "pair_position": 22,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 46,
+      "pair_position": 23,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 47,
+      "pair_position": 23,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 48,
+      "pair_position": 24,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 49,
+      "pair_position": 24,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 50,
+      "pair_position": 25,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 51,
+      "pair_position": 25,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 52,
+      "pair_position": 26,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 53,
+      "pair_position": 26,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 54,
+      "pair_position": 27,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 55,
+      "pair_position": 27,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 56,
+      "pair_position": 28,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 57,
+      "pair_position": 28,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 58,
+      "pair_position": 29,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 59,
+      "pair_position": 29,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 60,
+      "pair_position": 30,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 61,
+      "pair_position": 30,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 62,
+      "pair_position": 31,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 63,
+      "pair_position": 31,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 64,
+      "pair_position": 32,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 65,
+      "pair_position": 32,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 66,
+      "pair_position": 33,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 67,
+      "pair_position": 33,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 68,
+      "pair_position": 34,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 69,
+      "pair_position": 34,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 70,
+      "pair_position": 35,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 71,
+      "pair_position": 35,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 72,
+      "pair_position": 36,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 73,
+      "pair_position": 36,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 74,
+      "pair_position": 37,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 75,
+      "pair_position": 37,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 76,
+      "pair_position": 38,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 77,
+      "pair_position": 38,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 78,
+      "pair_position": 39,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 79,
+      "pair_position": 39,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 80,
+      "pair_position": 40,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 81,
+      "pair_position": 40,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 82,
+      "pair_position": 41,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 83,
+      "pair_position": 41,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 84,
+      "pair_position": 42,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 85,
+      "pair_position": 42,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 86,
+      "pair_position": 43,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 87,
+      "pair_position": 43,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 88,
+      "pair_position": 44,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 89,
+      "pair_position": 44,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 90,
+      "pair_position": 45,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 91,
+      "pair_position": 45,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 92,
+      "pair_position": 46,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 93,
+      "pair_position": 46,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 94,
+      "pair_position": 47,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 95,
+      "pair_position": 47,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 96,
+      "pair_position": 48,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 97,
+      "pair_position": 48,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 98,
+      "pair_position": 49,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 99,
+      "pair_position": 49,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 100,
+      "pair_position": 50,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 101,
+      "pair_position": 50,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 102,
+      "pair_position": 51,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 103,
+      "pair_position": 51,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 104,
+      "pair_position": 52,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 105,
+      "pair_position": 52,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 106,
+      "pair_position": 53,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 107,
+      "pair_position": 53,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 108,
+      "pair_position": 54,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 109,
+      "pair_position": 54,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 110,
+      "pair_position": 55,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 111,
+      "pair_position": 55,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 112,
+      "pair_position": 56,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 113,
+      "pair_position": 56,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 114,
+      "pair_position": 57,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 115,
+      "pair_position": 57,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 116,
+      "pair_position": 58,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 117,
+      "pair_position": 58,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 118,
+      "pair_position": 59,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 119,
+      "pair_position": 59,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 120,
+      "pair_position": 60,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 121,
+      "pair_position": 60,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 122,
+      "pair_position": 61,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 123,
+      "pair_position": 61,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 124,
+      "pair_position": 62,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 125,
+      "pair_position": 62,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 126,
+      "pair_position": 63,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 127,
+      "pair_position": 63,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 128,
+      "pair_position": 64,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 129,
+      "pair_position": 64,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 130,
+      "pair_position": 65,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 131,
+      "pair_position": 65,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 132,
+      "pair_position": 66,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 133,
+      "pair_position": 66,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 134,
+      "pair_position": 67,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 135,
+      "pair_position": 67,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 136,
+      "pair_position": 68,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 137,
+      "pair_position": 68,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 138,
+      "pair_position": 69,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 139,
+      "pair_position": 69,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 140,
+      "pair_position": 70,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 141,
+      "pair_position": 70,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 142,
+      "pair_position": 71,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 143,
+      "pair_position": 71,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 144,
+      "pair_position": 72,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 145,
+      "pair_position": 72,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 146,
+      "pair_position": 73,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 147,
+      "pair_position": 73,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 148,
+      "pair_position": 74,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 149,
+      "pair_position": 74,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 150,
+      "pair_position": 75,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 151,
+      "pair_position": 75,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 152,
+      "pair_position": 76,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 153,
+      "pair_position": 76,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 154,
+      "pair_position": 77,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 155,
+      "pair_position": 77,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 156,
+      "pair_position": 78,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 157,
+      "pair_position": 78,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 158,
+      "pair_position": 79,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 159,
+      "pair_position": 79,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 160,
+      "pair_position": 80,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 161,
+      "pair_position": 80,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 162,
+      "pair_position": 81,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 163,
+      "pair_position": 81,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 164,
+      "pair_position": 82,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 165,
+      "pair_position": 82,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 166,
+      "pair_position": 83,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 167,
+      "pair_position": 83,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 168,
+      "pair_position": 84,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 169,
+      "pair_position": 84,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 170,
+      "pair_position": 85,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 171,
+      "pair_position": 85,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 172,
+      "pair_position": 86,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 173,
+      "pair_position": 86,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 174,
+      "pair_position": 87,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 175,
+      "pair_position": 87,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 176,
+      "pair_position": 88,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 177,
+      "pair_position": 88,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 178,
+      "pair_position": 89,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 179,
+      "pair_position": 89,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 180,
+      "pair_position": 90,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 181,
+      "pair_position": 90,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 182,
+      "pair_position": 91,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 183,
+      "pair_position": 91,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 184,
+      "pair_position": 92,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 185,
+      "pair_position": 92,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 186,
+      "pair_position": 93,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 187,
+      "pair_position": 93,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 188,
+      "pair_position": 94,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 189,
+      "pair_position": 94,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 190,
+      "pair_position": 95,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 191,
+      "pair_position": 95,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 192,
+      "pair_position": 96,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 193,
+      "pair_position": 96,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 194,
+      "pair_position": 97,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 195,
+      "pair_position": 97,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 196,
+      "pair_position": 98,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 197,
+      "pair_position": 98,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 198,
+      "pair_position": 99,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 199,
+      "pair_position": 99,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 200,
+      "pair_position": 100,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 201,
+      "pair_position": 100,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 202,
+      "pair_position": 101,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 203,
+      "pair_position": 101,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 204,
+      "pair_position": 102,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 205,
+      "pair_position": 102,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 206,
+      "pair_position": 103,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 207,
+      "pair_position": 103,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 208,
+      "pair_position": 104,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 209,
+      "pair_position": 104,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 210,
+      "pair_position": 105,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 211,
+      "pair_position": 105,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 212,
+      "pair_position": 106,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 213,
+      "pair_position": 106,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 214,
+      "pair_position": 107,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 215,
+      "pair_position": 107,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 216,
+      "pair_position": 108,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 217,
+      "pair_position": 108,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 218,
+      "pair_position": 109,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 219,
+      "pair_position": 109,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 220,
+      "pair_position": 110,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 221,
+      "pair_position": 110,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 222,
+      "pair_position": 111,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 223,
+      "pair_position": 111,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 224,
+      "pair_position": 112,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 225,
+      "pair_position": 112,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 226,
+      "pair_position": 113,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 227,
+      "pair_position": 113,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 228,
+      "pair_position": 114,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 229,
+      "pair_position": 114,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 230,
+      "pair_position": 115,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 231,
+      "pair_position": 115,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 232,
+      "pair_position": 116,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 233,
+      "pair_position": 116,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 234,
+      "pair_position": 117,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 235,
+      "pair_position": 117,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 236,
+      "pair_position": 118,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 237,
+      "pair_position": 118,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 238,
+      "pair_position": 119,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 239,
+      "pair_position": 119,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 240,
+      "pair_position": 120,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 241,
+      "pair_position": 120,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 242,
+      "pair_position": 121,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 243,
+      "pair_position": 121,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 244,
+      "pair_position": 122,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 245,
+      "pair_position": 122,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 246,
+      "pair_position": 123,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 247,
+      "pair_position": 123,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 248,
+      "pair_position": 124,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 249,
+      "pair_position": 124,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 250,
+      "pair_position": 125,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 251,
+      "pair_position": 125,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 252,
+      "pair_position": 126,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 253,
+      "pair_position": 126,
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 254,
+      "pair_position": 127,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 255,
+      "pair_position": 127,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 256,
+      "pair_position": 128,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 257,
+      "pair_position": 128,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 258,
+      "pair_position": 129,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 259,
+      "pair_position": 129,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 260,
+      "pair_position": 130,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "episode_index": 261,
+      "pair_position": 130,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 262,
+      "pair_position": 131,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 263,
+      "pair_position": 131,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 264,
+      "pair_position": 132,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 265,
+      "pair_position": 132,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 266,
+      "pair_position": 133,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 267,
+      "pair_position": 133,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 268,
+      "pair_position": 134,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 269,
+      "pair_position": 134,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 270,
+      "pair_position": 135,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 271,
+      "pair_position": 135,
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 272,
+      "pair_position": 136,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 273,
+      "pair_position": 136,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 274,
+      "pair_position": 137,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 275,
+      "pair_position": 137,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 276,
+      "pair_position": 138,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "episode_index": 277,
+      "pair_position": 138,
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 278,
+      "pair_position": 139,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 279,
+      "pair_position": 139,
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 280,
+      "pair_position": 140,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 281,
+      "pair_position": 140,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 282,
+      "pair_position": 141,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 283,
+      "pair_position": 141,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 284,
+      "pair_position": 142,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 285,
+      "pair_position": 142,
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 286,
+      "pair_position": 143,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 287,
+      "pair_position": 143,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 288,
+      "pair_position": 144,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 289,
+      "pair_position": 144,
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 290,
+      "pair_position": 145,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 291,
+      "pair_position": 145,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 292,
+      "pair_position": 146,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "episode_index": 293,
+      "pair_position": 146,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 294,
+      "pair_position": 147,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f3c960a48273132c",
+      "episode_index": 295,
+      "pair_position": 147,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 296,
+      "pair_position": 148,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8f24735524874167",
+      "episode_index": 297,
+      "pair_position": 148,
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 298,
+      "pair_position": 149,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 299,
+      "pair_position": 149,
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 300,
+      "pair_position": 150,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "episode_index": 301,
+      "pair_position": 150,
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 302,
+      "pair_position": 151,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 303,
+      "pair_position": 151,
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 304,
+      "pair_position": 152,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "episode_index": 305,
+      "pair_position": 152,
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 306,
+      "pair_position": 153,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 307,
+      "pair_position": 153,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 308,
+      "pair_position": 154,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 309,
+      "pair_position": 154,
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 310,
+      "pair_position": 155,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 311,
+      "pair_position": 155,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 312,
+      "pair_position": 156,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "episode_index": 313,
+      "pair_position": 156,
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 314,
+      "pair_position": 157,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 315,
+      "pair_position": 157,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 316,
+      "pair_position": 158,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-e7587b2b65750306",
+      "episode_index": 317,
+      "pair_position": 158,
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 318,
+      "pair_position": 159,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 319,
+      "pair_position": 159,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 320,
+      "pair_position": 160,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 321,
+      "pair_position": 160,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 322,
+      "pair_position": 161,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "episode_index": 323,
+      "pair_position": 161,
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 324,
+      "pair_position": 162,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "episode_index": 325,
+      "pair_position": 162,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 326,
+      "pair_position": 163,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "episode_index": 327,
+      "pair_position": 163,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 328,
+      "pair_position": 164,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-ed878960135ff45a",
+      "episode_index": 329,
+      "pair_position": 164,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 330,
+      "pair_position": 165,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 331,
+      "pair_position": 165,
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 332,
+      "pair_position": 166,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-377f04276465b59d",
+      "episode_index": 333,
+      "pair_position": 166,
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 334,
+      "pair_position": 167,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "episode_index": 335,
+      "pair_position": 167,
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 336,
+      "pair_position": 168,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-77e1745655a235ce",
+      "episode_index": 337,
+      "pair_position": 168,
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    },
+    {
+      "arm": "SUPPRESSED",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 338,
+      "pair_position": 169,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 0
+    },
+    {
+      "arm": "ON",
+      "candidate_id": "v4-f901052615fa3aee",
+      "episode_index": 339,
+      "pair_position": 169,
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "slot_in_pair": 1
+    }
+  ],
+  "pairs": [
+    {
+      "arm_order_digest": "ff231fd7411500c4d8415e1a3180c06c8e4032273b6bebb7b925af2198e719c3",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "SUPPRESSED",
+      "order_key": "0f5bbe1d612a3c1446d6844cf0e007ee771ab3bc8a402ac46340e56d4f423fd5",
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "d1bce3d85268a4445051ac43977aa63ab31de3d1ec5d837bbf4e2a675a698021",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "SUPPRESSED",
+      "order_key": "01bad90402bb4444adad97816e43205e905f19fecc85639ec3c28d8b006517bf",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "18d24b79cf58ddd15725b9efe8c5ef1769178edc82228965f1bcb5f55aa72e53",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "ON",
+      "order_key": "11d52d42f5ea00e98fb23709a018b336b6dfe52dd449c4eeedf3d4ba014f67a0",
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "5896aa713ee3e5d67b5535051e9a5cfdcb688e99ddc609b8c2f86ec5058e201e",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "ON",
+      "order_key": "02169e8c7bb4d89a3b47bf39763392224e221f80450d1a3a5d78e262f1362cb2",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "8c44ddef54a081b40372d91dede673d2ca46341e907f2af4ba2e5bec6138806a",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "SUPPRESSED",
+      "order_key": "17ea0ea26b9e4c2f19e4b0c604debf3f69cce7d6184dfb74d268feecb7a2ae93",
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "5ff7ca7df108218d36617f782dfa9a754891c306fbe2057c93d46ecadaba379c",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "ON",
+      "order_key": "04a460e5744480154533510c68c50824b2ff1cf822a3bd14782d040578d37b75",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "a651e6d201d7d673c34c22244089fc4b875e0f447d0921c3672f698eb45638e2",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "SUPPRESSED",
+      "order_key": "1834cf56fea06073769c66df763a43c9b07b75c92869dc4d53a1e000ac711cf9",
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "25988abac4bda6be1c64a5068e5edb69d3d87db65286be6727a4d3b20f45a62e",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "ON",
+      "order_key": "06f2eba2e71b73a33de513ab6f38d08846be32dc37e39fdaa8202c7a196cdfcd",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "4131d8f701b912cbe613accedfb55dfe766f62f11ee5299d80ee5e375268b639",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "ON",
+      "order_key": "193286d7322b1cf67d02d11314fb4e78effacce071a2e06527b74db3de154238",
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "92ca7651fb01768c205d278c939981c21be48750f7e57f2d57a5121e2e65a9b3",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "SUPPRESSED",
+      "order_key": "07da28c39f0880340b4dd6571a10573a0e04896b85165c971d0fd5ed20d907be",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "1797ae38031a7ffa53319bd59d0313e43799b3502c965955fb90d3b7dc718935",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "ON",
+      "order_key": "19fbb20f9cffade6a6d6afbde2e0e367e3ba25ec0dc5fae594fd55e1702324e7",
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "fd7524d029fc98e3d8f2aabb54b60b809655bedf650521dd27e0b4e57b7deb41",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "SUPPRESSED",
+      "order_key": "13d017c4e136316168d7d737a385b54e9f4b94a0ed08373a98e4d2f46b641734",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "7e356fcd7e51fe30d2f165d1fee4e022aa0eaff2b123c594d6c0b663a43049b7",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "ON",
+      "order_key": "1a63322ce454d0c6e4684c570e4da3e92f636b9e1ae8f5ce5dab3a64046eed5c",
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "08df639fde48d18f3c3923a29cead0722f1d642f922370b83993af60623818b5",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "ON",
+      "order_key": "19b9d595db2971320a5b2601ca300e3928bef99b818f91a1f689a66b27b2cac5",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "05f9d16ce343fc8445882edb8af29bb4bc0d4268e220bf12f0bd38b7717bef2d",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "2442f69cbd74d77261c4db50a388634cd67ab32b2030b00530212dae2aa44e47",
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "77bd2c5ed78f56b9d677035149d410f8728177a90ce84deb08a045c44b87364e",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "ON",
+      "order_key": "19de8cf728c71ce3117161b974a49421b3a45b4e154fbff3cdf9ce60b0c5b551",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "19b52d5f0f399711d81a66d13ef10a5db0ab2c7f19cbf5b8677d46074a9423d2",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "ON",
+      "order_key": "259460874bba863bfaf84db767727853eb37dfdb255fe19ef145ec54881cf1e3",
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "25fc4b710abaddc15aee6991f93a2e9b4f3e20641edc6070a38fae863d1e42f7",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "ON",
+      "order_key": "2113d23f8ce8e9035a353033c8c486b48a7642c65e5860fe2784836f9754dbf4",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "0cf13f9aedc5f37becee08967338b87db2dabac9369346983fc55a2207a7bc1c",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "ON",
+      "order_key": "2668aeb397d96a3ead8a5bdeabe3b4bce0ae5d809ce305c7a79544273fd3f649",
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "dcfc293958ebb6c68a8583f5c1a2af1a2ff24ef1c51be46f491365ad4a7a7cde",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "SUPPRESSED",
+      "order_key": "21285393a5951b0ee45e00807e06af53f0d3e92e4af12d291a273a06655e0906",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "596be6826ac4d052619482ce10abbd5c7475ab30ae6cecb036638e8a0d57d89a",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "ON",
+      "order_key": "2b41fbd44521824eef379b9194e552edb9a8c05254777342fd8be6806232eb48",
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "e64808d1a04dea24130394d4a71e248c3fed3b6eb5ad3b538059623dabef34ca",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "SUPPRESSED",
+      "order_key": "2975bc7f0417d15e44e061882d9acebc79c37a8658505dc39a1672c2f92dabe4",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "57ba2b8d1cbc6fb4920459e008fd017028ca81d99c18ef6a5ad3d0a9a6002d0a",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "ON",
+      "order_key": "2f1e629a86e5c8a895d3ca48c4fe0e30ec02b775ecb7efbcaae1405724efaac5",
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "a8b9b147e1ee47d0d64871034d3e0a11b67455069557b23ffd82b4e8fa5c99c4",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "SUPPRESSED",
+      "order_key": "2975d621f58e85138e53f6860afb1c2b725c6d8fbbae5094d2a6d8b18167a7e8",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "0c1666a4bdca5cc98daab7dae17728dafff19a1682e192abcfe562cb3e0c2d21",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "ON",
+      "order_key": "3295e3af8fd587f06b975b156ceacd6ce36604483d61b8dfd433298647c64908",
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "64ac0d896b85552f86b86d317c506c1e1cc5d9830004d016e7a2b30546aba7db",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "ON",
+      "order_key": "2a78569291efd77674e386f5f883ee09106659cd4558e38a41069d67188fca1f",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "88211745f4538ecbf7bfd23561f783663010e0a6f285db8c70ed18c49ff90381",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "SUPPRESSED",
+      "order_key": "3e63093caf56f53a0fc36dee50a3d512b0397baaae8eda56ee65b75f15333c78",
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "86c6ea9e7238e9489f311db096119671980e9c853c6c39852f82cfca3aa91dd5",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "SUPPRESSED",
+      "order_key": "2b24c0fea9924c76a626c1126297e6d99bdb2e3695d9d8947943f305f44f5da7",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "983045695e9d99b0abf5b0cb113e92b65608b20f0f31e64515a88635009fdcc2",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "SUPPRESSED",
+      "order_key": "47d03c2c77c9068aa71685b90e52a8dd9ee2dcf0e4ef60c534aa27860d5e03aa",
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "83e0e4ffbdaab902d55ff9a30cb991404e533e5b1965612c9662f038a4780545",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "SUPPRESSED",
+      "order_key": "2cc11b9fc0bdf2c0cd1aec95be425a6558e9516da70d03d7e1c272e76c1bd0c1",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "4bab98323bbb0177bd53575c4a9d6976e407934c184c988e966d701baa62f8b7",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "ON",
+      "order_key": "4a8282bbb47fa5d8efa7cce32916d4b2f5f21931e7269afd8de602a917af4de9",
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "2690eb07981f34719910894e36c841e8159fa44187a164a328008961cb79beac",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "ON",
+      "order_key": "3570aa74b1fb6262fac1a03cc27da15d5f4b19843a8c25936ef88acf709d1a24",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "44eb5e1118d876015c1ccc661cf40fb90c8c2b77581113967775d9101848de0c",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "ON",
+      "order_key": "4ee1f86b95c56f862e1d22ac7ec8dd42829dc3630fd09e4da107b0641c540e56",
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "024512cc77a14aa63a36653e5090c11d9830421206e52d6a48bb790f443e0cba",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "ON",
+      "order_key": "366011a4e3b4f114982506271497b821d6cc52fb3a4132dfb53df68d7b4b362a",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "1f6d04231520229856fe8871ab5173573949febf6ae0f4e828b18cbe2252e215",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "ON",
+      "order_key": "5991c0bdfbf3465a4558f141f39d9055b75bcde441aef2143ae764e9fad2783d",
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "e20b0ce372a3d4a2e6609c01faae0bb0f91d11ee76b741f22d4af5b44b94993f",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "SUPPRESSED",
+      "order_key": "39bea9fe0edc16e61ee0a85bbcbb292a6938395782a9b7ff293e75f8bdbdc901",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "d4339014028ac2aad9b3b32942e2fa4f61ae61d200d3b9ba421140fe7ec1f150",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "SUPPRESSED",
+      "order_key": "5a4edc00f156ec6aeb34ccbe95c0c0c909d176507ed6b38951760a670dabb902",
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "f464e32e356f470722249028edc2ad732864d8f11f784f4a764505ccdec73f92",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "SUPPRESSED",
+      "order_key": "3e798bc2963e1b5a4caaff177ac29cd83526f4a7d53a5d6d52f5e3775b8dbaef",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "88924b7dbfbeba24c42421862e679440b4d0dccebdbff0e83dfceb27b7cdc981",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "SUPPRESSED",
+      "order_key": "5d9623de211a90c1387541cac3cd8acbeaffe735395da412bf4bb4e6d92db89d",
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "3e33126d9128ab3fc0d598929139915d0aabcd5bdc75b27b678c5a43582454fd",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "ON",
+      "order_key": "3ec00326dd4c8eaa6fe8d47cd91abebe692671e63eabbd8105af358820a814cc",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "6cf5aa8097b4acb930df7b040a5c5f74e66e53df61dee32094ff281490b9695e",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "ON",
+      "order_key": "60212023d5eb050a788475688a7865148426f395d2f35805d83ded18e964cbb4",
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "63c1f8cd6084406301f87634d42ab980a1d52397ccc1474a31ed7b04f63cc45e",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "ON",
+      "order_key": "42e621464828145d952b239bc7cfa9e4589a3ec9921a69e7732ca29212532531",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "d7a8eb842c1898f2f8bcd53d5d99c4caa2a397aaa447803d868d75a4908ff5e6",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "SUPPRESSED",
+      "order_key": "615170a7a8317ba6d4cd3c61df39bd144cafebea02bb090789ae67fe53b9d29a",
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "e8689bd13b37e41f4f2b930e9840a8d4d4c43308d9ee10a39434fb96f270f499",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "SUPPRESSED",
+      "order_key": "44e8a4f69d0a98c59338f1dcf3e66e5e3b46780973d386782d24f5ab35e1d503",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "8ad0bfe1bbddc8abd02de1d922905cc0e55aa48090638289c9316a411ff9ec00",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "SUPPRESSED",
+      "order_key": "6617acfea2f67aa0a26f2614f60598b5d3e6e5165ccdab7a08b19946545ac672",
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "328764eeb2bc188640bf65ba041818fee263db371b2e0ac1e0a415dc2e0df335",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "ON",
+      "order_key": "45b4f24139cfa982b8e4d3fa4542b2bc1d978b77a3ff7d7cc4ee6907e602477e",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "7222e095ff1bb70fba48a8a3c82231e5f0df3c3adae571dbbc15227f58bb82fa",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "ON",
+      "order_key": "66a000b3a0caedd6cfbe907231f37798443a9d575d08b58dfa41b74455d6cba4",
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "05b679582499858d23522c5340aa5c7a73af954d5662e7e8e54e4183b9b691cf",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "ON",
+      "order_key": "49a96d63b75fef2417ca98a3585cd57d914d769e0f04ad3d8c6809a92b15825a",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "55ef0c8884707807ce0c8dd33c5b3c2987c2a83f7de6db595ca26996f26c5abf",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "ON",
+      "order_key": "66f4c051fdb3d1ee7ef2c051cb3da49877219a0bf7f9e8ed1a12321dbd7468cf",
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "2b17269d03e2183fb95d8dd116165e18d0b48bafb41fd4061957153821392e0a",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "ON",
+      "order_key": "4d220c075ab584dc853978ae12148ed1cd184b6ffa35bfb998dd002b7e375e9b",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "b9393fcca1eadb3bf6e9b7a566cbd3d0cb08dc9a79fc3d1889992dbb6079f829",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "SUPPRESSED",
+      "order_key": "6737dbb21d3705dda513bd6b58d8d492f5025aaa9409defb442aefac67f2bdfc",
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "f7351494a17e0f308675846f3033c1213943021f9850ad158364a82fc12d6e43",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "SUPPRESSED",
+      "order_key": "5020d96c065062f4e216f87398684a40b757d1f651b2ebc5668118a382be7d73",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "fbfe73490c164b844491ec155b953514b9ab5a871938d4e06342d1b082e18140",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "SUPPRESSED",
+      "order_key": "6787399566e28307f8460559bd2e9397feb5b8f1dc26324cb2ec7d0db652f20b",
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "4399d18602f572490f3579cc3a06a1165bdb443359435aea1df2e3d7f54eb817",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "ON",
+      "order_key": "50db66e740e83032097e10e5f8103f3d84dc95d345051529f10b57c0018aa2c6",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "c9f89b71d600e6b190276412eac281af738611661e7749a5b6f309dd9dd8c27f",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "SUPPRESSED",
+      "order_key": "694ee83c601c5dfde2bb79314465efe510de6c807c32059fbfb186a15efbcb22",
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "305e8d8fc03d0b29b326275bd056a2e5f2f38b08a3dd5d4cca36d0529f0c34fd",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "ON",
+      "order_key": "5390905ef8bf6b35bac9587f38b28d57f92a517c92098f4eb8a47445d2201b3c",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "50cd9d5b5fe76dd7a6006e7a82e411927260cb454de7580c50f0d656b6bb7293",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "6bff60c798f112f78126a00c0de27f6acadb4601d6576166e5d3c2f0b3eb0680",
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "6578b07e9344bc558cf4340578fc34191ebebf0a5eaae77d1208ceced42afbbb",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "ON",
+      "order_key": "5587565f4af99bd6dcdab9b6f8432f6a67371df3d3dacb2c8c3ac7c3ea70ef3e",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "c17fdf675a5bfd742a076e73fff597be68e621785d3888faffb124440547f86c",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "SUPPRESSED",
+      "order_key": "6d2d0d5ec3d0ddb4353648e44adbd51c50eec8b126614115bed1ce6d5a6656c6",
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "6a2089b9c325613d19cc373e1fbe18c340fe9e11979141c836a6024fc35d7470",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "ON",
+      "order_key": "577b7ba9f0c769a6deafcf6d60691277393df28b4aa98fe2c2a3285df9e56728",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "462fbb8f6f5bce10a058eee1daef5025525715875c6b4d19ad8776c0be653614",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "ON",
+      "order_key": "6fa406a664ddd66bef76b6d18c685d6eede28a0396fd142e7b40b37de20f443e",
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "b6b64449a1f9a77e9834fa810b53b02f5d4353b87fc207d0fcb09c9af5fdf159",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "SUPPRESSED",
+      "order_key": "58ce0a1faeeae5f2bb6152dd0f2198af494ce2f26f183a55b77301d4714d5cd6",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "673bce9784c51bd11dfddf6479cbd97c813f08ea4a636a47363f4bec0c94de2c",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "ON",
+      "order_key": "714de0fb3c2c192e1ad86516f61031a877732d1f108bef1a7b33358775934f9d",
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "f7332aeab32c47e2e13aeeea5614f3454594141df1aa29e97408768ef63a6ab3",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "SUPPRESSED",
+      "order_key": "58e4ee1fc84f453447c7cccaa718c83852cbad190509c382baddea27ab482593",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "1cd98b9f671fbab93ad637dee59758411dc9b1350f09c20abc8ca394ef536492",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "ON",
+      "order_key": "750934d80c6d014893dff80f17739512b6ab4bd3296174ab49cfcb2ef4eaf424",
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "60d96939e6e3f06e6d29bd3d3a1272874ffee48a5f1dd7cbead4ec23f6fe83bb",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "ON",
+      "order_key": "5effa2494949710a280e4457b02e2643802df5653fee094490cea80b2a4f4f3c",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "5d5209569ab704a06a32094b2f77870e0925b23e07d98da3e778d287bc877e43",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "ON",
+      "order_key": "79c1c7ede60dfd2316079487170d6bc71d709f218b01856764129b68bd900370",
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "2b5dd3eb901228d90aebe9e4d5c2626f879af5fe1293d63c97d415e7d7e97ac8",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "ON",
+      "order_key": "5ff0bad86dc42a860fb6777b7a02d2aec9c7998b7fcbff9d9a720b767f47f055",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "43dbcb2e3282719f2217b9e5234cb150c1c2c73da75a4aa6a93730c094283157",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "ON",
+      "order_key": "7c2ccc35c29662d29a99bbbe9c694986629f90dfc36753781f32844da5e4d5f5",
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "9ba8fdc2c20e846b1d5106e1d3a40f398af8db17c1ce3032a03beee4b2e0208f",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "SUPPRESSED",
+      "order_key": "610e08f436e6b1ca4e26c6505507dd5bd731d5d80831ea4290aaace78924930b",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "144c84f993a70367abf641dd83684de7b85fce404ae0e7e6dfe16ed7107ec3a9",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "83170df410e16a5f0bb81030e190e0ba41530397d88b9f49720e32066a4a2c7e",
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "05c2d72d7f18a1ea33729d37522bbc79241da704dbc0f9467aa3406530a736a3",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "ON",
+      "order_key": "617a1e3fc5ea0eebe81550a52d51bd715bea38ccd37f2ab878cf475444677618",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "a0c991f18952b5ece1083ad3d012492dca605782fe2e7649466451083228249f",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "SUPPRESSED",
+      "order_key": "88a766152ed5991a2e6580bcb564554a52eb182246594cb28ed64decb17281bc",
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "9c0a07be465ca799d80ececcfb7d2cd344a2234f6cecf91cd33921fd04ad3d93",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "SUPPRESSED",
+      "order_key": "621379d762c62d3e74175b9a55f9155904ae913e397f3963c82a9e92bbb8e897",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "58650b6f2ccc8c57d61240a251fe4500fc0d13f28bf0fba9a87c1a25fa83dd29",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "ON",
+      "order_key": "8a11c335c42797474ba46868ea1dc7ff9f52fdebd2cc2847fed7ea9fa095cb74",
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "865fe670836379e8cc138403b9706355818ad5fda93e02ec982c50fd5cdb236a",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "SUPPRESSED",
+      "order_key": "684d76839e0c19b2208f70cfb39d4d0d46ad29ce3b4f1ba8ef4bea41d379d53d",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "56c98eb32289e11fb2c5e03012e4b69f1d7a4d7c4febd6d5287c682a3afb4feb",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "ON",
+      "order_key": "8df38f22667dcc35e2c6366e2184763de7288865b05ff4b1d19d92deededad4e",
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "6b37caf51c8ea26597da25a682e6b8123d843dd32015c6a7a152add2c51f0cb3",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "ON",
+      "order_key": "6a1f8061074e4c5fa627b855231a0a56f1b4ad8e8f1bdf28b6e633a833b81bdd",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "909c531b997c7f84aaefaa8b3ee92cecf5e3633a01852aafd783a5264627e974",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "SUPPRESSED",
+      "order_key": "90a2fa049a86208e10965a8d43222bf270504b0ca21914a861ce5fa2c673a5f6",
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "31c94517b2eab197abcfab979ade13805a79c9164276282c7ee504910978abf5",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "ON",
+      "order_key": "6a58bdfa7694602e7ab3aba2824cbefd6166c7069b4951fa15448b6969dbfaf6",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "ae5c967a81dbc9b2aa851babfb9412debf9b5ba2e8620c160c8de98ee0c07b3b",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "SUPPRESSED",
+      "order_key": "91dc1a56f3c9d5492db84cc71457b8ac8bab9204e50970b79da8e9371abd316e",
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "cba3df6886ec2cc245944cd7e2159573d2419633ddb3f7a75bdc4fb150b7bcd8",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "SUPPRESSED",
+      "order_key": "6f6f16a1b7b7c0f9297391d3cf09e8ae1c4801369c6286f1ae92d1d55832e62f",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "b4e75083860f402765b2e11bb912f7e798a9aeec9981153fbd858be8d99ee389",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "SUPPRESSED",
+      "order_key": "94185e9f85fdf7113f14c36bccb4687a093c8b0c5de908259aacb5076dc6c9ce",
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "e1342f22aa62ca568a29a49761d6681ae96870277285787d08dd9680d96227e5",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "SUPPRESSED",
+      "order_key": "71eb309282afe21923f0650a2ca22ca7fcccdc016bd3341c08a39c73f48df26f",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "4be088d87cef5b00ed5616a0187a0822a9cc6633053e1704f959b56e236f65f9",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "ON",
+      "order_key": "94afe0a6989db9934e5dd30c3f301d36e0d1e174f03979be102a198db551828b",
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "58c8b1bae4964ecd948b372ae23e5b0b50c10414459a15092d4e810f63f132ff",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "ON",
+      "order_key": "75c6d4d85144b1d838a3e1e108b758b760558375ab8dd6de8363aedda0a966f5",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "5322644742d70a478251a2a7ab0f7d10eb7aad66e41ec6d590d049393252f651",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "ON",
+      "order_key": "957dff9ba1e2ef58f2724144ca0e9ca5bc00316e2f0fe3fbc8207cb25b54ee32",
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "74953935f4c8321c74f0d12455946ffdd9eeebf64d52c116cb7478f11b4fa564",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "ON",
+      "order_key": "7a7c60c7003fb82485924696635791d93003db2977c8faec79a02fd890d29e79",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "f2df08f7caf17edc9c691ee28a7eb64adacf4c3be5df6293cb71b9168b4333e9",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "SUPPRESSED",
+      "order_key": "983e0f16313a7108b98b774af9eb8b3587f9d55f162eda59273b5ec3fd12b652",
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "bae70a62faecd046b4571a25090c49be84c0dbfa9cb5a429e3601136c1f3c362",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "SUPPRESSED",
+      "order_key": "7c0a8caa26442dcc43da537cefffbc5fc1b2acd891303dbddef5b632f98c661c",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "ad758e4304848a3b631667d5286ceba731a60efb12ea60c1319a3b6204a10fdb",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "SUPPRESSED",
+      "order_key": "995a8999464a661f5995e7c7b8df89899448b411cd527ca5b0ab40c3742c0fe0",
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "6519d42ff5365044261fd78905a4156825897b747c51f9dd3a95ccdb6b94cffc",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "ON",
+      "order_key": "7d0e0f01d4fc8d5127074a506a5c8c6f0a099ba32204971bf74b55d3e5f8d29e",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "df24bace359bdb5c69bfa0d90cf48029cebf15f4f101ab749680d749d3d3fb02",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "SUPPRESSED",
+      "order_key": "9af038c152f7d1066542cfa4c3155831a06047fa9afa18adad52f7eabe3d4e74",
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "201580c1ddbe8ea72bf69ebb4a5579180f27ada4fbaba3f61ba69e23b67d5f1a",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "ON",
+      "order_key": "7dbe1c840538294d8771e4a236b92ccbffac48a48f90fb5c43bb0e91ac3af689",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "5c061d92ad73c581fb77402fa8b642022cfe93cbc12f13e08e76717ee2c90a53",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "ON",
+      "order_key": "9deefe1e957493b1b016cf67d12699ee059ec135a4b46b5894cab9cfbd6510ce",
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "1f6e364f4ee6001623f78d9aad756f29149a1c2cd802586e3979908eab3f978a",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "ON",
+      "order_key": "7f351380d81d6f1701ffd6a5c50e0b3948d73c89af363aa69d79671bd5c9acac",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "7635029c4b78a753e6ac5e86b77f4e399113ed05f9c4c98e42db89f52b1a5d0a",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "ON",
+      "order_key": "a055628bd0a6aec19d29f4cb6a0f77e0865d6bd5c8f740e32631d655c10da27a",
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "9bb50df4edbfb8e0a4020a701033d2ea1653d4512edffcc81ec2a1da500086ba",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "SUPPRESSED",
+      "order_key": "801bd9aa7450feaf85d3390173e2fbf3608180767a67a1b4c00476170bbdaf80",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "131716e842719c4d21a702ededa5142627b9cf2b0d14fba8456b4cc1a26e6cd2",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "a52e1aad17ac3ab713c6a504697824a0f089815cdfdb94924717782ee9ef4b3c",
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "655cd308155e856015d11ce1c5a637e168db34b7404e091a4fd8f60abc350447",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "ON",
+      "order_key": "80fc6c1acd226986116b58c1f01493336e125ad8900a17fdafec973d1f7fad0a",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "1a2f907fb697a7dc1c034354d4830dce3b6b663220c9a924f0c3c5aaa0815f81",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "ON",
+      "order_key": "a9eae7ffec25c293dab2c140bfed31af0c458a1d25c4ed7fd89daefe6d103378",
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "065d2dd8053f698231bdc1e99446a0baf1a73bc6b7c97ac1683b34af4983e84f",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "ON",
+      "order_key": "8957beb85cc02abf8bcaea80b0f1ece091f13b057e991133bd03069f4c8b973b",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "8d22b2d5ac6b7ef36079936c04d13b63d18eca6d1eae17a1b12c6fc4b33df316",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "SUPPRESSED",
+      "order_key": "ab117bd27911548408cb4180ae89f6ffafc3162cb0c3b62c035b06860987570e",
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "2c96e41d5737f0d7630f005154c27b5b67c9179a3396ff09c162924b93df8b5f",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "ON",
+      "order_key": "8b3adf8b5eb9a4d2a84324ce0b1a6db8972f7a6dad0d5b8dd3e699cff4032973",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "1bf58be05045b9cc66aa93a4d51c98db315df4b3669eb08415f185d634f74c3b",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "ON",
+      "order_key": "ad881e83c8c319468bc0c75e8d935edece32bee656c71e40d90ba8bc4b6373a1",
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "40849439fdd1b752af1d1357e7e5588fc28a071049ace9a26c6e24ee800f5b4f",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "ON",
+      "order_key": "8b8ff8573a34db5ed47bb876a8408308db7e9558bfed1b4da2aa6fbf91f74e87",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "edfc9761697064bca06c6a4f828fa15e92938e93f4ab519ec21deb17b776f99d",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "SUPPRESSED",
+      "order_key": "aed65cb69084318be4017a99a184796644953eeaeeaab9a9779068da5c4392d2",
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "6f926196e569150ef6abb237385ee30fd26df501f5e16c590f2b131a21df0263",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "ON",
+      "order_key": "8cedcf36699e81ed962113f0fd199cb26bf2270ac40b9ae0497403f38f627fb8",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "6a6e4e61f546a1fda9f84fb671daa01c7f71fd5ba8153210a35b59b8a30734ac",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "ON",
+      "order_key": "aff942b375121566b765d97b29910dff4dc35c4585ffd6b56cf260196cd69e9b",
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "7a0957d3d76c3c03e9f64b939eab03eeacee343906ba4be3dde848a95d1603a1",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "ON",
+      "order_key": "9513af8ec319822affabadac35ea1e7af77f20d1e2590c52b64fcb9599ef4549",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "0711169936d675078783b91fbd3ae77f6ef390b58b2510a4f670908ee81db1b0",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "b0ccf0bc3c5261897811b5bc0ae5b0e219d744643348af686119d6bc550fa62b",
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "08114e523e67d96029304876da27046ce2ba8e96d10f824c9be5c3230379fef7",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "ON",
+      "order_key": "97646c8dcc9f4cf60806216b3193f2e475068f54587e446bd2d366ce69735eae",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "8b829539e30ebba24a51cb1cd536bbd12418985fa99a609f78ffea0b57762c7a",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "SUPPRESSED",
+      "order_key": "b716f367faff57e645d8f83f36667c85e65a7adf9decf5f03bf950e1f7c175ce",
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "14d18758a358b51699fbd8156c8d95c4ed2bda29c9f40501eb76827ccf066851",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "ON",
+      "order_key": "99656c367a6807cee06ca32d8e947d16cbc08ffac353e8e146075fc6ac302ee2",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "708d0a089a11089c7d40cb4aee175b1a3d556693f213d335d88ebf1d99943557",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "ON",
+      "order_key": "bb0b4282449ebec946e0d8f145c075ab2f783a25ff3b0c2f095e89b61e61a020",
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "c84c90747283b1fc44cc713959050df2c68a0621752ae3bb7a0162ed6c86b165",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "SUPPRESSED",
+      "order_key": "99753e700ac45ce05070b5d3494fdf15a158e8dfea1cf566992c6c27b254e8cf",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "c6ab1049f2c3a25e12d8a247326533c4e95e073fb6f8b7520aa93448ce5ed996",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "SUPPRESSED",
+      "order_key": "bda41a23cc4086d4dcd77a006155370679fea8355cc1d1ce0e899feb95e19be1",
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "4ea02a7b9eac38277d89e535ecec88d9041d8a01c6a9b41627de4aefa016caab",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "ON",
+      "order_key": "9aa50dcf2a7e09d4435e2186190e8d63d6bbcc4a5238923a8c0ea18322f78bb8",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "98df0cdb34cc028904fd208ad13a5dce6f91752329ca7190b44561f537f5c587",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "SUPPRESSED",
+      "order_key": "c044db966615c838f88dfe4588338f548c6a2ad186fbc5df1149ab265b01ebdc",
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "f9057bcfec86b22e04b918818a3ae2363f2e3542e60bd72508f5041924d5d7e3",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "SUPPRESSED",
+      "order_key": "9af43a6d84444629d458b207a9fc3bdaa0aa8c96041e308f23d3281eabff00f6",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "b374c79c754703b159c878693fa12f9f3a5668a308dd69e849f2fd351c1c4598",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "SUPPRESSED",
+      "order_key": "c2d5c8b5be5ef4e0afd76b63868e60ed087d6c09abc29449b8cf6eab2c3d6799",
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "d6fdac0ae73a30de306b86bca4bd3246da635d6cd98a3169d491a85b410703ec",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "SUPPRESSED",
+      "order_key": "9d8c23f827947cd1fc20dc01dc2ba4e28ae299d411755ee660dc18c36c1d1a5e",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "ec7f9b2a32c9652368dfe71158c242ab1181511ec889cb29a7325a636a67fd73",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "SUPPRESSED",
+      "order_key": "c33c686f47984b958d7e93b042914785b1125de7e5195215d00fc0f9bf37caea",
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "ba0219e83e209eea00cc86be1f163607c441779bef8b1123d11b70ece8290509",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "SUPPRESSED",
+      "order_key": "9e7caf83df8e57abc03523d82d8b9be21874bc7469ef5bb98a468ea04e3c8df2",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "ef7fa2b1ec2985df3e7098187e985e05b513b6c6c24e07a434a9844777c7aba7",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "SUPPRESSED",
+      "order_key": "c893139b1442f1464e3f1812451f887c3ec4d733388144f3190a02d03f63bb84",
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "ee0c0e3769d741167a13e93197fc0fa89a6f10ff65dda33e8c9b48796d48d54a",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "SUPPRESSED",
+      "order_key": "a8186a01186958586dfb1e04f8311a1e4c13a1c3a73bb9a6eae5dec071175eff",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "3fb9eb65b7643f2016c17cd61ef9fc2f2891d68b3208897ad5349fad7ef990cc",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "c94d27d875dea60419f92b1d5b7a52da53710a5b66ef619505d9e8f326bb2f02",
+      "repetition": 2,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "0082bdd4b765d107f814b3668cfcaba4f9a520ba0409f1e8ea02307b06a2ce97",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "ON",
+      "order_key": "ad1880d81136633f0db26f1f377914fc335509888dff654202ed504bf5f976e0",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "066a35962f6f9f33f67fdc5b102dcbf7f432e89728ffcd2f058454ee273fc940",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "ON",
+      "order_key": "cb329ac51ad9ab6f736d6ab8f3ff2884b4bb18b2b2a1d00e9764ec5d17cf86f4",
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "575887bb5643f1406b91ebd360345d718f0230710e745427c82d7f66bcbaf12d",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "ON",
+      "order_key": "afd42fef80be0ad9923e82c2b6ec806f77f20acd3153426b2f43439b75d2d8da",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "e2869fbfb6f6f14dbc19548e4388898b44048595f154e823915ed2ca0aceba5b",
+      "candidate_id": "v4-9b42b1951da730e1",
+      "first_arm": "SUPPRESSED",
+      "order_key": "cc4959a4770f19a4c407d50db55d471d3ce47801c1581804e375883b562268f1",
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "9a1000c306de0b58861277a12ad47df0f938d546ce9e3dea327537ff0aaa7115",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "SUPPRESSED",
+      "order_key": "b0797eee39e00588bd6f10ce45e5c5d853748cfc74992d01d9292d81967000ff",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "de464ae0bd146b0fcbb2702d16dc0be72764f7e196bca718c9075f68660b4572",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "SUPPRESSED",
+      "order_key": "cda88ae76a590ccad5e3d239dba9896659f0a853684ef302a95444a3373cd7ac",
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "9d7a0d27ad04b80f8fdc07713bdeb7bb5cbc5c86cf2424568f2d53c9095ad542",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "SUPPRESSED",
+      "order_key": "b0c48f162877643ac49b3ace0947aee34b31e7c7da2955bfa5d38048b71fa1af",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "586ea37c199ad49aeb1bfb1bb24090f35437c1ed8a64d855461686c7b2d4987e",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "ON",
+      "order_key": "d2edaae1e612add1df1ebc3ac51bad85bf4a00ef9cfed18f6b0dd3093c002b6b",
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "1edb1f394ceee66633538f755143b1542f5228231751891c357c7659507d2455",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "ON",
+      "order_key": "b2909f2397a6d2f02e2c5953015efca18366b7ed403c8582b322dcddafd5ff05",
+      "repetition": 4,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "218f86a11d6491dd159a3d0344656fe463d2596d8f35780f80cd6eb805fda206",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "d6fed5fd4457a137cd634393fba8511f112f3b0bfc43ef8d863a236bce5e12e0",
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "3f93f1b6b057bb4eacdffd42797b7ae9fe699598c570b10f796de8e8ccf25b44",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "ON",
+      "order_key": "b7c3c6be6697298dc3ddb6036c9c8dc48ff3137eabf2dd07b96717499676bb79",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "6b27d2a31de592537a9f58e13bd8394200370d345fd4b78ea61dc94814a4fb28",
+      "candidate_id": "v4-002ffd1e428c572a",
+      "first_arm": "ON",
+      "order_key": "d9cf4776ba7d7d693bd64530d927a8fba53e8dea59f07aa9587172637d87efcf",
+      "repetition": 3,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "93fba9a4f45b54fb858c1f27a48f1aa715de0ce8fdd4e35968c8811b2f13cc39",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "SUPPRESSED",
+      "order_key": "b96a7fbe5b491668c88aeda84be24351656952ebbbdb9c615e63d91bd3d181be",
+      "repetition": 3,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "75ebb710bc3835bac4d11a47926f695fa0d8955888f6c75f60626ff3806ea211",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "ddd273f90c8ca2739199e7450f4ddf9769bec980cf347690e389497128967973",
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "2df7a037e4af7bafae42b88ab36d6157eada865e599f2c028c5d6da06e05e1fe",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "ON",
+      "order_key": "bc36e1197b2d7c6ff2aca8aa477094a96f18d986b11a8dd59a2238ebff5b20b8",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "9314f31a1b60ecd7d9e20cc8ebffdf5f325784e6f46605e4893f0798f1476d3c",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "SUPPRESSED",
+      "order_key": "e0ce127f07fe03d4af2410a67e7efc16966fc13a9f59c0d3e4af02505676a5ef",
+      "repetition": 9,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "96d805c701cc7a2520d402a854ca50163f1d1b587a5bd3a4a621a2ce5fc8a681",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "SUPPRESSED",
+      "order_key": "bd4f1e61e01069bde47b90f9c7ea8e63f35142182c66950f3322979faacc3234",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "c3d977b1520433dc793617a893a7ad3409af38a03e81a1166a3599f6140e017f",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "SUPPRESSED",
+      "order_key": "e15ead751b80f9791cde0988583829637f786a346065a09c2326799d869958d5",
+      "repetition": 5,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "7ac2556e944fa45821a9606304a4a4153c05d1c8e176abc17c97da19bd6cb66f",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "ON",
+      "order_key": "c11d551b36f60eada81b434524dfeb22f5769a4f7a2c95d0ac790b4be6d5284d",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "271ee3307f5054afed469023d201ef2d095a7196bea9baff2b6aa222d054bf1e",
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "first_arm": "ON",
+      "order_key": "e18bb80621e98c362f52a0e9ed9f69b3476ffeaeef2e16357cb184023ed19113",
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "f5b4733e419511a7bad349cce6bc9c510d33d1780f32058437c8e0a929cc8709",
+      "candidate_id": "v4-f3c960a48273132c",
+      "first_arm": "SUPPRESSED",
+      "order_key": "c2e5b2736baa81af853316dd86516f2a1807aac690188f3115abe53b13e7adfe",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "1f5906e537ddd8d9a4b19cbb29dee5fcf3358711a92de3c5f77dcab21d4edeac",
+      "candidate_id": "v4-8f24735524874167",
+      "first_arm": "ON",
+      "order_key": "e69aa91b8aa5d8778a7ba062c3ee7c1da4d1f36db6204c9c46de2812827d55a6",
+      "repetition": 8,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "2b131fa3174369aea935b655d601650b3a381f84f1afb2742cc2f2d0addb53e7",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "ON",
+      "order_key": "c5c3b0d7bde453bc292f687e0ae220c533d9a51d1473f5987b93357e2310370a",
+      "repetition": 7,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "81bd0aafcfdf3bb5b6d9e75f550b3a0df6536b88f7f60bab3b2e2b5594aa3d5c",
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "first_arm": "SUPPRESSED",
+      "order_key": "e96226f3aa5a754a31338172dab8323f974c0e657afac422d145003176588290",
+      "repetition": 4,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "1659ec78564eb59089ce344622b3612f9668f8f257b8911e7e3c9c7edc88b16e",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "ON",
+      "order_key": "c6bf6f9b474601777486c86af7a1b5c34b5b86a8f50fd6f55f42948903003500",
+      "repetition": 0,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "68fba49cc86dcf65043f2b5850ae73b3a0702717b9104c0d9f134d5d837cb8b1",
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "first_arm": "ON",
+      "order_key": "eae7a956070e1ac95da07bbf9af5e8a9308e81c007226dedcb8c5bab2f38ff26",
+      "repetition": 7,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "e6d243d58afd50e8e190317e6545780fc92e2828644de59d15fb958836019e72",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "SUPPRESSED",
+      "order_key": "cc2c5a5b434a7acdef4a0644fa0b4c4c1851b0f61951a73bb41efc92cd7fad04",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "fc9f1c74589194ea41e7002dc1053326170498b015c5c5800e36873ac97e981d",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "SUPPRESSED",
+      "order_key": "eefd0a710581efff0bd020ace3088168762fa61db10a15259daeb42b0e7b1885",
+      "repetition": 0,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "f5849d15a94ed4ac005d1c6b1468d8f72d4d33a5d17e5f9f2e5f9d65d80bb90f",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "SUPPRESSED",
+      "order_key": "ccad4e8075b1e82773d0a5a7615e9a8a401255530f681647d762124050ab783d",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "7aebe6b9df47d200005bc99000cde8fb8badc285a1e4ad8f7b977c8223da717e",
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "first_arm": "ON",
+      "order_key": "f0f01ed52b5d9e057e977290b2b23fd2a3b6d4e50eaa8f934b3fcddc7af55ce2",
+      "repetition": 6,
+      "repository_id": "agent-operator-score",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "e5e9268f82fbff955c7d111bc6c6d7d7f6d00c4bd6abf9dadbd90378d35f134d",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "SUPPRESSED",
+      "order_key": "d23d0a0f25a0d738eb0d3b0a7816edb9644fbde66dd191a2509bdd91cd746015",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "ab91901329a5f22c7b46faeeee0cdae145ae7e2e9eddb6e822ef5fce94aeaf54",
+      "candidate_id": "v4-e7587b2b65750306",
+      "first_arm": "SUPPRESSED",
+      "order_key": "fd8b6c3aa15d9d12b6b9c707626feec8ae0aacb233b0355b7d5c7cb9baae9d37",
+      "repetition": 1,
+      "repository_id": "agent-operator-score",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "c821883c29cbc7391e8e4e069f6ecfc55868ee7d6be7ff880bee52a2cf8738be",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "SUPPRESSED",
+      "order_key": "d764209f843286d22111af8cb627700377c8b86edef461e4d00373f6a4498dac",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "d8e8cb59007349d786f31970be36a5cc1b43a57ea842093469bb990f0c009112",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "SUPPRESSED",
+      "order_key": "d924324e73d37eb3d0410b1d179efa1023fccb269570e58f7ba406dab1f0265e",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "447a86578cd2458b21901727f9f6c2e065f5ca2c129cb5d62a9a674c7a97043a",
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "first_arm": "ON",
+      "order_key": "d967e42bf4a09c0313faeb55da3f399b116f4a82af49f3ff7963e820c34b1f6d",
+      "repetition": 8,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "a3203fb08d72e65d5a6bf975e77edf567ff44ef5c7c771fb329b6a41b8b047e3",
+      "candidate_id": "v4-cadfb63755c3f504",
+      "first_arm": "SUPPRESSED",
+      "order_key": "da4f33b943e8656e8e9b354d40578ca7c0f5d8b101a03300acd1b4f4f12577e8",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "f4ee388a9a6919e127287c42fca63c3290787add04c05d950ee4147924a77d66",
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "first_arm": "SUPPRESSED",
+      "order_key": "df9bbb62551938c0c940f3d1961351b471849405b43317aa52d83ef529e1bd43",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "713b7206891eb27400e2fd58f7f064af8ec865c9447999d6f80da51e79c238a4",
+      "candidate_id": "v4-ed878960135ff45a",
+      "first_arm": "ON",
+      "order_key": "e08b1ebe6208982541dde33a8595be23e62e06c9a0b5d0dd59075f5e52e7250a",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "7f3a50381df3556951e235b64c7682a856d423e630c8b408985d2b5ec0d13976",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "ON",
+      "order_key": "e9ffecd18e1aa87e174d0f4ef23e481f06d7941cc2488d6193350d2578807339",
+      "repetition": 9,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "9705af4f246a67be438ea942499d2868f6c1897bc8d3038f1ccfca5788ea53d9",
+      "candidate_id": "v4-377f04276465b59d",
+      "first_arm": "SUPPRESSED",
+      "order_key": "eab78f01c578fedd7870ba166d7957e5a1cdc60b1713c42734b8c26ac433ae8e",
+      "repetition": 6,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    },
+    {
+      "arm_order_digest": "4588a6590c23f81949294f4195a2b2108a89acc1e9bfc42035c7c55f8eb9d44f",
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "first_arm": "ON",
+      "order_key": "f2723692bb6c48fd7aceed6b896debac44ac978d834c6cf625dcdbbe76ec9e3b",
+      "repetition": 5,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "67d3e5609e972119a9f0260cdab1a2924ab637869c63c14aeaa4e69cc83ea5be",
+      "candidate_id": "v4-77e1745655a235ce",
+      "first_arm": "ON",
+      "order_key": "f9292cbdb9dd4bf1e339e58f58c423171ece34bdb005ae600167cdc7b5fb1ca3",
+      "repetition": 2,
+      "repository_id": "gitseed",
+      "second_arm": "SUPPRESSED"
+    },
+    {
+      "arm_order_digest": "e2531aa1bef8d1da4fcbef9f931741e514dd733d589565f98592f421c461ceca",
+      "candidate_id": "v4-f901052615fa3aee",
+      "first_arm": "SUPPRESSED",
+      "order_key": "fa8c6ee7f0752939a15170154456a4c07fdf72096a221373dbb9859458fcdcd9",
+      "repetition": 1,
+      "repository_id": "gitseed",
+      "second_arm": "ON"
+    }
+  ],
+  "schema_version": 1,
+  "seed": "f502586ae078328ae98a8feb1e153a5bb4038c4250f89882d7712a4a8499023d",
+  "seed_inputs": {
+    "judge_panel_lock_sha256": "3e700460786f46a9d18ad0aa004eee24767ca10d18bf9d1343c48f0fc463f2e6",
+    "literal": "CDEB-FRESH-V8",
+    "preregistration_commit_sha": "4ed43c41893e12699eb19270c8ba58c53dda4e07",
+    "runtime_lock_sha256": "3a04383037712d95ba4b6db0563130b8a3ef325df26cef053e7c4801e51c6557",
+    "task_population_sha256": "c17d37bad8e9a8208a8076d6987b17eda6213887dd6018b2c199838cf0ceb0df"
+  },
+  "seed_recipe": "SHA256(\"CDEB-FRESH-V8\" + task-population-sha + judge-panel-lock-sha + runtime-lock-sha + preregistration-commit-sha), concatenated in that order",
+  "study_id": "cdeb-fresh-v8",
+  "what_this_does_not_control": "Both arms of a pair still run in sequence on one machine, so anything that drifts with time is shared between them rather than eliminated. Adjacency bounds how much can drift; it does not make the arms independent of when they ran."
+}

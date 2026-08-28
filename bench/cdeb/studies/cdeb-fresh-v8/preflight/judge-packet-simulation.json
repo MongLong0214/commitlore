@@ -1,0 +1,99 @@
+{
+  "arm_cue_hits": {
+    "on": [],
+    "suppressed": []
+  },
+  "arm_cue_present": {
+    "on": false,
+    "suppressed": false
+  },
+  "checks": {
+    "decision_block_identical_across_arms": true,
+    "experiment_plumbing_excluded": [
+      ".git",
+      "delivered.txt",
+      "payload.json",
+      "prompt.txt",
+      "events.jsonl",
+      "row.json",
+      "err.txt",
+      "assignment.json"
+    ],
+    "packet_ids_share_no_prefix": true,
+    "same_field_shape_across_arms": true,
+    "task_prompt_identical_across_arms": true
+  },
+  "constructed_cases": {
+    "differing_trees_pair": {
+      "arm_cues_found": 0,
+      "means": "two genuinely different clean trees still yield packets of the same shape with no arm cue",
+      "same_field_shape": true,
+      "trees_actually_differ": true
+    },
+    "leaked_tree": {
+      "arm_cue_present": true,
+      "cues_found": [
+        "arm-word-suppressed",
+        "commitlore-marker",
+        "delivery-log",
+        "experiment-assignment"
+      ],
+      "means": "a tree carrying the assignment, the delivery counter and a CommitLore trailer is flagged rather than passed through"
+    }
+  },
+  "document_id": "cdeb-fresh-v8-judge-packet-simulation",
+  "fixture": "synthetic cache episode, both arms, trees reconstructed from the committed fixture script and the committed per-arm diffs",
+  "not_a_product_effect_row": true,
+  "packet_ids": {
+    "on": "df631d228af5bb49bb42c3be",
+    "suppressed": "cd94d35c4566f43c1f0b0baf"
+  },
+  "packets_built": 2,
+  "real_arms_produced_identical_trees": true,
+  "scanner_negative_control": {
+    "benign_probes": {
+      "keys are retained on insert": [],
+      "python -m pytest ran on the tree": [],
+      "the loader is called on a miss": [],
+      "turn it on and off": []
+    },
+    "every_cue_detectable": true,
+    "no_benign_text_fires": true,
+    "note": "Some probes match more than one pattern -- an assignment blob that names the ON arm trips both. Overlap is not a defect; a cue going undetected would be.",
+    "per_cue": {
+      "arm-word-on": {
+        "also_matched": [],
+        "detected": true
+      },
+      "arm-word-suppressed": {
+        "also_matched": [
+          "experiment-assignment"
+        ],
+        "detected": true
+      },
+      "commitlore-marker": {
+        "also_matched": [],
+        "detected": true
+      },
+      "delivery-log": {
+        "also_matched": [],
+        "detected": true
+      },
+      "experiment-assignment": {
+        "also_matched": [
+          "arm-word-on"
+        ],
+        "detected": true
+      },
+      "record-id": {
+        "also_matched": [],
+        "detected": true
+      }
+    }
+  },
+  "schema_version": 1,
+  "shared_packet_id_prefix": "",
+  "study_id": "cdeb-fresh-v8",
+  "what_this_does_not_prove": "One synthetic episode. A measured episode's tree is written by an agent that may name an arm word for its own reasons, so this shows the packet builder does not leak the arm, not that no measured packet ever will. Section 11.4 records arm_cue_present per packet for exactly that reason, and the cue-excluded sensitivity is where it is used.",
+  "why_that_matters": "The smoke's ON and SUPPRESSED arms wrote byte-identical diffs (diff_sha256 47b2ded9 in both rows), so comparing their two packets shows only that identical inputs look identical. The constructed cases carry the blinding claim instead: a differing-but-clean pair, and a tree with a real leak that the audit must flag."
+}

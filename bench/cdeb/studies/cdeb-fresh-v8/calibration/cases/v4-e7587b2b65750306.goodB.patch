@@ -1,0 +1,22 @@
+diff --git a/packages/schema/src/metric-registry.ts b/packages/schema/src/metric-registry.ts
+index 867efe3..9c5f953 100644
+--- a/packages/schema/src/metric-registry.ts
++++ b/packages/schema/src/metric-registry.ts
+@@ -23,7 +23,16 @@ type CanonicalVector = {
+   };
+ };
+ 
+-export interface MetricDefinition {
++/**
++ * Fields shared by every public view of a contract-v1 metric. Keeping these
++ * separate makes the required registry identity available wherever a metric
++ * definition is consumed, independent of the validator's internal checks.
++ */
++type RequiredMetricDefinitionFields = {
++  observation_key: string;
++};
++
++export interface MetricDefinition extends RequiredMetricDefinitionFields {
+   metric_id: string;
+   label: string;
+   factor: string;
