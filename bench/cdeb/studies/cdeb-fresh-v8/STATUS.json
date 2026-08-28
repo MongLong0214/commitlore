@@ -4,6 +4,7 @@
   "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
   "calibration_complete": true,
+  "judge_packet_simulation": "pass",
   "manipulation_preflight": "17/17",
   "measured_run_allowed": false,
   "no_automatic_v9": true,
