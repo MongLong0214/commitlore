@@ -345,6 +345,23 @@ def run(assignment, out_dir, scratch):
         capture_output=True, text=True).stdout.splitlines()]
     open(os.path.join(out_dir, "diff.patch"), "w").write(diff)
 
+    # Regression runs on the agent's tree before the acceptance test is installed.
+    # `node --test` with no arguments discovers every test file, so installing the
+    # acceptance adds it to the regression suite -- and on agent-operator-score that
+    # is not merely one extra failure: adding a file makes six census-style tests
+    # fail that pass without it. Measured in the contaminated order, an
+    # implementation that passes its own acceptance still scored functionally
+    # failed, which is the fifth defect of the family found while building this.
+    regression = candidate["regression_acceptance"]
+    reg_acc = subprocess.run(regression["command"], shell=True,
+                             cwd=os.path.join(tree, regression.get("cwd", ".")),
+                             capture_output=True, text=True, timeout=1800)
+    baseline = json.load(open(os.path.join(V8, "regression-baseline.json")))
+    expected = set(baseline["repositories"][assignment["repository_id"]]["expected_failures"])
+    observed = set(regression_failures(reg_acc.stdout + "\n" + reg_acc.stderr))
+    new_failures = sorted(observed - expected)
+    regression_pass = not new_failures
+
     acceptance_sha = install_acceptance(
         tree, acceptance_path, task["acceptance_test_source"])
     # The frozen, verified command -- not task["how_to_run"], which for four of the
@@ -363,23 +380,6 @@ def run(assignment, out_dir, scratch):
         raise SystemExit(
             f"task acceptance did not run for {assignment['candidate_id']}: "
             f"exit {task_acc.returncode} from {acceptance_command!r}")
-    regression = candidate["regression_acceptance"]
-    reg_acc = subprocess.run(regression["command"], shell=True,
-                             cwd=os.path.join(tree, regression.get("cwd", ".")),
-                             capture_output=True, text=True, timeout=1800)
-
-    # Regression acceptance is "no failure outside the baseline", not "exit 0".
-    # agent-operator-score's pristine snapshot fails 11 of its 604 tests, stably
-    # across three runs. Scored by exit code, every one of that repository's 160
-    # episodes would fail regression whatever the agent did -- P-DSFPS zero in both
-    # arms, the equal-weight estimand halved, and section 27's AOS condition
-    # unreachable. gitseed is green at baseline, so the defect would have been
-    # invisible in half the data.
-    baseline = json.load(open(os.path.join(V8, "regression-baseline.json")))
-    expected = set(baseline["repositories"][assignment["repository_id"]]["expected_failures"])
-    observed = set(regression_failures(reg_acc.stdout + "\n" + reg_acc.stderr))
-    new_failures = sorted(observed - expected)
-    regression_pass = not new_failures
 
     completed = code == 0 and not timed_out
     # A run that never reached a model is not an episode outcome. Section 20 calls

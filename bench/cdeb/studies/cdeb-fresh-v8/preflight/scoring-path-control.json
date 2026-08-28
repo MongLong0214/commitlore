@@ -1,0 +1,43 @@
+{
+  "badA_note": "badA scores regression_new=4 on agent-operator-score even in the corrected order. That is a property of the control rather than the harness -- v6 built it to pass its own acceptance, not the suite -- and it is recorded because an FVR outcome may be rarer than the design assumes.",
+  "document_id": "cdeb-fresh-v8-scoring-path-control",
+  "fix": "run-episode.py measures regression on the agent's tree before installing the acceptance, then installs it and runs task acceptance.",
+  "method": "For one candidate per repository: materialise the snapshot, apply the v7 rebuilt goodA patch (an implementation that makes the acceptance pass), and score it exactly as an episode would. No coding agent runs.",
+  "not_a_pilot": "No coding agent ran and no outcome was produced.",
+  "question": "Can the scoring path produce a positive outcome at all, on real trees?",
+  "result": {
+    "agent-operator-score": {
+      "base": {
+        "acceptance_exit": 1,
+        "functional_pass": false,
+        "regression_new": 0
+      },
+      "goodA": {
+        "acceptance_exit": 0,
+        "functional_pass": true,
+        "regression_new": 0
+      }
+    },
+    "gitseed": {
+      "base": {
+        "acceptance_exit": 1,
+        "functional_pass": false,
+        "regression_new": 0
+      },
+      "goodA": {
+        "acceptance_exit": 0,
+        "functional_pass": true,
+        "regression_new": 0
+      }
+    }
+  },
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "what_it_found": {
+    "consequence": "In the contaminated order, goodA -- an implementation built to pass -- scored regression_new=5 and functional_pass=False. Every agent-operator-score episode would have been functionally failed however well the agent did.",
+    "defect": "Regression acceptance was measured after the acceptance test was installed into the tree.",
+    "mechanism": "`node --test` with no arguments discovers every test file, so installing the acceptance adds it to the regression suite. On agent-operator-score the effect is not one extra failure: adding a file makes six census-style tests fail that pass without it.",
+    "why_no_unit_test_would_catch_it": "Each step is correct in isolation. The defect is in the order, and only a check that asks for a positive outcome end to end can see it."
+  },
+  "why_it_had_to_be_asked": "Four defects found while building the runner all had the same shape -- a zero that reads as a result. Hunting them one at a time finds the ones you think of. Asking whether the path can score a pass at all covers the family."
+}
