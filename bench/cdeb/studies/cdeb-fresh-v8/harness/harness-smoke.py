@@ -111,7 +111,7 @@ def main():
                                 row["task_acceptance"]["pass"] is True,
                                 f"exit {row['task_acceptance']['exit_code']}"))
             passed.append(check("functional pass", row["functional_pass"] is True))
-            packet = os.path.join(out, "packet")
+            packet = os.path.join(out, row["packet_id"])
             passed.append(check("the judge packet was built",
                                 os.path.exists(os.path.join(packet, "packet_id.txt"))))
             passed.append(check("the packet holds no .git",
@@ -119,6 +119,9 @@ def main():
             passed.append(check("the packet holds no judgement artifact",
                                 not any(f.startswith(("out.", "events.", "raw."))
                                         for f in os.listdir(packet))))
+            passed.append(check("the packet directory is named by the packet id",
+                                os.path.basename(packet) == row["packet_id"],
+                                os.path.basename(packet)))
             passed.append(check("the worktree was torn down",
                                 not os.path.exists(os.path.join(out, "tree"))))
 

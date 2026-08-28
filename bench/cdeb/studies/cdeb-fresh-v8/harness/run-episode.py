@@ -470,8 +470,12 @@ def run(assignment, out_dir, scratch, agent=None):
 
     # Step 15, before step 16. The packet needs the final tree and the tree does
     # not survive the episode, so building it later is not an option that exists.
+    # The packet directory is named by the packet id, not "packet". judge-run.sh
+    # derives the id from the directory it is handed, and a fixed name would make
+    # every judgement report the same one and every result collide in one folder.
     row["judge_packet"] = episode_packet.build(
-        tree, row, candidate, task, os.path.join(out_dir, "packet"), acceptance_path)
+        tree, row, candidate, task,
+        os.path.join(out_dir, row["packet_id"]), acceptance_path)
 
     tmp = os.path.join(out_dir, "row.json.tmp")
     with open(tmp, "w") as fh:

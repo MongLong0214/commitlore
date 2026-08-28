@@ -42,8 +42,12 @@ SCHEMA=$SP/v8run/judge-schema.json
 # rather than reading in place means a stray write by a judge cannot alter what
 # the next judge sees, and a file that should not be in a packet is visible here
 # as a file this loop had to skip.
-WORK=$RESULTS/$PID/work.$JUDGE
-rm -rf "$WORK"; mkdir -p "$WORK"
+# The scratch copy keeps the packet id as its directory name. A judge reports the
+# packet id it judged, and it reads that from where it is standing as readily as
+# from packet_id.txt -- an earlier version named this directory work.$JUDGE and
+# every judgement came back claiming to have judged "work.judge-1".
+WORK=$RESULTS/$PID/work.$JUDGE/$PID
+rm -rf "$RESULTS/$PID/work.$JUDGE"; mkdir -p "$WORK"
 ( cd "$PACKET" && find . -type f \
     ! -name 'out.*' ! -name 'events.*' ! -name 'err.*' ! -name 'raw.*' \
     ! -name 'work.*' -print0 ) | while IFS= read -r -d '' f; do
@@ -130,7 +134,7 @@ else:
   *) echo "unknown family $FAMILY"; exit 1 ;;
 esac
 
-rm -rf "$WORK" "$HOME_DIR"
+rm -rf "$RESULTS/$PID/work.$JUDGE" "$HOME_DIR"
 
 python3 -c "
 import json
