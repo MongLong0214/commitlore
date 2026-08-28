@@ -1,0 +1,26 @@
+{
+  "completion_on": 0.9823529411764705,
+  "completion_suppressed": 0.9588235294117647,
+  "dsfps_ci": [
+    0.05208333333333333,
+    0.2486111111111111
+  ],
+  "dsfps_delta": 0.15486111111111112,
+  "fleiss_kappa": 0.1947037462761972,
+  "fvr_on": 0.19411764705882353,
+  "fvr_suppressed": 0.37058823529411766,
+  "median_pairwise_gwet_ac1": 0.30850097919524405,
+  "panel_indeterminate_rate": 0.1264705882352941,
+  "panel_label_counts": {
+    "PANEL_COMPLIANT": 195,
+    "PANEL_INDETERMINATE": 43,
+    "PANEL_VIOLATION": 102
+  },
+  "randomization_p": 0.005997001499250375,
+  "rbdr": 0.47619047619047616,
+  "repository_effects": {
+    "agent-operator-score": 0.1875,
+    "gitseed": 0.12222222222222223
+  },
+  "three_way_exact_agreement": 0.4647058823529412
+}

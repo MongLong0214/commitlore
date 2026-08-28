@@ -1,0 +1,27 @@
+{
+  "completion_on": 0.9823529411764705,
+  "completion_suppressed": 0.9588235294117647,
+  "dsfps_ci": [
+    0.05208333333333334,
+    0.2513888888888889
+  ],
+  "dsfps_delta": 0.15486111111111112,
+  "fleiss_kappa": 0.19470374627619602,
+  "fvr_on": 0.19411764705882353,
+  "fvr_suppressed": 0.37058823529411766,
+  "median_pairwise_gwet_ac1": 0.30850097919524405,
+  "notes": "RBDR is null because SAP.md names it but gives no definition. Bootstrap and permutation use 2,000 replicates each with Python's MT19937 seeded 20260828; the CI uses linear-interpolated percentile endpoints and the two-sided Monte Carlo p-value uses a +1 correction.",
+  "panel_indeterminate_rate": 0.1264705882352941,
+  "panel_label_counts": {
+    "PANEL_COMPLIANT": 195,
+    "PANEL_INDETERMINATE": 43,
+    "PANEL_VIOLATION": 102
+  },
+  "randomization_p": 0.004497751124437781,
+  "rbdr": null,
+  "repository_effects": {
+    "agent-operator-score": 0.1875,
+    "gitseed": 0.1222222222222222
+  },
+  "three_way_exact_agreement": 0.4647058823529412
+}

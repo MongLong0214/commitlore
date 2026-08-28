@@ -4,7 +4,9 @@
   ok   incomplete is not a success
   ok   functional failure is not a success
   ok   post-start failure retained in ITT
-  ok   a duplicate assignment is refused
+  ok   two live rows for one assignment are refused
+  ok   a superseded attempt plus its retry yields one ITT row
+  ok   a superseded attempt with no retry is refused
   ok   repositories weighted equally
   ok   per-repository effects reported
   ok   bootstrap fixture has candidates that differ
@@ -14,7 +16,10 @@
   ok   interval sits at the 2.5/97.5 percentiles
   ok   randomization p small under a real effect
   ok   randomization p large under no effect
-  ok   RBDR undefined when suppressed never revives
+  ok   RBDR undefined when nothing revived
+  ok   RBDR counts pairs that revived and were blocked
+  ok   RBDR ignores pairs the suppressed arm never revived
+  ok   RBDR carries a lower bound
   ok   gate has 25 conditions
   ok   gate passes when every condition holds
   ok   every condition is breakable and named

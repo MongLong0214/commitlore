@@ -58,8 +58,13 @@ argument for a 25-condition gate rather than a p-value: the one dataset that
 could have produced a false headline was stopped by a condition about mechanism,
 not significance.
 
-`known_positive` was also blocked — its RBDR is real but below the 50% floor. A
-generated effect large enough to see is not automatically a claim.
+`known_positive` does reach the claim, and that is the gate working rather than
+failing: it was generated with a large effect and the simulation holds the fifteen
+non-statistical conditions at passing values. An earlier version of this note said
+no scenario reached the claim, which was true only by accident — RBDR had been
+implemented before it was defined, and the invented formula happened to fall below
+the 50% floor. What matters, and what is asserted, is that every scenario with no
+effect or a harmful one is blocked.
 
 ## Mutation controls
 

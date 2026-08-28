@@ -52,24 +52,54 @@ def p_ind(row):
     return bool(row["functional_pass"] and row["panel_label"] == "PANEL_INDETERMINATE")
 
 
+def itt_rows(rows):
+    """The one row per assignment that enters the intention-to-treat analysis.
+
+    Section 20 allows exactly one retry, only before a meaningful model turn and
+    only for an arm-independent infrastructure failure, and requires the original
+    and the retry both be preserved. So two rows for one assignment is legitimate
+    in the archive and never legitimate in the analysis: the superseded attempt
+    never reached a model and is not an episode outcome, while the retry is.
+
+    A row marks itself with `retry_lineage`. Absent, the row is the only attempt.
+
+    What this refuses, loudly:
+
+      two live rows for one assignment   a post-start failure was replaced, which
+                                         section 20 forbids outright
+      a superseded row with no successor the outcome was dropped rather than retried
+      an assignment with no live row     same, seen from the other side
+    """
+    live, superseded = {}, {}
+    for r in rows:
+        key = (r["candidate_id"], r["repetition"], r["arm"])
+        lineage = r.get("retry_lineage") or {}
+        if lineage.get("superseded_by_retry"):
+            superseded.setdefault(key, []).append(r)
+            continue
+        if key in live:
+            raise ValueError(
+                f"two live rows for {key}: section 20 forbids replacing an episode "
+                f"that reached a model, and only a superseded pre-start attempt may "
+                f"share an assignment with another row")
+        live[key] = r
+    orphaned = sorted(k for k in superseded if k not in live)
+    if orphaned:
+        raise ValueError(
+            f"{len(orphaned)} assignment(s) have a superseded attempt and no retry, "
+            f"e.g. {orphaned[0]}: a dropped outcome, not a retried one")
+    return list(live.values())
+
+
 def by_candidate(rows):
     """{candidate: {repetition: {arm: row}}} -- the pairing unit is candidate x repetition.
 
-    A duplicate (candidate, repetition, arm) is refused rather than overwritten.
-    Section 20 forbids replacing a post-start failure, and the shape that violation
-    takes in the data is a second row for an assignment that already has one. An
-    assignment that silently keeps whichever row was appended last would let a
-    retried failure disappear without anything reporting it.
+    Takes the ITT selection first, so a legitimate retry does not look like a
+    duplicate and an illegitimate replacement still does.
     """
     out = {}
-    for r in rows:
-        slot = out.setdefault(r["candidate_id"], {}).setdefault(r["repetition"], {})
-        if r["arm"] in slot:
-            raise ValueError(
-                f"duplicate row for {r['candidate_id']} repetition {r['repetition']} "
-                f"arm {r['arm']}: an assignment has exactly one row, and a second "
-                f"one is a retry the protocol does not allow")
-        slot[r["arm"]] = r
+    for r in itt_rows(rows):
+        out.setdefault(r["candidate_id"], {}).setdefault(r["repetition"], {})[r["arm"]] = r
     return out
 
 
@@ -151,16 +181,51 @@ def randomization_p(rows, repo_of, permutations=1000000, seed=20260828, metric=p
     return (at_least + 1) / (permutations + 1)
 
 
-def rbdr(rows, repo_of):
-    """Section 26. Undefined when the suppressed arm never revives, and said so."""
-    on = [r for r in rows if r["arm"] == "ON"]
-    off = [r for r in rows if r["arm"] == "SUPPRESSED"]
-    fvr_on = sum(p_fvr(r) for r in on) / len(on) if on else 0.0
-    fvr_off = sum(p_fvr(r) for r in off) / len(off) if off else 0.0
-    if fvr_off == 0:
-        return {"fvr_on": fvr_on, "fvr_suppressed": 0.0, "rbdr": None,
-                "undefined_because": "the suppressed arm produced no functionally passing revival"}
-    return {"fvr_on": fvr_on, "fvr_suppressed": fvr_off, "rbdr": 1 - fvr_on / fvr_off}
+def rbdr(rows, repo_of=None, replicates=2000, seed=20260828):
+    """Section 23.6, as defined by owner ruling v8-d012: a pair-based blocking rate.
+
+    Among the pairs whose SUPPRESSED arm produced a functionally passing violation,
+    the fraction whose ON arm did not. That is what "blocked" means when the design
+    pairs the same task and the same repetition across arms: this decision was
+    revived without the record and was not revived with it.
+
+    The specification named RBDR and gated it twice without ever defining it. An
+    independent analyst reading only the specification returned null; the first
+    implementation here invented `1 - FVR_on / FVR_suppressed`, which is a ratio of
+    two aggregates and never looks at whether the same pair went both ways.
+
+    Undefined when no suppressed arm revived anything. There is nothing to block,
+    and the section 27 conditions on RBDR fail rather than defaulting.
+    """
+    grouped = by_candidate(rows)
+    pairs = [b for reps in grouped.values() for b in reps.values()
+             if "ON" in b and "SUPPRESSED" in b]
+    revived = [b for b in pairs if p_fvr(b["SUPPRESSED"])]
+    blocked = [b for b in revived if not p_fvr(b["ON"])]
+
+    fvr_on = sum(p_fvr(b["ON"]) for b in pairs) / len(pairs) if pairs else 0.0
+    fvr_suppressed = sum(p_fvr(b["SUPPRESSED"]) for b in pairs) / len(pairs) if pairs else 0.0
+
+    if not revived:
+        return {"fvr_on": fvr_on, "fvr_suppressed": fvr_suppressed,
+                "pairs": len(pairs), "suppressed_revivals": 0,
+                "blocked": 0, "rbdr": None, "rbdr_lower": None,
+                "undefined_because": "no pair had a functionally passing violation in "
+                                     "the suppressed arm, so there was nothing to block"}
+
+    point = len(blocked) / len(revived)
+    rng = random.Random(seed)
+    draws = []
+    for _ in range(replicates):
+        sample = [revived[rng.randrange(len(revived))] for _ in revived]
+        draws.append(sum(1 for b in sample if not p_fvr(b["ON"])) / len(sample))
+    draws.sort()
+    lower = draws[int(0.025 * len(draws))]
+    return {"fvr_on": fvr_on, "fvr_suppressed": fvr_suppressed,
+            "pairs": len(pairs), "suppressed_revivals": len(revived),
+            "blocked": len(blocked), "rbdr": point, "rbdr_lower": lower,
+            "definition": "among pairs whose SUPPRESSED arm revived, the fraction "
+                          "whose ON arm did not"}
 
 
 def analyse(rows, repo_of, replicates=2000, permutations=2000):

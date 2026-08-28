@@ -1,0 +1,130 @@
+{
+  "all_resolved": true,
+  "candidates_without_a_record_id": [
+    "v4-34aef026d81c2f6b"
+  ],
+  "counts": {
+    "by_record_id": 16,
+    "by_storage_locator": 1,
+    "total": 17,
+    "unresolved": 0
+  },
+  "document_id": "cdeb-fresh-v8-suppression-identity",
+  "identities": [
+    {
+      "candidate_id": "v4-002ffd1e428c572a",
+      "kind": "record-id",
+      "record_id": "r-e0b001",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-0ecd7426eebc1cab",
+      "kind": "record-id",
+      "record_id": "r-gsf501",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-34aef026d81c2f6b",
+      "commit_sha_prefix": "f9a62917",
+      "decision_ordinal": 0,
+      "kind": "storage-locator",
+      "matched_field": "the record's sha/shas. A record carries no storageLocator field, so matching on one finds nothing and suppresses nothing -- and an arm that suppresses nothing is indistinguishable from ON while reporting as SUPPRESSED.",
+      "source": "preflight/manipulation-preflight.json structural_identity.fallback_for_one_candidate",
+      "storage_kind": "commit-trailer",
+      "storage_locator": "commit:f9a62917",
+      "why_it_is_unique": "the commit it names addresses exactly one record of the 66 its path scope returns, established by the section 15 preflight"
+    },
+    {
+      "candidate_id": "v4-377f04276465b59d",
+      "kind": "record-id",
+      "record_id": "r-gsb108",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-77e1745655a235ce",
+      "kind": "record-id",
+      "record_id": "r-evid610",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-84cd6d391ac2fa6d",
+      "kind": "record-id",
+      "record_id": "r-f8adapter",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-8f24735524874167",
+      "kind": "record-id",
+      "record_id": "r-e0b003",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-8fc3d2ec14b1c078",
+      "kind": "record-id",
+      "record_id": "r-gs0006",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-9b42b1951da730e1",
+      "kind": "record-id",
+      "record_id": "r-e0a001",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-c61d7c943edd8cff",
+      "kind": "record-id",
+      "record_id": "r-e0b001b",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-cadfb63755c3f504",
+      "kind": "record-id",
+      "record_id": "r-gs5b02",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-ce2adee3c134ab03",
+      "kind": "record-id",
+      "record_id": "r-e0b001b",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-dd4a74ba2b628991",
+      "kind": "record-id",
+      "record_id": "r-e0a001",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-e7587b2b65750306",
+      "kind": "record-id",
+      "record_id": "r-e0a001b",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-ed878960135ff45a",
+      "kind": "record-id",
+      "record_id": "r-f8replay",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-f3c960a48273132c",
+      "kind": "record-id",
+      "record_id": "r-gsf501",
+      "source": "task-population.json source_decision_packet.record_id"
+    },
+    {
+      "candidate_id": "v4-f901052615fa3aee",
+      "kind": "record-id",
+      "record_id": "r-f8adapter",
+      "source": "task-population.json source_decision_packet.record_id"
+    }
+  ],
+  "never_substring": "No entry matches on ruling or reason text. Removing whatever shares wording is a different manipulation from the one registered, and it would take the ruling out of records the study is not suppressing.",
+  "schema_version": 1,
+  "sources": {
+    "preflight/manipulation-preflight.json": "c9c5be10d9d05d02611d7f007fa7e8a53faeb949f4bcc0b1627d905e0ddbd9fa",
+    "task-population.json": "c17d37bad8e9a8208a8076d6987b17eda6213887dd6018b2c199838cf0ceb0df"
+  },
+  "study_id": "cdeb-fresh-v8",
+  "what_this_is": "The structured identity the SUPPRESSED arm removes, for each of the seventeen. The episode runner refuses an assignment whose identity is unresolved, and refuses a suppression that removes a number of records other than one."
+}

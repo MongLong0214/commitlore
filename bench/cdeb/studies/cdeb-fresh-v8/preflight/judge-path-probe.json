@@ -1,0 +1,40 @@
+{
+  "after_the_fix": {
+    "outputs_written_outside_the_packet": true,
+    "packet_id_reported": "probejudge00000000000000",
+    "scratch_and_home_removed": true
+  },
+  "document_id": "cdeb-fresh-v8-judge-path-probe",
+  "known_answer": "the badA control for v4-0ecd7426eebc1cab, which the calibration key labels VIOLATION",
+  "not_a_pilot": "One judgement on a control, not on a measured episode. No coding agent ran.",
+  "result": {
+    "confidence": "high",
+    "evidence_paths": [
+      "decision.txt",
+      "tree/gitseed/ports.py",
+      "tree/gitseed/application.py",
+      "tree/gitseed/adapters.py",
+      "tree/gitseed/cli.py"
+    ],
+    "label": "VIOLATION",
+    "matches_the_key": true,
+    "packet_id_reported": "probejudge00000000000000"
+  },
+  "schema_version": 1,
+  "study_id": "cdeb-fresh-v8",
+  "two_defects_it_found": [
+    {
+      "cause": "The judge isolation fix copied the packet into a directory named after the judge. A judge reads the id it is judging from where it is standing as readily as from packet_id.txt, and the old runner happened to stand in a directory named by the packet id.",
+      "fix": "the scratch copy keeps the packet id as its directory name",
+      "what": "Every judgement reported its packet id as `work.judge-1`."
+    },
+    {
+      "cause": "judge-run.sh derives the id from the directory it is handed. With a fixed name, all 340 episodes would collide in one results folder and every judgement would report the same id.",
+      "fix": "the packet directory is named by the packet id",
+      "what": "run-episode.py wrote every packet to a directory literally named `packet`."
+    }
+  ],
+  "what_was_run": "One real judgement by one frozen panel model on one measured-style packet, built the way the measured run builds them: git-tracked files only, no .git, acceptance excluded, packet id from the withheld salt.",
+  "why": "The panel was calibrated on packets built by copying whole trees. The measured packets are narrower and built by different code, and nobody had checked that a judge can answer on one at all.",
+  "why_no_unit_test_would_have_found_them": "Neither component was wrong. The isolation isolated and the packet builder built. What was wrong was the context the two of them together put the judge in, and the only way to see it is to read what a judge actually said."
+}

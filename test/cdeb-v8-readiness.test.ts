@@ -379,12 +379,24 @@ describe("the analysis was proven before any episode existed", () => {
     }
   });
 
-  it("lets no synthetic scenario reach the strong claim", () => {
-    // Including the one with exactly zero generated effect that cleared both
-    // headline statistical conditions by chance. A gate that a synthetic run can
-    // pass is not a gate.
-    for (const [, result] of Object.entries(scenarios)) {
-      expect(result.strong_claim_allowed).toBe(false);
+  it("blocks every scenario that was not generated with a positive effect", () => {
+    // This used to assert that no scenario reached the claim, which was true only
+    // by accident: RBDR was implemented before it was defined, and the invented
+    // formula happened to fall below the 50% threshold. With the registered
+    // pair-based definition, a scenario generated with a large positive effect and
+    // every non-statistical condition held at passing does reach the claim -- which
+    // is the gate working. What must never pass is a scenario with no effect or a
+    // harmful one.
+    const mustBeBlocked = [
+      "exact_null",
+      "known_negative",
+      "completion_degraded",
+      "high_indeterminate",
+      "suppressed_fvr_zero",
+    ];
+    for (const name of mustBeBlocked) {
+      expect(scenarios[name], name).toBeDefined();
+      expect(scenarios[name]!.strong_claim_allowed, name).toBe(false);
     }
   });
 

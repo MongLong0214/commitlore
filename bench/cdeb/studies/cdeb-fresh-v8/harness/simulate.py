@@ -44,7 +44,7 @@ def gate_inputs(r):
                 dsfps_ci=r["ci95"], randomization_p=r["randomization_p"],
                 fvr_ci=[-0.22, -0.03],
                 rbdr_point=rb["rbdr"],
-                rbdr_lower=None if rb["rbdr"] is None else max(0.0, rb["rbdr"] - 0.2),
+                rbdr_lower=rb.get("rbdr_lower"),
                 completion_diff_lower=r["completion_on"] - r["completion_suppressed"] - 0.02,
                 functional_diff_lower=-0.02,
                 repo_effects=r["repository_effects"],
