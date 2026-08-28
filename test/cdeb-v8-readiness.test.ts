@@ -250,6 +250,28 @@ describe("the 340-episode schedule", () => {
     expect(recomputed).toBe(schedule.seed);
   });
 
+  it("has a packet-id commitment built from this schedule", () => {
+    // The mapping covers exactly the scheduled episodes, so a re-freeze makes it
+    // stale — and a commitment to a stale mapping attests that the assignment was
+    // fixed for a run nobody is making. The mapping itself stays out of the
+    // repository until section 21.4's seal; only this digest is published.
+    const commitment = readJson<{
+      mapping_sha256: string;
+      packets: number;
+      built_from_schedule_sha256: string;
+      built_from_schedule_seed: string;
+      scheme: string;
+    }>(resolve(V8, "packet-id-commitment.json"));
+
+    expect(commitment.packets).toBe(340);
+    expect(commitment.built_from_schedule_sha256).toBe(sha256(resolve(V8, "schedule.json")));
+    expect(commitment.built_from_schedule_seed).toBe(schedule.seed);
+    expect(commitment.scheme).toMatch(/HMAC/);
+    expect(commitment.mapping_sha256).toMatch(/^[0-9a-f]{64}$/);
+    // The mapping must not be in the tree while judging is open.
+    expect(existsSync(resolve(V8, "packet-mapping.json"))).toBe(false);
+  });
+
   it("holds the concurrency limits the protocol fixed", () => {
     expect(schedule.concurrency).toMatchObject({
       max_active_coding_episodes: 2,

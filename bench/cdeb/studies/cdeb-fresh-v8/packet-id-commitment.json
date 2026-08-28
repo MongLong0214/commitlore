@@ -1,4 +1,6 @@
 {
+  "built_from_schedule_seed": "f502586ae078328ae98a8feb1e153a5bb4038c4250f89882d7712a4a8499023d",
+  "built_from_schedule_sha256": "6869b85917442d0fedaad81c77ec1a93b2eac23b4417078a7b942b948d8d5bec",
   "document_id": "cdeb-fresh-v8-packet-id-commitment",
   "mapping_sha256": "2726ab0d15527d6e0cb123bf3272d0bfb6310176b1f22a531b06d2222843f025",
   "packets": 340,
@@ -8,5 +10,6 @@
   "scheme": "HMAC-SHA256(secret salt, candidate|arm|repetition), first 24 hex chars",
   "study_id": "cdeb-fresh-v8",
   "what_this_is": "A commitment to the packet-id -> assignment mapping, published while the mapping itself is withheld. After section 21.4's seal the salt and the mapping are published and anyone can recompute this digest.",
-  "why_the_previous_scheme_failed": "It hashed candidate|arm with a salt committed beside the code. Seventeen candidates times two arms is 34 combinations; the reversal was measured at under a millisecond. A public salt over a small input space is not opacity."
+  "why_the_previous_scheme_failed": "It hashed candidate|arm with a salt committed beside the code. Seventeen candidates times two arms is 34 combinations; the reversal was measured at under a millisecond. A public salt over a small input space is not opacity.",
+  "why_the_schedule_is_pinned_here": "The mapping covers exactly the scheduled episodes. If the schedule is re-frozen the mapping is stale, and a commitment to a stale mapping proves the assignment was fixed for a run that is no longer the one being made."
 }
