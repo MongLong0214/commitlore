@@ -94,7 +94,7 @@ export const admits = (range, version) => {
  * A specifier not in this table is treated as unflagged at 22.0. Add an
  * entry when src/ starts importing a builtin or using a capability that the
  * current floor lacks. Do not put bench-only APIs here —
- * `zlib.zstdCompressSync` is 22.15.0 and lives only in bench/cdeb.
+ * `zlib.zstdCompressSync` is 22.15.0.
  */
 export const UNFLAGGED_SINCE = Object.freeze({
   // The module is unflagged at 22.13.0, but the index's FTS5 virtual table

@@ -1591,37 +1591,6 @@ jobs:
           fi
           echo "attack 2 refused: the unallowed-extension target never ran"
 
-  oci-matrix:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '22.23.2'
-          cache: npm
-      - run: npm ci
-      - name: CDEB evaluator OCI isolation matrix
-        run: npx vitest run test/cdeb-evaluator-oci-matrix.test.ts
-
-  # A guard that does not fail under a mutation does not bind its claimed
-  # property. This deliberately runs separately from `check`: one Vitest
-  # process per control is expensive, and a missing or inert control must be
-  # visible as its own failing job rather than disappearing into the broad
-  # suite. This ratchet fails only when measurement regresses from the recorded
-  # baseline: its current gaps are thirteen exclusion-index kinds, one inert
-  # personal-path scan, and one unavailable exclusion-index control.
-  guard-mutations:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '22.23.2'
-          cache: npm
-      - run: npm ci
-      - name: CDEB guard mutations bind their claimed properties
-        run: node scripts/guard-mutations.mjs
-
   # A fan-in so branch protection can require ONE stable context instead of
   # twelve, several of which are matrix-interpolated.
   #
@@ -1652,8 +1621,6 @@ jobs:
       - install-alpine
       - install-script
       - install-ps1
-      - oci-matrix
-      - guard-mutations
     runs-on: ubuntu-latest
     steps:
       - name: every job this gate fans in from succeeded
@@ -1666,8 +1633,6 @@ jobs:
             install-alpine=${{ needs.install-alpine.result }}
             install-script=${{ needs.install-script.result }}
             install-ps1=${{ needs.install-ps1.result }}
-            oci-matrix=${{ needs.oci-matrix.result }}
-            guard-mutations=${{ needs.guard-mutations.result }}
         run: |
           set -eu
           failed=0

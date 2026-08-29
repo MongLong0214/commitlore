@@ -1,7 +1,0 @@
-Recorded decisions for the files you are about to change:
-
-  record r-synthcache02 (active)
-    Ruled-out: a time-to-live expiry on cache entries | callers cannot say what a correct lifetime is, and a wrong one silently reintroduces the loader calls the cache exists to remove
-    Limit: an unbounded cache grows with the key space, so a caller that generates unbounded keys will grow memory without bound
-
-  record r-synthcache01 (active)

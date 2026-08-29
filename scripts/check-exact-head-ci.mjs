@@ -40,18 +40,19 @@ const CI_WORKFLOW_FILE_PATH = fileURLToPath(new URL(`../${CI_WORKFLOW_PATH}`, im
 // shell command; without this lock replacing every job body with `true` would
 // still look like a real successful run. Update deliberately with the CI
 // workflow when its reviewed job contract changes.
-export const EXPECTED_CI_WORKFLOW_SHA256 = 'fc607ffc18f602f23152eef48312bb12e25d2da0af12e09f58396fb375c9b360';
+export const EXPECTED_CI_WORKFLOW_SHA256 = '7e6f6070b2c3230b1fa23682647cf6a49b4b474fce86e22b011f5da3e05868fe';
 
 // Fixed rather than inferred from returned jobs: absence must fail rather
 // than define itself away. `lint` only runs for pull requests and is therefore
 // deliberately not a member of the push-event release contract.
 //
 // That exclusion is about which contexts exist on a main commit, not about
-// whether `lint` ran. It is one of the thirteen required status checks on the
-// `main` branch protection, so it is evaluated on the pull request's head and
-// has to pass before anything reaches main; the squash then produces a new
-// commit that carries no `lint` context for this gate to find. Twelve here plus
-// `lint` is the thirteen that protection requires.
+// whether `lint` ran. Protection on `main` requires exactly two contexts,
+// `lint` and `gate`, so `lint` is evaluated on the pull request's head and has
+// to pass before anything reaches main; the squash then produces a new commit
+// that carries no `lint` context for this gate to find. The entries below
+// `gate` are not themselves protection contexts -- they are what `gate` fans
+// in from, checked here so a silently dropped job cannot pass as a green gate.
 //
 // Written down because the shorter version reads as a hole: a reader took it
 // that way on 2026-08-17 and asked whether main could be pushed unlinted. The
@@ -59,7 +60,7 @@ export const EXPECTED_CI_WORKFLOW_SHA256 = 'fc607ffc18f602f23152eef48312bb12e25d
 // linted, and saying only the first invites someone to add `lint` to this
 // list, which would block every release.
 export const REQUIRED_CHECKS = Object.freeze([
-  // `gate` fans in from the twelve below and fails unless every one succeeded. It
+  // `gate` fans in from the ten below and fails unless every one succeeded. It
   // is listed here as well rather than instead: this gate reads the API's job
   // list, so an entry it does not know about is reported as an unexpected job,
   // and a `gate` that is not named here would fail every release the moment it
@@ -75,8 +76,6 @@ export const REQUIRED_CHECKS = Object.freeze([
   'install-macos',
   'install-alpine (linux/amd64)',
   'install-alpine (linux/arm64)',
-  'oci-matrix',
-  'guard-mutations',
 ]);
 
 class GateError extends Error {
