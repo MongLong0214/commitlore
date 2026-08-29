@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"pin every prose field by literal digest\" \u2014 because \"freezing the full text duplicates the contract into the validator and makes any editorial fix a false failure, so only fields the contract derives or fixes numerically are pinned\".",
+  "evidence_paths": [
+    "diff.patch",
+    "tree/packages/schema/src/metric-registry.ts",
+    "tree/packages/schema/test/metric-registry.test.ts",
+    "tree/scripts/validate-planning.mjs",
+    "tree/tests/planning/workspace-skeleton.test.mjs",
+    "tree/specs/metrics.v0.json",
+    "tree/docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is zero bytes: the finished tree is byte-identical to the base tree, so the task (adding a required `observation_key` field to the exported `MetricDefinition` interface plus a compile-checked public consumer) is not present \u2014 `MetricDefinition` at packages/schema/src/metric-registry.ts:26-50 still declares 25 fields with no `observation_key`, and no new consumer file exists under packages/. In the tree as it stands, the registry validator checks free-text fields (`label`, `question`, `eligible_opportunity`, `partial_credit_rule`, `not_observed_rule`, `invalid_rule`, `normalization`, `gaming_guard`) only for presence and absence-of-dead-fields (REQUIRED_FIELDS loop, lines ~189-195). Every field it compares against a frozen literal is one the contract derives or fixes: `factor` from the ID range table, `treatment` from the ID, `aggregation` and `minimum_opportunities` from the M19 split, `cap`/`floor`/`version`, the fixed `evidence_precedence` order and numeric `confidence` table, `consumer_routes` computed by ROUTES_OF, and `per_opportunity_formula` reconstructed from the metric's own numerator/denominator. No sha256/hash/digest is computed over any metric prose. The only digest machinery in scope (scripts/validate-planning.mjs:776-783, tests/planning/workspace-skeleton.test.mjs:260-274) hashes whole gate-batch artifact files for acceptance staleness, which is pre-existing base-tree behavior and not a per-prose-field pin.",
+  "packet_id": "3a4c3c2cf656a961aaca4d03",
+  "rationale": "The recorded decision forbids one specific technique \u2014 freezing prose field text by literal digest in the validator \u2014 and permits pinning only fields the contract derives or fixes numerically. Nothing in the final tree does the forbidden thing: no hash is taken over any metric prose field, and the validator's literal comparisons are confined exactly to the derived/numerically-fixed set the decision blesses. Because the diff is empty, the implementation introduced no new pinning of any kind, so it cannot have introduced the ruled-out approach within the recorded six-path scope while the decision is active. Separately worth flagging, though it is not what I am judging: the task appears unimplemented \u2014 `observation_key` is enforced at runtime via REQUIRED_FIELDS (line 66) and read in the derivation paths (lines 240, 250, 350-351, 367) but is absent from the exported `MetricDefinition` interface, so a typed consumer still cannot read it as a required string, and no compile-checked consumer was added. That is a completeness gap against task.txt, not a decision violation.",
+  "reexplanation_required": "NO"
+}

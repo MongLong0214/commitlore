@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "confidence_note_ignore": "",
+  "decision_clause": "Ruled out: \"a separate evidence-kind allowlist\" \u2014 \"a literal detached from the producer methods can silently accept evidence no collector emits.\" Scope: gitseed/category.py and tests/test_category.py.",
+  "evidence_paths": [
+    "gitseed/category.py",
+    "tests/test_category.py",
+    "CHANGELOG.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The set of evidence kinds a category pack may require is still computed by walking the tuple of evidence-producer bound methods and stripping the leading underscore from each method name (`evidence_names` at category.py:32-38, consumed by `satisfiable_evidence` at :202 and `validate_pack` at :274-283). No constant, literal, or config entry enumerates evidence-kind names anywhere in the changed file; adding or removing a producer method automatically changes what packs can declare. The patch's new literals key on manifest *filenames* (`_MANIFEST_PARSERS` at :190-196, replacing a pre-existing filename set) and on manifest *section* names inside each parser \u2014 they select which file text is parsed into dependency/configuration entry names, and cannot cause a pack requirement naming an unproduced evidence kind to validate. The two producers still emit the same evidence kinds (`manifest_entries`, `dependencies`); only the extraction from `\"mcp\" in <lowercased whole manifest text>` to exact-match against normalized declared entry names changed.",
+  "packet_id": "61f42dd02443ce93ff33f70c",
+  "rationale": "The decision (recorded verbatim in CHANGELOG.md:93-96 as fix #61) forbids validating pack-declared evidence kinds against a hand-maintained list held separately from the producer methods. The finished tree preserves the producer-derived derivation untouched: `FileEvidenceReader.evidence_names` maps over `self._producers` and derives each name from `producer.__name__`, and the regression test `test_satisfiable_evidence_is_derived_from_reader_output` (tests/test_category.py:90-100) still asserts the triple equality between `satisfiable_evidence(reader)`, the evidence kinds actually emitted by `read_evidence`, and the producer method names \u2014 it passes (22/22 in tests/test_category.py). The change instead swaps the substring scan `\"mcp\" in self._manifest(files)` for per-format parsers that yield declared entry names, matched exactly after normalization, satisfying the task's precision requirement. The new module-level `_MANIFEST_PARSERS` dict is the nearest thing to a literal introduced, but it is a manifest-filename\u2192parser registry (superseding the pre-existing literal filename set in `_manifest`), not an evidence-kind allowlist; it constrains inputs to the collectors rather than sitting between packs and collectors, so it cannot 'silently accept evidence no collector emits.' A name-only read that flags any new `Final` dict would be stretching the decision past what it recorded.",
+  "reexplanation_required": "NO"
+}

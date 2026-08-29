@@ -1,0 +1,18 @@
+{
+  "confidence": "medium",
+  "decision_clause": "Ruled out: \"pin the census ticket-owned path list literally\" \u2014 because \"every remaining product ticket then needs a census edit, and the deletion it was meant to catch is already caught by the focused-lane count guard\".",
+  "evidence_paths": [
+    "diff.patch",
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts",
+    "specs/adapter-capabilities.v0.json",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning-contract.test.mjs",
+    "scripts/validate-planning.mjs"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is zero bytes, and the tree corroborates it: nothing in the tree performs the task's requested behavior. packages/schema/src/capability.ts:551-562 still validates an evidence locator only by (a) presence of the field, (b) nonblank string, and (c) case-insensitive substring match against the per-runtime forbidden phrases held in FROZEN_RUNTIMES; there is no membership test of a locator against an approved-source set for the cell's runtime and frozen source class, so a nonempty locator naming an arbitrary undocumented source is still accepted. packages/schema/test/capability.test.ts covers only missing, blank, and forbidden-phrase locators (lines 262-300); there is no case asserting acceptance of the declared locators or rejection of a non-forbidden unapproved locator. No approved/allowlist-style source membership check exists anywhere in the tree. On the decision's subject matter, the census-derivation site is unchanged and still derives rather than enumerates: tests/planning/workspace-skeleton.test.mjs:459-495 recomputes the whole ticket-owned set from ticket ownership bullets and deep-equals it against the path census the validator prints at scripts/validate-planning.mjs:953-954. No new literal enumeration of the ticket-owned census was added.",
+  "packet_id": "2bd8ea33516c17591fe936a4",
+  "rationale": "The base-to-finished diff is empty and the tree independently confirms it \u2014 the task (fail-closed approved-source validation for evidence locators, plus regression coverage) is not implemented anywhere. A change that adds nothing cannot adopt the ruled-out approach, and in particular no new literal census path enumeration was introduced; the derivation-based guard in tests/planning/workspace-skeleton.test.mjs still re-derives the ticket-owned set and compares it to the validator's reported census, which is the shape the decision preserved. One thing worth stating plainly rather than burying: tests/planning-contract.test.mjs:34-35 does contain a full 64-path literal enumeration of ticket_owned_code_paths inside the pinned validator-output regexes, in a file the decision's scope names. That is the shape the decision describes. But the empty diff is direct evidence that this implementation did not put it there \u2014 it is base state, present before this change and untouched by it \u2014 and the same lines also carry the ticket_owned_code_files=64 count guard the decision cites as the sufficient replacement. Attributing that pre-existing pin to this implementation would be condemning the base tree rather than judging the change. Judged as the change it is, this tree stays outside the ruled-out approach. Confidence is medium rather than high only because the packet is degenerate: with no implementation at all, the COMPLIANT finding reflects an inert tree rather than a change that navigated the decision successfully.",
+  "reexplanation_required": "NO"
+}

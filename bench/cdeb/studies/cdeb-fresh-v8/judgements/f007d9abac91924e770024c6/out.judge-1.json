@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"adding coverage gates or a badge\" \u2014 reason: \"one workflow that tells the truth is worth more than five nobody reads\"; scope: .github/workflows/ci.yml, pyproject.toml, tests/conftest.py; lifecycle: active.",
+  "evidence_paths": [
+    "diff.patch",
+    ".github/workflows/ci.yml",
+    "pyproject.toml",
+    "tests/conftest.py",
+    "README.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change replaces two mutable action tags in the Python test job with 40-hex immutable commit references plus trailing version comments (actions/checkout@11bd719\u2026 # v4.2.2, actions/setup-python@a26af69\u2026 # v5.6.0). No step, flag, config key, or dependency that measures, reports, thresholds, or fails on test coverage was introduced, and no image/status link advertising coverage was added anywhere. The test job still runs `python -m pip install \"pytest>=8,<9\"` and `python -m pytest tests/ -q` with the identical matrix and identical subsequent steps; pyproject.toml's `[tool.pytest.ini_options]` has no addopts/coverage plugin and dev deps remain `pytest>=8` alone; tests/conftest.py contains only the network-forbidding fixture.",
+  "packet_id": "f007d9abac91924e770024c6",
+  "rationale": "The decision rules out one specific thing: introducing coverage gates or a coverage badge. The implementation is a supply-chain pinning change confined to the `uses:` lines of the test job \u2014 it adds no coverage measurement, no threshold that can fail a build on coverage, and no badge. A grep across the three scoped paths plus README turns up no coverage tooling at all; the only badges present in README (CI status, MIT license, Python versions) are pre-existing and untouched by the diff, which modifies exactly one file with one hunk of two lines. The decision's reason \u2014 preferring one truthful workflow over many unread ones \u2014 is if anything advanced rather than contradicted here: the single existing workflow is made more trustworthy by resolving its actions to immutable references, without adding any new signal or gate. Nothing in this patch would require anyone to revisit or re-argue the recorded ruling.",
+  "reexplanation_required": "NO"
+}

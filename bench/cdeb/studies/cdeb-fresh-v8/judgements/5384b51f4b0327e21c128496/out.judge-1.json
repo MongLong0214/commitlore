@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Retrying on a bare 403 is ruled out \u2014 roughly half of 403s are permissions errors and no amount of waiting fixes those; scope covers gitseed/collect/__init__.py, gitseed/collect/ratelimit.py, gitseed/collect/search.py, tests/test_collect.py; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "gitseed/collect/search.py",
+    "gitseed/collect/ratelimit.py",
+    "tests/test_collect.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only behavioral change in the final tree is that `collect` inspects its `pages` and `per_page` arguments at function entry and raises ValueError (before any `transport.get` call) when `pages < 1` or `per_page` is outside 1..100; valid values including the 1 and 100 boundaries proceed to issue exactly the same requests as before. The 403 handling path is untouched: `classify` still splits a 403 by headers \u2014 exhausted budget or a Retry-After header yields the rate-limited branch, anything else yields the forbidden branch \u2014 and in `collect` the forbidden branch returns immediately with an incomplete result and no sleep and no re-request, while only the rate-limited branch sleeps and re-issues the URL once. No new code sleeps, backs off, or re-sends a request keyed on a raw 403 status.",
+  "packet_id": "5384b51f4b0327e21c128496",
+  "rationale": "The decision forbids treating a bare 403 as retryable. The task and the patch are about argument validation for paging, an entirely different concern, and the patch adds five lines of pre-flight checks plus tests. Nothing in the diff touches ratelimit.classify or the 403 branches in search.collect, and the finished tree still discriminates 403s by X-RateLimit/Retry-After headers, returning 'forbidden \u2014 a permissions problem, not a budget one' without any wait or retry. The new tests assert that invalid paging arguments produce ValueError with `transport.urls == []`, i.e. they reduce rather than increase request traffic. Two of the four scope paths (ratelimit.py, __init__.py) are unmodified; the two modified scope paths contain no retry logic changes. The final tree clearly stays outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

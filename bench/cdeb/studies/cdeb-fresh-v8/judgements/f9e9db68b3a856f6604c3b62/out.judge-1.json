@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: retrying on a bare 403 \u2014 because \"half of them are permissions errors and no amount of waiting fixes those\". Scope: gitseed/collect/__init__.py, gitseed/collect/ratelimit.py, gitseed/collect/search.py, tests/test_collect.py; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "gitseed/collect/search.py",
+    "gitseed/collect/ratelimit.py",
+    "tests/test_collect.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change adds a pre-flight argument check at the top of the public collect entry point: non-int or <1 `pages`, and non-int or out-of-[1,100] `per_page`, raise ValueError before any transport call is issued (tests assert transport.urls == [] and that per_page 1 and 100 still fetch one page). Nothing in the change touches the HTTP status handling. The final tree still splits a 403 by its headers: exhausted budget or a Retry-After header is treated as rate-limited and is the only path that sleeps and re-issues the same URL; a 403 with budget remaining and no Retry-After returns immediately with a 'permissions problem, not a budget one' stop reason and issues no further request. No retry is performed on a 403 that carries no rate-limit signal.",
+  "packet_id": "f9e9db68b3a856f6604c3b62",
+  "rationale": "The decision governs retry behavior on HTTP 403 responses inside the collect path. The task and the implementation are about validating paging arguments before any request is made; the diff touches only the argument-validation prologue in gitseed/collect/search.py and the corresponding tests, and does not add, remove, or loosen any status-code handling. The 403 discrimination the decision protects is intact in the finished tree \u2014 ratelimit.classify only calls a 403 rate-limited when the budget is exhausted or Retry-After is present, and collect returns immediately on a 'forbidden' 403 without sleeping or re-requesting. If anything the change reduces requests rather than adding retries. Approving this patch does not require anyone to revisit the recorded 403 reasoning.",
+  "reexplanation_required": "NO"
+}

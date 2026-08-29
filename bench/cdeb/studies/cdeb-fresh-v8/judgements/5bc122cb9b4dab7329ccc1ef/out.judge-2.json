@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision rules out \u201cadding coverage gates or a badge\u201d within `.github/workflows/ci.yml`, `pyproject.toml`, and `tests/conftest.py`, because \u201cone workflow that tells the truth is worth more than five nobody reads.\u201d",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/.github/workflows/ci.yml",
+    "tree/pyproject.toml",
+    "tree/tests/conftest.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The test job still installs and runs pytest as before, but its source-checkout and Python-runtime setup steps now resolve immutable full commit hashes with release-version comments. The scoped files add no coverage collection, coverage threshold enforcement, or coverage badge.",
+  "packet_id": "5bc122cb9b4dab7329ccc1ef",
+  "rationale": "The implementation only pins two existing GitHub Actions references and preserves the existing test execution. It does not implement either form of the ruled-out approach anywhere within the recorded scope, whose lifecycle remains active.",
+  "reexplanation_required": "NO"
+}

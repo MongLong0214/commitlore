@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"JSON files on disk\" \u2014 because \"SQLite keeps each artifact atomically constrained with its correction lineage\"; scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active.",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "gitseed/storage_schema.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "Both read APIs remain backed entirely by a single SQLite database connection: `history(limit=N)` and `observations(limit=N)` add SQL-level bounding by wrapping the existing ordered SELECT in a subquery that orders by the table's monotonic append key descending with `LIMIT ?`, then re-orders ascending so the returned slice keeps chronological append order; the no-limit paths run the original unbounded queries unchanged. A non-positive limit raises ValueError before any query. Records are still read from the `run_artifacts` and `repository_observations` tables (artifacts as BLOBs, correction lineage via the `corrects_run_id` foreign key), and no file is opened, written, or read outside the sqlite3 connection \u2014 the change introduces no on-disk sidecar, cache, index, or serialized record file of any format.",
+  "packet_id": "d6276dacd77678226bdef9b9",
+  "rationale": "The decision rules out storing artifacts as JSON files on disk, on the ground that SQLite holds each artifact atomically together with its correction lineage. The diff touches only the two scoped paths and is purely a query-shaping change inside SQLiteRunStore: it adds an optional `limit` parameter that is pushed down into SQL (`ORDER BY rowid DESC LIMIT ?` / `ORDER BY observation_id DESC LIMIT ?`, re-sorted ascending in an outer select). Nothing in the change moves storage or reads off SQLite \u2014 there is no `json` import, no `open()`, no Path write, and no new file created anywhere in the patch. The storage schema is untouched; artifacts remain BLOBs in `run_artifacts` with the `corrects_run_id` self-reference and the immutability triggers intact, which is exactly the property the decision's reason protects. Pre-existing `json` usage elsewhere in the package (artifact.py, cli.py, adapters.py, etc.) is unmodified by this change and lies outside the recorded scope. The added tests exercise the bounded reads against real persisted artifacts through the same store, again with no file-based alternative. This is plainly outside the ruled-out approach; a reviewer approving it would not have to revisit the JSON-vs-SQLite question at all.",
+  "reexplanation_required": "NO"
+}

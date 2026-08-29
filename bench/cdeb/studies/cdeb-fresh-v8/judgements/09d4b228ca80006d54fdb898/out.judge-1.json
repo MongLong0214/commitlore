@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: normalized per-port tables \u2014 \"canonical artifact bytes already preserve the replay contract without duplicating serializers\" (scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active).",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "gitseed/storage_schema.py",
+    "tests/test_storage.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "`SQLiteRunStore.get(run_id)` runs a single SELECT of `run_id, corrects_run_id, artifact` against the pre-existing `run_artifacts` table, raises `KeyError(run_id)` when no row matches, and otherwise rebuilds the run by handing the stored BLOB to the one existing deserializer (`RunArtifact.from_bytes`) \u2014 the same call `history()` already used \u2014 wrapping it in `StoredRun`. `load()` is reduced to `self.get(run_id).artifact`, so the artifact-only path now flows through the same single decode. No table, column, index, or migration is added; `SCHEMA_VERSION` stays at 2 and `storage_schema.py` is untouched. No per-stage/per-port field is projected into SQL columns, and no second serialization or field-extraction routine is introduced anywhere; every field consumers read (artifact contents) still comes from decoding the canonical bytes.",
+  "packet_id": "09d4b228ca80006d54fdb898",
+  "rationale": "The decision forbids shredding run data into normalized per-port tables, on the ground that the canonical artifact bytes alone carry the replay contract and a normalized layout would force a duplicate serializer. The task (a point lookup returning StoredRun with its artifact and corrects_run_id) is exactly the kind of request that could tempt someone to denormalize artifact internals into queryable columns. This implementation does not do that: it widens an existing single-row SELECT to also read the `corrects_run_id` column that the base schema already defined, and reconstructs the artifact by decoding the stored blob with the single existing `RunArtifact.from_bytes` entry point. The diff touches only `storage.py` and `tests/test_storage.py` \u2014 both in scope \u2014 and adds no DDL, no migration step, and no parallel decoding path; `load()` was in fact collapsed onto `get()`, reducing rather than duplicating deserialization sites. The pre-existing `repository_observations` table is base-tree state, not part of this change. Tests in scope pass (13 passed), including the new lookup-of-a-correction and unknown-id KeyError cases. Nothing here would require anyone to re-explain why per-port normalization was ruled out.",
+  "reexplanation_required": "NO"
+}

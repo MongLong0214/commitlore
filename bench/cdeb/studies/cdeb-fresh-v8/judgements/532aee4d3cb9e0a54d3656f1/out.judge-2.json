@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out \u201ca separate evidence-kind allowlist\u201d because \u201ca literal detached from the producer methods can silently accept evidence no collector emits.\u201d",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/category.py",
+    "tree/tests/test_category.py",
+    "tree/tests/test_seam.py",
+    "tree/gitseed/ports.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The reader derives accepted evidence kinds directly from its producer methods, while parsing supported manifests for declared entry names and emitting only exact normalized `mcp` and `ollama` matches. The added filename and manifest-section sets govern parsing locations, not which evidence kinds category packs may request.",
+  "packet_id": "532aee4d3cb9e0a54d3656f1",
+  "rationale": "Within the active recorded scope, the final implementation retains the producer-derived evidence-kind vocabulary: `evidence_names` is computed from `_producers`, and pack validation uses that result. It does not introduce a detached literal list of acceptable evidence kinds. The new literal sets enumerate supported manifest filenames and package.json sections, which is a distinct concern required to parse declared entries precisely. Tests continue to establish that satisfiable evidence equals the evidence actually produced.",
+  "reexplanation_required": "NO"
+}

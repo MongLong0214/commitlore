@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"pin every prose field by literal digest\" is ruled out \u2014 freezing the full text duplicates the contract into the validator and makes any editorial fix a false failure, so only fields the contract derives or fixes numerically are pinned.",
+  "evidence_paths": [
+    "diff.patch",
+    "tree/packages/schema/src/metric-registry.ts",
+    "tree/packages/schema/test/metric-registry.test.ts",
+    "tree/specs/metrics.v0.json",
+    "tree/scripts/validate-planning.mjs",
+    "tree/tests/planning/workspace-skeleton.test.mjs",
+    "tree/docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is 0 bytes, and the finished tree matches that: `MetricDefinition` (tree/packages/schema/src/metric-registry.ts:26-52) still declares 26 members ending at `consumer_routes: string[]` with no `observation_key` member, and no file anywhere in the tree constructs or annotates a `MetricDefinition` value as a compile-checked consumer (only uses are the runtime cast at :142 and the `as MetricDefinition[]` cast in the test at :254). The registry validator's content checks compare only values the contract computes or enumerates: `cap === 1`, `floor === 0`, `minimum_opportunities` 1-or-2 by id, `factor` from the M-index band, `treatment` from the id, `aggregation` from the id, the frozen `evidence_precedence` ordering, the numeric `confidence` table, `consumer_routes` rebuilt from factor+treatment, and `per_opportunity_formula` reconstructed as `s = ${numerator} / ${denominator}` from that same metric's own two fields. The free-text fields \u2014 `label`, `question`, `observation_type`, `eligible_opportunity`, `partial_credit_rule`, `not_observed_rule`, `invalid_rule`, `normalization`, `gaming_guard` \u2014 are reached only by the `Object.hasOwn(metric, field)` presence loop over REQUIRED_FIELDS; their text is never compared to a stored string, hash, or checksum. The only `createHash`/sha256 in scope (scripts/validate-planning.mjs:780) digests whole gate-artifact files for staleness, not metric prose.",
+  "packet_id": "8109d97a954814531b8bfb7a",
+  "rationale": "The recorded decision forbids one specific validator technique: freezing the literal text of prose registry fields (by digest or stored copy) so that any editorial wording change fails validation. Reading the six in-scope paths, nothing in the finished tree does that. Every content assertion in metric-registry.ts is either numeric (cap, floor, minimum_opportunities, the confidence table), an enumeration the contract fixes by identity (factor band, treatment, aggregation, consumer routes, evidence-precedence order), or a string the contract derives from other declared fields (per_opportunity_formula, rebuilt from the metric's own numerator and denominator \u2014 which the in-file comment explicitly distinguishes as \"a derivable contradiction, not prose\"). The nine genuinely editorial fields are checked for presence only; rewording any of them raises no error. Separately, and outside what the decision governs: diff.patch is empty and the task's two deliverables are absent \u2014 `observation_key` is required by the runtime REQUIRED_FIELDS list at src:66 and read at src:240/250/350/351/367, but was never added to the exported `MetricDefinition` interface, and no compile-checked public consumer exists. That is a failure to complete the task, not adoption of the ruled-out approach. Since a tree that changes nothing cannot implement the forbidden pinning, and the pre-existing checks stay on the derived/numeric side the decision's reason carves out, this is COMPLIANT rather than INDETERMINATE.",
+  "reexplanation_required": "NO"
+}

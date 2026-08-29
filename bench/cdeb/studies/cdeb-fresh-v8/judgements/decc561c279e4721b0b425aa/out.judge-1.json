@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"storage replay as deserialization\" is ruled out: replay must recompute output from recorded port responses (scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active).",
+  "evidence_paths": [
+    "diff.patch",
+    "gitseed/storage.py",
+    "gitseed/application.py",
+    "tests/test_storage.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The entire change is confined to the observation-history read path: the SELECT over repository_observations changes its ordering key from insertion id alone to (recorded timestamp, insertion id), so rows come back oldest-to-newest by recorded time with ties broken by insertion sequence, plus one new test that saves a newer run before two equal-timestamped older runs and asserts the resulting order. The run-reconstruction path is untouched: SQLiteRunStore.replay still loads the stored bytes and hands them to the application-level replay, which renders the artifact, refuses on engine-version mismatch, requires full-source traces, and then re-executes the pipeline against port stand-ins that serve the recorded repository/file/model/clock responses. Nothing in the final tree returns the stored artifact directly as the replay result, and no decoding shortcut was added that would bypass re-execution.",
+  "packet_id": "decc561c279e4721b0b425aa",
+  "rationale": "The decision governs how replay produces its output \u2014 by recomputation from recorded port responses rather than by simply decoding the stored artifact. The task and the implementation concern a different concern entirely: the ordering of the derived observation history. The one production-code edit is an ORDER BY clause in observations(), a query that reads a separate derived table (repository_observations) and never participates in reconstructing a RunArtifact. Reading the finished tree, gitseed/storage.py:107 still delegates replay to gitseed/application.py:234, which calls re_evaluate \u2192 execute() with _ReplayRepository/_ReplayFiles/_ReplayModel/_ReplayClock supplying the recorded responses; the existing tests asserting that replay restores output by executing recorded port responses remain intact and unmodified. No deserialization-only path was introduced anywhere in the recorded scope, so this final tree clearly stays outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

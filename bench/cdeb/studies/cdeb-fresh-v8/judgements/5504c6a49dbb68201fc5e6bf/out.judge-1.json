@@ -1,0 +1,14 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: JSON files on disk \u2014 because SQLite keeps each artifact atomically constrained with its correction lineage. Scope: gitseed/storage.py, tests/test_storage.py; lifecycle active.",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "All persistence and reads still go through a single sqlite3 connection opened on the store path: `history(limit=N)` and `observations(limit=N)` are implemented as SQL over the existing `run_artifacts` and `repository_observations` tables \u2014 an inner `ORDER BY rowid/observation_id DESC LIMIT ?` subquery re-sorted ascending by the append key \u2014 so the N most recent rows come back in chronological append order, with no-limit calls unchanged. A non-positive limit raises ValueError before any query. No new on-disk file is created, opened, read, or written anywhere in the change; nothing serializes records to a filesystem path outside the database. Artifacts remain BLOBs inside the same DB rows that carry `corrects_run_id`, so the atomic artifact-plus-correction-lineage constraint is untouched. The `json` import in tests/test_storage.py is pre-existing and only decodes an in-memory `artifact.to_bytes()` payload; it touches no file.",
+  "packet_id": "5504c6a49dbb68201fc5e6bf",
+  "rationale": "The decision rules out storing this data as JSON files on disk, preferring SQLite so each artifact stays atomically constrained with its correction lineage. The task asked only for bounded recent slices of the existing read APIs, and the implementation delivers that entirely inside SQLite: two parameterized LIMIT queries in gitseed/storage.py plus tests in tests/test_storage.py (both scope paths, and the change touches nothing else). There is no filesystem-JSON store, no sidecar index file, no cache file, and no fallback path that bypasses the database \u2014 the ruled-out approach appears nowhere in the final tree. The scoped test file's `json` usage predates the diff and is in-memory artifact decoding, not disk persistence. The scoped acceptance runner confirms the behavior: `pytest tests/test_storage.py` passes 15 tests, including the two new bounded-read tests and the positive-limit guard.",
+  "reexplanation_required": "NO"
+}

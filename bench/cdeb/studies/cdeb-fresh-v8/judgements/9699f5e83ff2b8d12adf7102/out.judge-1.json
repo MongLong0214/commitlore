@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Scoring and screening ports are ruled out: \"both are pure deterministic domain functions with no outside capability to supply\", recorded against scope path gitseed/ports.py, lifecycle active.",
+  "evidence_paths": [
+    "gitseed/ports.py",
+    "gitseed/category.py",
+    "gitseed/application.py",
+    "gitseed/scoring.py",
+    "tests/test_seam.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change threads the already-injected evidence reader into the absent-evidence constructor: on a category-read failure (or a missing files entry) the run builds one ABSENT, empty-valued Evidence per name advertised by the run's own evidence reader instead of the module default's names. A structural type describing just the `evidence_names` attribute was added in gitseed/category.py so the constructor accepts any supplied reader. Scoring and screening remain directly imported, directly called module-level functions (`from .scoring import ... score` called inline in application.py; screen.* imported concretely by artifact.py/scoring.py/cli.py) with no injected implementation, no default parameter carrying a swappable implementation, and no field in the run's port bundle. gitseed/ports.py is byte-for-byte unchanged and still declares only repository, file, evidence, model, and clock capabilities.",
+  "packet_id": "9699f5e83ff2b8d12adf7102",
+  "rationale": "The ruled-out approach is turning scoring or screening into supplied capabilities \u2014 a port in gitseed/ports.py. The diff never touches gitseed/ports.py, gitseed/scoring.py, or gitseed/screen/, and the finished tree's RunPorts still has exactly repository, files, model, clock, and evidence members with no scoring or screening entry; `score()` is called as a plain import in application.py:146 and screening helpers are imported concretely. The one new Protocol (EvidenceVocabulary, gitseed/category.py:28) describes the vocabulary side of the evidence reader, which was already a supplied capability before this change (EvidenceReader / RunPorts.evidence pre-exist in the untouched ports.py). Widening an existing, permitted port so that failure-path output uses that port's own vocabulary is a different seam from the one the decision closed; reading it as a scoring/screening port would require stretching the recorded scope beyond gitseed/ports.py and beyond the two named domain functions. The test change confirms behavior rather than naming: a broken reader advertising {repository_layout, runtime_markers} yields absent evidence items with exactly those names, while the category-read PortFailure is still recorded and the run still degrades to a review recommendation.",
+  "reexplanation_required": "NO"
+}

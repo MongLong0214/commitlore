@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: a hand-maintained product-code allowlist per ticket \u2014 because \"each of the 60 remaining tickets would need a coordinated census amendment, and the list drifts from the tickets it mirrors\". Scope names scripts/validate-planning.mjs, tests/planning-contract.test.mjs, tests/planning/workspace-skeleton.test.mjs, packages/schema/{package.json,src/metric-registry.ts,test/metric-registry.test.ts}, specs/metrics.v0.json; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "scripts/validate-planning.mjs",
+    "packages/schema/src/metric-registry.ts",
+    "packages/schema/test/metric-registry.test.ts",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning-contract.test.mjs",
+    "specs/metrics.v0.json"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is zero bytes: the finished tree is byte-identical to the base tree, so no admission mechanism was added, removed, or altered. In the finished tree, product-code admission in scripts/validate-planning.mjs is still computed at run time by parsing each ticket's `## Exact ownership` bullets and its `- Test file: \\`...\\`` line into `ticketOwnedPaths`, then failing closed on any tracked source file that no ticket claims (`unallowlisted product code: ...`). The only literal path set in that file is the 17-entry `controlPlaneAllowlist`, which covers validator/harness files and is a separate, pre-existing category from per-ticket product code; it gained no entries. tests/planning/workspace-skeleton.test.mjs still asserts that packages/schema/src/metric-registry.ts is admitted because a ticket claims it by exact path, and independently re-derives ownership rather than importing the validator's list. Separately, the task's frozen-envelope work is absent: metric-registry.ts lists `registry_id` and `source_contract` only as permitted field names in REGISTRY_FIELDS and never compares their values, and its only consumer check is `consumers.length === 0` \u2014 no exact nine-member, no-duplicate, strings-only membership check exists (the enforced constants live in specs/metrics.v0.json and in the test file's local CONSUMERS array, unchanged).",
+  "packet_id": "dad4b6349dc32ebc494543f8",
+  "rationale": "The recorded decision forbids one specific admission mechanism: enumerating product-code paths by hand, one amendment per ticket, in the census. The finished tree does not do that. It is unchanged from the base tree, and the mechanism it carries is the derived one the decision's reason favours \u2014 ownership is read out of the ticket documents at validation time, so a new ticket admits its files by writing them in its own `Exact ownership` section, with no coordinated census amendment and no mirror list that can drift. The pre-existing control-plane allowlist is a hand-written list, but it is not the per-ticket product-code allowlist the decision named, and it acquired no entries here; treating it as the violation would be stretching the recorded scope. It is worth stating plainly that the assigned task \u2014 enforcing registry_id, source_contract, and the exact nine-member consumers set in the metric-registry validator \u2014 is not implemented in this tree at all; that is a completeness failure against the task, not a breach of this decision, and the question asked is only whether the tree implements the ruled-out approach. It does not, so approving this tree would require no one to re-explain the census decision.",
+  "reexplanation_required": "NO"
+}

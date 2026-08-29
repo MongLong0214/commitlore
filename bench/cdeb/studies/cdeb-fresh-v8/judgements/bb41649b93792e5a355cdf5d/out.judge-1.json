@@ -1,0 +1,20 @@
+{
+  "confidence": "medium",
+  "decision_clause": "Ruled out: \"keep the wildcard census and rely on the focused-lane guard\" \u2014 because \"the guard catches deletion only, and the review demonstrated growth passing 230/230 with an unreviewed product file present.\"",
+  "evidence_paths": [
+    "diff.patch",
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning-contract.test.mjs",
+    "scripts/validate-planning.mjs",
+    "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+    "package.json",
+    "packages/schema/package.json"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is zero bytes, and the tree matches an unchanged base: validateCapabilityMatrix still returns a single flat record with `ok: boolean` plus `rows: CapabilityRow[]`, `required_event_groups`, and `coverage` on every path, including the early `ok: false` returns that spread an `empty` object typed as `CapabilityRow[]` (packages/schema/src/capability.ts:48-55, 258-272, 432); the tests still read `result.rows` off that flat shape with no ok-discriminated narrowing (packages/schema/test/capability.test.ts:97-101, 137-158). No file was added, renamed, or removed anywhere. Independently, the tree's file census is exact-path, not wildcard: scripts/validate-planning.mjs builds its admitted set only from ticket bullets and RED-test lines that name a path literally, and emits `unallowlisted product code: <paths>` with exit 1 for any source file not so named (scripts/validate-planning.mjs:835-868), which tests/planning-contract.test.mjs:628-661 exercises by materializing new sources and asserting they are rejected. tests/planning/workspace-skeleton.test.mjs:378-399 does a `deepEqual` of the walked skeleton against that exact-declaration set (plus bounded fixture globs and two literally-named JSON paths), and :477-486 pins `product_code_files=0` / `product_code_paths=none` against the validator's own reported census. The focused-lane count guard (tests/planning/workspace-skeleton.test.mjs:717-757) exists alongside these, but growth is caught by the exact census rather than left to that guard.",
+  "packet_id": "bb41649b93792e5a355cdf5d",
+  "rationale": "The decision rules out one specific pairing: leaving file admission to a wildcard and leaning on the focused-lane count guard to notice drift, on the ground that the lane guard only catches a lost test and not an added, unreviewed product file. Judging the finished tree against that: nothing in it admits product source by wildcard. Every .ts/.mjs under the skeleton must be claimed by exact literal path in a ticket's `## Exact ownership` bullet or `- Test file:` line, and unowned source fails closed with a non-zero exit \u2014 precisely the growth case the decision's reason says the guard misses is the case this census catches, and two separate tests assert that by writing new sources into a copied tree and requiring rejection. The lane-count guard is present, but it is an additional check layered on that exact census, not a substitute for one. Separately, the diff is empty and the tree carries no trace of the requested change: the result contract is still the flat non-discriminated `ValidationResult`, no new test file was added, and the pinned `[\"capability\", 19]` lane count is untouched. So the implementation introduced no new census seam of any kind, wildcard or otherwise, and there is nothing here that would make someone re-argue the recorded decision. That the task itself appears unimplemented is a separate matter from the question I was asked, and it does not convert a no-op into the ruled-out approach. I hold this at medium rather than high only because the empty patch gives me no view of what the implementer attempted, so I am reading the tree's end state alone \u2014 but that end state is unambiguous on the point the decision governs.",
+  "reexplanation_required": "NO"
+}

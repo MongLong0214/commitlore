@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"add the two paths to controlPlaneAllowlist\" \u2014 because it \"mislabels product code as control plane and drives control_plane_code_files up as a disguise for a growing product surface\". Recorded scope names scripts/validate-planning.mjs, tests/planning-contract.test.mjs, packages/schema/src/metric-registry.ts, packages/schema/test/metric-registry.test.ts, and three others; lifecycle active.",
+  "evidence_paths": [
+    "scripts/validate-planning.mjs",
+    "tests/planning-contract.test.mjs",
+    "packages/schema/src/metric-registry.ts",
+    "packages/schema/test/metric-registry.test.ts",
+    "specs/metrics.v0.json",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change is confined to the registry validator and its test. validateMetricRegistry now iterates a fixed seven-name root field list (registry_id, contract_version, source_contract, consumers, route_tables, frontiers, metrics), emits a per-field MISSING diagnostic for any absent name, an INVALID diagnostic for any wrong-typed value, rejects unknown root keys, pins the three identity/provenance strings to metrics.v0 / metric-scoring-contract-v1 / docs/contracts/metric-scoring-contract-v1.md, and short-circuits before metric-level checks when any structural root field is malformed \u2014 so an absent or malformed route_tables/frontiers is a root-contract rejection rather than a silently substituted empty object. The test adds delete, type-tamper, and identity-alteration cases for every root field. The set literal in scripts/validate-planning.mjs that classifies a source file as control plane still holds the same 17 entries and contains neither packages/schema/src/metric-registry.ts nor packages/schema/test/metric-registry.test.ts; the census literals in tests/planning-contract.test.mjs still read control_plane_code_files=17 control_plane_allowlist=17, and both touched files remain in the ticket-owned path census in those same literals.",
+  "packet_id": "d7886f484547ffcb05278305",
+  "rationale": "The ruled-out approach is a specific, mechanically checkable edit: inserting the two schema paths into the control-plane classification set (and bumping the paired census numbers), which would reclassify product code as control plane. diff.patch touches exactly two files \u2014 packages/schema/src/metric-registry.ts and packages/schema/test/metric-registry.test.ts \u2014 and neither scripts/validate-planning.mjs nor tests/planning-contract.test.mjs is modified. In the finished tree the classification set is unchanged at 17 entries with no metric-registry path in it, and the two files continue to be admitted through ticket ownership rather than control-plane allowlisting, so the control_plane_code_files count did not move. The task was delivered entirely inside the already-ticket-owned product files, which is the route the decision left open. Renaming is not a factor here: I checked the set's membership and the numeric census literals, not the identifier's name.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "The decision ruled out \u201cfiltering the roadmap and Board out of a broad input scan,\u201d because an exclusion list would silently admit later projections; inputs must instead be positively declared and closed.",
+  "evidence_paths": [
+    "tree/tests/planning-contract.test.mjs",
+    "tree/scripts/validate-planning.mjs",
+    "tree/scripts/render-execution-views.mjs",
+    "tree/docs/tickets/BOARD.md",
+    "tree/docs/planning/AOS-EXECUTION-ROADMAP.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The dependency-basis test derives authority only from canonically shaped PRD files under the PRD directory, while the renderer uses an exact catalog path and a fixed list of generated surfaces. The tree still rejects the hyphenated PRD identity and still renders the three entry tickets with no dependencies, so it did not accomplish the task through either the ruled-out filtering approach or another repair.",
+  "packet_id": "c7dc512818f3b6887498dc27",
+  "rationale": "Within the active recorded scope, there is no broad planning-input scan followed by exclusions for the roadmap and board. The relevant inputs and generated surfaces are selected positively. The empty patch and unchanged defective dependency behavior show that the requested repair was not implemented, but task incompleteness is not itself a violation of this decision.",
+  "reexplanation_required": "NO"
+}

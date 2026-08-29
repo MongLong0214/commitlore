@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: scoring and screening ports \u2014 \"both are pure deterministic domain functions with no outside capability to supply\". Scope: gitseed/ports.py, lifecycle active.",
+  "evidence_paths": [
+    "gitseed/ports.py",
+    "gitseed/application.py",
+    "gitseed/category.py",
+    "gitseed/pipeline/run.py",
+    "tests/test_seam.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change threads the already-existing evidence-reader collaborator (RunPorts.evidence) into the absent-evidence constructor, so that when evidence extraction raises, the run artifact emits one ABSENT, empty-valued evidence item per name advertised by that run's supplied reader instead of the module default reader's names; the category-read PortFailure is still appended and the run stays degraded. Scoring is still invoked as a direct in-process pure call \u2014 `score(inputs)` imported from gitseed.scoring in application.py:25,146 \u2014 with no protocol, no injected implementation, and no field on RunPorts. Screening likewise remains direct calls into gitseed/screen/* from gitseed/pipeline/run.py (scan_files, findings, risk_of, unverified) with no indirection point. gitseed/ports.py is not touched by the diff at all: its protocols remain RepositoryReader, FileReader, EvidenceReader, Clock, and RunPorts still carries repository/files/model/clock/evidence \u2014 no scoring- or screening-shaped substitutable collaborator was added under any name.",
+  "packet_id": "f366139f651c7c1c12e29185",
+  "rationale": "The decision's ruled-out approach is narrowly and explicitly about turning scoring and screening into ports \u2014 i.e. adding externally-supplied, substitutable implementations for two computations the record calls pure deterministic domain functions \u2014 and its recorded scope names exactly one path, gitseed/ports.py. The final tree does none of that. The diff modifies only gitseed/application.py, gitseed/category.py, and tests/test_seam.py; gitseed/ports.py is byte-identical to the base tree, so nothing was added to or removed from the port surface. What the implementation does add is a default-valued reader parameter to absent_evidence() and two call sites passing ports.evidence. That reader is EvidenceReader, a port that already existed in the base tree and is already a RunPorts field \u2014 an outside capability the decision does not touch and which by construction must be supplied because reading files from a repository is not a pure domain computation. Using an existing port's advertised vocabulary at a failure path is not the same as introducing a new seam for scoring or screening. Note also that this is the opposite direction from the ruled-out move: it removes a hidden dependency on the module-level DEFAULT_EVIDENCE_READER in favour of the reader the caller already injected, rather than creating a new injection point. The test change confirms the observable behavior rather than the naming: a stub reader advertising {\"custom-files\", \"custom-source\"} that raises now yields exactly those two names as ABSENT with empty value sets, while the category PortFailure is still recorded. Approving this patch requires no one to revisit or re-argue the scoring/screening-ports decision, since neither function gained a substitution point.",
+  "reexplanation_required": "NO"
+}

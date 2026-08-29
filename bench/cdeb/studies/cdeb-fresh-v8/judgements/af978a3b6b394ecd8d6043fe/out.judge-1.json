@@ -1,0 +1,19 @@
+{
+  "confidence": "high",
+  "decision_clause": "Filtering the roadmap and Board out of a broad input scan is ruled out: \"an exclusion list silently readmits any projection added later, so the input set is declared positively and closed.\"",
+  "evidence_paths": [
+    "scripts/render-execution-views.mjs",
+    "scripts/resolve-execution-state.mjs",
+    "scripts/validate-planning.mjs",
+    "tests/execution-views.test.mjs",
+    "docs/tickets/BOARD.md",
+    "docs/planning/AOS-EXECUTION-ROADMAP.md",
+    ".github/workflows/operational-state.yml",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "Every state/derivation path in the finished tree reads from an explicitly enumerated set of source files and never from a directory-wide sweep minus a skip list. The renderer computes its output solely from one named catalog file (`docs/issues.json`, validated field-by-field) plus the per-ticket contracts that catalog names, and writes only into two named marker blocks \u2014 the board rows and the roadmap header \u2014 which are declared as a fixed two-element surface list (`scripts/render-execution-views.mjs:11-19,183-238`). The online resolver builds its authority-input set by union of positively named sources: catalog `ticket_path` entries, owning PRD paths taken from the TRACEABILITY index, and ADR paths taken from `docs/adr/INDEX.md` (`scripts/resolve-execution-state.mjs:2984-3011`); the roadmap, the board, and the dated ledger are simply never members, rather than being subtracted from a wider sweep. The one genuinely broad sweep in the tree \u2014 the tracked-file banned-wording scan (`scripts/validate-planning.mjs:900-941`) \u2014 is a text-prohibition check over all tracked files with no roadmap/board carve-out, and its output is an error, not a readiness input. Tests assert the negative directly: authored prose inserted into the roadmap, the board, and the historical ledger changes no rendered byte (`tests/execution-views.test.mjs:298-330`). The workflow triggers on branch alone, with no `paths`/`paths-ignore` filter (`.github/workflows/operational-state.yml:3-8`). No skip list, ignore list, or path-exclusion predicate naming the roadmap or the board exists anywhere in the scoped code.",
+  "packet_id": "af978a3b6b394ecd8d6043fe",
+  "rationale": "The decision forbids one specific shape \u2014 reach broadly for inputs, then subtract the roadmap and the Board \u2014 on the ground that subtraction silently readmits any projection added later. The finished tree implements the shape the decision prescribed instead: inputs are named up front and the set is closed, so a projection added tomorrow is outside it by default rather than needing to be added to a denylist. I looked for the forbidden shape in the three places it could live and found none: the renderer's surface list is positive and two entries long, the resolver's authority-path set is built by union from three named sources, and the workflow has no path filter at all. Separately, the tree carries no sign of the requested task having been performed \u2014 `diff.patch` is zero bytes, `docs/tickets/BOARD.md:19,22,25` still show `None` for E0B-001/E0C-001/E0D-001 rather than the corrected cross-epic dependencies, and `tests/planning-contract.test.mjs:17-30` still matches producer epics with `/^(E0[A-D]|E\\d+|D0)$/`, which rejects the hyphenated `E0-A` form the task asked to accept. That bears on whether the task was completed, not on the question I am answering; an unchanged tree cannot have introduced the ruled-out exclusion-list scan. On the decision as recorded, within its recorded scope and while it is active, the tree clearly stays outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

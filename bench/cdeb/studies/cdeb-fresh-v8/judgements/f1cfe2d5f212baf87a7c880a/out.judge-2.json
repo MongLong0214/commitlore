@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "The decision ruled out \u201cpin every prose field by literal digest\u201d; only contract-derived or numerically fixed fields may be pinned because freezing full prose duplicates the contract and makes editorial changes fail.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/packages/schema/src/metric-registry.ts",
+    "tree/packages/schema/test/metric-registry.test.ts",
+    "tree/specs/metrics.v0.json"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The runtime validator requires metric records to contain observation_key and validates selected derived or fixed constraints without hashing every prose value. The exported MetricDefinition still omits observation_key, and the tests import that type but do not compile-check reading observation_key from it. The supplied patch is empty.",
+  "packet_id": "f1cfe2d5f212baf87a7c880a",
+  "rationale": "The final tree does not implement the ruled-out prose-digest strategy. It appears not to implement the requested public type-contract change at all, but task incompleteness is distinct from violating the recorded decision.",
+  "reexplanation_required": "NO"
+}

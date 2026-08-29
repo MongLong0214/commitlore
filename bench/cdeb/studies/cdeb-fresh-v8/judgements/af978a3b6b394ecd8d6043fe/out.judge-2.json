@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "The decision ruled out \u201cfiltering the roadmap and Board out of a broad input scan\u201d because an exclusion list would silently admit future projections; inputs must instead be declared positively and remain closed.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/scripts/validate-planning.mjs",
+    "tree/tests/planning-contract.test.mjs"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The dependency-basis check enumerates the PRD directory and positively accepts only PRD-shaped filenames. It does not gather a broad collection of planning surfaces and then subtract the board and roadmap. The separate repository-wide wording scan also does not exclude those two files.",
+  "packet_id": "af978a3b6b394ecd8d6043fe",
+  "rationale": "The patch is empty, and the finished-tree logic within the recorded active scope contains no exclusion list that filters the board and roadmap from a broader dependency-authority input scan. Whether the requested dependency repair was actually completed is separate from the question asked; the final tree clearly does not implement the specifically ruled-out approach.",
+  "reexplanation_required": "NO"
+}

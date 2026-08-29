@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"letting a grading failure end the run\" \u2014 because \"it makes one flaky model call discard every candidate already screened\". Scope: gitseed/pipeline/__init__.py, gitseed/pipeline/run.py, tests/test_pipeline.py; lifecycle active.",
+  "evidence_paths": [
+    "gitseed/pipeline/run.py",
+    "tests/test_pipeline.py",
+    "gitseed/pipeline/__init__.py",
+    "diff.patch"
+  ],
+  "extra_field_note": "none",
+  "label": "COMPLIANT",
+  "observable_behavior": "The candidate loop in run() still wraps the grader call in a per-candidate try/except that catches any exception, records a run-level reason for that one repository, appends a Reviewed entry with grade=None and a withheld string, and then `continue`s to the next candidate. Nothing in the change re-raises, breaks, returns early, or drops previously accumulated entries when grading fails; the function still returns every screened candidate it built. The only behavioral change is that when the incoming collection is marked incomplete and its stop reason mentions a rate limit, the returned result's rate_limited flag is set to true while the run stays incomplete and keeps its collection-stopped-early reason. The new test asserts exactly that flag alongside the existing incompleteness assertions.",
+  "packet_id": "9ef9caabc45ca71b0b99ff7e",
+  "rationale": "The decision forbids one specific control-flow shape: a grading failure terminating the run and discarding already-screened candidates. The final tree preserves that shape unchanged \u2014 gitseed/pipeline/run.py catches grader.evaluate exceptions per candidate, records them, and continues, and the surviving tests pin the behavior (a grading timeout yields complete=False with the candidate still present and withheld, and a separate test asserts three reviewed entries with the message \"one bad repository discarded the others\"). The diff touches a different seam entirely: a two-line addition that derives rate_limited from the collection's stop reason, plus one test assertion. It adds no path by which a model call can end the run. I ran the scope's acceptance runner (pytest tests/test_pipeline.py): 25 passed, including both grading-failure containment tests. This is plainly outside the ruled-out approach rather than an ambiguous reading.",
+  "reexplanation_required": "NO"
+}

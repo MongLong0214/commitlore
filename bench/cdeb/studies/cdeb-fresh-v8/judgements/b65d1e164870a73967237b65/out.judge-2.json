@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out \u201cretrying on a bare 403\u201d because many such responses are permission errors that waiting cannot fix; active for the four recorded collection paths.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/collect/search.py",
+    "tree/gitseed/collect/ratelimit.py",
+    "tree/tests/test_collect.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "Invalid page counts and page sizes raise ValueError before the transport is contacted. Separately, a 403 without rate-limit evidence is treated as a permission failure and returned after one request; retrying occurs only when headers identify rate limiting and waiting is enabled.",
+  "packet_id": "b65d1e164870a73967237b65",
+  "rationale": "The added implementation only performs pre-request paging validation. Within the active recorded scope, the finished code also expressly avoids the ruled-out behavior: a bare 403 is classified as forbidden and is neither slept on nor retried. Tests verify both the new validation and the single-request handling of permission-related 403 responses.",
+  "reexplanation_required": "NO"
+}

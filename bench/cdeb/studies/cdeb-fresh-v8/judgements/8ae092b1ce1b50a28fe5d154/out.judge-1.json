@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: retrying on a bare 403 \u2014 \"half of them are permissions errors and no amount of waiting fixes those.\" Scope: gitseed/collect/__init__.py, gitseed/collect/ratelimit.py, gitseed/collect/search.py, tests/test_collect.py; lifecycle active.",
+  "evidence_paths": [
+    "gitseed/collect/search.py",
+    "gitseed/collect/ratelimit.py",
+    "tests/test_collect.py",
+    "gitseed/collect/__init__.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change adds pre-request argument validation at the top of the public collect entry point: it raises ValueError for pages < 1 and for per_page outside 1..100 before any transport call is issued, leaving per_page=1 and per_page=100 accepted and forwarded in the query string; tests assert the transport recorded zero URLs on the invalid cases. No response-handling path is touched. In the finished tree, a 403 whose headers carry no rate-limit exhaustion and no Retry-After is still classified separately from a budget refusal (ratelimit.classify returns the permissions class), and collect returns immediately on that class with a stop reason naming it a permissions problem \u2014 it performs no second request and no sleep. The single re-issue of a request in collect remains gated on the budget-refusal class only, after an explicit caller-opted wait.",
+  "packet_id": "8ae092b1ce1b50a28fe5d154",
+  "rationale": "The recorded decision governs how the collector reacts to a 403 that carries no rate-limit signal: it must not wait-and-retry, because such responses are frequently permissions failures that waiting cannot fix. The implementation under review is entirely upstream of any HTTP response \u2014 it validates paging arguments before the first request and raises ValueError, plus parametrized tests for zero, negative, and oversized values and for the accepted boundaries. It adds no retry loop, no sleep, and no new response classification, and it does not weaken the existing separation between a budget 403 and a permissions 403. The bare-403 path in the finished tree still terminates on the first response with a permissions stop reason. Nothing in the diff touches ratelimit.py or the classification/retry seam at all, so the ruled-out approach is not implemented anywhere within the recorded scope, and approving this patch would not require re-explaining why bare 403s are not retried.",
+  "reexplanation_required": "NO"
+}

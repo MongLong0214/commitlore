@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "The recorded decision rules out keeping the focused-lane case counts as a floor: \"two cases of slack let whole test cases and five allowlists be removed without a failure.\" The counts must be pinned exactly, with no slack, so a lane that loses a case fails.",
+  "evidence_paths": [
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning-contract.test.mjs",
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The `focused-lane-is-not-silently-empty` case in tests/planning/workspace-skeleton.test.mjs:717-755 runs each focused `npm test -w @aos/schema -- <pattern>` lane, parses the runner's pass/fail summary, and asserts equality against a hard-coded per-lane number (`assert.equal(Number(passed[1]), cases, ...)`, line 741-745) for all ten lanes, including `[\"capability\", 19]`. No comparison in that case is a `>=`/at-least form and no lane number is set below the count the lane actually produces, so removing a single case from any lane makes the assertion fail. The companion guard at line 748-754 still pins the empty-pattern hazard by requiring the non-matching run's count to be strictly below the smallest lane. In tests/planning-contract.test.mjs the validator-output receipts (lines 34-35) still pin `control_plane_allowlist=17`, `control_plane_code_files=17`, `ticket_owned_code_files=64` and the full literal path list as an exact anchored regex rather than a subset or minimum match. diff.patch is zero bytes, and the tree's behavior is consistent with an unmodified base: packages/schema/src/capability.ts has no type check rejecting a non-null, non-string `derivation_proof` (a numeric or object proof on a RUNNER_DERIVED cell still falls through `isFilledString` to `UNAVAILABLE` and passes, capability.ts:587-599), and packages/schema/test/capability.test.ts contains no mutation case feeding a scalar or container proof value.",
+  "packet_id": "9cc86368d500229fab6affb1",
+  "rationale": "The decision, read against its stated reason, forbids expressing the focused-lane case counts as a floor or leaving slack in them, because slack previously allowed whole test cases and five allowlists to disappear without a failure. The finished tree does the opposite of the ruled-out thing: every lane count is an exact `assert.equal` against a pinned number, the in-file comment at workspace-skeleton.test.mjs:728-729 states the constraint explicitly, and the allowlist/file counts in planning-contract.test.mjs remain exact-pinned inside anchored regexes. Nothing in the four scoped paths converts a count to a minimum, widens a regex, lowers a pinned number, or otherwise reintroduces slack. Separately, diff.patch is empty and the tree shows no `derivation_proof` type rejection and no new mutation cases, so the task itself appears unimplemented \u2014 but that is a completeness question, not the question asked here, and an unchanged tree cannot implement the ruled-out approach. The decision's scope names these four paths and its lifecycle is active, so the assessment is made squarely inside the recorded scope.",
+  "reexplanation_required": "NO"
+}

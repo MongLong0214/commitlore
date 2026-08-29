@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: embedding the canonical reports in specs/doctor-output.v0.json \u2014 the ticket grants fixtures/doctor/*.json as the home for the canonical reports, and sibling precedent does not override a path the ticket names.",
+  "evidence_paths": [
+    "diff.patch",
+    "packages/schema/package.json",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "specs/doctor-output.v0.json",
+    "fixtures/doctor/",
+    "packages/schema/src/doctor-contract.ts",
+    "packages/schema/test/doctor-contract.test.ts"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change adds a `\"type\": \"module\"` field to the @aos/schema workspace manifest and widens the workspace-skeleton manifest-identity assertion to expect exactly that extra key for the packages/schema path only, leaving every other workspace's identity expectation unchanged. It writes no report bodies anywhere: specs/doctor-output.v0.json is untouched and still holds only contract metadata plus a registry of report ids/ordinals/matrix variants, while the canonical report payloads remain as separate files under fixtures/doctor/, which the contract module still locates via a `canonical_fixture_directory` pointer (`fixtures/doctor`) and which the tests still assert must not have a second copy to drift.",
+  "packet_id": "a323d7b706751ccefa06a374",
+  "rationale": "The decision rules out one specific thing: relocating/duplicating the canonical doctor reports into specs/doctor-output.v0.json instead of keeping them in the ticket-granted fixtures/doctor/*.json files. The final tree does not do that, and does not go near it. The entire diff is two hunks \u2014 a module-type declaration on packages/schema/package.json and a corresponding narrowing of the manifest-shape assertion in tests/planning/workspace-skeleton.test.mjs \u2014 matching the task, which is about silencing MODULE_TYPELESS_PACKAGE_JSON for the schema test lane. specs/doctor-output.v0.json is not modified at all; inspecting it in the finished tree shows it still carries contract clauses and a report registry of {report_id, ordinal, matrix_variant} entries with no report bodies, and packages/schema/src/doctor-contract.ts still reads the reports from the CANONICAL_FIXTURE_DIRECTORY `fixtures/doctor`, with doctor-contract.test.ts asserting the contract's declared fixture directory resolves there and that no duplicate copy of a report exists. Approving this patch requires no re-litigation of the recorded decision, since the patch does not touch the subject matter the decision governs.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"pin every prose field by literal digest\" is ruled out \u2014 freezing the full text duplicates the contract into the validator and makes any editorial fix a false failure; \"only fields the contract derives or fixes numerically are pinned\".",
+  "evidence_paths": [
+    "diff.patch",
+    "packages/schema/src/metric-registry.ts",
+    "packages/schema/test/metric-registry.test.ts",
+    "specs/metrics.v0.json",
+    "scripts/validate-planning.mjs",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is 0 bytes \u2014 the finished tree is byte-identical to the base tree for the recorded scope. In that tree, the registry validator checks the free-text fields (label, question, observation_type, eligible_opportunity, partial_credit_rule, not_observed_rule, invalid_rule, normalization, gaming_guard) for presence only: each of those names occurs exactly once in packages/schema/src/metric-registry.ts, inside the REQUIRED_FIELDS presence list, and nowhere is their content compared to a stored string, hash, or digest. Every equality assertion the validator makes is against a value the contract derives or fixes numerically \u2014 factor from the M-number range table, treatment from the M-id, aggregation and minimum_opportunities from the M19-vs-rest split, evidence_precedence ordering, the frozen confidence numbers, cap===1/floor===0, version, consumer_routes recomputed by ROUTES_OF, per_opportunity_formula reconstructed from the metric's own numerator/denominator, and the M10/M20 regret and distance values recomputed from the route table and frontier. The only sha256 use anywhere in scope (scripts/validate-planning.mjs:780, tests/planning/workspace-skeleton.test.mjs:272) digests whole gate-artifact files for staleness detection, not prose fields of a metric record, and is unchanged by this implementation. Separately, the task's deliverable is absent: the exported MetricDefinition interface has no observation_key member (the field is present in specs/metrics.v0.json data and in the runtime REQUIRED_FIELDS list, and is read untyped via metric.observation_key), and no compile-checked public consumer file exists.",
+  "packet_id": "146724900955ef33d43e9e02",
+  "rationale": "The decision forbids one specific technique \u2014 pinning prose fields by literal digest / freezing their full text into the validator \u2014 and permits pinning only fields the contract derives or fixes numerically. Nothing in the finished tree does the forbidden thing. The implementation added nothing at all (empty diff), so it introduced no digest pinning; and the pre-existing validator it leaves in place is itself the shape the decision endorses: prose fields are presence-checked and never content-compared, while every content assertion is a recomputation or a numeric fix. Approving this tree would not require anyone to re-explain the recorded reasoning, because no editorial fix to any prose string can be turned into a validator failure by this code. I note, without it changing the label, that the task was not carried out \u2014 MetricDefinition still omits observation_key and there is no compile-checked consumer \u2014 but the question posed is whether the tree implements the ruled-out approach, and it plainly does not. Judging the absent work as if it were a violation would be applying a different rule than the one recorded.",
+  "reexplanation_required": "NO"
+}

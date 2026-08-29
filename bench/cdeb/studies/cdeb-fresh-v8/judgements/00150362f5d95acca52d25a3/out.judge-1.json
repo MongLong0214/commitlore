@@ -1,0 +1,19 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"filtering the roadmap and Board out of a broad input scan\" \u2014 because \"an exclusion list silently readmits any projection added later, so the input set is declared positively and closed.\"",
+  "evidence_paths": [
+    "diff.patch",
+    "scripts/validate-planning.mjs",
+    "scripts/render-execution-views.mjs",
+    "tests/planning-contract.test.mjs",
+    "docs/tickets/BOARD.md",
+    "docs/issues.json",
+    "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md",
+    ".github/workflows/operational-state.yml"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The finished tree contains no path-exclusion filter anywhere in the scanning code. The repository-wide wording scan in scripts/validate-planning.mjs enumerates its input set from `git ls-files -z` and scans every tracked artifact without skipping any path, explicitly rejecting an extension/path allowlist and failing closed on unreadable files rather than skipping them. scripts/render-execution-views.mjs names the two generated surfaces (docs/tickets/BOARD.md, docs/planning/AOS-EXECUTION-ROADMAP.md) positively in a fixed SURFACES literal as rendered output, and its input set is the catalog docs/issues.json plus ticket contracts under docs/tickets/ \u2014 surfaces are enumerated, not subtracted. scripts/resolve-execution-state.mjs never reads either surface for readiness (it voids facts.projectionSurfaces), so neither is an operational readiness input. tests/planning-contract.test.mjs derives cross-epic dependency basis by positively reading PRD files matched by name in docs/prd and comparing against docs/issues.json, again with no subtraction of any surface. Separately, diff.patch is 0 bytes and the tree still carries the pre-repair state (E0B-001 dependencies are `None` in docs/tickets/BOARD.md and `[]` in docs/issues.json; declaredPrdEpicDependencies still matches only the unhyphenated `E0[A-D]` form), so no code introducing the ruled-out shape was added.",
+  "packet_id": "00150362f5d95acca52d25a3",
+  "rationale": "The decision forbids one specific construction: removing the roadmap and the Board from a broad scan by listing them as exceptions, rather than declaring the scanned input set positively and closed. I looked for that construction at every scanning site in the recorded scope. The wording scan takes the whole tracked-file set from git with zero exclusions and documents that an allowlist was rejected precisely because it kept leaking; the renderer enumerates its two output surfaces positively and takes its inputs from a named catalog plus ticket contracts; the resolver deliberately does not read projection surfaces at all; the cross-epic dependency test builds its declared-edge set by reading the PRD directory positively. Nothing subtracts docs/tickets/BOARD.md or docs/planning/AOS-EXECUTION-ROADMAP.md from a wider sweep. On top of that, the patch from base to finished tree is empty and the tree still shows the unrepaired entry-ticket dependencies and the unhyphenated-only PRD epic matcher, so the implementation introduced no new scanning behaviour of any kind. Whether the task was actually completed is a separate question from the one asked; on the recorded decision the tree clearly stays outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

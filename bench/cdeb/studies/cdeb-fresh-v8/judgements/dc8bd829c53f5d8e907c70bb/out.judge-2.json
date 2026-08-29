@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out \u201cnormalized per-port tables\u201d because canonical artifact bytes already preserve the replay contract without duplicating serializers; active for gitseed/storage.py and tests/test_storage.py.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/storage.py",
+    "tree/tests/test_storage.py",
+    "tree/gitseed/storage_schema.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "A point lookup selects the correction-link identifier and the existing whole-artifact byte blob for one run, reconstructs the artifact from those canonical bytes, and raises KeyError containing the requested identifier when no row exists. It introduces no per-port tables or additional serializers.",
+  "packet_id": "dc8bd829c53f5d8e907c70bb",
+  "rationale": "Within the decision\u2019s active scope, the implementation directly follows the retained whole-artifact design. The new lookup reads correction metadata alongside the canonical artifact blob from the existing run table; it does not normalize artifact port data into separate tables or duplicate artifact serialization.",
+  "reexplanation_required": "NO"
+}

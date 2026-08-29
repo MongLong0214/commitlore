@@ -1,0 +1,19 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"filtering the roadmap and Board out of a broad input scan\" \u2014 \"an exclusion list silently readmits any projection added later, so the input set is declared positively and closed.\"",
+  "evidence_paths": [
+    "diff.patch",
+    "scripts/render-execution-views.mjs",
+    "scripts/validate-planning.mjs",
+    ".github/workflows/operational-state.yml",
+    "docs/tickets/BOARD.md",
+    "tests/planning-contract.test.mjs",
+    "tests/execution-views.test.mjs",
+    "package.json"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The finished tree is byte-identical to the base tree: diff.patch is 0 bytes, and nothing the task asked for is present \u2014 docs/tickets/BOARD.md rows 19/22/25 still render `None` for E0B-001, E0C-001 and E0D-001; the three ticket contracts still carry `- Dependencies: None`; docs/issues.json still holds `dependencies: []` for all three; and the cross-epic basis matcher in tests/planning-contract.test.mjs:28 is still the unhyphenated `/^(E0[A-D]|E\\d+|D0)$/`, so a PRD dependency written `E0-A` still declares no edge. On the decision's own subject matter, the surviving code derives the board and roadmap header from an enumerated, closed input set: scripts/render-execution-views.mjs reads exactly docs/issues.json (CATALOG_PATH, line 183) plus the ticket contracts each catalog record names via `ticket_path` (lines 297-336), and writes only into the two named marker blocks listed in SURFACES (lines 16-19). No code path anywhere walks a directory of documents and then removes docs/tickets/BOARD.md or docs/planning/AOS-EXECUTION-ROADMAP.md from the result. The board is likewise not consumed as readiness state: the operational-state workflow computes state from scripts/resolve-execution-state.mjs and runs the renderer only in `--check` drift mode.",
+  "packet_id": "084c5f67189e6f3dee76f1c8",
+  "rationale": "The question is whether the final tree implements the ruled-out approach \u2014 a broad input scan with the roadmap and Board filtered out by exclusion. It does not. The renderer's inputs are declared positively and closed (the catalog file, plus the ticket contracts that catalog itself names), and the projection surfaces it writes are a fixed two-entry list; there is no scan-then-exclude anywhere in the scoped paths, and the board is never read as an operational readiness input. Separately, and independent of the compliance question, this tree implements none of the task: the diff is empty, the three entry-ticket dependencies are unchanged in all three representations (contract, catalog, board), no regression coverage for the hyphenated `E0-A` PRD form was added, and the epic-identity repair the task centers on is absent. A tree that changed nothing cannot have introduced the ruled-out approach, so the recorded decision is not violated \u2014 that is what COMPLIANT means here, not that the work was done.",
+  "reexplanation_required": "NO"
+}

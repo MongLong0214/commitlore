@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "keep the wildcard census and rely on the focused-lane guard \u2014 recorded against packages/schema/src/capability.ts, packages/schema/test/capability.test.ts, tests/planning-contract.test.mjs, tests/planning/workspace-skeleton.test.mjs; lifecycle active. The ruled-out approach is replacing the wildcard test census with something other than the wildcard + focused-lane-guard arrangement.",
+  "evidence_paths": [
+    "diff.patch",
+    "tree/package.json",
+    "tree/tests/planning/workspace-skeleton.test.mjs",
+    "tree/packages/schema/src/capability.ts",
+    "tree/packages/schema/test/capability.test.ts"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The final tree is byte-identical to the base tree: diff.patch is a zero-byte file (md5 d41d8cd98f00b204e9800998ecf8427e). Test discovery is still the runner's own default file sweep \u2014 package.json declares `\"test\": \"node --test\"` with no explicit file list, and tests/planning/workspace-skeleton.test.mjs:31-47 pins that exact script text verbatim. The guard that backstops it is still the per-pattern case-count check at tests/planning/workspace-skeleton.test.mjs:717, which runs `npm test -w @aos/schema -- <pattern>` for ten named lanes, asserts each ran an exact count (capability = 19), and asserts a non-matching pattern runs fewer than the smallest lane. Neither the sweep nor the guard was altered, and no enumerated-file census was introduced anywhere. Separately, the task itself is not implemented: packages/schema/src/capability.ts:49-55 still declares `ValidationResult` as `{ ok: boolean; errors; rows: CapabilityRow[]; required_event_groups; coverage }` \u2014 a non-discriminated shape that hands back `CapabilityRow[]` and derived coverage on the failure returns at lines 268, 271 and 432 \u2014 and packages/schema/test/capability.test.ts:100-101 still reads `result.rows` without narrowing on `ok`.",
+  "packet_id": "9a5d953129f65b82d485c599",
+  "rationale": "The recorded decision is a keep-as-is ruling about how the repository counts its tests: the wildcard census stays and the focused-lane guard carries the weight. The ruled-out approach is therefore a move away from that arrangement. The final tree makes no change at all \u2014 the patch is empty and every artifact the decision names is unchanged, so the wildcard `node --test` script, the workspace-skeleton assertion that pins it, and the focused-lane case-count guard all stand exactly as the decision left them. A tree that changes nothing cannot implement the approach the decision ruled out, so this is a clear COMPLIANT rather than an unsettled case; approving it would require no one to re-explain the census ruling. Worth flagging outside the decision question: the task was not carried out either. `validateCapabilityMatrix` still returns a single `ok: boolean` shape that presents `rows: CapabilityRow[]` and derived coverage on failure paths, and no coverage was added for the runtime payload or the TypeScript-facing contract. That is a completeness failure, not a decision violation, and the label answers only the decision question I was asked.",
+  "reexplanation_required": "NO"
+}

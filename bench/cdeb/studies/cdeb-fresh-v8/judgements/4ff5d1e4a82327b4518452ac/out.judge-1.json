@@ -1,0 +1,19 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"embed the canonical reports in specs/doctor-output.v0.json\" \u2014 the ticket grants fixtures/doctor/*.json as the home for the canonical reports, and sibling precedent does not override a path the ticket names. Scope covers fixtures/doctor/*.json, packages/schema/src/doctor-contract.ts, packages/schema/test/doctor-contract.test.ts, specs/doctor-output.v0.json, tests/planning-contract.test.mjs, tests/planning/workspace-skeleton.test.mjs; lifecycle: active.",
+  "evidence_paths": [
+    "diff.patch",
+    "specs/doctor-output.v0.json",
+    "fixtures/doctor/complete.json",
+    "fixtures/doctor/blocked.json",
+    "packages/schema/src/doctor-contract.ts",
+    "packages/schema/test/doctor-contract.test.ts",
+    "packages/schema/package.json",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "specs/doctor-output.v0.json (10 KB) carries only an index of the eight canonical reports \u2014 each entry is three scalars (report_id, ordinal, matrix_variant) \u2014 plus the locator pair canonical_fixture_directory: \"fixtures/doctor\" and canonical_fixture_name_template: \"<report_id>.json\". The report bodies themselves (contract_id, command, runtime_id, assessment_mode, capability_digest, observations, verdict, \u2026, ~14 KB each) live one-per-file under fixtures/doctor/. packages/schema/test/doctor-contract.test.ts builds its corpus by reading that fixture directory listing and passes it as a separate argument to validateDoctorOutput(report, contract, matrix, fixtures), so the validator resolves report content from the fixture files, not from the spec document. There is no second copy of any report body inside the spec.",
+  "packet_id": "4ff5d1e4a82327b4518452ac",
+  "rationale": "diff.patch is 0 bytes, so the finished tree is byte-identical to the base tree; independently of that, I inspected the finished tree directly for the ruled-out arrangement and it is absent. The one place the decision names \u2014 specs/doctor-output.v0.json \u2014 holds a reference table (report_id/ordinal/matrix_variant) and a pointer to fixtures/doctor, while the eight full report payloads sit in fixtures/doctor/*.json, which is exactly the arrangement the decision's reason preserves. doctor-contract.ts even asserts canonical_fixture_directory === \"fixtures/doctor\" and the test file comments that \"there is no second copy of a report anywhere to drift.\" Nothing in the tree moves report bodies into the spec, and the recorded scope names no other path where an equivalent embedding could have happened. Separately worth flagging, though it is not what I am judging: the task's actual work is also not present \u2014 packages/schema/package.json still lacks a \"type\" declaration and tests/planning/workspace-skeleton.test.mjs:369 still asserts each workspace manifest's identity deepEquals exactly {name, version, private}, so the MODULE_TYPELESS_PACKAGE_JSON change was not made. An unchanged tree cannot implement the ruled-out approach, and the tree independently keeps the reports outside the spec, so this is COMPLIANT rather than INDETERMINATE.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: letting a grading failure end the run \u2014 because it makes one flaky model call discard every candidate already screened. Scope: gitseed/pipeline/__init__.py, gitseed/pipeline/run.py, tests/test_pipeline.py; lifecycle active.",
+  "evidence_paths": [
+    "gitseed/pipeline/run.py",
+    "tests/test_pipeline.py",
+    "gitseed/pipeline/__init__.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only production change is inside the branch that handles a collection whose candidate list was truncated: it now captures the collector's stop reason into a local, records the same 'collection stopped early: <reason>' incomplete line, and additionally sets the run-level rate-limited flag when that reason mentions a rate limit. No control flow is added or removed \u2014 the run proceeds into the per-candidate loop exactly as before, and the collection remains reported as incomplete with its reason retained. The grader call site (gitseed/pipeline/run.py:278-295) is untouched: an exception from grader.evaluate (including ModelInputTooLarge raised while building the digest) is caught per candidate, appended as an incomplete line naming that repository, recorded as a Reviewed entry with grade=None and a withheld explanation, and the loop continues to the remaining candidates. Nothing in the change causes a grading exception to propagate, to abort the loop, or to discard already-screened entries; the returned result still carries every candidate's screening outcome.",
+  "packet_id": "7bbe23b383ce636a9ef37240",
+  "rationale": "The decision forbids a specific failure-propagation shape at the grading seam: one model call failing and taking the whole run (and every already-screened candidate) with it. The implementation does not touch that seam. The two-line production edit sits in the collection-truncation branch above the loop and only widens what feeds PipelineResult.rate_limited, which is the flag the task asked for; the incomplete flag and the incomplete_because line are preserved verbatim. The grading try/except still catches broadly with an explicit 'one repository, not the run' intent, records the failure against that candidate, and continues \u2014 and the tests that guard exactly this (a failing grader recorded against that candidate only, with the sibling candidate still graded; a grading timeout reported while the entry survives as ungraded; an oversized digest reported without ending the run) are unmodified by the diff and pass. I ran the module's suite in the finished tree: 25 passed. The test-file change is a single added assertion on rate_limited alongside the existing incomplete assertions, not a relaxation of any grading-failure guard. This is plainly outside the ruled-out approach rather than a close call, so INDETERMINATE would understate how clearly the record settles it.",
+  "reexplanation_required": "NO"
+}

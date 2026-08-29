@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"storage replay as deserialization\" is ruled out: replay must recompute output from recorded port responses (scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active).",
+  "evidence_paths": [
+    "diff.patch",
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "gitseed/application.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only production change is the ORDER BY clause of the query backing SQLiteRunStore.observations(): rows from the repository_observations table are now returned sorted by observed_at then by the monotonic observation_id, so a backfilled older run saved last still sorts first while same-timestamp rows keep insertion order. The replay entry point in gitseed/storage.py is untouched \u2014 SQLiteRunStore.replay() still loads the artifact bytes and hands them to gitseed.application.replay, which checks engine versions and then calls re_evaluate \u2192 execute(...) with replay-backed repository/files/model/clock ports, i.e. it re-runs the pipeline over the recorded port responses rather than reconstructing the stored output object. No new code path returns a previously recorded output in place of recomputation, and the reconstitution of StoredObservation values from the derived observations table is pre-existing behavior that predates this change.",
+  "packet_id": "2ba431444605c61f5b574915",
+  "rationale": "The decision governs how replay produces its output: it must be recomputed from recorded port responses, not deserialized from a stored result. The implementation touches a different, non-replay path \u2014 the ordering of the derived observation history \u2014 and leaves both the replay method and the recomputation machinery it delegates to unchanged. The existing guard tests for the decision (test_re_evaluating_a_full_source_stored_artifact_recomputes_recorded_port_responses, which corrupts a stored derived score and asserts replay restores the correct value by executing the recorded port responses, and test_stored_replay_has_no_external_writer_port) are untouched by the diff and still hold. The added test only asserts observation ordering across out-of-order saves. Nothing in the final tree substitutes deserialization of a recorded output for recomputation, so approving this patch would not require anyone to revisit the recorded decision.",
+  "reexplanation_required": "NO"
+}

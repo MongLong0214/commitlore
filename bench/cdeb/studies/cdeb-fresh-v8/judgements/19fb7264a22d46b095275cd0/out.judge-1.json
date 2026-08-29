@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"storage replay as deserialization\" is ruled out \u2014 replay must recompute output from recorded port responses (scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active).",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "diff.patch",
+    "gitseed/application.py",
+    "gitseed/storage_schema.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only production change is the SQL ordering clause in SQLiteRunStore.observations(): the SELECT over repository_observations now orders by `observed_at, observation_id` instead of `observation_id` alone, so the returned StoredObservation tuple is sorted oldest-to-newest by recorded timestamp with insertion sequence as the tiebreaker. The run-restoration path is untouched: SQLiteRunStore.replay() still loads the stored bytes and hands them to application.replay(), which renders the artifact, raises on engine-version mismatch, and then calls re_evaluate() to re-execute the pipeline through _ReplayRepository/_ReplayFiles/_ReplayModel/_ReplayClock ports backed by the recorded responses. No code path was added that returns a deserialized artifact in place of a recomputed one. The rest of the diff is a new test asserting the observation ordering for runs saved out of timestamp order.",
+  "packet_id": "19fb7264a22d46b095275cd0",
+  "rationale": "The decision governs how replay produces its output: it forbids treating storage replay as mere deserialization and requires recomputation from recorded port responses. The implementation changes only the read ordering of the derived observation projection \u2014 a separate table and a separate accessor that has never been the replay path and produces StoredObservation rows, not a RunArtifact. gitseed/storage.py:107 still routes replay through application.replay -> re_evaluate, which executes the request against replay ports built from the recorded artifact, and tests/test_storage.py:261-264 still asserts that replay restores output by executing recorded port responses. Nothing in the final tree substitutes RunArtifact.from_bytes (the deserialization-only shape, used by load()/history()) for that recomputation. Reordering rows by observed_at does read a persisted value directly, but persisted observation history is not replay output and the decision's reason and scope do not reach it; stretching it to cover any read of stored data would be writing a new decision. Within the recorded scope, the tree clearly stays outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

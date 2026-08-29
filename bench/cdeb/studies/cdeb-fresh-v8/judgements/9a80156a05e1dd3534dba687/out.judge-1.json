@@ -1,0 +1,15 @@
+{
+  "": "",
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"a separate evidence-kind allowlist\" \u2014 because \"a literal detached from the producer methods can silently accept evidence no collector emits\" (scope: gitseed/category.py, tests/test_category.py; lifecycle: active).",
+  "evidence_paths": [
+    "gitseed/category.py",
+    "tests/test_category.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The set of acceptable evidence kinds is still computed at runtime by reflecting over the tuple of producer callables: `evidence_names` maps `_producer_name` (the method's `__name__` minus the leading underscore) over `self._producers`, and `read_evidence` calls that same tuple to emit evidence. `satisfiable_evidence()` returns that derived set, and `validate_pack` checks each `EvidenceRequirement.evidence` against it, so a pack naming a kind no producer emits still raises `UnavailableEvidence`. The change replaces the whole-manifest substring match with per-format entry-name extraction (`_manifest_entry_names` dispatching to package.json/pyproject/Cargo/go.mod/requirements parsers plus `_normalize_entry`), so the `manifest_entries` value `mcp` and the `dependencies` value `ollama` fire only on an exactly-normalized declared entry name and not on prose, comments, or `mcp-tools`/`ollama-client`. No new literal collection of evidence-kind names gates acceptance anywhere in the production path.",
+  "packet_id": "9a80156a05e1dd3534dba687",
+  "rationale": "The decision forbids introducing a standalone literal list of evidence kinds that would sit apart from the producer methods and could admit kinds nothing collects. The final tree does not add one. gitseed/category.py:32-38 keeps the derivation seam intact (`evidence_names` from `_producers` via `_producer_name`), gitseed/category.py:235-236 and 307-314 still route pack validation through that derived set, and tests/test_category.py:90-100 still asserts the vocabulary equals both what `read_evidence` emits and the producer method names. The diff touches only the manifest-parsing internals behind the two producers. The literal string tuples the patch does add \u2014 the package.json fields harvested in `_package_entries` (`dependencies`, `devDependencies`, `optionalDependencies`, ...) \u2014 are npm manifest section keys used to collect dependency names from a file; they never enter the evidence-kind vocabulary or the `validate_pack` check, so the name overlap with the `dependencies` evidence kind is coincidental rather than a second acceptance list. The only hardcoded evidence-name set in the repo, tests/test_seam.py:370, is a pre-existing test double outside both the diff and the recorded scope paths. Tests pass (19/19 in tests/test_category.py), confirming the described behavior. Approving this patch would not require re-explaining the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

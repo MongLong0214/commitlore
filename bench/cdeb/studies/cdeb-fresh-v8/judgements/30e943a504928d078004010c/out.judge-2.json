@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision ruled out \u201cscoring and screening ports\u201d in `gitseed/ports.py` because both are pure deterministic domain functions with no outside capability to supply.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/ports.py",
+    "tree/gitseed/application.py",
+    "tree/gitseed/category.py",
+    "tree/tests/test_seam.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "If the supplied evidence reader throws, execution records a category-read failure and emits an empty, absent-basis evidence item for each evidence name advertised by that reader. Scoring and approval inputs remain unchanged. No scoring or security-screening capability is supplied through a port.",
+  "packet_id": "30e943a504928d078004010c",
+  "rationale": "The implementation changes failure handling in `application.py` and makes the absent-evidence helper accept a vocabulary in `category.py`. The scoped file, `gitseed/ports.py`, is unchanged by the patch, and its finished `RunPorts` still has no scoring or security-screening port. Using the existing category evidence reader\u2019s advertised vocabulary is not the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

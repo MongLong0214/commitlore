@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision ruled out keeping focused-lane counts as a floor because existing slack could allow test cases and allowlist entries to be removed without failure.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The focused-lane guard requires each lane's reported passing count to equal an exact recorded count. A count below or above that value fails; it is not accepted merely for meeting a minimum floor.",
+  "packet_id": "df74a960276aad933b263394",
+  "rationale": "Within the decision's named path and active lifecycle, the finished tree explicitly uses exact equality for lane counts and even documents that they are \u201cExact, not a floor.\u201d That clearly stays outside the ruled-out floor-based approach. The empty diff and the separate derivation-proof task do not alter the observable decision-relevant behavior in the finished tree.",
+  "reexplanation_required": "NO"
+}

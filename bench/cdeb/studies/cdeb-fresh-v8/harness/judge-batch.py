@@ -216,6 +216,26 @@ def main():
         print(f"  refusing: {len(problems)} problems, e.g. {problems[0]}")
         return 2
 
+    def hit_a_session_limit(packet_id, seat):
+        """Whether the last attempt failed because the subscription window closed.
+
+        A seat that has exhausted its session limit fails every remaining packet the
+        same way, and retrying 264 of them spends an hour learning it again. The
+        signal is the CLI's own 429, read from the raw response rather than inferred
+        from an empty output file -- an empty file is also what a crash leaves.
+        """
+        for name in (f"raw.{seat}.json",):
+            path = os.path.join(results_root, packet_id, name)
+            if not os.path.exists(path):
+                continue
+            try:
+                body = json.load(open(path))
+            except (json.JSONDecodeError, OSError):
+                continue
+            if body.get("api_error_status") == 429:
+                return str(body.get("result", ""))[:120]
+        return None
+
     results_root = os.path.join(SCRATCH, "v8run/judgements")
     os.makedirs(results_root, exist_ok=True)
     manifest = os.path.join(V8, "judgements-seal-manifest.jsonl")
@@ -235,6 +255,15 @@ def main():
                 ["bash", os.path.join(HERE, "judge-run.sh"),
                  packet_path(by_packet[pid]), seat, family, model, results_root],
                 capture_output=True, text=True)
+            limited = hit_a_session_limit(pid, seat)
+            if limited:
+                print(f"  {seat} stopping: {limited}", flush=True)
+                done = sum(1 for line in open(manifest)
+                           if json.loads(line)["judge"] == seat) \
+                    if os.path.exists(manifest) else 0
+                print(f"  {seat} has {done} of {len(packet_ids)} sealed; the rest "
+                      f"resume after the window reopens", flush=True)
+                break
             entry = seal(out, pid, seat, manifest)
             if entry.get("sealed"):
                 made += 1

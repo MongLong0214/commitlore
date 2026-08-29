@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "The recorded decision ruled out \u201ckeep the lane counts as a floor,\u201d because slack could allow test cases and allowlists to be removed without failure.",
+  "evidence_paths": [
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning-contract.test.mjs",
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "Each focused schema lane must report zero failures and a pass count exactly equal to its pinned per-lane count; both lower and higher counts fail instead of being accepted above a minimum floor.",
+  "packet_id": "0e1e41fbfc95871ebba773f1",
+  "rationale": "Within the active four-path scope, the finished tree explicitly documents \u201cExact, not a floor\u201d and enforces the lane counts with strict equality. The planning-contract expectations likewise pin exact census and allowlist counts. The capability task does not introduce a minimum-count comparison. Therefore the final tree clearly stays outside the ruled-out floor-with-slack approach.",
+  "reexplanation_required": "NO"
+}

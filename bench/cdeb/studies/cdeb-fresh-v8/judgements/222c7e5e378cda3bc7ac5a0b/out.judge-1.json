@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"embed the canonical reports in specs/doctor-output.v0.json\" \u2014 the ticket grants fixtures/doctor/*.json, and sibling precedent does not override a path the ticket names.",
+  "evidence_paths": [
+    "specs/doctor-output.v0.json",
+    "fixtures/doctor/complete.json",
+    "packages/schema/package.json",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "specs/doctor-output.v0.json is byte-for-byte untouched by the change and still holds only pointers to the report bodies \u2014 a `canonical_fixture_directory` of \"fixtures/doctor\", a `canonical_fixture_name_template` of \"<report_id>.json\", and a `canonical_reports` array whose eight entries carry just report_id, ordinal, and matrix_variant. The eight actual report documents (contract_id, command, capability_digest, observations, verdict, exit_code, reasons, human_projection) remain as separate files under fixtures/doctor/. The change instead adds `\"type\": \"module\"` to packages/schema/package.json and makes the workspace-skeleton manifest assertion branch on path === \"packages/schema\" to expect that extra identity field while every other workspace keeps the original three-field identity and the forbidden-field and single-lane script checks.",
+  "packet_id": "222c7e5e378cda3bc7ac5a0b",
+  "rationale": "The decision rules out one specific relocation: moving the canonical report bodies into specs/doctor-output.v0.json instead of leaving them at the ticket-granted fixtures/doctor/*.json paths. The final tree does not do that. The spec file is not in the diff at all, and reading it in the finished tree confirms it still references the reports indirectly by directory and name template, with the payloads living in fixtures/doctor/. The task here is unrelated in substance \u2014 silencing Node's MODULE_TYPELESS_PACKAGE_JSON warning for the @aos/schema doctor-contract lane \u2014 and the implementation stays within that: a `type` declaration on the schema workspace manifest plus a deliberate, narrowly-scoped carve-out in the manifest expectation that leaves the other workspaces' constraints intact. Nothing in the change embeds, inlines, or duplicates report content into the spec, so approving this patch would not require anyone to re-explain the recorded decision. The one thing worth noting is that packages/schema/package.json is not among the eleven scope paths, but that is a scope-coverage observation about the recorded screen, not the ruled-out approach \u2014 the decision's subject matter is untouched either way.",
+  "reexplanation_required": "NO"
+}

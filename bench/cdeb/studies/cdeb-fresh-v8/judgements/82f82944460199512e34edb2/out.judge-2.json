@@ -1,0 +1,14 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision ruled out keeping lane counts as a floor because slack permits tests and allowlist entries to disappear undetected.",
+  "evidence_paths": [
+    "tree/tests/planning/workspace-skeleton.test.mjs",
+    "tree/packages/schema/test/capability.test.ts",
+    "tree/packages/schema/src/capability.ts"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The focused schema lanes require their observed passing-test counts to equal fixed values; the capability lane must run exactly 19 tests. The implementation does not accept any count at or above a lower bound.",
+  "packet_id": "82f82944460199512e34edb2",
+  "rationale": "Within the recorded four-path scope, the finished tree explicitly says the lane counts are exact, not floors, and enforces equality. Thus it stays outside the ruled-out floor-with-slack approach. Whether the separate proof-validation task is otherwise complete does not change this decision-boundary finding.",
+  "reexplanation_required": "NO"
+}

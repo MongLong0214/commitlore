@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision rules out \u201cletting a grading failure end the run,\u201d because one flaky model call would discard every candidate already screened.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/pipeline/run.py",
+    "tree/tests/test_pipeline.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "A rate-limit-truncated collection returns an incomplete result with its stop reason retained and the rate-limit flag set. Separately, a grading exception is caught for the affected candidate, recorded as an incomplete reason, and processing continues without discarding screened candidates.",
+  "packet_id": "fd5983c189b33f988019fae7",
+  "rationale": "The change only propagates collection-stage rate limiting into the result. Within the decision\u2019s active path scope, grading failures remain isolated per candidate and do not terminate the pipeline or erase prior work. The finished tests explicitly cover both behaviors.",
+  "reexplanation_required": "NO"
+}

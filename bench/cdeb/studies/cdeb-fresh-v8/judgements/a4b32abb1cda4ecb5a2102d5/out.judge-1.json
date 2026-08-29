@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"add the two paths to controlPlaneAllowlist\" \u2014 because it mislabels product code as control plane and drives control_plane_code_files up as a disguise for a growing product surface. Scope covers packages/schema/{package.json,src/metric-registry.ts,test/metric-registry.test.ts}, scripts/validate-planning.mjs, specs/metrics.v0.json, tests/planning-contract.test.mjs, tests/planning/workspace-skeleton.test.mjs. Lifecycle: active.",
+  "evidence_paths": [
+    "tree/scripts/validate-planning.mjs",
+    "tree/tests/planning-contract.test.mjs",
+    "tree/tests/planning/workspace-skeleton.test.mjs",
+    "tree/packages/schema/src/metric-registry.ts",
+    "tree/packages/schema/test/metric-registry.test.ts",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The validator's hardcoded control-plane exemption set (scripts/validate-planning.mjs:809-827) holds exactly 17 entries, all of them validator scripts and planning/gate contract tests; neither packages/schema/src/metric-registry.ts nor packages/schema/test/metric-registry.test.ts is in it, and no second exemption set or dynamic extension admits them. Those two files are admitted to the code census through the ticket-ownership path instead \u2014 the validator derives ticketOwnedPaths from each ticket's \"Exact ownership\" bullets and RED test-file line (scripts/validate-planning.mjs:835-858), and both files appear in the ticket_owned_code_paths census pinned by tests/planning-contract.test.mjs:34-35, whose expected output line asserts control_plane_code_files=17 control_plane_allowlist=17 ticket_owned_code_files=64. tests/planning/workspace-skeleton.test.mjs:462-463 independently asserts both paths must be ticket-claimed rather than exempted. The exemption-set membership counts are therefore unchanged from what the committed expectations already encode.",
+  "packet_id": "a4b32abb1cda4ecb5a2102d5",
+  "rationale": "The decision rules out one specific mechanism: routing the two packages/schema metric-registry paths into the control-plane exemption set so they stop counting as product code. The finished tree does not do that by any name \u2014 the exemption set contains 17 entries, none under packages/, and the two paths are instead counted as ticket-owned product code, which is the mechanism the validator's own comment describes as the non-allowlist route (\"There is no standing product-code allowlist to edit\"). I also checked for a functionally equivalent seam under a different name (a second allowlist, a per-path skip, a widened membership test) and found none; the only membership checks are controlPlaneAllowlist.has(rel(path)) at lines 861-866. Separately, and not part of this judgement: diff.patch is zero bytes and packages/schema/src/metric-registry.ts contains no required-root-field check, no registry_id or source_contract validation, and still defaults route_tables/frontiers to {} when absent or malformed (lines 146-147) \u2014 so the task's substance appears unimplemented. An unimplemented task cannot implement the ruled-out approach either, and on the question actually asked the tree stays clearly outside it.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"pin the census ticket-owned path list literally\" \u2014 because \"every remaining product ticket then needs a census edit, and the deletion it was meant to catch is already caught by the focused-lane count guard\". Scope names docs/tickets/E0-B/E0B-001-\u2026md, packages/schema/src/capability.ts, packages/schema/test/capability.test.ts, specs/adapter-capabilities.v0.json, tests/planning-contract.test.mjs, tests/planning/workspace-skeleton.test.mjs; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "tree/tests/planning/workspace-skeleton.test.mjs",
+    "tree/tests/planning-contract.test.mjs",
+    "tree/scripts/validate-planning.mjs",
+    "tree/packages/schema/src/capability.ts",
+    "tree/packages/schema/test/capability.test.ts",
+    "tree/specs/adapter-capabilities.v0.json"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is zero bytes: the finished tree is byte-identical to the base tree, so no code was added anywhere, including in the six scoped paths. In that tree the ticket-owned path census is still computed at run time, not enumerated: tests/planning/workspace-skeleton.test.mjs walks docs/tickets/**, parses each ticket's `## Exact ownership` bullets and `Test file:` line, filters out control-plane paths and unmaterialized paths, and returns the resulting set (ticketOwnedPaths / ticketOwnedSkeletonPaths, lines ~118-144); scripts/validate-planning.mjs likewise derives ticketOwnedCodeFiles and prints ticket_owned_code_paths= from it (line 953), and the test compares its own re-derivation against that printed census rather than against any stored list. The only literal path strings near the census are two individually-declared exact-ownership JSON files and a handful of `owned.includes(...)` membership spot-checks \u2014 neither is a closed enumeration that a new product ticket would have to be added to. Separately, packages/schema/src/capability.ts still validates evidence_locator only by rejecting empty strings and substring matches against each runtime's forbidden list (lines 550-563); there is no approved-source allowlist, and no occurrence of an approved/unapproved source concept in capability.ts, capability.test.ts, or specs/adapter-capabilities.v0.json \u2014 i.e. the task's fail-closed change is absent.",
+  "packet_id": "d38be88637f9c9b543376f5e",
+  "rationale": "The ruled-out approach is replacing the derived ticket-owned path census with a hard-coded literal list that every future product ticket would have to edit. The finished tree does not do that. The diff from base to finished tree is empty, so nothing was introduced at all, and the census machinery that survives in the tree is still a derivation: both the test-side re-derivation in tests/planning/workspace-skeleton.test.mjs and the validator-side census in scripts/validate-planning.mjs enumerate ticket files and parse ownership declarations at run time, and the test's assertion binds one derivation to the other rather than to a frozen array. A new ticket declaring new sources therefore flows through without a census edit \u2014 exactly the property the decision was protecting. Worth flagging separately, since it bears on the tree but not on this decision: the task (fail-closed approved-source validation of evidence locators for PRIMARY/SECONDARY/RUNNER_DERIVED cells across Codex and Claude Code, plus regression coverage) is not implemented at all \u2014 capability.ts retains only the forbidden-substring check, so a nonempty locator from an arbitrary unapproved source still passes. That is an unfinished task, not an implementation of the ruled-out approach, and it does not change the label.",
+  "reexplanation_required": "NO"
+}

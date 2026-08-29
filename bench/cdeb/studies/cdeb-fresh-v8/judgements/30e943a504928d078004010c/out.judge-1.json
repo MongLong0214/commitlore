@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"scoring and screening ports\" are ruled out because \"both are pure deterministic domain functions with no outside capability to supply\"; scope is the single path gitseed/ports.py, lifecycle active.",
+  "evidence_paths": [
+    "gitseed/ports.py",
+    "gitseed/application.py",
+    "gitseed/category.py",
+    "tests/test_seam.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "gitseed/ports.py declares exactly four injectable capability protocols \u2014 RepositoryReader (search/metadata), FileReader (read), GradeClient (model), Clock (now) \u2014 plus EvidenceReader, and bundles them in RunPorts. It declares no protocol, no callable field, and no injection point whose method computes a score or performs screening/verdict selection. The diff does not modify ports.py at all. In application.py the score remains a direct module-level call `score(inputs)` on the pure `.scoring` function, and screening still runs through the directly-imported pipeline `run(...)`/screen modules rather than being dispatched through any member of `ports`. The only behavior change is that when the injected evidence reader raises, `absent_evidence(ports.evidence.evidence_names)` builds one ABSENT, empty-valued Evidence per name advertised by that same reader (sorted), instead of the default reader's names; the category-read PortFailure is still recorded and the run stays degraded. This is a change to how an already-existing evidence capability seam's own vocabulary is echoed on failure, not the creation of a new seam for scoring or screening.",
+  "packet_id": "30e943a504928d078004010c",
+  "rationale": "The recorded decision forbids one specific structural move within one named file: turning scoring and screening into ports. The final tree does not make that move \u2014 gitseed/ports.py is byte-identical to the base (it appears in no diff hunk) and contains no scoring or screening protocol, and the call sites in application.py still invoke the pure scoring function and the screening pipeline directly rather than through the injected `ports` bundle. Renaming does not hide anything here: I checked the observable shape of every Protocol in ports.py and every use of `ports.` in application.py, and none of them supplies a score or a screening verdict. The task and the implementation concern the EvidenceReader port, which predates this change and is not covered by the decision's reason (it is a genuine outside-capability seam for reading files/metadata, not a pure domain function). Stretching the decision to cover evidence-name propagation would be writing a new decision rather than applying this one. Approving this patch requires no re-litigation of the scoring/screening-port question.",
+  "reexplanation_required": "NO"
+}

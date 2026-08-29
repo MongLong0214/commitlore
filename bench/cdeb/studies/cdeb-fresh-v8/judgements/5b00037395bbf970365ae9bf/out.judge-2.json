@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision rules out \u201cretrying on a bare 403\u201d because many such responses are permission errors that waiting cannot fix; its scope includes the collection and rate-limit code and tests.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/collect/search.py",
+    "tree/gitseed/collect/ratelimit.py",
+    "tree/tests/test_collect.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The collector rejects pages below 1 and per-page counts outside 1\u2013100 before contacting the transport. A 403 without rate-limit evidence is reported as a permissions failure without waiting or retrying; retry occurs only when headers identify the response as rate-limited.",
+  "packet_id": "5b00037395bbf970365ae9bf",
+  "rationale": "The finished change only adds pre-request paging validation and corresponding tests. It neither introduces nor enables retries for bare 403 responses, and the existing scoped behavior explicitly keeps those responses on the non-retry path.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"storage replay as deserialization\" is ruled out: replay must recompute output from recorded port responses (scope: gitseed/storage.py, tests/test_storage.py).",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "gitseed/application.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only production change is the SQL ordering of the derived observation-history read: `SELECT ... FROM repository_observations ORDER BY observation_id` becomes `ORDER BY observed_at, observation_id`, so rows come back sorted by their recorded timestamp with insertion sequence as the tiebreaker. The run-artifact retrieval path is untouched: `SQLiteRunStore.replay(run_id)` still loads the stored bytes and hands them to `application.replay`, which checks engine versions and then calls `re_evaluate`, re-executing the pipeline against `_ReplayRepository`/`_ReplayFiles`/`_ReplayModel`/`_ReplayClock` ports fed from the recorded responses. Nothing in the diff makes any replay result come from `RunArtifact.from_bytes`/`render` alone.",
+  "packet_id": "0286e9423609c534fa2b72d7",
+  "rationale": "The decision governs how replay produces output \u2014 it forbids replay collapsing into a plain deserialization of the stored artifact. The implementation touches a different seam entirely: the ordering of `repository_observations` rows returned by `observations()`, which are derived rows written at save time and never feed the replay path. `SQLiteRunStore.replay` is byte-for-byte unchanged and still routes through `application.replay` \u2192 `re_evaluate`, which re-executes the run against replay ports built from recorded port responses; the storage test asserting exactly that (`replayed.to_bytes() == recorded.to_bytes()` via `re_evaluate`, tests/test_storage.py:236-246) is also unchanged, as is the read-only-seam test at line 274. The test edit only replaces an append-ordering test with an out-of-timestamp-order one, matching the task. Both changed files are inside the recorded scope, but neither change implements or moves toward the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

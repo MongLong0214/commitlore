@@ -1,0 +1,18 @@
+{
+  "confidence": "medium",
+  "decision_clause": "Ruled out: \"pin the census ticket-owned path list literally\" \u2014 because \"every remaining product ticket then needs a census edit, and the deletion it was meant to catch is already caught by the focused-lane count guard\". Scope: the E0B-001 ticket, packages/schema/src/capability.ts, packages/schema/test/capability.test.ts, specs/adapter-capabilities.v0.json, tests/planning-contract.test.mjs, tests/planning/workspace-skeleton.test.mjs. Lifecycle: active.",
+  "evidence_paths": [
+    "diff.patch",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "tests/planning-contract.test.mjs",
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts",
+    "docs/tickets/E0-B/E0B-001-define-adapter-capability-schema-and-complete-event-matrix.md"
+  ],
+  "label": "COMPLIANT",
+  "note": null,
+  "observable_behavior": "diff.patch is zero bytes: the finished tree is byte-identical to the base tree, so no code in any scope path was added, removed, or rewritten. The census in tests/planning/workspace-skeleton.test.mjs still computes its ticket-owned set at run time by walking docs/tickets/**, parsing each ticket's `## Exact ownership` bullets and `- Test file:` line, subtracting a locally held control-plane set, and keeping only paths that stat as regular in-root files (lines 73-141); the set is never spelled out as a hardcoded array of ticket-owned product paths. The deletion signal the decision points at is still the exact per-lane case counts in the `focused-lane-is-not-silently-empty` case (lines 717-755, e.g. `[\"capability\", 19]`), which remain untouched. The one literal enumeration of ticket-owned paths in the tree \u2014 the `acceptedValidatorOutput`/`pendingValidatorOutput` regexes at tests/planning-contract.test.mjs:34-35 \u2014 is unchanged base-tree content, not something this work introduced; it is the long-standing 'coordinated census amendment' convention that other tickets (D0-005/006/007/008/009, E0B-003) already describe. Separately, the task itself is unimplemented: packages/schema/src/capability.ts:551-563 still only rejects missing/blank locators and locators containing a FROZEN_RUNTIMES forbidden phrase, with no approved-source (allowlist) check per runtime and frozen source class, and packages/schema/test/capability.test.ts has no accepted-declared / rejected-unapproved locator coverage.",
+  "packet_id": "0e03e2b8b25886b202e020fb",
+  "rationale": "The decision rules out replacing the derived ticket-owned census with a literally pinned path list, on the ground that the count guard already catches the deletion such a pin would detect. The finished tree makes no change at all relative to the base \u2014 diff.patch is empty \u2014 so the implementation neither adopted the ruled-out pin nor touched the derivation, the census output pins, or the focused-lane counts. The re-derivation in tests/planning/workspace-skeleton.test.mjs remains parse-driven over ticket documents, and the focused-lane count guard the decision relies on is intact. The only literal path enumeration in scope (the validator-output regexes in tests/planning-contract.test.mjs) is pre-existing base content preserved unchanged, which is why I did not treat it as this implementation adopting the ruled-out approach; that reading is the sole reason confidence is medium rather than high. Note for the record, though it is outside what I am judging: the task's substantive requirement \u2014 fail-closed approved-source validation of evidence locators plus regression coverage \u2014 is not present in the tree at all.",
+  "reexplanation_required": "NO"
+}

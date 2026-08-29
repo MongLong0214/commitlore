@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"JSON files on disk\" is ruled out; the recorded reason is that \"SQLite keeps each artifact atomically constrained with its correction lineage\" \u2014 scoped to gitseed/storage.py and tests/test_storage.py, lifecycle active.",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "gitseed/storage_schema.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "Persistence remains a single sqlite3 connection opened on a database path in SQLiteRunStore.__init__, with rows inserted into the run_artifacts and repository_observations tables inside `with self._connection` transactions. The new bounded reads are implemented entirely as SQL: history() and observations() build a query with a `WHERE rowid IN (SELECT rowid ... ORDER BY rowid DESC LIMIT ?)` (resp. observation_id) subselect and re-sort ascending, so the N most recently appended rows come back in append order; passing limit <= 0 raises ValueError, and omitting limit runs the original unbounded ordered SELECT. No file is written, read, enumerated, or globbed anywhere in the change \u2014 there is no filesystem write call, no per-run/per-observation file, and no directory scan serving as the record store.",
+  "packet_id": "0229de3b03c303322e8941e9",
+  "rationale": "The task asked for bounded recent slices from the existing SQLite run store, and the implementation delivers exactly that inside the SQL layer. The diff touches only the two scoped paths and adds nothing but LIMIT-bearing query variants plus two tests that exercise them through the store's own save/history/observations APIs against a real on-disk database (tmp_path / \"runs.db\"). The correction lineage the decision cited as its reason is untouched: corrects_run_id is still a self-referencing FK on run_artifacts, still carried through the limited history() rows, and the new test asserts the correction link survives the bounded read. The only appearances of `json` in the finished tree's scoped files are pre-existing uses of json.loads/json.dumps on RunArtifact.to_bytes() \u2014 that is the artifact's in-memory serialization format for the BLOB column and for round-trip assertions, not a file-on-disk record store; the bytes are handed to SQLite, never to a file handle. A JSON encoding stored inside a SQLite BLOB is not the ruled-out approach, which was about where records live, not how a single blob is encoded. Nothing here would require re-explaining why SQLite was chosen over JSON files.",
+  "reexplanation_required": "NO"
+}

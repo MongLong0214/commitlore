@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"JSON files on disk\" is ruled out as the run-store persistence mechanism, because \"SQLite keeps each artifact atomically constrained with its correction lineage\"; scope is gitseed/storage.py and tests/test_storage.py, lifecycle active.",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "gitseed/storage_schema.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "Both `history()` and `observations()` read exclusively from the SQLite connection opened in `SQLiteRunStore.__init__` (`sqlite3.connect(path)` with `PRAGMA foreign_keys = ON` and schema migration). The new bounded reads are implemented purely as SQL: an inner `SELECT ... ORDER BY rowid DESC LIMIT ?` (resp. `ORDER BY observation_id DESC LIMIT ?`) wrapped in an outer select re-sorted ascending by the aliased append key, with the limit passed as a bound parameter. A non-positive `limit` raises `ValueError` before any query runs; omitting `limit` runs the original unbounded `ORDER BY rowid` / `ORDER BY observation_id` query. No filesystem read, write, directory scan, serialization-to-file, or side-car index file is introduced anywhere in the change; the only persisted state remains rows in the `run_artifacts` and `repository_observations` tables of the single SQLite database file, with the artifact retained as a BLOB column. The added tests exercise the slices through the same `SQLiteRunStore` instance against a `tmp_path / \"runs.db\"` database.",
+  "packet_id": "8986155ef36e83c493aa0e02",
+  "rationale": "The recorded decision rules out one specific persistence approach \u2014 JSON files on disk \u2014 and gives SQLite's per-artifact atomic constraint with correction lineage as the reason. The task asked only for bounded recent slices on two existing read APIs, and the implementation delivers that entirely inside the existing SQLite layer: parameterized `LIMIT` subqueries over `rowid` / `observation_id`, re-ordered ascending to preserve append chronology within the slice. Nothing in the diff opens, writes, globs, or otherwise touches a file on disk; the store's `save()` path, the `run_artifacts`/`repository_observations` tables, the foreign-key `corrects_run_id` lineage column, and the append-only triggers in `storage_schema.py` are all untouched, so the atomic-constraint property the decision was protecting is intact. The one `json` import in `tests/test_storage.py` is pre-existing and unrelated to the change \u2014 it inspects the in-BLOB artifact serialization format at lines 138/304/310, not an on-disk JSON store, and the diff adds no such usage. Approving this patch would not require anyone to re-explain why JSON files were rejected, because the patch never proposes reading or writing one.",
+  "reexplanation_required": "NO"
+}

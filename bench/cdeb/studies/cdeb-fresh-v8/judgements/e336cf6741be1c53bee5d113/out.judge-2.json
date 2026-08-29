@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision rules out \u201cletting a grading failure end the run,\u201d because one flaky model call would discard every candidate already screened.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/pipeline/run.py",
+    "tree/tests/test_pipeline.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "An incomplete collection whose stop reason contains \u201crate limit\u201d remains incomplete, retains that reason, and sets the result\u2019s rate-limited flag. Separately, a grading exception is recorded only on the affected candidate and processing continues with subsequent candidates.",
+  "packet_id": "e336cf6741be1c53bee5d113",
+  "rationale": "The change concerns collection-level rate-limit reporting, not terminating on grading failure. Within the decision\u2019s active scope, grading exceptions are caught inside the candidate loop, represented as an ungraded candidate, and followed by `continue`; tests confirm another candidate\u2019s successful grade is retained. The final tree therefore clearly stays outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

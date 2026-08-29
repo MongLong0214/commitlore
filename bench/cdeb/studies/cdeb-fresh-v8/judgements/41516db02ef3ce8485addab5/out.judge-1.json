@@ -1,0 +1,18 @@
+{
+  "_note_ignored": null,
+  "confidence": "high",
+  "decision_clause": "A hand-maintained product-code allowlist per ticket is ruled out \u2014 \"each of the 60 remaining tickets would need a coordinated census amendment, and the list drifts from the tickets it mirrors\"; scope is the seven listed paths, including scripts/validate-planning.mjs and packages/schema/src/metric-registry.ts. Lifecycle: active.",
+  "evidence_paths": [
+    "diff.patch",
+    "tree/scripts/validate-planning.mjs",
+    "tree/packages/schema/src/metric-registry.ts",
+    "tree/packages/schema/test/metric-registry.test.ts",
+    "tree/tests/planning/workspace-skeleton.test.mjs",
+    "tree/docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is zero bytes: the finished tree is byte-identical to the base tree, so no code path was added, removed, or altered. In that tree, admission of product source files is still computed at run time by reading each ticket document's `## Exact ownership` bullets and its `- Test file:` line, splitting each `path \u2014 symbol` pair, and collecting the resulting paths into `ticketOwnedPaths` (scripts/validate-planning.mjs:834-859). Files are then partitioned against that derived set: any source file neither claimed by a ticket nor present in the fixed control-plane set fails closed with `unallowlisted product code` (lines 861-868). The only literal path list in the file is `controlPlaneAllowlist` (lines 809-826), which enumerates validators, resolvers and their own contract tests \u2014 it holds no per-ticket product file, and adding a ticket adds no entry to it; workspace-skeleton.test.mjs:476-495 re-derives the census independently and asserts the validator reports `product_code_files=0` / `product_code_paths=none`, and lines 640-706 assert that an unclaimed source file is rejected. The metric-registry validator itself is unchanged: it checks `contract_version`, rejects registry keys outside a fixed field-name list, and treats `consumers` only as a non-empty array used to reject dead routes (packages/schema/src/metric-registry.ts:69, 144-152, 264-272); it does not compare `registry_id` or `source_contract` to fixed values, nor does it require `consumers` to be exactly the nine-member set.",
+  "packet_id": "41516db02ef3ce8485addab5",
+  "rationale": "The recorded decision bars introducing a hand-maintained, per-ticket product-code allowlist that would have to be amended each time a ticket lands. The finished tree contains no such mechanism: the product-code census is still derived at run time from ticket documents, and the one static list present (`controlPlaneAllowlist`) covers control-plane tooling and its own tests rather than mirroring tickets \u2014 the ticket that owns the file under change (E0A-001) claims `packages/schema/src/metric-registry.ts` through its `## Exact ownership` line, not through any list edit. Since the diff is empty, nothing was added anywhere in scope that could constitute the ruled-out approach, and approving it would require no re-explanation of the decision. Separately and outside what I am asked to label: the task \u2014 enforcing `registry_id`, `source_contract`, and an exact nine-member `consumers` set \u2014 is not implemented in this tree at all; the validator only rejects an empty `consumers` array and never compares the identity/provenance fields to their frozen values. That is a completion gap, not a decision violation, and it does not move the label.",
+  "reexplanation_required": "NO"
+}

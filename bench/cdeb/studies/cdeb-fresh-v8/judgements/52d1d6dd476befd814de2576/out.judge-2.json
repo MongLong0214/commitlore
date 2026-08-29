@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision, scoped to `gitseed/ports.py`, ruled out \u201cscoring and screening ports\u201d because both are pure deterministic domain functions with no outside capability to supply.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/ports.py",
+    "tree/gitseed/application.py",
+    "tree/gitseed/category.py",
+    "tree/tests/test_seam.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "If evidence extraction cannot run or raises an exception, execution creates an empty, ABSENT evidence item for every name advertised by the configured evidence reader and records a category-read failure. Scoring and screening remain directly invoked domain computations; no externally supplied scoring or screening capability is exposed through the run ports.",
+  "packet_id": "52d1d6dd476befd814de2576",
+  "rationale": "The finished `RunPorts` exposes repository, file, model, clock, and evidence readers, but no scoring or screening port. The change only consults the already-configurable evidence reader for its advertised vocabulary when constructing degraded category evidence. It neither modifies the scoped `gitseed/ports.py` nor introduces an indirect externally supplied scoring or screening implementation, so it clearly stays outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: letting a grading failure end the run \u2014 because \"it makes one flaky model call discard every candidate already screened\". Scope: gitseed/pipeline/__init__.py, gitseed/pipeline/run.py, tests/test_pipeline.py; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "gitseed/pipeline/run.py",
+    "tests/test_pipeline.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change adds exactly one statement inside the `if not collected.complete:` branch of `run()`: it sets the run-level rate-limit flag from a substring match on the collection's recorded stop reason, before recording the same collection-stopped-early line it already recorded. That flag is then passed into the returned result, so a collection truncated for a rate limit yields a result that is still incomplete, still carries its collection stop reason in the incomplete list, and additionally reports rate limiting. The grader call site is untouched: `grader.evaluate(...)` remains wrapped in a broad `except Exception`, which records a per-candidate reason, appends a `Reviewed` entry with `grade=None` and a `withheld` explanation, and `continue`s to the next candidate. No new raise, early return, break, or short-circuit is introduced on any grading path, and no already-screened candidate is dropped from the output when grading fails.",
+  "packet_id": "b1b3af5dab71a07b5918b653",
+  "rationale": "The decision rules out one specific control-flow shape: a grading failure terminating the run and discarding candidates already screened. The final tree does not implement that shape anywhere in the recorded scope. The entire behavioral change is two lines \u2014 one derivation of a boolean from the collection's stop reason in gitseed/pipeline/run.py, and one assertion in tests/test_pipeline.py; gitseed/pipeline/__init__.py is unchanged. The grading `except Exception` block still isolates failure to a single candidate via mark_incomplete + append + continue, and the module docstring's stated seam rule is unchanged. The two tests that pin the ruled-out behavior remain present and passing (test_a_failing_grader_is_recorded_against_that_candidate_only, test_a_grading_timeout_is_reported_and_makes_the_run_incomplete); the full pipeline suite is 25 passed. The added flag is purely additive reporting on the collection stage \u2014 it neither gates nor aborts grading. Approving this patch requires no re-litigation of the recorded decision.",
+  "reexplanation_required": "NO",
+  "verdict_note_unused": null
+}

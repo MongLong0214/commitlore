@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out \u201cfiltering the roadmap and Board out of a broad input scan\u201d; because exclusions silently readmit future projections, the input set must instead be positively declared and closed.",
+  "evidence_paths": [
+    "tree/scripts/validate-planning.mjs",
+    "tree/scripts/render-execution-views.mjs",
+    "tree/tests/planning-contract.test.mjs",
+    "tree/tests/execution-views.test.mjs",
+    "tree/docs/issues.json",
+    "tree/docs/tickets/BOARD.md",
+    "tree/docs/planning/AOS-EXECUTION-ROADMAP.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The validator derives prerequisite authority only from records matching explicit PRD and ticket-contract path shapes, canonicalizes hyphenated PRD epic identities, and rejects cross-epic ticket edges absent from that declared set. The board and roadmap are separately handled as rendered surfaces; their authored prose does not become dependency input.",
+  "packet_id": "7c98f3d93a8f95a179ecf868",
+  "rationale": "Although the validator also performs a repository-wide walk for other censuses, the dependency graph added by this implementation consumes positively selected PRD and ticket-contract maps. It does not gather broad planning prose and then exclude the board and roadmap by name. The renderer likewise reads an explicit catalog, its referenced ticket contracts, and a fixed two-surface output list. Regression tests confirm the supported hyphenated PRD edges pass, an undeclared cross-epic edge fails, and board/roadmap prose remains non-input. This stays outside the active decision\u2019s ruled-out approach within its recorded paths.",
+  "reexplanation_required": "NO"
+}

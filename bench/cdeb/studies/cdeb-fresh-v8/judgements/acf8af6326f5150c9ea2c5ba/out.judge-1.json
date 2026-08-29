@@ -1,0 +1,14 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"JSON files on disk\" as the run-store persistence mechanism, because \"SQLite keeps each artifact atomically constrained with its correction lineage\"; scope is gitseed/storage.py and tests/test_storage.py, lifecycle active.",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "Both bounded read APIs stay entirely inside the single SQLite connection. `history(limit=N)` and `observations(limit=N)` build a subquery that orders by the table's monotonic rowid/observation_id descending with a parameterized `LIMIT ?`, then re-orders the resulting slice ascending, so the N most recently inserted rows come back in append order; passing no limit executes the original unbounded ordered SELECT unchanged. `limit <= 0` raises ValueError. Records are still reconstructed from the `artifact` BLOB column of `run_artifacts` and the columns of `repository_observations` \u2014 no filesystem path is opened, no serialized collection is written to or read from a file, and no per-run or per-observation file is created. The only `json` usage in the scope is pre-existing in-memory inspection of `RunArtifact.to_bytes()` in tests, not file I/O.",
+  "packet_id": "acf8af6326f5150c9ea2c5ba",
+  "rationale": "The decision forbids persisting run-store state as JSON files on disk, on the ground that SQLite holds each artifact and its correction lineage under atomic constraints. The task asked only for bounded recent slices of the existing SQLite reads, and the implementation does exactly that: the slicing is pushed into SQL (`ORDER BY rowid DESC LIMIT ?` wrapped in an outer ascending order) rather than being achieved by any alternative store. No new persistence path, no file writes, no sidecar index or cache file appears anywhere in the diff or the finished tree's storage module; `corrects_run_id` remains a column on `run_artifacts` alongside the artifact blob, so the lineage-with-artifact property the decision cites is untouched. Nothing here would require re-arguing the SQLite-over-JSON-files choice.",
+  "reexplanation_required": "NO"
+}

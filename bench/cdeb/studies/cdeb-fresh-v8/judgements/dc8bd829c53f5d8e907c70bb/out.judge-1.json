@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"normalized per-port tables\" \u2014 because \"canonical artifact bytes already preserve the replay contract without duplicating serializers\" (scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active).",
+  "evidence_paths": [
+    "diff.patch",
+    "tree/gitseed/storage.py",
+    "tree/gitseed/storage_schema.py",
+    "tree/tests/test_storage.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change adds a point-lookup method on SQLiteRunStore that issues a single SELECT of the existing `corrects_run_id` and `artifact` columns from the one existing `run_artifacts` row, raises KeyError(run_id) when no row matches, and reconstructs the run object by calling the same canonical `RunArtifact.from_bytes` deserializer that `history()` already uses. The previous artifact-only lookup is re-expressed as a projection of that single read path (`load` returns `get(...).artifact`), so there is now one query site and one deserialization site rather than two. No table is created, altered, or added to the migration ladder; SCHEMA_VERSION stays at 2 and no artifact field is projected into any column of its own. Tests exercise the lookup only through the public store surface (a saved correction returns its own artifact bytes plus the identifier of the run it corrects; an unknown identifier raises KeyError carrying that identifier).",
+  "packet_id": "dc8bd829c53f5d8e907c70bb",
+  "rationale": "The decision forbids splitting run data into normalized per-port tables, on the ground that the stored canonical artifact bytes are already sufficient and a normalized shape would force a second serializer. The final tree does the opposite of that: it reads the untouched `run_artifacts` blob and the `corrects_run_id` column that the base schema already declared as a self-referencing FK, and it decodes with the pre-existing `RunArtifact.from_bytes`. `storage_schema.py` is not modified at all by the diff \u2014 no new table, no new column, no new migration step \u2014 so the structural thing the decision ruled out is absent from the tree. Nor is the reason's concern triggered: rather than adding a serialization path, the patch removes one duplicated read/decode site by routing `load` through the new lookup, leaving a single canonical decode used by lookup, history, and replay. The returned `StoredRun` is the dataclass that already existed and that `history()` already returned; exposing it for one identifier is a query surface, not a storage normalization. The correction link is surfaced from the column where it was already persisted, not from a newly introduced relation table, so approving this would not require re-explaining or relitigating the recorded decision.",
+  "reexplanation_required": "NO"
+}

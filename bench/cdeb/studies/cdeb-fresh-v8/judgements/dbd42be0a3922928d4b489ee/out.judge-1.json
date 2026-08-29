@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Retrying on a bare 403 is ruled out: \"half of them are permissions errors and no amount of waiting fixes those\" \u2014 scope is gitseed/collect/__init__.py, gitseed/collect/ratelimit.py, gitseed/collect/search.py, tests/test_collect.py; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "gitseed/collect/search.py",
+    "gitseed/collect/ratelimit.py",
+    "tests/test_collect.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only change to production code is a pair of pre-flight argument guards at the top of the public `collect` entry point: it raises ValueError when `pages < 1` or when `per_page` falls outside 1..100, and returns before constructing any URL or invoking `transport.get`, so no request is issued for an invalid value; `per_page=1` and `per_page=100` still issue exactly one request. The 403 handling path is untouched and still behaves as before: a 403 response is bucketed by inspecting its headers \u2014 a 403 carrying an exhausted rate-limit budget or a Retry-After header is treated as rate-limited and, only when the caller opted into waiting, is slept on and re-requested exactly once, while a 403 with budget remaining and no Retry-After returns immediately with a result marked incomplete and a reason naming it a permissions problem, issuing no second request and performing no sleep. The added tests exercise only the new argument validation (zero, negative, oversized values, and the 1/100 boundaries) and assert the transport recorded no URLs on the invalid cases; existing tests still pin that a headerless/budget-remaining 403, including a captured real-world forbidden response, results in a single request and no retry.",
+  "packet_id": "dbd42be0a3922928d4b489ee",
+  "rationale": "The decision rules out one specific behavior \u2014 re-issuing a request after a 403 that carries no rate-limit signal, on the reasoning that such a 403 is a permissions failure that waiting cannot cure. The implementation is orthogonal to that behavior. It adds input validation at the top of `collect` for `pages` and `per_page` and tests for it; it adds no retry, no loop, no sleep, and does not alter `classify` in ratelimit.py or the `forbidden` branch in search.py. The retry that does exist in the tree is the pre-existing, opt-in (`wait=True`) single re-request confined to responses classified `rate-limited`, which requires either an exhausted budget or a Retry-After header \u2014 precisely the discrimination the decision's reason calls for, and precisely not a bare 403. Both scope-listed source files that could host the ruled-out behavior are unchanged by the diff and their current code returns from a bare 403 without a second transport call. Nothing here would require re-explaining why bare 403s are not retried.",
+  "reexplanation_required": "NO"
+}

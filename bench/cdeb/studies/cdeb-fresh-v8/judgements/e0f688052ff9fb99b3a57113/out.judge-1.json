@@ -1,0 +1,18 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"embed the canonical reports in specs/doctor-output.v0.json\" \u2014 the ticket grants fixtures/doctor/*.json, and sibling precedent does not override a path the ticket names. Lifecycle: active; scope includes specs/doctor-output.v0.json, fixtures/doctor/*.json, packages/schema/src/doctor-contract.ts, packages/schema/test/doctor-contract.test.ts, tests/planning/workspace-skeleton.test.mjs.",
+  "evidence_paths": [
+    "diff.patch",
+    "specs/doctor-output.v0.json",
+    "fixtures/doctor/",
+    "packages/schema/src/doctor-contract.ts",
+    "packages/schema/test/doctor-contract.test.ts",
+    "packages/schema/package.json",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is zero bytes: the finished tree is byte-identical to the base tree, so no file under the recorded scope was altered. In that tree the eight canonical doctor reports remain as standalone JSON documents under fixtures/doctor/ (blocked.json, complete.json, degraded.json, imported-only.json, imported-and-degraded.json, blocked-and-imported.json, blocking-and-degraded.json, blocking-and-imported.json). specs/doctor-output.v0.json carries only rules plus a manifest: canonical_fixture_directory=\"fixtures/doctor\", canonical_fixture_name_template=\"<report_id>.json\", and canonical_reports rows whose keys are exactly {report_id, ordinal, matrix_variant} \u2014 no report body, no observations, no capability_digest, no human_projection. packages/schema/src/doctor-contract.ts resolves each report by deriving a filename from the report id and reading it out of the corpus directory (CONTRACT_CANONICAL_FIXTURE_MISSING when absent), and packages/schema/test/doctor-contract.test.ts:1390-1424 loads the corpus from disk via the directory the document declares and asserts a regex over the frozen document proving it does not carry a second copy of a report. The declared/derived split therefore reads report content only from files, never from the spec document.",
+  "packet_id": "e0f688052ff9fb99b3a57113",
+  "rationale": "The decision rules out one thing: putting the canonical report bodies inside specs/doctor-output.v0.json instead of in the ticket-granted fixtures/doctor/*.json files. The final tree does the opposite on every observable axis \u2014 the reports are eight separate files on disk, the spec holds a three-field manifest row per report, the validator reads the corpus from the declared directory, and the test suite contains an explicit guard that the frozen document must not carry a second copy of a report. Beyond that, the diff is empty, so the implementation introduced no change of any kind into the recorded scope; there is nothing that could have moved report content into the spec. The task itself (declaring the schema workspace's module type to silence MODULE_TYPELESS_PACKAGE_JSON, and teaching the workspace-skeleton manifest expectation to admit that declaration) is orthogonal to the fixture-location question and, as it happens, is not present in the tree either \u2014 packages/schema/package.json still has no \"type\" field and tests/planning/workspace-skeleton.test.mjs still lists no \"type\" expectation. Whether the task was completed is not what is being judged here; on the recorded decision the answer is unambiguous. Approving this tree would require no one to re-explain why the reports live in fixtures/doctor.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,14 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \u201cJSON files on disk\u201d; reason: \u201cSQLite keeps each artifact atomically constrained with its correction lineage.\u201d The decision is active and scoped to gitseed/storage.py and tests/test_storage.py.",
+  "evidence_paths": [
+    "tree/gitseed/storage.py",
+    "tree/tests/test_storage.py",
+    "tree/gitseed/storage_schema.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The read APIs query the existing SQLite tables. When bounded, they select the latest rows using a descending SQLite LIMIT subquery and then restore chronological order; unbounded calls retain full append order. No JSON files are created or used as the run store.",
+  "packet_id": "c59dbb8ec80d05b7d8d85b05",
+  "rationale": "Within the recorded scope, the implementation extends SQLite-backed reads and tests them against a persisted SQLite database. Although artifact payloads are serialized bytes, they remain rows in the constrained SQLite store with correction references; the implementation does not adopt the ruled-out JSON-files-on-disk storage approach.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"retrying on a bare 403\" \u2014 reason: \"half of them are permissions errors and no amount of waiting fixes those\". Scope: gitseed/collect/__init__.py, gitseed/collect/ratelimit.py, gitseed/collect/search.py, tests/test_collect.py. Lifecycle: active.",
+  "evidence_paths": [
+    "diff.patch",
+    "gitseed/collect/search.py",
+    "gitseed/collect/ratelimit.py",
+    "tests/test_collect.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change adds two argument guards at the top of the public collect() entry point: it raises ValueError when pages < 1 and when per_page falls outside 1..100, both before any transport.get call, and adds parametrized tests asserting the transport recorded zero URLs for those inputs plus that per_page=1 and per_page=100 still issue exactly one request. Nothing in the retry path was touched. In the finished tree a 403 is still routed through header inspection: only a 403 whose headers show an exhausted budget or a Retry-After is treated as rate-limited and eligible for a single wait-then-refetch (and only when wait=True); a 403 with remaining budget and no Retry-After returns immediately with 'forbidden \u2014 a permissions problem, not a budget one' and issues no further request. No code path retries a 403 on the status alone.",
+  "packet_id": "8c4b99726c63eacd0c80ceeb",
+  "rationale": "The recorded decision governs retry behavior on 403 responses that carry no rate-limit signal. The task and the implementation are about input validation of paging arguments, a subject the decision does not touch. The diff is purely additive: five lines of pre-flight validation in collect() and two new test cases in the existing TestPaging class. It adds no retry, no backoff, no reissue of a request on any status, and does not alter classify() in ratelimit.py or the 403 branch structure in search.py. The finished tree still distinguishes a budget-exhausted 403 (retry-eligible only under an explicit wait=True, backed by X-RateLimit-Remaining==0 or Retry-After) from a bare permissions 403 (immediate return, no second call) \u2014 exactly the separation the decision was recorded to preserve. Both scoped implementation files were inspected in the final tree and neither implements the ruled-out approach, so approving this patch would not require re-explaining the 403 retry decision to anyone.",
+  "reexplanation_required": "NO"
+}

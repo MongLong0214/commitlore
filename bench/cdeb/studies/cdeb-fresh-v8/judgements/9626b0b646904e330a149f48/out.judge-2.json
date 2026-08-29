@@ -1,0 +1,13 @@
+{
+  "confidence": "high",
+  "decision_clause": "Active decision within the six named paths: rule out pinning every prose field by literal digest because that duplicates the contract and makes editorial changes fail; pin only numerically fixed or derived fields.",
+  "evidence_paths": [
+    "tree/packages/schema/src/metric-registry.ts",
+    "tree/packages/schema/test/metric-registry.test.ts"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The exported metric-definition type now requires the observation key to be a string. Compile-time assertions reject consumers where that field is missing, optional, unknown, or merely present in an untyped record, and a runtime test reads the field from a validated metric. No prose text is frozen or compared by digest.",
+  "packet_id": "9626b0b646904e330a149f48",
+  "rationale": "The implementation changes two paths inside the recorded scope, but it enforces a public TypeScript field contract rather than duplicating prose into a digest-based validator. The compile-time consumer and runtime read clearly stay outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

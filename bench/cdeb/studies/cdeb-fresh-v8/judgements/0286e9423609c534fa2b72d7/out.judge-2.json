@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out \u201cstorage replay as deserialization\u201d; replay must recompute output from recorded port responses.",
+  "evidence_paths": [
+    "decision.txt",
+    "task.txt",
+    "diff.patch",
+    "tree/gitseed/storage.py",
+    "tree/gitseed/application.py",
+    "tree/tests/test_storage.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "Observation history is read in ascending recorded-time order, with insertion sequence breaking timestamp ties. Stored-run replay loads the artifact bytes and passes them to application replay, which checks engine versions and recomputes output by executing the recorded port responses rather than merely returning deserialized output.",
+  "packet_id": "0286e9423609c534fa2b72d7",
+  "rationale": "The implementation changes only observation ordering and its coverage. Within the recorded storage and test scope, the replay path still performs the required recomputation and does not implement the ruled-out deserialize-only approach.",
+  "reexplanation_required": "NO"
+}

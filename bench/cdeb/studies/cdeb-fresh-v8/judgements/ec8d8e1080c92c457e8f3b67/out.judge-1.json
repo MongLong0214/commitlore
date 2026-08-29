@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"storage replay as deserialization\" is ruled out: replay must recompute output from recorded port responses (scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active).",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "diff.patch",
+    "gitseed/application.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only behavioral change is in the SQL that reads the derived-observation table: `SQLiteRunStore.observations()` now orders rows by `observed_at, observation_id` instead of `observation_id` alone, so history is returned oldest-to-newest by recorded time with insertion order breaking ties. The replay path is untouched: `SQLiteRunStore.replay(run_id)` still loads the stored bytes and hands them to `application.replay`, which checks engine versions and then calls `re_evaluate` \u2014 that function re-runs `execute()` over the request with replay-backed repository/files/model/clock ports built from the recorded responses, rather than returning the stored artifact's decoded output. `load()` remains the plain deserializer and is distinct from `replay()`; `observations()` reads a persisted derived-observation table that predates this change and is not the replay seam.",
+  "packet_id": "ec8d8e1080c92c457e8f3b67",
+  "rationale": "The recorded decision bars making storage replay a mere deserialization of the stored artifact \u2014 replay has to recompute output by re-executing against recorded port responses. The diff contains exactly two hunks, both inside the recorded scope: a one-line ORDER BY change in `observations()` and a new ordering test. Neither touches `SQLiteRunStore.replay`, `application.replay`, or `re_evaluate`. In the finished tree, `storage.py:107` still routes replay through `replay_artifact`, which raises on engine mismatch and otherwise calls `re_evaluate`, which reconstructs `_ReplayRepository/_ReplayFiles/_ReplayModel/_ReplayClock` from the recorded artifact and re-runs `execute()`; the surviving test at tests/test_storage.py:253 corrupts a derived score in the stored bytes and asserts the replayed artifact matches the uncorrupted original, which only holds if output is recomputed rather than decoded. The changed ordering is a read-side sort over an already-persisted derived table, which is a separate concern from the replay seam and was already stored that way in the base tree; nothing in the decision speaks to how derived observations are ordered on read. Approving this patch would not require anyone to re-explain the replay decision.",
+  "reexplanation_required": "NO"
+}

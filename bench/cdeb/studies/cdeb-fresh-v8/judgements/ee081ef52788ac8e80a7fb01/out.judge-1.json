@@ -1,0 +1,21 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: embedding the canonical reports in `specs/doctor-output.v0.json`. Reason: the ticket grants `fixtures/doctor/*.json`, and sibling precedent does not override a path the ticket names. Scope names `specs/doctor-output.v0.json` and the six `fixtures/doctor/*.json` files; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "specs/doctor-output.v0.json",
+    "fixtures/doctor/complete.json",
+    "fixtures/doctor/blocked.json",
+    "fixtures/doctor/degraded.json",
+    "fixtures/doctor/imported-only.json",
+    "fixtures/doctor/imported-and-degraded.json",
+    "fixtures/doctor/blocked-and-imported.json",
+    "packages/schema/package.json",
+    "tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "`diff.patch` is zero bytes: the finished tree is byte-identical to the base tree, so no file under the recorded scope was altered. In that tree the report bodies live one-per-file on disk under `fixtures/doctor/` (eight files, ~14 KB each, each a full report object carrying `contract_id`, `command`, `capability_digest`, event-group lists, etc.). `specs/doctor-output.v0.json` is 10 KB total \u2014 smaller than a single report \u2014 and its `canonical_reports` array holds only reference tuples (`report_id`, `ordinal`, `matrix_variant`) plus the locator pair `canonical_fixture_directory: \"fixtures/doctor\"` and `canonical_fixture_name_template: \"<report_id>.json\"`. The spec therefore points at the on-disk fixture files by constructed path and contains no report payload; a consumer must open `fixtures/doctor/<report_id>.json` to obtain a report. Separately, the task's own target is also untouched: `packages/schema/package.json` still declares only `name`/`version`/`private`/`scripts` with no module-type field, and `tests/planning/workspace-skeleton.test.mjs:369` still asserts each workspace manifest's non-scripts identity deep-equals exactly `{ name, version: \"0.0.0\", private: true }`.",
+  "packet_id": "ee081ef52788ac8e80a7fb01",
+  "rationale": "The decision forbids one specific arrangement: putting the canonical report contents inside the spec file rather than in the ticket-granted `fixtures/doctor/*.json` files. The finished tree does the opposite of that \u2014 the payloads are in the fixture files and the spec carries only an index plus a directory/name-template locator, which is the arrangement the decision preserves. The size evidence is decisive on its own: the spec is 10 KB while the eight reports total ~112 KB, so the reports cannot be embedded in it. The point is reinforced by the empty diff: nothing in the recorded scope changed, so the implementation could not have introduced the ruled-out approach even in principle. I note for accuracy that the empty diff also means the task itself (declaring the schema workspace's module type and updating the skeleton manifest expectation) was not carried out \u2014 but that is a question of whether the work was done, not whether it crossed this decision, and the judgement asked here turns only on the latter. Approving this tree would require no one to re-argue why the reports stay in `fixtures/doctor/`.",
+  "reexplanation_required": "NO"
+}

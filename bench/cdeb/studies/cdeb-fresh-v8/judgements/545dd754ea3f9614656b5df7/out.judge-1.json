@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: retrying on a bare 403. Reason: half of them are permissions errors and no amount of waiting fixes those. Scope: gitseed/collect/__init__.py, gitseed/collect/ratelimit.py, gitseed/collect/search.py, tests/test_collect.py; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "gitseed/collect/search.py",
+    "gitseed/collect/ratelimit.py",
+    "tests/test_collect.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change adds two pre-flight guards at the top of the public collect() entry point: it raises ValueError when the page count is below 1 and when the per-page size falls outside the inclusive 1..100 range, before any call is made through the supplied transport. Tests assert the transport recorded zero URLs for (0,30), (-1,30), (1,0), (1,-1), (1,101), and that per_page 1 and 100 still issue exactly one request. Nothing in the change touches HTTP status handling. In the finished tree, a 403 response is still split by headers: only an exhausted budget or a Retry-After header makes it retryable ('rate-limited'); a 403 carrying remaining budget and no Retry-After is classified 'forbidden', and the collection loop returns immediately with stopped_because 'forbidden \u2014 a permissions problem, not a budget one' rather than waiting or re-issuing the request.",
+  "packet_id": "545dd754ea3f9614656b5df7",
+  "rationale": "The decision forbids one specific behavior: waiting/retrying on a 403 that carries no rate-limit signal, because such a 403 is a permissions failure that retrying cannot resolve. The implementation is entirely about argument validation on the paging parameters and adds no retry, backoff, or wait path at all \u2014 it strictly shortens the request path by raising before the first transport call. The 403 handling that the decision protects is untouched and still intact in the final tree: ratelimit.classify separates exhausted-budget/Retry-After 403s ('rate-limited') from bare 403s ('forbidden'), and search.collect returns on 'forbidden' without any retry, while only the 'rate-limited' branch waits. Two of the four scoped paths are modified, so the change is squarely inside the recorded scope and the decision is active, but nothing in it implements or re-enables the ruled-out approach. Approving this patch would not require anyone to revisit the 403 reasoning.",
+  "reexplanation_required": "NO"
+}

@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "\"storage replay as deserialization\" is ruled out \u2014 \"replay must recompute output from recorded port responses\" (scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active).",
+  "evidence_paths": [
+    "gitseed/storage.py",
+    "tests/test_storage.py",
+    "gitseed/application.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only production change is the SQL ordering clause in `SQLiteRunStore.observations()`, which now sorts the derived observation rows by `observed_at` then by the insertion-sequence column instead of by insertion sequence alone, so a backfilled older run sorts before an earlier-saved newer run while ties keep save order. The replay path is untouched: `SQLiteRunStore.replay()` still loads the stored artifact bytes and hands them to `application.replay`, which checks engine versions and then calls `re_evaluate` \u2014 that re-executes the pipeline (`execute(...)`) against replay-backed repository/files/model/clock ports built from the recorded responses, rather than returning the decoded stored artifact. `load()` remains a plain byte-decode of the artifact and is not what `replay()` returns to callers. The added test only asserts observation history ordering; the existing test that replay's output comes from re-executing recorded port responses (tests/test_storage.py:266-269) is unchanged.",
+  "packet_id": "7a39d24a9f6f9cf3540a15ef",
+  "rationale": "The decision governs how replay produces its output: it must recompute from recorded port responses, not simply deserialize the stored artifact. This implementation never touches replay. The diff is two hunks \u2014 an ORDER BY change in the observation-history query and a new test for out-of-timestamp-order saves \u2014 both inside the recorded scope paths but on a different code path (the derived observations table written at save time, which already existed before this change). `SQLiteRunStore.replay` continues to route through `application.replay` \u2192 `re_evaluate` \u2192 `execute(...)` with replay ports, which is exactly the recomputation the decision requires; nothing in the change substitutes a decode-and-return for that recomputation, weakens the engine-version guard, or makes `observations()` serve as a replay result. Sorting stored rows is not \"replay as deserialization\" under any reading of the clause, so the final tree clearly stays outside the ruled-out approach.",
+  "reexplanation_required": "NO"
+}

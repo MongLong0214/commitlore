@@ -1,0 +1,14 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \u201cpin every prose field by literal digest\u201d; full-text freezing duplicates the contract and causes editorial changes to fail, so only derived or numerically fixed fields may be pinned.",
+  "evidence_paths": [
+    "tree/packages/schema/src/metric-registry.ts",
+    "tree/packages/schema/test/metric-registry.test.ts",
+    "tree/specs/metrics.v0.json"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The runtime validator requires an observation selector and uses it to choose count or F1 derivation, but the exported static metric shape still omits that selector. No code hashes individual prose fields or compares them with literal digests.",
+  "packet_id": "146724900955ef33d43e9e02",
+  "rationale": "The finished implementation introduces no literal-digest mechanism: diff.patch is empty, and the scoped source and test contain no prose-field hashing. The requested public type change and compile-checked consumer are therefore not implemented, but task incompleteness is separate from this judgment; the final tree does not implement the specifically ruled-out approach.",
+  "reexplanation_required": "NO"
+}

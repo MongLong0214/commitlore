@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \"pin every prose field by literal digest\" \u2014 freezing the full text duplicates the contract into the validator and makes any editorial fix a false failure; only fields the contract derives or fixes numerically are pinned.",
+  "evidence_paths": [
+    "diff.patch",
+    "packages/schema/src/metric-registry.ts",
+    "packages/schema/test/metric-registry.test.ts",
+    "scripts/validate-planning.mjs",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "docs/tickets/E0-A/E0A-001-freeze-m01-m20-metric-registry.md"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "diff.patch is zero bytes: the finished tree is byte-identical to the base tree, so the implementation introduces no new pinning of any kind. In the tree as it stands, the registry validator compares a metric entry's fields only against values the contract derives or fixes numerically \u2014 factor from the M-index band, treatment from the metric id, aggregation and minimum_opportunities from the treatment class, cap === 1, floor === 0, version === the contract-version constant, the numeric confidence table, the ordered evidence-precedence enum, consumer_routes computed from factor/treatment, and per_opportunity_formula reconstructed from the entry's own numerator and denominator strings. Free prose fields (label, question, partial_credit_rule, gaming_guard, not_observed_rule, invalid_rule, normalization, numerator/denominator text) are only checked for presence via the REQUIRED_FIELDS key list and are never compared to a stored literal or hashed. The only sha256 use in scope is scripts/validate-planning.mjs:780 and tests/planning/workspace-skeleton.test.mjs:272, which digest whole accepted-gate ticket artifacts for staleness detection \u2014 pre-existing file-level gate bookkeeping, not per-field pinning of registry prose.",
+  "packet_id": "113f6eca0ab6436ed636650f",
+  "rationale": "The decision forbids one specific validator shape: hard-freezing the literal text of prose fields (by stored string or digest) inside the metric-registry validator, so that an editorial wording fix would fail the check. Nothing in the finished tree does that. The empty diff already settles it \u2014 the implementation changed nothing, so it cannot have added the ruled-out mechanism \u2014 and reading the tree directly confirms the validator's pins are exactly the class the decision permits: derived (formula from numerator/denominator, routes from factor/treatment) or numerically/enumeratively fixed (cap, floor, confidence table, precedence order, aggregation, minimum_opportunities). Prose fields appear only as membership in a required-key list, which is a completeness check, not a text freeze. The task itself (adding observation_key as a required typed field on the exported MetricDefinition plus a compile-checked consumer) was not carried out \u2014 the interface at packages/schema/src/metric-registry.ts:26-51 still omits observation_key even though REQUIRED_FIELDS at line 66 lists it and validateVectors reads metric.observation_key, and no new consumer file exists. That is a failure to deliver the task, not a decision violation; the question asked is only whether the tree implements the ruled-out approach, and it plainly does not. Approving this tree would require no re-explanation of the recorded decision.",
+  "reexplanation_required": "NO"
+}

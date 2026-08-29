@@ -1,0 +1,16 @@
+{
+  "_note": "n/a",
+  "confidence": "high",
+  "decision_clause": "\"storage replay as deserialization\" is ruled out: replay must recompute output from recorded port responses (scope: gitseed/storage.py, tests/test_storage.py; lifecycle: active).",
+  "evidence_paths": [
+    "diff.patch",
+    "tree/gitseed/storage.py",
+    "tree/gitseed/application.py",
+    "tree/tests/test_storage.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change is confined to the derived-observation read path: `SQLiteRunStore.observations()` now selects `ORDER BY observed_at, observation_id` instead of `ORDER BY observation_id`, so rows come back sorted by the recorded timestamp with insertion sequence as the tiebreak; a new test saves runs out of timestamp order (newer, older, then two equal-time runs) and asserts the returned order. The run-reconstruction path is untouched: `SQLiteRunStore.replay(run_id)` still loads the stored bytes and hands them to `application.replay`, which renders the artifact, raises on engine-version mismatch, and calls `re_evaluate` to re-execute the request against replay-backed repository/files/model/clock ports \u2014 i.e. output is still recomputed from recorded port responses, not read back off the wire format. The existing test asserting replay reproduces output by executing recorded port responses is unmodified.",
+  "packet_id": "ee348b2ef266e030817421f6",
+  "rationale": "The decision governs how a stored run is turned back into output \u2014 it forbids replay that merely deserializes a recorded artifact and requires recomputation from the recorded port responses. The implementation never touches that path. `storage.py`'s only edit is the SQL ordering clause in `observations()`, which reads a separate `repository_observations` table of derived per-repo star counts that was already materialized at save time before this change; the diff changes only the sort key of an existing read, and adds no new stored-output shortcut around replay. `replay()` still delegates to `application.replay` \u2192 `re_evaluate`, which executes the request through `_ReplayRepository`/`_ReplayFiles`/`_ReplayModel`/`_ReplayClock` rather than reconstructing the artifact from bytes. The two files edited are exactly the recorded scope, so scope is not the issue \u2014 the issue is that nothing in that scope moves replay toward deserialization. Ordering a derived-history query is orthogonal to the recorded rule; reading the decision to cover it would require extending 'replay' to mean any read of stored data, which the decision's own reason ('recompute output from recorded port responses') does not support. Approving this patch would not require re-explaining the decision to anyone.",
+  "reexplanation_required": "NO"
+}

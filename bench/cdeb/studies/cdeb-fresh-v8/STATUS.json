@@ -5,17 +5,28 @@
   "calibration_candidates_completed": 4,
   "calibration_candidates_required_minimum": 3,
   "calibration_complete": true,
+  "cost_disclosed_late": {
+    "claude_seat_reported_cost_usd": 82.08,
+    "claude_seat_successful_calls": 82,
+    "full_seat_would_have_been_usd": 340,
+    "what_was_stated_at_approval": "time only"
+  },
   "dry_run_manipulation": "17/17",
+  "effect_estimate": null,
+  "effect_estimate_why_absent": "a panel label needs three judgements on one packet and no episode has three, so P-DSFPS and every section 27 condition depending on it are uncomputable from this data",
   "episodes_complete": true,
+  "episodes_with_a_complete_panel": 0,
   "evidence_tier_bounded_by": "calibration label/origin confound, section 26; see v8-d010 for what it does and does not bound",
   "headline_scope_in_sentence": true,
   "judge_independence_enforced": true,
   "judge_packet_simulation": "pass",
+  "judgements_expected": 1020,
+  "judgements_sealed": 104,
   "manipulation_preflight": "17/17",
   "measured_run_allowed": false,
   "measured_run_allowed_at": "2026-08-28T00:00:00Z",
   "measured_run_allowed_note": "closed again after the first pair, per the owner's decision to pace the rest against a measured episode time",
-  "measured_run_scope": "340 episodes complete and sealed. The gate is closed for episodes; judging is the next stage and has its own runner.",
+  "measured_run_scope": "closed. The research line is terminated by owner decision.",
   "no_automatic_v9": true,
   "packet_ids_reversible": false,
   "panel": [
@@ -24,7 +35,7 @@
     "gpt-5.6-terra"
   ],
   "panel_frozen": true,
-  "phase": "coding-rows-sealed",
+  "phase": "terminated",
   "prb_prerequisites": {
     "batch_runner": "batch.py, one worker per repository, refuses while measured_run_allowed is false",
     "episode_runner": "run-episode.py, section 19's sixteen steps",
@@ -41,6 +52,8 @@
     "B: blinding and judging",
     "C: analysis and the claim gate"
   ],
+  "result_category": null,
+  "result_category_why_absent": "no section 28 category was reached; the run was stopped by the owner during judging",
   "rows_sealed": 340,
   "runtime_locked": true,
   "schedule_frozen": true,
@@ -49,7 +62,7 @@
   "schema_version": 1,
   "section_10_reliability_metrics_implemented": true,
   "section_13_artifacts_complete": true,
-  "state_machine_position": "CODING_ROWS_SEALED",
+  "state_machine_position": "TERMINATED_BY_OWNER",
   "study_id": "cdeb-fresh-v8",
   "successor_required": false,
   "synthetic_smoke": "pass",
@@ -57,6 +70,6 @@
   "task_population_frozen": true,
   "task_population_import_valid": true,
   "updated_at": "2026-08-28T00:00:00Z",
-  "verdict": null,
-  "verdict_basis": null
+  "verdict": "TERMINATED_BY_OWNER",
+  "verdict_basis": "340 episodes sealed with twelve integrity checks passing and 104 of 1,020 judgements sealed. The owner stopped the research on learning the judging cost, which had not been stated when approval was sought. RESULT.md records what was measured."
 }

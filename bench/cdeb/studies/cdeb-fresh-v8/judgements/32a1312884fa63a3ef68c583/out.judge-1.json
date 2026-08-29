@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: retrying on a bare 403 \u2014 \"half of them are permissions errors and no amount of waiting fixes those\". Scope: gitseed/collect/__init__.py, gitseed/collect/ratelimit.py, gitseed/collect/search.py, tests/test_collect.py; lifecycle active.",
+  "evidence_paths": [
+    "diff.patch",
+    "tree/gitseed/collect/search.py",
+    "tree/gitseed/collect/ratelimit.py",
+    "tree/tests/test_collect.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The only change is an argument precondition at the top of the public collect entry point: it raises ValueError for pages < 1 and for per_page outside 1..100 before constructing any URL or calling transport.get, with parametrized tests asserting no transport call is made for (0,30), (-1,30), (1,0), (1,-1), (1,101) and that per_page=1 and per_page=100 still fetch one page. The response-handling path is untouched: a 403 whose headers show remaining budget and no Retry-After is still classified separately from a rate limit (ratelimit.classify, tree/gitseed/collect/ratelimit.py:88-100) and causes collect to return immediately with a stop reason rather than sleeping and re-issuing the same request (tree/gitseed/collect/search.py:196-197). Only the 429 / budget-exhausted / Retry-After branch sleeps and re-requests.",
+  "packet_id": "32a1312884fa63a3ef68c583",
+  "rationale": "The recorded decision forbids one specific behavior: waiting and re-issuing a request after a 403 that carries no rate-limit signal, because such a 403 is a permissions failure that waiting cannot cure. The task and the implementation are about a different axis entirely \u2014 client-side validation of paging arguments before any request is issued. Nothing in the diff touches classification of 403, the retry/sleep branch, or the forbidden early-return. In the finished tree the guard against the ruled-out behavior is still intact and still exercised by tests (classify(403, {'X-RateLimit-Remaining': '27'}) == 'forbidden'; the live-captured forbidden response test asserting a permissions problem, not a wait). The new ValueError raises are not retries and do not touch the transport at all \u2014 the added code path terminates before any HTTP call. There is also no indirect route to the ruled-out behavior: rejecting per_page > 100 or pages < 1 removes requests that GitHub might answer with 422, not with 403, and it adds no loop, sleep, or re-issue anywhere. Both readings are not plausible here; the decision's subject matter and the change's subject matter do not intersect, and the ruled-out approach remains absent from the scoped files.",
+  "reexplanation_required": "NO"
+}

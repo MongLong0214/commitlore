@@ -1,0 +1,15 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: \u201ckeep the wildcard census and rely on the focused-lane guard,\u201d because that guard only caught deletion and allowed unreviewed product-file growth to pass.",
+  "evidence_paths": [
+    "tests/planning-contract.test.mjs",
+    "tests/planning/workspace-skeleton.test.mjs",
+    "packages/schema/src/capability.ts",
+    "packages/schema/test/capability.test.ts"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The full planning test pins the validator\u2019s exact product-file count and complete path list, so adding a product source changes the reported census and fails the snapshot independently of the focused schema-lane test-count guard. The requested discriminated validation-result contract is absent, but that task-completeness failure does not implement the rejected census strategy.",
+  "packet_id": "e8687b7beaeb89626bd33b47",
+  "rationale": "The finished tree does not merely use a dynamically growing census backed by the focused-lane guard: tests/planning-contract.test.mjs asserts a fixed 64-file census and enumerates every accepted path, while tests/planning/workspace-skeleton.test.mjs separately checks focused-lane counts. Thus the growth scenario cited by the decision is covered by an independent exact census. The empty patch and unchanged boolean ValidationResult mean the task itself was not completed, but the recorded decision does not rule out a no-op or the old result type.",
+  "reexplanation_required": "NO"
+}

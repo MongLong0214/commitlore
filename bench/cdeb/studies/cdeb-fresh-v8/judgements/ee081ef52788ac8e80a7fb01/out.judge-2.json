@@ -1,0 +1,21 @@
+{
+  "confidence": "high",
+  "decision_clause": "The active decision ruled out embedding the canonical reports in `specs/doctor-output.v0.json`; the ticket-granted `fixtures/doctor/*.json` paths are where those reports belong.",
+  "evidence_paths": [
+    "tree/specs/doctor-output.v0.json",
+    "tree/packages/schema/src/doctor-contract.ts",
+    "tree/fixtures/doctor/blocked-and-imported.json",
+    "tree/fixtures/doctor/blocked.json",
+    "tree/fixtures/doctor/complete.json",
+    "tree/fixtures/doctor/degraded.json",
+    "tree/fixtures/doctor/imported-and-degraded.json",
+    "tree/fixtures/doctor/imported-only.json",
+    "tree/packages/schema/package.json",
+    "tree/tests/planning/workspace-skeleton.test.mjs"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The specification contains only a three-field manifest for each canonical report\u2014identifier, order, and matrix variant\u2014plus the fixture directory and filename template. The complete report objects remain separate JSON fixtures, and the verifier loads that fixture corpus, recomputes each report, and rejects missing, extra, or invalid fixtures. It does not embed the report bodies in the specification.",
+  "packet_id": "ee081ef52788ac8e80a7fb01",
+  "rationale": "Within the decision's active, path-specific scope, the finished tree follows the expressly permitted fixture approach rather than the ruled-out embedding approach. The `canonical_reports` array in the specification is manifest metadata, not a copy of the reports: full reports with observations, verdicts, exit codes, reasons, and projections are stored under `fixtures/doctor/`. The module-type task and the empty patch do not introduce the forbidden representation.",
+  "reexplanation_required": "NO"
+}

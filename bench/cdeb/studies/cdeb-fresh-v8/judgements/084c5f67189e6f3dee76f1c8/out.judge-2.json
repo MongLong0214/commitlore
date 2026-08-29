@@ -1,0 +1,16 @@
+{
+  "confidence": "high",
+  "decision_clause": "Ruled out: filtering the roadmap and Board out of a broad input scan, because an exclusion list would silently admit future projections; inputs must instead be positively declared and closed.",
+  "evidence_paths": [
+    "scripts/render-execution-views.mjs",
+    "tests/execution-views.test.mjs",
+    "scripts/validate-planning.mjs",
+    "package.json",
+    ".github/workflows/operational-state.yml"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The generated-view path reads one fixed catalog, follows the exact ticket-contract paths declared by that catalog, and treats the Board and roadmap as two fixed render targets. Tests confirm that prose on those projection surfaces does not affect generated results. It does not discover readiness inputs broadly and then blacklist the Board and roadmap.",
+  "packet_id": "084c5f67189e6f3dee76f1c8",
+  "rationale": "Within the active recorded scope, the implementation uses positive declarations: a fixed catalog path, catalog-declared ticket paths, fixed output surfaces, and explicitly invoked operational commands. The repository-wide walk in the planning validator is a conformance and source census; it does not exclude the Board or roadmap from an operational-readiness input set, and the Board is explicitly read and validated there. No projection exclusion list implementing the ruled-out approach is present. The supplied diff is also empty, so it introduces no contrary implementation.",
+  "reexplanation_required": "NO"
+}

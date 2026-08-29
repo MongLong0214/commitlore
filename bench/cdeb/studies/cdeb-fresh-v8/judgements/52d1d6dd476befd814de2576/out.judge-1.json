@@ -1,0 +1,17 @@
+{
+  "confidence": "high",
+  "decision_clause": "Scoring and screening ports were ruled out because \"both are pure deterministic domain functions with no outside capability to supply\"; scope is limited to gitseed/ports.py, lifecycle active.",
+  "evidence_paths": [
+    "gitseed/ports.py",
+    "gitseed/application.py",
+    "gitseed/category.py",
+    "gitseed/scoring.py",
+    "gitseed/pipeline/run.py",
+    "tests/test_seam.py"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change threads the already-existing evidence-reading capability held on the run's port bundle into the helper that builds the all-absent evidence tuple, so that on an evidence-read failure the run artifact emits one absent, valueless item per name advertised by the reader actually supplied for that run (test asserts {\"custom-files\", \"custom-source\"} rather than the default reader's names), while still appending the category-read failure to the artifact. Scoring is still invoked as a direct call on a value object (gitseed/application.py:146 calls the module-level score function with ScoreInputs), and screening is still invoked by direct module import (gitseed/pipeline/run.py imports scan_files, risk_of, findings from the screen package). Neither is reached through an injected, substitutable object; no protocol or bundle field for either is defined. gitseed/ports.py is byte-for-byte unchanged by the patch and declares only RepositoryReader, FileReader, EvidenceReader, Clock, and the GradeClient it re-exposes \u2014 the same set as before.",
+  "packet_id": "52d1d6dd476befd814de2576",
+  "rationale": "The recorded decision rules out one specific thing: turning scoring and screening into injectable ports, on the ground that they are pure deterministic domain functions with nothing external to supply. Its scope names a single path, gitseed/ports.py. The patch does not touch that file at all, and the finished tree's port surface contains no scoring or screening capability \u2014 score() and the screen signal/verdict functions are both still called directly as pure functions with no seam in front of them.\n\nWhat the patch does touch is the evidence reader, which was already a port in gitseed/ports.py before this change (category.py's new import of EvidenceReader for a type annotation resolves against an unmodified ports.py, and RunPorts already carried an `evidence` field defaulted to DEFAULT_EVIDENCE_READER). So the work does not introduce a new port; it makes an existing one's identity flow to the place where a failure fallback is constructed, so the degraded artifact speaks the vocabulary of whichever reader the run was given. absent_evidence() gaining a reader parameter is the mechanism, but the reader is category evidence, not scoring and not screening \u2014 a different capability, one whose portness the decision never addressed and which the recorded rationale (nothing outside to supply) does not describe, since an evidence reader plainly reads outside files.\n\nStretching \"scoring and screening ports\" to cover \"any parameter added to any domain function\" would be writing a broader rule than the one recorded, and doing so somewhere outside the named path. The case is plain in the other direction: the ruled-out approach is absent from the finished tree, and approving this patch needs no reconsideration of why scoring and screening stay unported.",
+  "reexplanation_required": "NO"
+}

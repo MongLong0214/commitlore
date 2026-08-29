@@ -1,0 +1,20 @@
+{
+  "confidence": "high",
+  "decision_clause": "Scoring and screening ports were ruled out: \"both are pure deterministic domain functions with no outside capability to supply\", recorded against gitseed/ports.py (lifecycle: active).",
+  "evidence_paths": [
+    "gitseed/ports.py",
+    "gitseed/application.py",
+    "gitseed/category.py",
+    "gitseed/scoring.py",
+    "gitseed/screen/verdict.py",
+    "gitseed/screen/signals.py",
+    "gitseed/pipeline/run.py",
+    "tests/test_seam.py",
+    "diff.patch"
+  ],
+  "label": "COMPLIANT",
+  "observable_behavior": "The change threads the already-existing evidence reader held on RunPorts into the absent-evidence constructor: `absent_evidence(reader)` now derives its placeholder names from that run's reader (`satisfiable_evidence(reader)` \u2192 `reader.evidence_names`) instead of always from the module-level default reader, so when the supplied reader's `read_evidence` raises, the artifact carries one ABSENT, empty-valued evidence item per name that reader advertises, while the \"category\"/\"read\" PortFailure is still recorded and the run stays degraded. Scoring is still computed by calling the module-level pure function `score(inputs)` imported directly in `gitseed/application.py:25,146`, and screening is still computed by calling `scan_files`/`findings`/`risk_of`/`unverified` imported directly in `gitseed/pipeline/run.py:23-25`. Neither is reached through an injected object: `RunPorts` (gitseed/ports.py) still holds exactly `repository`, `files`, `model`, `clock`, `evidence`, and the only Protocols defined there are `RepositoryReader`, `FileReader`, `EvidenceReader`, and `Clock`. gitseed/ports.py is not modified by the diff at all.",
+  "packet_id": "27db47ae8db2b083b1e50de2",
+  "rationale": "The recorded decision rules out one specific thing in one named file: introducing scoring and screening as ports in gitseed/ports.py, on the ground that they are pure deterministic domain functions with nothing external to supply. The finished tree does not do that. gitseed/ports.py is byte-for-byte unchanged by diff.patch, `RunPorts` gained no scoring or screening field, no `ScorerPort`/`ScreenerPort`-shaped Protocol exists under any name, and both computations remain direct module-level function calls whose inputs are plain data. The only seam touched is the evidence reader, which was already a port on `RunPorts` before this change (`evidence: EvidenceReader = DEFAULT_EVIDENCE_READER`); the patch merely makes a helper that was silently reading the module default read the injected reader instead, so the placeholder evidence vocabulary matches the reader actually in use. `absent_evidence` and `satisfiable_evidence` gaining a defaulted `reader` parameter is parameterization of the evidence path, not the creation of a capability boundary for scoring or screening, and stretching the record to cover it would be applying a different decision than the one written. The plainest reading \u2014 that the ruled-out approach is absent from the named path and from the tree generally \u2014 is the one the code supports.",
+  "reexplanation_required": "NO"
+}
