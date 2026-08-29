@@ -25,7 +25,7 @@ import type { GuardExposure } from "./types.ts";
  * The shipping hook matcher, read from the committed build rather than copied.
  * `init` installs `CLAUDE_HOOK_MATCHER` into `.claude/settings.json`; an arm
  * whose settings carry any other matcher measures a surface the product does
- * not ship, which CDEB PRD §24.1 rules out as a hook plan. The import is
+ * not ship, which rules it out as a hook plan. The import is
  * static on purpose: the value is compile-time data of the shipping binary,
  * and `dist/` is committed (ADR-0011) so it is always present in a checkout.
  */

@@ -1,9 +1,0 @@
-{
-  "study_id": "cdeb-fresh-v5",
-  "phase": "stage1-hold",
-  "measured_run_allowed": false,
-  "updated_at": "2026-08-23T09:30:00Z",
-  "successor_required": true,
-  "verdict": "TERMINAL_HOLD",
-  "verdict_basis": "stage1-r1/CENSUS-REPORT.md: two of the four fixed repositories cannot produce the same acceptance result twice on their own unmodified trees, so their strata supply zero of the eight buildable candidates each needs. The estimand is an equal-weight average over four fixed strata and is undefined with two of them empty."
-}

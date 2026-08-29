@@ -1,7 +1,0 @@
-{
-  "active_study_id": "cdeb-fresh-v8",
-  "last_terminal_study_id": "cdeb-fresh-v7",
-  "status": "active",
-  "reason": "cdeb-fresh-v8 is the final blind-panel effect trial of this research line, opened by a separate owner decision after cdeb-fresh-v7 reached TERMINAL_HOLD_FINAL holding zero measured rows. v7 established that 8 of the fixed 17 decisions yield a deterministic final-tree predicate and 9 do not; that is a result about instruments, not about the product. Reading a decision and judging whether one finished implementation clearly takes the ruled-out approach is a different question from writing a predicate covering every implementation, and v8 measures the first. The primary instrument is a blinded three-judge semantic panel, so an unresolved machine boundary is neither an exclusion nor a hold reason and all 17 tasks stay in the population. The design is 17 tasks x 2 arms x 10 repetitions = 340 episodes, each judged by 3 blind judges for 1,020 primary judgements, with no pilot and no sample-size gate. Judges are calibrated against 47 controls whose labels two blind sessions agreed on; four Good controls whose judges split are retained but excluded from the key, recorded as v8-d001. v3, v3r1, v4, v5, v6 and v7 are terminal and none may be resumed. This is the final planned study; a successor requires a separate owner decision and is not generated automatically.",
-  "successor_requires_new_study_id": true
-}
