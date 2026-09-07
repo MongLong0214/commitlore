@@ -29,6 +29,7 @@ import { resolve } from 'node:path';
 import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
+import { NOTES_REF } from '../core/notes.js';
 import { syncNotes, type SyncResult } from '../core/sync.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 
@@ -139,13 +140,44 @@ const saidWhy = (detail: string): string =>
  * Saying only "branch push continues" reported the half the operator could
  * already see and left the half they were asking about unstated.
  */
-export const describeSync = (results: readonly SyncResult[]): string[] =>
+/**
+ * Is there anything local the mirror would have sent?
+ *
+ * #632 asked exactly this and #656 answered it unconditionally with yes, so a
+ * push whose repository had no records at all was told its records were "still
+ * only local" (#865). The remote's contents cannot be known once the remote has
+ * stopped answering; whether this clone has a notes ref is a local question
+ * that cannot time out.
+ *
+ * Deliberately ref-scoped and not commit-scoped. The mirror publishes
+ * `refs/notes/commitlore` whole, so a record written against a commit the
+ * remote already has is still unsent -- and a check that only looked at the
+ * commits in this push would call that "nothing waiting" and be wrong in the
+ * more dangerous direction. `test/pre-push-hook.test.ts` fixes that shape.
+ *
+ * `null` when git will not answer at all, so the caller keeps the cautious
+ * sentence rather than inventing a reassuring one from a failure to measure.
+ */
+const localRecordsExist = (): boolean | null => {
+  const result = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF]);
+  if (result.code === 0) return result.stdout.trim() !== '';
+  // `--verify --quiet` exits 1 for "no such ref", which is an answer. Anything
+  // else -- not a repository, git missing -- is not.
+  return result.code === 1 ? false : null;
+};
+
+export const describeSync = (
+  results: readonly SyncResult[],
+  hasLocalRecords: boolean | null = null,
+): string[] =>
   results
     .filter((result) => result.outcome === 'failed' || result.outcome === 'diverged')
     .map((result) =>
       result.outcome === 'diverged'
         ? `commitlore: notes mirror (${result.remote}) diverged: ${oneLine(result.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it — run "commitlore sync" to merge them.`
-        : `commitlore: notes mirror (${result.remote}) failed: ${saidWhy(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`,
+        : hasLocalRecords === false
+          ? `commitlore: notes mirror (${result.remote}) failed: ${saidWhy(result.detail)}. The branch was pushed. Nothing is waiting locally, so nothing was lost.`
+          : `commitlore: notes mirror (${result.remote}) failed: ${saidWhy(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`,
     );
 
 /**
@@ -166,6 +198,9 @@ export const register = (program: Command): void => {
     .argument('[url]', 'its URL, as git passes it')
     .description('internal hook command: publish the notes mirror alongside a push')
     .action((remote?: string) => {
+      // Measured before the transport runs, because it must not depend on the
+      // remote answering: that is the whole distinction #865 turns on.
+      const hasLocalRecords = localRecordsExist();
       try {
         const results = syncNotes({
           ...(remote === undefined || remote === '' ? {} : { remotes: [remote] }),
@@ -174,13 +209,16 @@ export const register = (program: Command): void => {
             timeout: PRE_PUSH_NOTES_SYNC_TIMEOUT_MS,
           },
         });
-        for (const line of describeSync(results)) process.stderr.write(`${line}\n`);
+        for (const line of describeSync(results, hasLocalRecords)) process.stderr.write(`${line}\n`);
       } catch (error: unknown) {
         // A push must never fail because the mirror could not be published —
         // and the line must still say where the records ended up, for the same
         // reason `describeSync` does (#632).
+        const why = saidWhy(error instanceof Error ? error.message : String(error));
         process.stderr.write(
-          `commitlore: notes mirror failed: ${saidWhy(error instanceof Error ? error.message : String(error))}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.\n`,
+          hasLocalRecords === false
+            ? `commitlore: notes mirror failed: ${why}. The branch was pushed. Nothing is waiting locally, so nothing was lost.\n`
+            : `commitlore: notes mirror failed: ${why}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.\n`,
         );
       }
     });

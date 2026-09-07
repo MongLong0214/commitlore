@@ -25,7 +25,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { NOTES_REF, writeRecord } from '../src/core/notes.js';
-import { installPrePushHook, PRE_PUSH_NOTES_SYNC_TIMEOUT_MS } from '../src/hooks/pre-push.js';
+import { describeSync, installPrePushHook, PRE_PUSH_NOTES_SYNC_TIMEOUT_MS } from '../src/hooks/pre-push.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -248,4 +248,45 @@ describe('the pre-push hook publishes the mirror without re-entering itself', ()
       await new Promise<void>((resolveClose, rejectClose) => server.close((error) => error ? rejectClose(error) : resolveClose()));
     }
   }, 60_000);
+});
+
+/**
+ * #865. The failed-mirror line answers "where are my records now", and it used
+ * to answer it unconditionally with "still only local" -- without checking. A
+ * field report on v1.2.0 got that line for a repository with no notes ref at
+ * all, ran `commitlore sync`, and found nothing to send.
+ *
+ * What the remote holds cannot be known once the remote has stopped answering.
+ * Whether this clone holds anything is local and cannot time out, and the
+ * mirror publishes the ref whole -- so the ref is the right granularity. A
+ * commit-scoped check would call a record written against an already-pushed
+ * commit "nothing waiting", which is the wrong direction to be wrong in.
+ */
+describe('the failed-mirror line only claims what was measured', () => {
+  const failed = [{ remote: 'origin', outcome: 'failed' as const, detail: 'ETIMEDOUT' }];
+
+  it('says nothing was lost when this clone has no records at all', () => {
+    const [line] = describeSync(failed, false);
+    expect(line).toContain('Nothing is waiting locally');
+    expect(line).toContain('nothing was lost');
+    expect(line).not.toContain('still only local');
+  });
+
+  it('keeps the cautious sentence when records exist locally', () => {
+    const [line] = describeSync(failed, true);
+    expect(line).toContain('still only local');
+    expect(line).toContain('commitlore sync');
+  });
+
+  it('keeps the cautious sentence when the local answer could not be measured', () => {
+    // "Unknown" must not be reported as "none": the reassuring sentence is only
+    // safe when the absence was actually observed.
+    const [line] = describeSync(failed, null);
+    expect(line).toContain('still only local');
+  });
+
+  it('leaves a divergence alone — its answer does not depend on the local count', () => {
+    const diverged = [{ remote: 'origin', outcome: 'diverged' as const, detail: 'both moved' }];
+    expect(describeSync(diverged, false)[0]).toContain('neither one fast-forwards');
+  });
 });

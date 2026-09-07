@@ -101,7 +101,7 @@ jobs:
       - name: PRD-F2 100k-commit query performance
         env:
           COMMITLORE_PERF_LARGE: "1"
-        run: npx vitest run test/index-perf.test.ts --reporter=basic
+        run: npx vitest run test/index-perf.test.ts --reporter=default
 
       # #392: bench/verify.mjs existed for weeks with no npm script and no step
       # here, so the result schema drifted five fields behind the runner and a

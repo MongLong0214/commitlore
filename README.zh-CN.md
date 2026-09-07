@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh | sh -s v1.2.1
 ```
 
 <details>
 <summary>想先阅读安装器吗？</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh
-sh install.sh v1.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh
+sh install.sh v1.2.1
 
 # 或者跳过脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v1.2.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -105,13 +105,13 @@ CommitLore 把那份判断留在代码旁边。
 macOS 和 Linux：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh | sh -s v1.2.1
 ```
 
 Windows：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.ps1))) v1.2.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.ps1))) v1.2.1
 ```
 
 需要 Node.js 22.23.2+ 和 Git。脚本会在写入任何内容前检查两者。
@@ -226,7 +226,7 @@ CommitLore 会问：
 
 ## 现场报告，不是测量
 
-这是某人在一个无关仓库首次安装 v1.2.0 时的一次运行。这里没有测量任何东西，也没有写进
+这是某人在一个无关仓库首次安装 v1.2.1 时的一次运行。这里没有测量任何东西，也没有写进
 evidence log。之所以放在这里，是因为上段主张了一种本页表格未覆盖的 loop。
 
 那个人让 agent 修复一个舍入 bug，顺带提到 decimal library 已经考虑过又被否决，最后说“commit it”。

@@ -48,18 +48,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh | sh -s v1.2.1
 ```
 
 <details>
 <summary>Prefer to read the installer first?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh
-sh install.sh v1.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh
+sh install.sh v1.2.1
 
 # Or skip the script: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v1.2.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -109,13 +109,13 @@ preserve, not for narrating every change.
 macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh | sh -s v1.2.1
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.ps1))) v1.2.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.ps1))) v1.2.1
 ```
 
 Requires Node.js 22.23.2+ and Git. The script checks both before it writes anything.
@@ -242,7 +242,7 @@ per-record user command.
 
 ## A field report, not a measurement
 
-One run, on an unrelated repository, by someone installing v1.2.0 for the first
+One run, on an unrelated repository, by someone installing v1.2.1 for the first
 time. Nothing here was measured and none of it is in the evidence logs. It is on
 this page because the paragraph above asserts a loop that no table here covers.
 

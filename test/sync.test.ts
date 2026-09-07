@@ -17,7 +17,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { NOTES_REF, NOTES_REFSPEC, forcesNotes, readRecord, writeRecord } from '../src/core/notes.js';
-import { syncNotes } from '../src/core/sync.js';
+import { classifyFailureDetail, syncNotes } from '../src/core/sync.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const scratch: string[] = [];
@@ -231,6 +231,41 @@ describe('#416 the notes mirror completes a round trip between two clones', () =
     expect(forcesNotes('+refs/notes/commitlore:refs/notes/commitlore')).toBe(true);
     // And does not fire on an unrelated forced refspec.
     expect(forcesNotes('+refs/heads/*:refs/remotes/origin/*')).toBe(false);
+  });
+
+  it('states an unreachable remote in one line, so the table keeps its shape', () => {
+    // #865: git answers an unreachable remote with more than one line, and both
+    // used to go into the detail column. The row then broke in half and the
+    // trailing line read as a bare `fatal:` standing above the next remote's row
+    // rather than as this remote's result. `SyncResult.detail` promises one line.
+    const { alice } = team('one-line-detail');
+    const sha = git(alice, ['rev-parse', 'HEAD']).trim();
+    writeRecord(sha, record('local only'), { cwd: alice });
+    git(alice, ['remote', 'set-url', 'origin', join(temp('vanished'), 'nowhere.git')]);
+
+    const results = syncNotes({ cwd: alice });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.outcome).toBe('failed');
+    expect(results[0]?.detail).not.toContain('\n');
+    expect(results[0]?.detail.trim()).toBe(results[0]?.detail);
+  });
+
+  it('does not relabel a timeout, or a message that merely contains those words', () => {
+    // Review of #865 found the first draft's classifier too loose: it matched
+    // "the words repository and not found somewhere in the message", so
+    // `repository metadata not found` became `remote not found`. Worse, the
+    // hook reads `detail` for ETIMEDOUT to say *why* the mirror failed, and
+    // `execGit` appends that to partial stderr — so relabelling could erase the
+    // one part anything parses and report a missing fork for a slow remote.
+    expect(classifyFailureDetail("fatal: repository 'https://x/y.git' not found")).toBe(
+      'remote not found',
+    );
+    expect(classifyFailureDetail('remote: Repository not found.')).toBe('remote not found');
+    expect(classifyFailureDetail('fatal: repository metadata not found')).toContain('metadata');
+    expect(classifyFailureDetail('remote: Repository not found.\nETIMEDOUT')).toContain(
+      'ETIMEDOUT',
+    );
   });
 
   it('leaves the working notes ref intact when it refuses', () => {

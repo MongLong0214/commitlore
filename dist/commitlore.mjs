@@ -23017,10 +23017,14 @@ var revParse2 = (ref, opts) => {
   return result.code === 0 && sha !== "" ? sha : null;
 };
 var isAncestor = (a, b, opts) => execGit(["merge-base", "--is-ancestor", a, b], gitOptions4(opts)).code === 0;
+var oneLine = (detail) => detail.replace(/\s+/g, " ").trim();
+var REMOTE_NOT_FOUND = /\brepository\b(?:\s+'[^']*'|\s+"[^"]*")?\s+not found/i;
+var TIMED_OUT = /\bETIMEDOUT\b/;
+var classifyFailureDetail = (detail) => !TIMED_OUT.test(detail) && REMOTE_NOT_FOUND.test(detail) ? "remote not found" : oneLine(detail);
 var failure3 = (remote, detail) => ({
   remote,
   outcome: "failed",
-  detail
+  detail: classifyFailureDetail(detail)
 });
 var syncRemote = (remote, opts = {}) => {
   const fetched = execGit(
@@ -23135,10 +23139,15 @@ var installPrePushHook = (cwd = process.cwd()) => {
     );
   }
 };
-var oneLine = (detail) => detail.replace(/\s+/g, " ").trim();
-var saidWhy = (detail) => /\bETIMEDOUT\b/.test(detail) ? `the ${PRE_PUSH_NOTES_SYNC_TIMEOUT_MS / 1e3}s this hook waits for the remote ran out` : oneLine(detail);
-var describeSync = (results) => results.filter((result) => result.outcome === "failed" || result.outcome === "diverged").map(
-  (result) => result.outcome === "diverged" ? `commitlore: notes mirror (${result.remote}) diverged: ${oneLine(result.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it \u2014 run "commitlore sync" to merge them.` : `commitlore: notes mirror (${result.remote}) failed: ${saidWhy(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`
+var oneLine2 = (detail) => detail.replace(/\s+/g, " ").trim();
+var saidWhy = (detail) => /\bETIMEDOUT\b/.test(detail) ? `the ${PRE_PUSH_NOTES_SYNC_TIMEOUT_MS / 1e3}s this hook waits for the remote ran out` : oneLine2(detail);
+var localRecordsExist = () => {
+  const result = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF]);
+  if (result.code === 0) return result.stdout.trim() !== "";
+  return result.code === 1 ? false : null;
+};
+var describeSync = (results, hasLocalRecords = null) => results.filter((result) => result.outcome === "failed" || result.outcome === "diverged").map(
+  (result) => result.outcome === "diverged" ? `commitlore: notes mirror (${result.remote}) diverged: ${oneLine2(result.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it \u2014 run "commitlore sync" to merge them.` : hasLocalRecords === false ? `commitlore: notes mirror (${result.remote}) failed: ${saidWhy(result.detail)}. The branch was pushed. Nothing is waiting locally, so nothing was lost.` : `commitlore: notes mirror (${result.remote}) failed: ${saidWhy(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`
 );
 var nonInteractiveGitEnv = () => ({
   ...process.env,
@@ -23147,6 +23156,7 @@ var nonInteractiveGitEnv = () => ({
 });
 var register7 = (program3) => {
   program3.command(PRE_PUSH_HOOK_NAME).argument("[remote]", "the remote git is pushing to").argument("[url]", "its URL, as git passes it").description("internal hook command: publish the notes mirror alongside a push").action((remote) => {
+    const hasLocalRecords = localRecordsExist();
     try {
       const results = syncNotes({
         ...remote === void 0 || remote === "" ? {} : { remotes: [remote] },
@@ -23155,11 +23165,13 @@ var register7 = (program3) => {
           timeout: PRE_PUSH_NOTES_SYNC_TIMEOUT_MS
         }
       });
-      for (const line2 of describeSync(results)) process.stderr.write(`${line2}
+      for (const line2 of describeSync(results, hasLocalRecords)) process.stderr.write(`${line2}
 `);
     } catch (error2) {
+      const why = saidWhy(error2 instanceof Error ? error2.message : String(error2));
       process.stderr.write(
-        `commitlore: notes mirror failed: ${saidWhy(error2 instanceof Error ? error2.message : String(error2))}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.
+        hasLocalRecords === false ? `commitlore: notes mirror failed: ${why}. The branch was pushed. Nothing is waiting locally, so nothing was lost.
+` : `commitlore: notes mirror failed: ${why}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.
 `
       );
     }
@@ -24922,13 +24934,13 @@ var harvestVerify = (options) => {
     exitCode: 0
   };
 };
-var oneLine2 = (text) => text.replace(/\s+/g, " ").trim();
+var oneLine3 = (text) => text.replace(/\s+/g, " ").trim();
 var runHarvestVerify = (options) => {
   try {
     return harvestVerify(options);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
-    return { stdout: "", stderr: `${PREFIX3} ${oneLine2(detail)}
+    return { stdout: "", stderr: `${PREFIX3} ${oneLine3(detail)}
 `, exitCode: BAD_INPUT };
   }
 };
@@ -25478,7 +25490,7 @@ var INVISIBLE_RE2 = /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]
 var GRADE_TOKEN_RE = /\[(directive|claim|blocked)\]/gi;
 var MAX_VALUE_CHARS = 400;
 var TRUNCATION_MARK = " ...[truncated]";
-var oneLine3 = (raw) => {
+var oneLine4 = (raw) => {
   const flattened = raw.replace(ANSI_ESCAPE_RE2, "").replace(CONTROL_RE2, " ").replace(INVISIBLE_RE2, "").replace(GRADE_TOKEN_RE, "\\[$1\\]").replace(/\s+/g, " ").trim();
   if (flattened.length <= MAX_VALUE_CHARS) return flattened;
   return `${flattened.slice(0, MAX_VALUE_CHARS)}${TRUNCATION_MARK}`;
@@ -25519,9 +25531,9 @@ var TRUST_TAGS = {
   blocked: "[blocked]  "
 };
 var entryLine = (record2, trailer, trust, tier) => {
-  const value = oneLine3(trailer.value);
-  const body = tier === OTHER_TIER ? `${oneLine3(trailer.key)}: ${value}` : value;
-  return `  ${TRUST_TAGS[trust]}  ${oneLine3(record2.recordId ?? "-")}  ${shortSha3(record2.sha)}  ${body}`;
+  const value = oneLine4(trailer.value);
+  const body = tier === OTHER_TIER ? `${oneLine4(trailer.key)}: ${value}` : value;
+  return `  ${TRUST_TAGS[trust]}  ${oneLine4(record2.recordId ?? "-")}  ${shortSha3(record2.sha)}  ${body}`;
 };
 var byRecency = (a, b) => {
   if (a.committedTs !== b.committedTs) return b.committedTs - a.committedTs;
@@ -25543,7 +25555,7 @@ var project = (records, grades) => {
     if (grade2.trust === "blocked") {
       withheldValues += payload.length;
       withheld.push({
-        recordId: record2.recordId !== void 0 && RECORD_ID_RE.test(record2.recordId) ? oneLine3(record2.recordId) : "-",
+        recordId: record2.recordId !== void 0 && RECORD_ID_RE.test(record2.recordId) ? oneLine4(record2.recordId) : "-",
         sha: shortSha3(record2.sha),
         patterns: grade2.matchedPatterns ?? [],
         keys: grade2.matchedTrailerKeys ?? [],
@@ -25574,14 +25586,14 @@ var withheldLine = (withheld) => {
   if (withheld.length === 0) return [];
   const collisions = withheld.filter((entry) => entry.reason === "identity-collision");
   const injections = withheld.filter((entry) => entry.reason === "injection");
-  const collisionNamed = oneLine3(
+  const collisionNamed = oneLine4(
     collisions.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ")
   );
   const collisionLine = collisions.length === 0 ? [] : [
     `withheld: ${collisions.length} record(s) due to a Record-Id collision; content not shown: ${collisionNamed}.`
   ];
   if (injections.length === 0) return collisionLine;
-  const named = oneLine3(
+  const named = oneLine4(
     injections.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ")
   );
   const patterns = [...new Set(injections.flatMap((entry) => entry.patterns))].sort();
@@ -34485,16 +34497,7 @@ var Server = class extends Protocol {
     if (!methodSchema) {
       throw new Error("Schema is missing a method literal");
     }
-    let methodValue;
-    if (isZ4Schema(methodSchema)) {
-      const v4Schema = methodSchema;
-      const v4Def = v4Schema._zod?.def;
-      methodValue = v4Def?.value ?? v4Schema.value;
-    } else {
-      const v3Schema = methodSchema;
-      const legacyDef = v3Schema._def;
-      methodValue = legacyDef?.value ?? v3Schema.value;
-    }
+    const methodValue = getLiteralValue(methodSchema);
     if (typeof methodValue !== "string") {
       throw new Error("Schema method literal must be a string");
     }
@@ -34803,8 +34806,17 @@ var Server = class extends Protocol {
 import process4 from "node:process";
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
+var STDIO_DEFAULT_MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 var ReadBuffer = class {
+  constructor(options) {
+    this._maxBufferSize = options?.maxBufferSize ?? STDIO_DEFAULT_MAX_BUFFER_SIZE;
+  }
   append(chunk) {
+    const newSize = (this._buffer?.length ?? 0) + chunk.length;
+    if (newSize > this._maxBufferSize) {
+      this.clear();
+      throw new Error(`ReadBuffer exceeded maximum size of ${this._maxBufferSize} bytes`);
+    }
     this._buffer = this._buffer ? Buffer.concat([this._buffer, chunk]) : chunk;
   }
   readMessage() {
@@ -34832,18 +34844,24 @@ function serializeMessage(message) {
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 var StdioServerTransport = class {
-  constructor(_stdin = process4.stdin, _stdout = process4.stdout) {
+  constructor(_stdin = process4.stdin, _stdout = process4.stdout, options) {
     this._stdin = _stdin;
     this._stdout = _stdout;
-    this._readBuffer = new ReadBuffer();
     this._started = false;
     this._ondata = (chunk) => {
-      this._readBuffer.append(chunk);
-      this.processReadBuffer();
+      try {
+        this._readBuffer.append(chunk);
+        this.processReadBuffer();
+      } catch (error2) {
+        this.onerror?.(error2);
+        this.close().catch(() => {
+        });
+      }
     };
     this._onerror = (error2) => {
       this.onerror?.(error2);
     };
+    this._readBuffer = new ReadBuffer({ maxBufferSize: options?.maxBufferSize });
   }
   /**
    * Starts listening for messages on stdin.

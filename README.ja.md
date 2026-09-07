@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh | sh -s v1.2.1
 ```
 
 <details>
 <summary>先にインストーラーを読みたいですか？</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh
-sh install.sh v1.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh
+sh install.sh v1.2.1
 
 # あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
-git clone --depth 1 --branch v1.2.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -107,13 +107,13 @@ CommitLore はその判断をコードのそばに残します。
 macOS と Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh | sh -s v1.2.1
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.ps1))) v1.2.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.ps1))) v1.2.1
 ```
 
 Node.js 22.23.2+ と Git が必要です。スクリプトは何かを書き込む前に両方を確認します。
@@ -232,7 +232,7 @@ superseded な決定は大いに関係があり得ても、現在の指針とし
 
 ## 現場報告であって測定ではない
 
-無関係な一つのリポジトリで、初めて v1.2.0 を入れた人の一回の実行です。ここでは何も測定されず、
+無関係な一つのリポジトリで、初めて v1.2.1 を入れた人の一回の実行です。ここでは何も測定されず、
 evidence log にもありません。上の段落が表で扱っていない loop を主張しているため、このページにあります。
 
 その人は agent に丸めの不具合を直すよう頼み、decimal library はすでに検討して却下したと付け加え、

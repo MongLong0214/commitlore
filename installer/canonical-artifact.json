@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "c939c152715ab8f01eea0888e26f73435db53c82931c4741b28ad162ad73619c"
+    "sha256": "5af161de2542ca2e07d5566a1a2dbd66ed51e9bf4ad9c9d8c3f64609fd9b1d4a"
   },
   "artifact": {
-    "sha256": "469d61aa6502ebdbdd9915e5b962144bb718b782a634cd43cf19a53f8fde5a5e",
+    "sha256": "26e55355619ad81dae04eed5f36be60cb7223378fca290974bcfd16a602616b1",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "24b845a7ee9b7a65f2b335f0a299a6d623a7131cdb54f8e664ec6a4b838cacde"
+        "sha256": "9932c059f0d4ce8a4cab17ce674a4089ec74bd099b3cf26dc13bbed557e92f02"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1046,15 +1046,15 @@
       },
       {
         "path": "dist/core/sync.d.ts",
-        "sha256": "f42b5512c20636900748d6765eb2fc624848b7d6acbce4cd1d84f09eee8d0897"
+        "sha256": "64ec1350270d7498a9675adab0b67621dd01cdce9cf192dba74513cb079f7975"
       },
       {
         "path": "dist/core/sync.js",
-        "sha256": "4063614b79318a4180cb249f4fea31b171e0b77973b42a56d1b66b9ed1ad416e"
+        "sha256": "38c81bb0829d4ca97ca30a2606a446d69baf051924d91b5e34f43dd84d011ff0"
       },
       {
         "path": "dist/core/sync.js.map",
-        "sha256": "31caa351dedfddf17ee656d1c6f4ac0f480094257e369019173a0f698f78295b"
+        "sha256": "f87d0eb490fe1a4924761853a8b0ce1c4df0225813e8a356178ebe9622ec55c1"
       },
       {
         "path": "dist/core/trailers.d.ts",
@@ -1178,15 +1178,15 @@
       },
       {
         "path": "dist/hooks/pre-push.d.ts",
-        "sha256": "50a328d14efd52cfa7c5fed03f49eb8a7e9efe805646c09686b3295a0c7e8f25"
+        "sha256": "bcf44f344dd9852c9e8ed1baa8a20898631fe96a20d78c0a19553c7d3e7e8d20"
       },
       {
         "path": "dist/hooks/pre-push.js",
-        "sha256": "dc4d6dc0e6aeb688851bd098ac4fec47297dccf4aa748fb34b2e242b9c658b22"
+        "sha256": "e5730b7d2aa93b017490b84c18ea1867e40941843ebe7be4d061b462fdc23eb2"
       },
       {
         "path": "dist/hooks/pre-push.js.map",
-        "sha256": "a4d1e396c78dd7f172409df90e170c2dd769f50b51e8fe4372e09e28b2b77276"
+        "sha256": "2a7adc5d162bbe9423726c24f03743d901599b71514d4661734ae2cb33f5ee4c"
       },
       {
         "path": "dist/hooks/prepare-commit-msg.d.ts",
