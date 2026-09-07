@@ -81,6 +81,17 @@ const makeRepository = (): { cwd: string; since: string; secret: string } => {
   git(cwd, ['init', '--quiet']);
   git(cwd, ['config', 'user.email', 'shadow@example.test']);
   git(cwd, ['config', 'user.name', 'Shadow Test']);
+  // `byteSnapshot` below is exhaustive on purpose -- it is the evidence that
+  // `capture --shadow` touched nothing. That makes it sensitive to files whose
+  // lifetime belongs to git rather than to the code under test: a run on CI
+  // (2026-09-07, run 34073112868) captured `.git/objects/maintenance.lock` in
+  // `before` and found it gone in `after`, and the empty-file digest
+  // e3b0c442...b7852b855 in the diff is what identified it. Filtering the
+  // snapshot would have been the wrong repair, because then the snapshot would
+  // stop being exhaustive and a real stray file could hide behind the filter.
+  // Deny git the background work instead, so there is nothing transient to see.
+  git(cwd, ['config', 'gc.auto', '0']);
+  git(cwd, ['config', 'maintenance.auto', 'false']);
   writeFileSync(join(cwd, 'README.md'), '# fixture\n');
   commit(cwd, 'initial fixture');
   const since = git(cwd, ['rev-parse', 'HEAD']).trim();
