@@ -107,10 +107,28 @@ const revParse = (ref: string, opts: NotesOptions): string | null => {
 const isAncestor = (a: string, b: string, opts: NotesOptions): boolean =>
   execGit(['merge-base', '--is-ancestor', a, b], gitOptions(opts)).code === 0;
 
+/**
+ * `SyncResult.detail` promises one line, and git does not. A fetch against a
+ * deleted remote answers with two -- `remote: Repository not found.` and
+ * `fatal: repository '...' not found` -- and putting both in the column split
+ * the row in half, so the second line read as a bare `fatal:` standing above
+ * the table rather than as that remote's result (#865). Collapse here, at the
+ * one place a git diagnostic becomes a detail, so the table, the JSON and the
+ * hook all inherit the promise.
+ */
+const oneLine = (detail: string): string => detail.replace(/\s+/g, ' ').trim();
+
+/**
+ * A remote that no longer exists is a normal thing to find in a clone that has
+ * outlived a fork, and the useful report is which remote, not git's two-line
+ * phrasing of it.
+ */
+const REMOTE_NOT_FOUND = /repository .*not found|repository not found/i;
+
 const failure = (remote: string, detail: string): SyncResult => ({
   remote,
   outcome: 'failed',
-  detail,
+  detail: REMOTE_NOT_FOUND.test(detail) ? 'remote not found' : oneLine(detail),
 });
 
 /**
