@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh | sh -s v1.2.1
 ```
 
 <details>
 <summary>먼저 설치기를 읽어 보고 싶나요?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh
-sh install.sh v1.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh
+sh install.sh v1.2.1
 
 # 또는 스크립트를 건너뜁니다. 스크립트가 만드는 체크아웃은 직접 만들 수 있습니다.
-git clone --depth 1 --branch v1.2.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -107,13 +107,13 @@ CommitLore는 그 판단을 코드 곁에 보관합니다.
 macOS와 Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.sh | sh -s v1.2.1
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.ps1))) v1.2.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.1/install.ps1))) v1.2.1
 ```
 
 Node.js 22.23.2+와 Git이 필요합니다. 스크립트는 무엇이든 쓰기 전에 둘을 확인합니다.
@@ -232,7 +232,7 @@ CommitLore는 이렇게 묻습니다.
 
 ## 현장 보고이지 측정은 아닙니다
 
-관련 없는 한 저장소에서 v1.2.0을 처음 설치한 사람이 한 번 실행한 사례입니다. 여기서는 아무것도
+관련 없는 한 저장소에서 v1.2.1을 처음 설치한 사람이 한 번 실행한 사례입니다. 여기서는 아무것도
 측정하지 않았고 evidence log에도 없습니다. 위 문단이 표로 다루지 않는 loop를 주장하기 때문에
 이 페이지에 있습니다.
 

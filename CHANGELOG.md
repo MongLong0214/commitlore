@@ -4,6 +4,64 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.1
+
+A security release, and one line that had been asserting something nobody checked.
+
+**Seven advisories left the tree, and two of them shipped.** `npm audit --omit=dev`
+was failing on `main`, not only on the dependency pull requests that were being
+blamed for it: `fast-uri` (high, four GHSAs, reached through `ajv`) and `qs`
+(moderate, two, reached through the MCP SDK's `express`) were both in the runtime
+tree — the tree that gets bundled into `dist/commitlore.mjs` and installed. They
+are fixed at `fast-uri` 3.1.7 and `qs` 6.16.0. Five more, including one rated
+critical, were `esbuild <=0.24.2` reachable only through vitest 2's own
+dependencies; the vitest 4 upgrade below is what removes them. `npm audit` is now
+silent on both surfaces.
+
+**The push hook no longer reports records that do not exist as unsent.** On a
+failed notes mirror the line said "the records for these commits are still only
+local" whether or not any record existed — #632 asked "is there a local note
+waiting?" and the answer was hard-coded to yes. A repository with no notes ref at
+all was told to run `commitlore sync`, and found nothing to send. The hook now
+checks, locally, before it claims; when there is nothing waiting it says so. The
+check is ref-scoped rather than commit-scoped on purpose: the mirror publishes
+`refs/notes/commitlore` whole, so a record written against an already-pushed
+commit is still unsent, and a commit-scoped check would call that "nothing
+waiting" — wrong in the dangerous direction.
+
+**`commitlore sync` keeps one row per remote.** An unreachable remote answers with
+two lines of git diagnostic, and both went into a column that promises one. The
+row broke in half and the trailing `fatal:` read as a bare error standing above
+the table rather than as that remote's result.
+
+**Upgrades.** vitest 2.1.9 → 4.1.11, `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0,
+js-yaml 5.2.3 → 5.4.1, `upload-artifact` v4.6.2 → v7.0.1 and `download-artifact`
+v4.3.0 → v8.0.1. vitest 4 needed three things with it: `--reporter=basic` no
+longer exists, changing `ci.yml` moves the reviewed-workflow lock deliberately,
+and the 5s default test timeout no longer fits a runner whose per-file startup
+costs more — every failure measured during that upgrade was a timeout, none was
+an assertion.
+
+**Reviewed, with one exception recorded.** 1.2.0 shipped without a cross-provider
+review and said so here. This one had them: `gpt-5.6-sol`, read-only and asked to
+*disprove* rather than approve, went through the dependency batch (it recomputed
+the source digest and all 310 `dist` entries from the commit's git blobs
+independently) and the artifact-action upgrade (it read the pinned action sources
+and mapped every uploaded path to where the next job reads it). The exception is
+the security fix itself, which was merged first and without one, because leaving
+two advisories in the runtime tree to wait for a reviewer is the worse trade. Both
+reviews recorded their own limits — neither could rerun the Docker build, and
+neither dispatched the canonical-merge workflow — and those limits stand.
+
+**Not changed, deliberately.** The guard's short-alternative false positive
+(#858) was measured rather than fixed. At one distinctive token the corroboration
+strength is structurally 1.00 whatever the token is, because the corpus weight
+that separates a rare `redis` from an ordinary `read` is divided out by its own
+denominator. Every rule that removes the false positive also removes
+`add a Redis client` → `shared Redis cache`, a documented true positive. Trading
+that for an advisory false positive is the wrong direction for a tool that
+declares itself advisory; the issue carries the measurements.
+
 ## 1.2.0
 
 > **Recorded as held for want of a reviewer, not as reviewed.** Every change in

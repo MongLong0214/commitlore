@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "3ed9923564b0c4fab22a6499431443d543acd140e8317388cf050d8755d529ed"
+    "sha256": "0b6cb658c751df30bb14be7fe99726f5b86ec18e45b3ee2a70f94d83f2eab320"
   },
   "artifact": {
-    "sha256": "8ca06b24a111ad6e28e6f6319af53cf4140d0f31fcb791879d8844d784b0dbe0",
+    "sha256": "584bff7af855d136de8c2c7910a0421a2cf45824effefe280e998a9ec4500f22",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "a24a4f9b6091365c0bcf5323c3f0425f5b7f4d3dd7a2f2066135144d0c0e3bd5"
+        "sha256": "1990b5c54c957edbea46745f2007b313554b47d8d1533c129ef09ab08c5c209f"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1050,11 +1050,11 @@
       },
       {
         "path": "dist/core/sync.js",
-        "sha256": "4063614b79318a4180cb249f4fea31b171e0b77973b42a56d1b66b9ed1ad416e"
+        "sha256": "b4a5187d3caf667ab32cb5a72cf2b2089623aab9c229a1664720e5a1f9f62933"
       },
       {
         "path": "dist/core/sync.js.map",
-        "sha256": "31caa351dedfddf17ee656d1c6f4ac0f480094257e369019173a0f698f78295b"
+        "sha256": "0495c3b934aa0ea257cce0e7feccb6c740aabf203de04d07e0029fb00a7a1466"
       },
       {
         "path": "dist/core/trailers.d.ts",
@@ -1178,15 +1178,15 @@
       },
       {
         "path": "dist/hooks/pre-push.d.ts",
-        "sha256": "50a328d14efd52cfa7c5fed03f49eb8a7e9efe805646c09686b3295a0c7e8f25"
+        "sha256": "bcf44f344dd9852c9e8ed1baa8a20898631fe96a20d78c0a19553c7d3e7e8d20"
       },
       {
         "path": "dist/hooks/pre-push.js",
-        "sha256": "dc4d6dc0e6aeb688851bd098ac4fec47297dccf4aa748fb34b2e242b9c658b22"
+        "sha256": "e5730b7d2aa93b017490b84c18ea1867e40941843ebe7be4d061b462fdc23eb2"
       },
       {
         "path": "dist/hooks/pre-push.js.map",
-        "sha256": "a4d1e396c78dd7f172409df90e170c2dd769f50b51e8fe4372e09e28b2b77276"
+        "sha256": "2a7adc5d162bbe9423726c24f03743d901599b71514d4661734ae2cb33f5ee4c"
       },
       {
         "path": "dist/hooks/prepare-commit-msg.d.ts",
