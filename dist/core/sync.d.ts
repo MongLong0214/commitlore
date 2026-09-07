@@ -65,6 +65,7 @@ export interface SyncOptions extends NotesOptions {
     /** Limits applied only to network transport children (`git fetch` and `git push`). */
     readonly transport?: Pick<ExecGitOptions, 'env' | 'timeout'>;
 }
+export declare const classifyFailureDetail: (detail: string) => string;
 /**
  * Synchronise one remote.
  *

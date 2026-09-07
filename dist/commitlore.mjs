@@ -23018,11 +23018,13 @@ var revParse2 = (ref, opts) => {
 };
 var isAncestor = (a, b, opts) => execGit(["merge-base", "--is-ancestor", a, b], gitOptions4(opts)).code === 0;
 var oneLine = (detail) => detail.replace(/\s+/g, " ").trim();
-var REMOTE_NOT_FOUND = /repository .*not found|repository not found/i;
+var REMOTE_NOT_FOUND = /\brepository\b(?:\s+'[^']*'|\s+"[^"]*")?\s+not found/i;
+var TIMED_OUT = /\bETIMEDOUT\b/;
+var classifyFailureDetail = (detail) => !TIMED_OUT.test(detail) && REMOTE_NOT_FOUND.test(detail) ? "remote not found" : oneLine(detail);
 var failure3 = (remote, detail) => ({
   remote,
   outcome: "failed",
-  detail: REMOTE_NOT_FOUND.test(detail) ? "remote not found" : oneLine(detail)
+  detail: classifyFailureDetail(detail)
 });
 var syncRemote = (remote, opts = {}) => {
   const fetched = execGit(

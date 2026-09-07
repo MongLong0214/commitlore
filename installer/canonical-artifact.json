@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "0b6cb658c751df30bb14be7fe99726f5b86ec18e45b3ee2a70f94d83f2eab320"
+    "sha256": "5af161de2542ca2e07d5566a1a2dbd66ed51e9bf4ad9c9d8c3f64609fd9b1d4a"
   },
   "artifact": {
-    "sha256": "584bff7af855d136de8c2c7910a0421a2cf45824effefe280e998a9ec4500f22",
+    "sha256": "26e55355619ad81dae04eed5f36be60cb7223378fca290974bcfd16a602616b1",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "1990b5c54c957edbea46745f2007b313554b47d8d1533c129ef09ab08c5c209f"
+        "sha256": "9932c059f0d4ce8a4cab17ce674a4089ec74bd099b3cf26dc13bbed557e92f02"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1046,15 +1046,15 @@
       },
       {
         "path": "dist/core/sync.d.ts",
-        "sha256": "f42b5512c20636900748d6765eb2fc624848b7d6acbce4cd1d84f09eee8d0897"
+        "sha256": "64ec1350270d7498a9675adab0b67621dd01cdce9cf192dba74513cb079f7975"
       },
       {
         "path": "dist/core/sync.js",
-        "sha256": "b4a5187d3caf667ab32cb5a72cf2b2089623aab9c229a1664720e5a1f9f62933"
+        "sha256": "38c81bb0829d4ca97ca30a2606a446d69baf051924d91b5e34f43dd84d011ff0"
       },
       {
         "path": "dist/core/sync.js.map",
-        "sha256": "0495c3b934aa0ea257cce0e7feccb6c740aabf203de04d07e0029fb00a7a1466"
+        "sha256": "f87d0eb490fe1a4924761853a8b0ce1c4df0225813e8a356178ebe9622ec55c1"
       },
       {
         "path": "dist/core/trailers.d.ts",

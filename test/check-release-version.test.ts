@@ -43,11 +43,15 @@ describe('this repository agrees with itself', () => {
     const codexPlugin = JSON.parse(
       readFileSync(join(REPO_ROOT, '.codex-plugin', 'plugin.json'), 'utf8'),
     ) as { version?: unknown };
+    const serverManifest = JSON.parse(readFileSync(join(REPO_ROOT, 'server.json'), 'utf8')) as {
+      version?: unknown;
+    };
 
     expect(lock.version).toBe(pkg.version);
     expect(lock.packages?.['']?.version).toBe(pkg.version);
     expect(claudePlugin.version).toBe(pkg.version);
     expect(codexPlugin.version).toBe(pkg.version);
+    expect(serverManifest.version).toBe(pkg.version);
   });
 
   it('the gate itself accepts this repository at its own version', () => {
@@ -75,8 +79,10 @@ interface FixtureVersions {
   packageLock?: string;
   packageLockRoot?: string;
   cli?: string;
+  server?: string;
   pluginManifest?: boolean;
   codexPluginManifest?: boolean;
+  serverManifest?: boolean;
 }
 
 const fixture = (versions: FixtureVersions = {}): string => {
@@ -118,6 +124,12 @@ const fixture = (versions: FixtureVersions = {}): string => {
       `${JSON.stringify({ name: 'commitlore', version: versions.codexPlugin ?? VERSION }, null, 2)}\n`,
     );
   }
+  if (versions.serverManifest !== false) {
+    writeFileSync(
+      join(root, 'server.json'),
+      `${JSON.stringify({ name: 'io.github.MongLong0214/commitlore', version: versions.server ?? VERSION }, null, 2)}\n`,
+    );
+  }
   writeFileSync(
     join(root, 'dist', 'commitlore.mjs'),
     `#!/usr/bin/env node\nif (process.argv[2] === '--version') console.log(${JSON.stringify(versions.cli ?? VERSION)});\n`,
@@ -146,6 +158,11 @@ describe('#492 check-release-version', () => {
     // one would have published green and told a Codex user they had installed
     // the previous release.
     ['the codex plugin manifest', { codexPlugin: '0.7.0' }, '.codex-plugin/plugin.json .version'],
+    // Added the same way and for the same reason, one release later. The 1.2.1
+    // review found `server.json` still advertising 1.2.0 while every source the
+    // gate read said 1.2.1, so the gate passed. An MCP registry entry is how a
+    // stranger finds this, and it was pointing at the previous tag.
+    ['the server manifest', { server: '0.7.0' }, 'server.json .version'],
     ['the package-lock root version', { packageLock: '0.7.0' }, 'package-lock.json .version'],
     [
       'the package-lock root package version',

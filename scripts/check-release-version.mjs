@@ -99,6 +99,12 @@ const plugin = readManifest('.claude-plugin/plugin.json', ['.version']);
 // A Codex user would have installed this release and been told it was the
 // previous one.
 const codexPlugin = readManifest('.codex-plugin/plugin.json', ['.version']);
+// `server.json` is the MCP registry manifest, and it was the fourth one this
+// gate did not read. The 1.2.1 review found it still advertising 1.2.0 —
+// version, installer command and release URL — while every source below read
+// 1.2.1 and the gate passed. Exactly the shape of the Codex note above, one
+// file later, and the reason that note says nothing else would have caught it.
+const serverManifest = readManifest('server.json', ['.version']);
 const packageLock = readManifest('package-lock.json', ['.version', '.packages[""].version']);
 
 const pkgVersion = requiredVersion(pkg.version, 'package.json .version');
@@ -107,6 +113,7 @@ const codexPluginVersion = requiredVersion(
   codexPlugin.version,
   '.codex-plugin/plugin.json .version',
 );
+const serverVersion = requiredVersion(serverManifest.version, 'server.json .version');
 const packageLockVersion = requiredVersion(packageLock.version, 'package-lock.json .version');
 const packageLockRootVersion = requiredVersion(
   packageLock.packages?.['']?.version,
@@ -120,6 +127,7 @@ const versionSources = [
   ['package.json .version', pkgVersion],
   ['.claude-plugin/plugin.json .version', pluginVersion],
   ['.codex-plugin/plugin.json .version', codexPluginVersion],
+  ['server.json .version', serverVersion],
   ['package-lock.json .version', packageLockVersion],
   ['package-lock.json .packages[""].version', packageLockRootVersion],
   ['dist/commitlore.mjs --version', cliVersion],
@@ -137,10 +145,10 @@ if (mismatches.length > 0) {
   process.exit(1);
 }
 
+// Built from `versionSources` rather than written out, so the line cannot claim
+// to have compared a set the loop above did not. It said "version consistent"
+// without naming `server.json` for as long as `server.json` went unchecked.
 console.log(
-  `version consistent: tag ${tagArg} == package.json .version ${pkgVersion} == ` +
-    `.claude-plugin/plugin.json .version ${pluginVersion} == ` +
-    `.codex-plugin/plugin.json .version ${codexPluginVersion} == package-lock.json .version ` +
-    `${packageLockVersion} == package-lock.json .packages[""].version ${packageLockRootVersion} == ` +
-    `dist/commitlore.mjs --version ${cliVersion}`,
+  `version consistent: tag ${tagArg} == ` +
+    versionSources.map(([source, version]) => `${source} ${version}`).join(' == '),
 );

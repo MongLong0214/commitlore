@@ -17,7 +17,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { NOTES_REF, NOTES_REFSPEC, forcesNotes, readRecord, writeRecord } from '../src/core/notes.js';
-import { syncNotes } from '../src/core/sync.js';
+import { classifyFailureDetail, syncNotes } from '../src/core/sync.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const scratch: string[] = [];
@@ -249,6 +249,23 @@ describe('#416 the notes mirror completes a round trip between two clones', () =
     expect(results[0]?.outcome).toBe('failed');
     expect(results[0]?.detail).not.toContain('\n');
     expect(results[0]?.detail.trim()).toBe(results[0]?.detail);
+  });
+
+  it('does not relabel a timeout, or a message that merely contains those words', () => {
+    // Review of #865 found the first draft's classifier too loose: it matched
+    // "the words repository and not found somewhere in the message", so
+    // `repository metadata not found` became `remote not found`. Worse, the
+    // hook reads `detail` for ETIMEDOUT to say *why* the mirror failed, and
+    // `execGit` appends that to partial stderr — so relabelling could erase the
+    // one part anything parses and report a missing fork for a slow remote.
+    expect(classifyFailureDetail("fatal: repository 'https://x/y.git' not found")).toBe(
+      'remote not found',
+    );
+    expect(classifyFailureDetail('remote: Repository not found.')).toBe('remote not found');
+    expect(classifyFailureDetail('fatal: repository metadata not found')).toContain('metadata');
+    expect(classifyFailureDetail('remote: Repository not found.\nETIMEDOUT')).toContain(
+      'ETIMEDOUT',
+    );
   });
 
   it('leaves the working notes ref intact when it refuses', () => {
