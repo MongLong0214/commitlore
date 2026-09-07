@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "c939c152715ab8f01eea0888e26f73435db53c82931c4741b28ad162ad73619c"
+    "sha256": "3ed9923564b0c4fab22a6499431443d543acd140e8317388cf050d8755d529ed"
   },
   "artifact": {
-    "sha256": "469d61aa6502ebdbdd9915e5b962144bb718b782a634cd43cf19a53f8fde5a5e",
+    "sha256": "8ca06b24a111ad6e28e6f6319af53cf4140d0f31fcb791879d8844d784b0dbe0",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "24b845a7ee9b7a65f2b335f0a299a6d623a7131cdb54f8e664ec6a4b838cacde"
+        "sha256": "a24a4f9b6091365c0bcf5323c3f0425f5b7f4d3dd7a2f2066135144d0c0e3bd5"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
