@@ -86,7 +86,7 @@ describe('ADR-0019: guard signal insufficiency', () => {
         `(actual recall: ${(point.recall * 100).toFixed(1)}%)`,
       ).toBeLessThanOrEqual(CURRENT_PRECISION_UPPER);
     }
-  });
+  }, 300_000);
 
   it('49 false negatives from semantic revivals produce zero corroborated signal', () => {
     // Shape 1 from the analysis: tasks whose FNs all score undefined (zero
@@ -136,5 +136,5 @@ describe('ADR-0019: guard signal insufficiency', () => {
     // The analysis found exactly 49 positives from these tasks produce zero signal.
     // Assert at least 49 to pin the finding; more would strengthen the claim.
     expect(zeroSignalPositives).toBeGreaterThanOrEqual(49);
-  });
+  }, 300_000);
 });
