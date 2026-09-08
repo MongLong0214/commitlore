@@ -4,6 +4,39 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.4
+
+`doctor` blamed the hook that worked, and prescribed reinstalling it.
+
+**`hook-runtime` attributed a preserved hook's failure to commitlore's hook
+(#876).** The installed stub runs the hook it preserved at install time first and
+exits with that hook's code, verbatim, before commitlore is resolved. Probed as
+one process, a preserved hook that called `node` by name died with 127 under
+git's PATH and the row read "the hook cannot find a node interpreter", with
+`commitlore hooks install` as the fix. That command rewrites only commitlore's
+own file; it reported the file unchanged, and the next `doctor` failed
+identically. The reporter spent several minutes repairing the wrong component,
+because the diagnostic named it.
+
+**The preserved hook now runs on its own first**, under the same PATH-less
+environment and through `sh` the way the stub invokes it. If it exits non-zero,
+the row says commitlore's hook is not what failed, names the preserved hook by
+path, classifies its first stderr line the same way the stub's was (node
+missing, node threw, unclear), and prescribes a fix aimed at that file. Only once
+it has passed does the stub run, so every remaining failure is commitlore's own
+resolution and `hooks install` is once again a remedy that can move it.
+
+**`commit-msg-hook` inherits the fix along with the outcome.** It was the row the
+reporter read: it already carried the runtime row's outcome when blocked on it,
+and kept saying `hooks install` under an outcome that had just explained why
+that could not help.
+
+Not changed: a broken preserved hook still blocks every commit. That is the
+chaining contract — a hook that was rejecting commits before commitlore arrived
+must keep rejecting them — and whether a hook that is broken rather than
+rejecting deserves different treatment is a separate decision from a diagnostic
+one.
+
 ## 1.2.3
 
 The capture prompt was the session, so on a long session there was no prompt.
