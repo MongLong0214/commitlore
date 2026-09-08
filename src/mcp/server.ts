@@ -379,7 +379,10 @@ const TOOLS: readonly Tool[] = [
     description:
       'Prepare a capture transaction: computes binding conditions (HEAD, staged diff, tree, ' +
       'policy hash), generates the prompt contract for the agent to use, and persists a ' +
-      'phase:"prepared" pending transaction. Returns the nonce needed for verify and stage.',
+      'phase:"prepared" pending transaction. Returns the nonce needed for verify and stage. ' +
+      'The prompt carries the end of the transcript rather than all of it; transcript_window ' +
+      'says which lines, numbered as the whole transcript numbers them. Verification still ' +
+      'reads the whole transcript, so quote only what the prompt shows you.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -638,6 +641,11 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         policy_identity_hash: result.policy_identity_hash,
         source_hashes: result.source_hashes,
         prompt: result.prompt,
+        // What of the transcript that prompt carries (#873). It travels here
+        // for the same reason the two fields below do: MCP is the first-class
+        // surface for every agent but the plugin, and an agent handed a slice
+        // of its own session with no way to tell would cite the whole of it.
+        transcript_window: result.transcript_window,
         // MCP is the first-class surface for every agent other than the Claude
         // Code plugin, so both of these must travel here and not only to the
         // pending file and the CLI. `guard_advisory` is always present, never

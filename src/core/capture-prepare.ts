@@ -10,7 +10,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { markCaptureError } from './capture-outcome.js';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch, type GuardResult } from './guard.js';
-import { buildHarvestPrompt } from './harvest.js';
+import { buildHarvestPromptWithWindow, type TranscriptWindow } from './harvest.js';
 import { policySourceLabel, resolvePolicy } from './capture-policy.js';
 import {
   createPending,
@@ -136,6 +136,13 @@ export interface PrepareResult {
   policy_identity_hash: string;
   source_hashes: { transcript: string; diff: string };
   prompt: string;
+  /**
+   * What of the transcript the prompt carries (#873). The prompt is bounded;
+   * `source_hashes.transcript` and every verification are not — they are over
+   * the whole transcript. A caller that assumed the prompt was the session had
+   * no way to tell, so this says it.
+   */
+  transcript_window: TranscriptWindow;
   guard_advisory: GuardAdvisory | null;
   /**
    * A named reason when a policy file exists but could not be used (T-1110).
@@ -158,6 +165,7 @@ interface PreparedValues {
   policy_identity_hash: string;
   source_hashes: { transcript: string; diff: string };
   prompt: string;
+  transcript_window: TranscriptWindow;
   guard_advisory: GuardAdvisory | null;
   policy_error: string | null;
 }
@@ -248,13 +256,16 @@ const prepareValues = (opts: {
           : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
       });
 
+  const harvest = buildHarvestPromptWithWindow({ transcript, diff });
+
   return {
     base_head: baseHead,
     staged_diff_hash: stagedDiffHash,
     staged_tree_oid: stagedTreeOid,
     policy_identity_hash: policy.identityHash,
     source_hashes: sourceHashes,
-    prompt: buildHarvestPrompt({ transcript, diff }),
+    prompt: harvest.prompt,
+    transcript_window: harvest.window,
     guard_advisory: advisory,
     policy_error: policy.error,
   };
@@ -297,6 +308,7 @@ export const prepareCaptureContext = (opts: PrepareCaptureOptions): PrepareResul
     policy_identity_hash: prepared.policy_identity_hash,
     source_hashes: prepared.source_hashes,
     prompt: prepared.prompt,
+    transcript_window: prepared.transcript_window,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory,
   };
@@ -335,6 +347,7 @@ export const prepareCaptureContextReadOnly = (opts: PrepareCaptureOptions & {
     policy_identity_hash: prepared.policy_identity_hash,
     source_hashes: prepared.source_hashes,
     prompt: prepared.prompt,
+    transcript_window: prepared.transcript_window,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory,
     pending,

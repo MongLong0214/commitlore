@@ -4,6 +4,59 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.3
+
+The capture prompt was the session, so on a long session there was no prompt.
+
+**`capture` embedded the whole transcript in its prompt (#873).** Measured by the
+reporter: a 67,981,436-byte transcript produced a 67,468,122-byte prompt — 99.3%
+of the file, and larger than any model can consume, so the pipeline could not be
+completed and no record was ever written. The pipeline itself was fine, which is
+how they proved it: `tail -n 400` on the same transcript gave 537,250 bytes and
+the same command in the same repository worked.
+
+**The failure was silent, which is why it reads as the reason capture is not
+used.** Prompt-only mode reports `outcome: "empty"`, `staged: false`, exit 0. An
+operator who tried capture once on a real session got a prompt they could not
+use and no statement that anything was wrong, and did not try again. In the
+repository where this was measured, `stale` reported 1 record in 1000 commits
+while roughly twenty commits in one recent session carried real decision context
+and produced none — with `{"mode":"auto","unattended":true}` already set, so
+permission was never the obstacle.
+
+**The prompt now carries the end of the transcript within a byte budget**, 256
+KiB by default and `COMMITLORE_TRANSCRIPT_BUDGET_BYTES` to change it. The end
+rather than the beginning: a decision is taken near the end of the session that
+implements it, and the diff being captured is that end.
+
+**Three things the bound deliberately does not do.** It does not renumber — the
+window keeps the line numbers it has in the whole transcript, because
+verification reads the whole transcript and a window renumbered from 1 would
+have every `L<start>-L<end>` locator name a different line of the file it is
+checked against. It does not reach the hash — `source_hashes` and every quote
+check are still over the whole transcript, so a quote from outside the window
+still verifies and a caller passing the session it actually had is never told
+the transcript was substituted. And it does not stay quiet — the prompt says
+which lines it shows and how many were left out, and `transcript_window` says
+the same to `capture --json` and to `commitlore_prepare_capture`. A bounded
+prompt that did not say so would be the old silence in a smaller package.
+
+**One line can outrun the budget by itself.** A JSONL transcript line can hold an
+entire tool result. That line is shown from its end rather than dropped, and the
+window marks it partial, because a window of no lines is worse than a window of
+one partial line. The byte slice never leaves a split codepoint at the front: a
+replacement character inside a quotable line is a character nobody can copy back.
+
+**Not claimed.** Where the useful boundary is. 256 KiB is comfortably readable by
+current models and carries far more than the ~537 KB slice measured to work; the
+reporter said they had not measured where a good record stops needing context,
+and neither has this. Also unchanged, and worth stating because automation is
+built on it: `outcome` is `staged`, `empty` or `rejected`, and all three exit 0
+— anything driving capture must read `--json`, because an exit-code check reads
+a rejected record as a success.
+
+**Not reviewed.** No cross-provider review was run on this change.
+
 ## 1.2.2
 
 One line of configuration, and the plugin's MCP server had never started for

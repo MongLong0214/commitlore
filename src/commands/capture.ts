@@ -39,7 +39,7 @@ import {
   configuredTrustedSignerFingerprints,
   configuredTrustedAuthors,
 } from '../core/trusted-authors.js';
-import { parseDraft } from '../core/harvest.js';
+import { parseDraft, type TranscriptWindow } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
 import type { GuardAdvisory } from '../core/pending.js';
 
@@ -80,6 +80,13 @@ export interface CaptureResult {
   nonce: string | null;
   staged: boolean;
   prompt?: string;
+  /**
+   * What of the transcript `prompt` carries, present whenever `prompt` is
+   * (#873). The prompt is bounded; verification is not — it reads the whole
+   * transcript. Without this a caller could not tell a slice from the session,
+   * and the prompt was previously the session, at whatever size that was.
+   */
+  transcript_window?: TranscriptWindow;
   guard_advisory?: GuardAdvisory | null;
   /**
    * Every reason a record was refused (#309). Both sources are included: the
@@ -238,6 +245,7 @@ const runCapturePipeline = (opts: {
       nonce: null,
       staged: false,
       prompt: prepareResult.prompt,
+      transcript_window: prepareResult.transcript_window,
       guard_advisory: prepareResult.guard_advisory,
     };
   }
@@ -383,7 +391,11 @@ export const register = (program: Command): void => {
     // when a subcommand was invoked, so `capture gc` — which needs no transcript
     // — would fail before its own action ran. The requirement is enforced in the
     // action below instead, where it applies only to the capture flow itself.
-    .option('--transcript <path>', 'path to the session transcript file')
+    .option(
+      '--transcript <path>',
+      'path to the session transcript file (the prompt carries its last 256 KiB; ' +
+        'COMMITLORE_TRANSCRIPT_BUDGET_BYTES changes that, and verification always reads all of it)',
+    )
     .option('--diff <path>', 'path to the diff file (defaults to the staged diff)')
     .option('--draft <path>', 'path to the draft JSON file (omit for prompt-only mode)')
     .option('--out <path>', 'write the pending nonce to a file')
