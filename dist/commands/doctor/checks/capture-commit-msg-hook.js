@@ -67,6 +67,11 @@ export const checkHook = (ctx, runtime) => {
     ];
     if (runtime !== undefined && runtime.status !== 'ok') {
         const inherited = `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`;
+        // This row is blocked on the runtime's finding, so the fix that moves that
+        // finding is the only fix that moves this one. Prescribing `hooks install`
+        // here regardless is how a preserved hook's failure came to carry a remedy
+        // that reinstalls the hook which worked (#876).
+        const inheritedFix = runtime.fix ?? install;
         // A skipped runtime would make this row a skip too, and a skip has to name
         // a reason. Inheriting the runtime's is the only answer that stays true —
         // this row did not look for the same reason that one did not. The branch is
@@ -74,12 +79,12 @@ export const checkHook = (ctx, runtime) => {
         // written out rather than cast away so that adding one cannot silently
         // produce a reasonless skip here.
         if (runtime.status === 'skipped') {
-            return blocked(runtime, check(id, category, title, 'skipped', inherited, install, false, false, {
+            return blocked(runtime, check(id, category, title, 'skipped', inherited, inheritedFix, false, false, {
                 evidence: { ...hookEvidence, runtime_status: runtime.status },
                 skipReason: runtime.skipReason ?? 'nothing_applicable',
             }));
         }
-        return blocked(runtime, check(id, category, title, runtime.status, inherited, install, false, undefined, { evidence: { ...hookEvidence, runtime_status: runtime.status } }));
+        return blocked(runtime, check(id, category, title, runtime.status, inherited, inheritedFix, false, undefined, { evidence: { ...hookEvidence, runtime_status: runtime.status } }));
     }
     return problems.length === 0
         ? check(id, category, title, 'ok', `installed at ${path}; ${targetDetail}`, null, false, undefined, { evidence: hookEvidence })

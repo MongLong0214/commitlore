@@ -23,5 +23,11 @@ import { type DoctorCheck, type DoctorContext } from '../model.js';
  * The probe message is valid, so a healthy hook exits 0. A hook that cannot find
  * a runtime exits non-zero having parsed nothing, which is indistinguishable
  * from "your message was fine" to everyone except this check.
+ *
+ * Two hooks run here, not one. The stub hands the message to the hook it
+ * preserved at install time before it resolves commitlore, and exits with that
+ * hook's code if it fails -- so the preserved hook is probed on its own first,
+ * and its failure is reported as its own, with a fix aimed at it. `hooks
+ * install` cannot move a finding about a file it does not write (#876).
  */
 export declare const checkHookRuntime: (ctx: DoctorContext) => DoctorCheck;

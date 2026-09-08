@@ -4,10 +4,38 @@
  * It owns execution of the installed hook under Git's environment; consumers
  * receive its completed row through the registry rather than importing it.
  */
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { CHAINED_HOOK_NAME } from '../../../hooks/commit-msg.js';
 import { check, gitOptions, PROBE_MESSAGE, streamEvidence } from '../model.js';
+/**
+ * The stub runs `"$chained" "$@"` only when `[ -x "$chained" ]` holds, so a
+ * preserved hook without its execute bit is inert to git and to the stub alike.
+ * The same test here, so this check does not probe a file the hook will skip.
+ */
+const isExecutable = (path) => {
+    try {
+        accessSync(path, fsConstants.X_OK);
+        return true;
+    }
+    catch {
+        return false;
+    }
+};
+/**
+ * How the stub's failure reads on its first stderr line: node was never found,
+ * node ran and threw, or neither. Shared between the two hooks this check runs,
+ * because the preserved hook fails in the same three shapes and the
+ * classification is about the line, not about who wrote it.
+ */
+const classifyFailure = (status, said) => {
+    if (status === 127 || /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said))
+        return 'node-missing';
+    if (/^\s*at\s|\.js:\d+/.test(said))
+        return 'node-threw';
+    return 'unclear';
+};
 /**
  * Whether the installed hook actually runs, in the environment git gives it.
  *
@@ -26,6 +54,12 @@ import { check, gitOptions, PROBE_MESSAGE, streamEvidence } from '../model.js';
  * The probe message is valid, so a healthy hook exits 0. A hook that cannot find
  * a runtime exits non-zero having parsed nothing, which is indistinguishable
  * from "your message was fine" to everyone except this check.
+ *
+ * Two hooks run here, not one. The stub hands the message to the hook it
+ * preserved at install time before it resolves commitlore, and exits with that
+ * hook's code if it fails -- so the preserved hook is probed on its own first,
+ * and its failure is reported as its own, with a fix aimed at it. `hooks
+ * install` cannot move a finding about a file it does not write (#876).
  */
 export const checkHookRuntime = (ctx) => {
     const { opts, git, spawn, env } = ctx;
@@ -51,15 +85,59 @@ export const checkHookRuntime = (ctx) => {
         return check(id, category, title, 'ok', 'no hook installed — nothing to run', null, false, undefined, { evidence: { hook_path: hook } });
     }
     const probe = join(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
+    // No node, and no PATH entry that could supply one. `git` must stay
+    // reachable: the hook reads its own config through it.
+    const hookEnv = { PATH: '/usr/bin:/bin', HOME: env['HOME'] ?? '' };
     try {
+        // The stub runs the hook it preserved at install time first, and that
+        // hook's non-zero exit is the stub's exit, verbatim, before commitlore is
+        // reached. Probed through the stub alone, the two are one process with one
+        // stderr, and the row attributed a preserved hook's `node: command not
+        // found` to the installed hook and prescribed `hooks install` -- which
+        // reports the file unchanged, because the file it writes was never the one
+        // failing (#876). So the preserved hook runs on its own first, the way the
+        // stub runs it: through sh, so a script without a shebang behaves the same
+        // here as it does there.
+        const chained = join(dirname(hook), CHAINED_HOOK_NAME);
+        if (isExecutable(chained)) {
+            writeFileSync(probe, PROBE_MESSAGE);
+            const preserved = spawn('/bin/sh', ['-c', '"$0" "$1"', chained, probe], {
+                shell: false,
+                encoding: 'utf8',
+                cwd,
+                env: hookEnv,
+            });
+            const exit = preserved.error === undefined ? preserved.status : null;
+            if (preserved.error !== undefined || exit !== 0) {
+                const spoke = `${preserved.stderr ?? ''}`.trim();
+                const said = preserved.error?.message ?? (spoke.split('\n')[0] ?? '');
+                const shape = preserved.error === undefined ? classifyFailure(exit, said) : 'unclear';
+                const because = shape === 'node-missing'
+                    ? `it calls node by name and git's PATH has none: ${said}`
+                    : shape === 'node-threw'
+                        ? `its node process ran but threw (exit ${String(exit)}): ${said}`
+                        : `it exited ${String(exit ?? 'unavailable')} under the restricted PATH: ${said || 'no output'}`;
+                return check(id, category, title, 'fail', `commitlore's hook is not what failed. It runs the hook it preserved first, and that hook -- ${chained} -- stops the commit before commitlore is reached: ${because}. That file was this repository's commit-msg hook before commitlore was installed; \`hooks install\` rewrites only commitlore's own and leaves it as it is`, shape === 'node-missing'
+                    ? `edit ${chained} to call node by absolute path (or remove it if it is no longer wanted)`
+                    : `fix or remove ${chained}`, false, undefined, {
+                    evidence: {
+                        hook_path: hook,
+                        chained_hook_path: chained,
+                        exit_code: String(exit ?? 'unavailable'),
+                        ...(preserved.error === undefined ? {} : { error: preserved.error.message }),
+                        ...streamEvidence('stderr', preserved.stderr ?? ''),
+                    },
+                });
+            }
+        }
+        // A commit-msg hook may rewrite the message it is given; the probe is
+        // written again so the stub reads the same bytes the preserved hook did.
         writeFileSync(probe, PROBE_MESSAGE);
         const run = spawn('/bin/sh', [hook, probe], {
             shell: false,
             encoding: 'utf8',
             cwd,
-            // No node, and no PATH entry that could supply one. `git` must stay
-            // reachable: the hook reads its own config through it.
-            env: { PATH: '/usr/bin:/bin', HOME: env['HOME'] ?? '' },
+            env: hookEnv,
         });
         if (run.error !== undefined) {
             return check(id, category, title, 'fail', `could not run the hook: ${run.error.message}`, fix, false, undefined, {
@@ -74,9 +152,11 @@ export const checkHookRuntime = (ctx) => {
         if (run.status !== 0) {
             const spoke = `${run.stderr ?? ''}`.trim();
             const said = spoke.split('\n')[0] ?? '';
-            const nodeMissing = run.status === 127 ||
-                /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said);
-            const nodeThrew = /^\s*at\s|\.js:\d+/.test(said);
+            // The preserved hook, if any, has already exited 0 on its own above, so
+            // whatever follows is commitlore's resolution failing, not a hand-off.
+            const shape = classifyFailure(run.status, said);
+            const nodeMissing = shape === 'node-missing';
+            const nodeThrew = shape === 'node-threw';
             // The stub says this when the recorded pair resolved and the containment
             // check refused it: present, executable, and under a tree this install
             // did not record. An upgrade produces it, because `commitlore.bin` follows
