@@ -91,12 +91,24 @@ describe('#303 user-facing text names only packages the manifest carries', () =>
  */
 describe('#359 capture --diff documents the default it actually has', () => {
   const captureSource = readFileSync(join(REPO_ROOT, 'src/commands/capture.ts'), 'utf8');
-  const diffOption = captureSource
-    .split('\n')
-    .find((line) => line.includes(".option('--diff <path>'"));
+
+  // The whole `.option(...)` call, not one line of it. r-diffdefault recorded
+  // reading a single line as this check's known limit, and #877 collected on it:
+  // the description outgrew one line, the call became multi-line, and all three
+  // assertions below stopped seeing any string at all. A guard that silently
+  // matches nothing reports the same green as one that passed.
+  const optionCall = (flag: string): string | undefined => {
+    const chunk = captureSource.split('.option(').find((part) => part.trimStart().startsWith(flag));
+    if (chunk === undefined) return undefined;
+    // Chained calls are indented four spaces; stop at the next one.
+    const end = chunk.indexOf('\n    .');
+    return end === -1 ? chunk : chunk.slice(0, end);
+  };
+  const diffOption = optionCall("'--diff <path>'");
 
   it('the option line exists to be checked', () => {
     expect(diffOption).toBeDefined();
+    expect(diffOption).toContain('--diff <path>');
   });
 
   it('does not tell the caller the default is empty', () => {
@@ -105,6 +117,15 @@ describe('#359 capture --diff documents the default it actually has', () => {
 
   it('names the staged diff, which is what omitting the flag uses', () => {
     expect(diffOption).toMatch(/staged/i);
+  });
+
+  // #877 narrowed what the flag means without changing what it reads. The
+  // transaction binds to the staged diff at prepare, verify and stage, so a
+  // description promising that `--diff` selects a different diff would be the
+  // #359 defect again in the other direction: the caller passes one, every
+  // record comes back `source-mismatch`, and the help text told them to.
+  it('does not promise that --diff selects a diff other than the staged one', () => {
+    expect(diffOption).toMatch(/assert|cannot (select|override)/i);
   });
 
   // Teeth: the sentence above is only worth asserting while the code still

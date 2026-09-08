@@ -496,6 +496,104 @@ describe('commitlore capture', () => {
   });
 });
 
+describe('commitlore capture --out (#878)', () => {
+  // Prompt-only is the step --out exists for -- get the nonce, hand the prompt
+  // to a model, come back with --draft -- and it was the one run where the
+  // pipeline returned `nonce: null`, so the write was guarded out. Exit 0, no
+  // file, nothing said. Three runs because the report measured three.
+  it('writes the pending nonce in prompt-only mode', () => {
+    const cwd = makeRepo();
+    const { transcriptPath } = makeFixtures(cwd);
+
+    for (const run of [1, 2, 3]) {
+      const outPath = join(cwd, `nonce-${run}.txt`);
+      const result = runCapture(['--transcript', transcriptPath, '--out', outPath], { cwd });
+
+      expect(result.exitCode).toBe(0);
+      expect(existsSync(outPath), `run ${run} wrote no file`).toBe(true);
+      expect(readFileSync(outPath, 'utf8').trim()).toMatch(/^[0-9a-f]{32}$/);
+    }
+  });
+
+  // The file is worthless unless it names the transaction prepare actually
+  // persisted -- a well-formed nonce nothing can be staged under would be the
+  // same silence in a different shape.
+  it('writes a nonce that names a real pending transaction', () => {
+    const cwd = makeRepo();
+    const { transcriptPath } = makeFixtures(cwd);
+    const outPath = join(cwd, 'nonce.txt');
+
+    runCapture(['--transcript', transcriptPath, '--out', outPath], { cwd });
+
+    const nonce = readFileSync(outPath, 'utf8').trim();
+    expect(listPending(cwd)).toContain(`${nonce}.json`);
+  });
+
+  it('reports the nonce in the JSON envelope too', () => {
+    const cwd = makeRepo();
+    const { transcriptPath } = makeFixtures(cwd);
+
+    const result = runCapture(['--transcript', transcriptPath, '--json'], { cwd });
+
+    const parsed = JSON.parse(result.stdout) as { outcome: string; nonce: string | null };
+    expect(parsed.outcome).toBe('empty');
+    expect(parsed.nonce).toMatch(/^[0-9a-f]{32}$/);
+  });
+});
+
+describe('commitlore capture --diff (#877)', () => {
+  /** A real diff that is not the staged one: the previous commit's. */
+  const writeForeignDiff = (cwd: string): string => {
+    const path = join(cwd, 'other.patch');
+    writeFileSync(path, execSync('git show HEAD', { cwd, encoding: 'utf8' }));
+    return path;
+  };
+
+  // The transaction binds to the staged diff and nothing else, so a --diff that
+  // differs cannot be honoured. It was refused before this too -- but at verify,
+  // as `source-mismatch` against the draft's sources, which sent the reporter to
+  // re-check quotes and locators that were never wrong.
+  it('refuses a --diff that is not the staged diff, naming the flag', () => {
+    const cwd = makeRepo();
+    const { transcriptPath } = makeFixtures(cwd);
+    const foreign = writeForeignDiff(cwd);
+
+    const result = runCapture(['--transcript', transcriptPath, '--diff', foreign], { cwd });
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain('--diff');
+    expect(result.stderr, 'the flag is named, not the draft').not.toContain('source-mismatch');
+    expect(result.stderr, 'and the way out is named').toContain('git reset --soft');
+  });
+
+  // Refused before prepare, so a run that cannot succeed leaves no transaction
+  // for `capture gc` to collect. Two were left behind per attempt before.
+  it('writes no pending transaction for a --diff it refuses', () => {
+    const cwd = makeRepo();
+    const { transcriptPath, draftPath } = makeFixtures(cwd);
+    const foreign = writeForeignDiff(cwd);
+
+    runCapture(['--transcript', transcriptPath, '--diff', foreign, '--draft', draftPath], { cwd });
+
+    expect(listPending(cwd)).toEqual([]);
+  });
+
+  // The control. Without it the fix degenerates into "reject every --diff",
+  // which passes the two assertions above and breaks every caller that has one.
+  it('still stages when --diff is byte-identical to the staged diff', () => {
+    const cwd = makeRepo();
+    const { transcriptPath, diffPath, draftPath } = makeFixtures(cwd);
+
+    const result = runCapture(
+      ['--transcript', transcriptPath, '--diff', diffPath, '--draft', draftPath],
+      { cwd },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(listStagedPending(cwd).length).toBe(1);
+  });
+});
+
 describe('commitlore capture --unattended (#511)', () => {
   it('is refused where the repository did not opt in, and stages nothing', () => {
     const cwd = makeRepo();
