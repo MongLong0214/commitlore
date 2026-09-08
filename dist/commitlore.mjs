@@ -12140,11 +12140,71 @@ var vocabularyBlock = (entries) => {
   }
   return lines;
 };
-var numberLines = (text) => {
+var numberLines = (text, firstLine6 = 1) => {
   const lines = text.split("\n");
   if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-  const width = String(lines.length).length;
-  return lines.map((line2, index) => `${String(index + 1).padStart(width)} | ${line2}`).join("\n");
+  const width = String(firstLine6 + lines.length - 1).length;
+  return lines.map((line2, index) => `${String(firstLine6 + index).padStart(width)} | ${line2}`).join("\n");
+};
+var DEFAULT_TRANSCRIPT_BUDGET_BYTES = 256 * 1024;
+var transcriptBudgetBytes = () => {
+  const raw = Number(process.env["COMMITLORE_TRANSCRIPT_BUDGET_BYTES"]);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_TRANSCRIPT_BUDGET_BYTES;
+};
+var lineBytes = (line2) => Buffer.byteLength(line2, "utf8") + 1;
+var tailBytes = (line2, budget) => Buffer.from(line2, "utf8").subarray(-budget).toString("utf8").replace(/^\uFFFD+/, "");
+var windowTranscript = (transcript, budget = transcriptBudgetBytes()) => {
+  const lines = transcript.split("\n");
+  if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  const totalLines = lines.length;
+  const totalBytes = Buffer.byteLength(transcript, "utf8");
+  let kept = 0;
+  let bytes = 0;
+  for (let index = totalLines - 1; index >= 0; index -= 1) {
+    const next = bytes + lineBytes(lines[index]);
+    if (next > budget && kept > 0) break;
+    if (next > budget) break;
+    bytes = next;
+    kept += 1;
+  }
+  if (kept === 0) {
+    const last = lines[totalLines - 1] ?? "";
+    const text2 = tailBytes(last, budget);
+    return {
+      text: text2,
+      window: {
+        first_line: totalLines,
+        last_line: totalLines,
+        total_lines: totalLines,
+        total_bytes: totalBytes,
+        window_bytes: Buffer.byteLength(text2, "utf8"),
+        truncated: true,
+        first_line_partial: true
+      }
+    };
+  }
+  const firstLine6 = totalLines - kept + 1;
+  const text = lines.slice(firstLine6 - 1).join("\n");
+  return {
+    text,
+    window: {
+      first_line: firstLine6,
+      last_line: totalLines,
+      total_lines: totalLines,
+      total_bytes: totalBytes,
+      window_bytes: Buffer.byteLength(text, "utf8"),
+      truncated: firstLine6 > 1,
+      first_line_partial: false
+    }
+  };
+};
+var windowNotice = (window) => {
+  if (!window.truncated) return [];
+  const omitted = window.first_line - 1;
+  return [
+    `(This is the end of the transcript: lines ${window.first_line}-${window.last_line} of ${window.total_lines}, ${omitted} earlier line(s) omitted to bound this prompt${window.first_line_partial ? `, and line ${window.first_line} is shown from its middle` : ""}. The numbers below are the transcript's own, so a locator you write still names the line in the whole file. Cite only what you can see here.)`,
+    ""
+  ];
 };
 var outputBlock = (entries) => {
   const claims = entries.filter((entry) => entry.claim).map((entry) => entry.key);
@@ -12206,10 +12266,11 @@ var buildHarvestContract = () => {
     ""
   ].join("\n");
 };
-var buildHarvestPrompt = (input) => {
+var buildHarvestPromptWithWindow = (input) => {
   const entries = loadVocabulary().filter((entry) => entry.key !== "Verified");
   const diff = input.diff.trim() === "" ? "(no diff)" : input.diff.replace(/\n+$/, "");
-  return [
+  const { text, window } = windowTranscript(input.transcript);
+  const prompt = [
     "# CommitLore harvest",
     "",
     "You are recording the decision context for a change that is about to be",
@@ -12230,14 +12291,17 @@ var buildHarvestPrompt = (input) => {
     "",
     "## TRANSCRIPT",
     "",
-    numberLines(input.transcript),
+    ...windowNotice(window),
+    numberLines(text, window.first_line),
     "",
     "## DIFF",
     "",
     diff,
     ""
   ].join("\n");
+  return { prompt, window };
 };
+var buildHarvestPrompt = (input) => buildHarvestPromptWithWindow(input).prompt;
 var RECORD_FIELDS = ["trailers", "evidence"];
 var EVIDENCE_FIELDS = ["key", "source", "quote", "locator"];
 var EVIDENCE_SOURCES = ["transcript", "diff"];
@@ -16963,13 +17027,15 @@ var prepareValues = (opts) => {
     ...opts.requireSignedDirective === true ? { requireSignedDirective: true } : {},
     ...opts.trustedSignerFingerprints === void 0 ? {} : { trustedSignerFingerprints: opts.trustedSignerFingerprints }
   });
+  const harvest2 = buildHarvestPromptWithWindow({ transcript, diff });
   return {
     base_head: baseHead,
     staged_diff_hash: stagedDiffHash,
     staged_tree_oid: stagedTreeOid,
     policy_identity_hash: policy.identityHash,
     source_hashes: sourceHashes,
-    prompt: buildHarvestPrompt({ transcript, diff }),
+    prompt: harvest2.prompt,
+    transcript_window: harvest2.window,
     guard_advisory: advisory,
     policy_error: policy.error
   };
@@ -16994,6 +17060,7 @@ var prepareCaptureContext = (opts) => {
     policy_identity_hash: prepared.policy_identity_hash,
     source_hashes: prepared.source_hashes,
     prompt: prepared.prompt,
+    transcript_window: prepared.transcript_window,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory
   };
@@ -17019,6 +17086,7 @@ var prepareCaptureContextReadOnly = (opts) => {
     policy_identity_hash: prepared.policy_identity_hash,
     source_hashes: prepared.source_hashes,
     prompt: prepared.prompt,
+    transcript_window: prepared.transcript_window,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory,
     pending: pending2
@@ -18078,6 +18146,7 @@ commitlore capture: the built-in defaults were used for this capture
       nonce: null,
       staged: false,
       prompt: prepareResult.prompt,
+      transcript_window: prepareResult.transcript_window,
       guard_advisory: prepareResult.guard_advisory
     };
   }
@@ -18191,7 +18260,10 @@ var emitCaptureOutcome = (result, opts) => {
 var register3 = (program3) => {
   const capture = program3.command("capture").description(
     "prepare \u2192 verify \u2192 stage a record from a transcript and draft (no trailer syntax needed)"
-  ).option("--transcript <path>", "path to the session transcript file").option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
+  ).option(
+    "--transcript <path>",
+    "path to the session transcript file (the prompt carries its last 256 KiB; COMMITLORE_TRANSCRIPT_BUDGET_BYTES changes that, and verification always reads all of it)"
+  ).option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
     "--unattended",
     `declare this capture unattended: prepared, verified and staged without asking. Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`
   ).addHelpText(
@@ -35744,7 +35816,7 @@ var TOOLS = [
   },
   {
     name: PREPARE_CAPTURE_TOOL,
-    description: 'Prepare a capture transaction: computes binding conditions (HEAD, staged diff, tree, policy hash), generates the prompt contract for the agent to use, and persists a phase:"prepared" pending transaction. Returns the nonce needed for verify and stage.',
+    description: 'Prepare a capture transaction: computes binding conditions (HEAD, staged diff, tree, policy hash), generates the prompt contract for the agent to use, and persists a phase:"prepared" pending transaction. Returns the nonce needed for verify and stage. The prompt carries the end of the transcript rather than all of it; transcript_window says which lines, numbered as the whole transcript numbers them. Verification still reads the whole transcript, so quote only what the prompt shows you.',
     inputSchema: {
       type: "object",
       properties: {
@@ -35946,6 +36018,11 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         policy_identity_hash: result.policy_identity_hash,
         source_hashes: result.source_hashes,
         prompt: result.prompt,
+        // What of the transcript that prompt carries (#873). It travels here
+        // for the same reason the two fields below do: MCP is the first-class
+        // surface for every agent but the plugin, and an agent handed a slice
+        // of its own session with no way to tell would cite the whole of it.
+        transcript_window: result.transcript_window,
         // MCP is the first-class surface for every agent other than the Claude
         // Code plugin, so both of these must travel here and not only to the
         // pending file and the CLI. `guard_advisory` is always present, never
