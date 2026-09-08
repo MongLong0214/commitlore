@@ -5,6 +5,7 @@
  * contract via `buildHarvestPrompt`, and persists the prepared transaction
  * through `createPending`.
  */
+import { type TranscriptWindow } from './harvest.js';
 import { type GuardAdvisory, type PendingRecord } from './pending.js';
 export interface PrepareCaptureOptions {
     cwd: string;
@@ -43,6 +44,13 @@ export interface PrepareResult {
         diff: string;
     };
     prompt: string;
+    /**
+     * What of the transcript the prompt carries (#873). The prompt is bounded;
+     * `source_hashes.transcript` and every verification are not — they are over
+     * the whole transcript. A caller that assumed the prompt was the session had
+     * no way to tell, so this says it.
+     */
+    transcript_window: TranscriptWindow;
     guard_advisory: GuardAdvisory | null;
     /**
      * A named reason when a policy file exists but could not be used (T-1110).

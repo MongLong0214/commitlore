@@ -89,6 +89,37 @@ export declare const EXAMPLE_DRAFT: {
     records: DraftRecord[];
 };
 /**
+ * What the prompt actually showed, so a caller is never left to assume it was
+ * the session. Nothing here changes what verification reads — the whole
+ * transcript is still hashed and still searched for every quote.
+ */
+export interface TranscriptWindow {
+    /** 1-based number, in the whole transcript, of the window's first line. */
+    first_line: number;
+    last_line: number;
+    total_lines: number;
+    /** Bytes of the whole transcript, so the caller can see the size it did not get. */
+    total_bytes: number;
+    /** Bytes of the window as the prompt carries it. */
+    window_bytes: number;
+    /** False when the whole transcript fitted and the window is the session. */
+    truncated: boolean;
+    /**
+     * True when `first_line` is shown from its middle. One JSONL line can hold a
+     * whole tool result and outrun the budget by itself, and a window of no lines
+     * at all would be worse than a window of one partial one.
+     */
+    first_line_partial: boolean;
+}
+/**
+ * The tail of `transcript` that fits in `budget` bytes, in whole lines where
+ * whole lines fit.
+ */
+export declare const windowTranscript: (transcript: string, budget?: number) => {
+    text: string;
+    window: TranscriptWindow;
+};
+/**
  * Builds the static prompt contract — everything an agent session needs to know
  * about CommitLore's rules, vocabulary, and expected output format, without any
  * session-specific transcript or diff content.
@@ -100,10 +131,16 @@ export declare const EXAMPLE_DRAFT: {
  */
 export declare const buildHarvestContract: () => string;
 /**
- * Builds the prompt contract handed to the user's agent session. Deterministic
- * by construction — no clock, no randomness, no model — so the same transcript
- * and diff always produce the same bytes.
+ * Builds the prompt contract handed to the user's agent session, and says what
+ * of the transcript it carries. Deterministic by construction — no clock, no
+ * randomness, no model — so the same transcript, diff and budget always produce
+ * the same bytes.
  */
+export declare const buildHarvestPromptWithWindow: (input: HarvestInput) => {
+    prompt: string;
+    window: TranscriptWindow;
+};
+/** The prompt alone, for the callers that only emit it. */
 export declare const buildHarvestPrompt: (input: HarvestInput) => string;
 /**
  * Structural check for records already decoded from JSON, before any of them

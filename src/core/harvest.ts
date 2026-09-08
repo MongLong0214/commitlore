@@ -332,12 +332,156 @@ const vocabularyBlock = (entries: VocabularyEntry[]): string[] => {
   return lines;
 };
 
-/** Line-numbered so a citation can name a range the verifier can find again. */
-const numberLines = (text: string): string => {
+/**
+ * Line-numbered so a citation can name a range the verifier can find again.
+ *
+ * `firstLine` is the number the first line of `text` carries in the whole
+ * transcript, which is 1 unless the prompt is showing a window of it. The
+ * numbers have to be the transcript's own: verification reads the whole
+ * transcript, and a locator renumbered to a window would name a different line
+ * of the file it is checked against (#873).
+ */
+const numberLines = (text: string, firstLine = 1): string => {
   const lines = text.split('\n');
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-  const width = String(lines.length).length;
-  return lines.map((line, index) => `${String(index + 1).padStart(width)} | ${line}`).join('\n');
+  const width = String(firstLine + lines.length - 1).length;
+  return lines
+    .map((line, index) => `${String(firstLine + index).padStart(width)} | ${line}`)
+    .join('\n');
+};
+
+/**
+ * How much transcript the prompt may carry.
+ *
+ * #873: the prompt embedded the transcript whole, so a 67,981,436-byte session
+ * produced a 67,468,122-byte prompt — larger than any model can read, which
+ * makes the capture pipeline unusable exactly on the long sessions that have
+ * the most to record. The reporter measured the pipeline working again at
+ * roughly half a megabyte and said, correctly, that they had not measured where
+ * the useful boundary is. Neither has this: 256 KiB is a bound chosen to be
+ * comfortably readable by current models while still carrying far more than the
+ * ~537,250-byte slice that was shown to work, not a claim about how much
+ * context a good record needs.
+ *
+ * It is the last bytes rather than the first: a decision is taken near the end
+ * of the session that implements it, and the diff being captured is that end.
+ */
+const DEFAULT_TRANSCRIPT_BUDGET_BYTES = 256 * 1024;
+
+/** An override, for an operator whose model reads more, or less, than this. */
+const transcriptBudgetBytes = (): number => {
+  const raw = Number(process.env['COMMITLORE_TRANSCRIPT_BUDGET_BYTES']);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_TRANSCRIPT_BUDGET_BYTES;
+};
+
+/**
+ * What the prompt actually showed, so a caller is never left to assume it was
+ * the session. Nothing here changes what verification reads — the whole
+ * transcript is still hashed and still searched for every quote.
+ */
+export interface TranscriptWindow {
+  /** 1-based number, in the whole transcript, of the window's first line. */
+  first_line: number;
+  last_line: number;
+  total_lines: number;
+  /** Bytes of the whole transcript, so the caller can see the size it did not get. */
+  total_bytes: number;
+  /** Bytes of the window as the prompt carries it. */
+  window_bytes: number;
+  /** False when the whole transcript fitted and the window is the session. */
+  truncated: boolean;
+  /**
+   * True when `first_line` is shown from its middle. One JSONL line can hold a
+   * whole tool result and outrun the budget by itself, and a window of no lines
+   * at all would be worse than a window of one partial one.
+   */
+  first_line_partial: boolean;
+}
+
+/** Byte length as the prompt will carry it, newline included. */
+const lineBytes = (line: string): number => Buffer.byteLength(line, 'utf8') + 1;
+
+/**
+ * The last `budget` bytes of one line, without a split codepoint at the front.
+ * Slicing a UTF-8 buffer mid-character yields U+FFFD, and a replacement
+ * character inside a quotable line is a character nobody can copy back.
+ */
+const tailBytes = (line: string, budget: number): string =>
+  Buffer.from(line, 'utf8').subarray(-budget).toString('utf8').replace(/^\uFFFD+/, '');
+
+/**
+ * The tail of `transcript` that fits in `budget` bytes, in whole lines where
+ * whole lines fit.
+ */
+export const windowTranscript = (
+  transcript: string,
+  budget: number = transcriptBudgetBytes(),
+): { text: string; window: TranscriptWindow } => {
+  const lines = transcript.split('\n');
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  const totalLines = lines.length;
+  const totalBytes = Buffer.byteLength(transcript, 'utf8');
+
+  let kept = 0;
+  let bytes = 0;
+  for (let index = totalLines - 1; index >= 0; index -= 1) {
+    const next = bytes + lineBytes(lines[index]!);
+    if (next > budget && kept > 0) break;
+    if (next > budget) break; // not even the last line fits whole
+    bytes = next;
+    kept += 1;
+  }
+
+  if (kept === 0) {
+    // One line longer than the whole budget. Showing its tail keeps the window
+    // anchored where the decision is, and the line number stays the file's.
+    const last = lines[totalLines - 1] ?? '';
+    const text = tailBytes(last, budget);
+    return {
+      text,
+      window: {
+        first_line: totalLines,
+        last_line: totalLines,
+        total_lines: totalLines,
+        total_bytes: totalBytes,
+        window_bytes: Buffer.byteLength(text, 'utf8'),
+        truncated: true,
+        first_line_partial: true,
+      },
+    };
+  }
+
+  const firstLine = totalLines - kept + 1;
+  const text = lines.slice(firstLine - 1).join('\n');
+  return {
+    text,
+    window: {
+      first_line: firstLine,
+      last_line: totalLines,
+      total_lines: totalLines,
+      total_bytes: totalBytes,
+      window_bytes: Buffer.byteLength(text, 'utf8'),
+      truncated: firstLine > 1,
+      first_line_partial: false,
+    },
+  };
+};
+
+/**
+ * The line the prompt carries when it is showing a window, so the reader is
+ * told rather than left to infer it from a transcript that starts mid-sentence.
+ */
+const windowNotice = (window: TranscriptWindow): string[] => {
+  if (!window.truncated) return [];
+  const omitted = window.first_line - 1;
+  return [
+    `(This is the end of the transcript: lines ${window.first_line}-${window.last_line} of ` +
+      `${window.total_lines}, ${omitted} earlier line(s) omitted to bound this prompt` +
+      `${window.first_line_partial ? `, and line ${window.first_line} is shown from its middle` : ''}. ` +
+      'The numbers below are the transcript\'s own, so a locator you write still names ' +
+      'the line in the whole file. Cite only what you can see here.)',
+    '',
+  ];
 };
 
 const outputBlock = (entries: VocabularyEntry[]): string[] => {
@@ -414,15 +558,19 @@ export const buildHarvestContract = (): string => {
 };
 
 /**
- * Builds the prompt contract handed to the user's agent session. Deterministic
- * by construction — no clock, no randomness, no model — so the same transcript
- * and diff always produce the same bytes.
+ * Builds the prompt contract handed to the user's agent session, and says what
+ * of the transcript it carries. Deterministic by construction — no clock, no
+ * randomness, no model — so the same transcript, diff and budget always produce
+ * the same bytes.
  */
-export const buildHarvestPrompt = (input: HarvestInput): string => {
+export const buildHarvestPromptWithWindow = (
+  input: HarvestInput,
+): { prompt: string; window: TranscriptWindow } => {
   const entries = loadVocabulary().filter((entry) => entry.key !== 'Verified');
   const diff = input.diff.trim() === '' ? '(no diff)' : input.diff.replace(/\n+$/, '');
+  const { text, window } = windowTranscript(input.transcript);
 
-  return [
+  const prompt = [
     '# CommitLore harvest',
     '',
     'You are recording the decision context for a change that is about to be',
@@ -443,14 +591,21 @@ export const buildHarvestPrompt = (input: HarvestInput): string => {
     '',
     '## TRANSCRIPT',
     '',
-    numberLines(input.transcript),
+    ...windowNotice(window),
+    numberLines(text, window.first_line),
     '',
     '## DIFF',
     '',
     diff,
     '',
   ].join('\n');
+
+  return { prompt, window };
 };
+
+/** The prompt alone, for the callers that only emit it. */
+export const buildHarvestPrompt = (input: HarvestInput): string =>
+  buildHarvestPromptWithWindow(input).prompt;
 
 const RECORD_FIELDS = ['trailers', 'evidence'];
 const EVIDENCE_FIELDS = ['key', 'source', 'quote', 'locator'];

@@ -19,6 +19,7 @@
 import type { Command } from 'commander';
 import { type CaptureOutcome } from '../core/capture-outcome.js';
 import { type CaptureShadowResult } from '../core/capture-shadow.js';
+import { type TranscriptWindow } from '../core/harvest.js';
 import type { GuardAdvisory } from '../core/pending.js';
 /** Why a drafted record did not survive. Empty when everything was accepted. */
 export interface CaptureRejectionReport {
@@ -41,6 +42,13 @@ export interface CaptureResult {
     nonce: string | null;
     staged: boolean;
     prompt?: string;
+    /**
+     * What of the transcript `prompt` carries, present whenever `prompt` is
+     * (#873). The prompt is bounded; verification is not — it reads the whole
+     * transcript. Without this a caller could not tell a slice from the session,
+     * and the prompt was previously the session, at whatever size that was.
+     */
+    transcript_window?: TranscriptWindow;
     guard_advisory?: GuardAdvisory | null;
     /**
      * Every reason a record was refused (#309). Both sources are included: the
