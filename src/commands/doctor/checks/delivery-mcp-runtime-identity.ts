@@ -22,6 +22,28 @@ import { check, type Category, type DoctorCheck, type DoctorContext } from '../m
 const identityOf = (runtime: LiveMcpRuntime): string =>
   `${runtime.entrypointRealpath} (root ${runtime.packageRoot})`;
 
+/**
+ * Group the scan by identity, keeping every pid rather than the first (#885).
+ *
+ * The scan already knows each process id and this row used to drop all of them
+ * on the way to a deduplicated identity string. That left an operator told three
+ * runtimes were answering and given nothing to act on — the reporter had to run
+ * `ps` themselves to find the five processes behind those three names.
+ */
+const pidsByIdentity = (runtimes: readonly LiveMcpRuntime[]): Map<string, number[]> => {
+  const grouped = new Map<string, number[]>();
+  for (const runtime of runtimes) {
+    const key = identityOf(runtime);
+    const pids = grouped.get(key);
+    if (pids === undefined) grouped.set(key, [runtime.pid]);
+    else pids.push(runtime.pid);
+  }
+  return grouped;
+};
+
+const withPids = (identity: string, pids: readonly number[]): string =>
+  `${identity} pid ${pids.join(', ')}`;
+
 const missingAssets = (runtime: LiveMcpRuntime): string[] => [
   ...(runtime.bundlePresent ? [] : ['dist/commitlore.mjs']),
   ...(runtime.specPresent ? [] : ['spec/SPEC.md']),
@@ -86,14 +108,29 @@ export const checkMcpRuntimeIdentity = (ctx: DoctorContext): DoctorCheck => {
 
   const identities = [...new Map(scan.runtimes.map((runtime) => [identityOf(runtime), runtime])).values()];
   if (identities.length > 1) {
+    const grouped = pidsByIdentity(scan.runtimes);
+    const allPids = scan.runtimes.map((runtime) => runtime.pid);
     return check(
       id,
       category,
       title,
       'warn',
       `${identities.length} distinct live CommitLore runtimes are answering MCP — runtime mismatch: ` +
-        identities.map(identityOf).join('; '),
-      null,
+        identities
+          .map((runtime) => withPids(identityOf(runtime), grouped.get(identityOf(runtime)) ?? []))
+          .join('; ') +
+        // #885: the row named versions and stopped, so an operator could not tell
+        // whether it was cosmetic. These runtimes write. Each answers with the
+        // build it started on, so records committed in one repository on one day
+        // can come from more than one of them, and nothing on the commit says
+        // which. Deliberately does not name one of them as the stale one:
+        // r-liveruntime660 ruled that out, because a copied or stale install can
+        // report the same version as a current one.
+        '. Each keeps writing records with the build it started on, so this' +
+        ' repository can receive records from more than one of them',
+      'restart the host sessions that own these pids so every session answers from one install' +
+        ` (${allPids.join(', ')}) — a host resolves the launcher once at session start and holds` +
+        ' that runtime until the session ends, so an upgrade does not reach a session already running',
       false,
       // Machine state, not this repository's -- see the note above.
       false,
@@ -103,6 +140,7 @@ export const checkMcpRuntimeIdentity = (ctx: DoctorContext): DoctorCheck => {
           runtime_count: String(scan.runtimes.length),
           distinct_identities: String(identities.length),
           package_roots: identities.map((runtime) => runtime.packageRoot).join(', '),
+          pids: allPids.join(', '),
         },
       },
     );

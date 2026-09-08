@@ -4,6 +4,85 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.6
+
+A long session killed the process outright, and an upgrade nobody could see had
+already happened.
+
+**`capture` died with a fatal V8 error on a large transcript (#884).** On a
+74,173,844-byte session it exited 133 having written no JSON at all:
+
+```
+# Fatal error in , line 0
+# Fatal JavaScript invalid size error 134217728
+```
+
+Not a graceful refusal — an engine abort. `capture` reports outcomes
+structurally so a caller can branch on `staged` / `empty` / `rejected` rather
+than on the exit code, and this escaped that contract entirely: a wrapper that
+had been careful to read the outcome had nothing to read. Reproduced on 1.2.3 as
+well, so it was a standing limit rather than a regression the last release
+introduced.
+
+1.2.3 bounded the *prompt* (#873). It did not bound the guard beside it.
+`prepareCaptureContext` handed the whole transcript to the guard advisory on one
+line and took a 256 KiB window of it on the next. The guard normalises its
+proposal through the anti-injection normaliser, whose `\p{Script=Latin}\p{M}*`
+global replace collects one match per letter into a single array; past roughly
+69 MB that array crosses V8's 2^27 `FixedArray` ceiling and the process dies
+inside `Runtime_RegExpExecMultiple`.
+
+**The guard now reads the same window the prompt carries.** That is a narrowing,
+and it is also the more honest alignment: the advisory is shown beside the
+prompt, so an advisory computed over a whole session could warn about a decision
+the prompt does not contain. Measured on a 74,450,108-byte transcript: exit 0,
+`outcome: staged`, 0.7 s end to end, where before the process aborted.
+
+**It says when it did so.** A truncated scan must never read as a complete one,
+so the advisory carries a `proposal-windowed` gap whenever the window dropped
+part of the session — an empty `matches` array is then silence about the window,
+not a clean scan of the transcript.
+
+A note on what is *not* fixed: verification still reads the whole transcript on
+purpose, so a quote from outside the window still verifies, and its scan builds
+per-character structures over the whole file. That survives 74 MB and would fail
+somewhere past ~134 M characters. Bounding it would break the guarantee that a
+locator names a line of the file it is checked against.
+
+**`doctor`'s runtime-mismatch row named versions and stopped (#885).** It
+reported three distinct live CommitLore runtimes answering MCP while every
+registration on the machine was correct — the old runtimes were live processes
+that outlived an upgrade, because a host resolves the launcher once at session
+start and holds that runtime for the life of the session. Agent sessions there
+ran for days.
+
+Those runtimes write. Records captured by a session started two days earlier
+come from the build that session started on, and nothing on the commit says
+which. The row gave an operator no way to tell whether that was cosmetic, and
+the scan already knew the process ids and discarded them, so the reporter had to
+run `ps` themselves to find the five processes behind the three names.
+
+The row now names every pid, says plainly that each runtime keeps writing
+records with the build it started on, and offers an action: restart the host
+sessions that own those pids, because an upgrade cannot reach a process that is
+already running. It deliberately does not label any runtime the stale one — a
+copied or stale install can report the same version as a current one.
+
+**`upgrade` reported a release older than the binary printing it (#885, not
+separately filed).** On a machine running 1.2.5 it said `latest v1.2.3` and
+"this is the newest release". The lookup was fine; the answer is cached for a
+day in `~/.cache/commitlore/latest-release.json` and only `upgrade` acting
+clears it, so a release installed any other way — `install.sh`, the plugin
+marketplace, a manual checkout — leaves yesterday's answer standing. A `latest`
+older than the version already running cannot be the latest, and that case now
+re-asks. Equality still serves from the cache, or the cache would never serve
+the case it exists for.
+
+Not addressed, and left for its own decision: #885 also asks that the producing
+runtime be recorded on the record itself. `CommitLore-Version:` is not that
+field — SPEC §8 defines it as the protocol version a record targets — so this
+needs a new trailer and a wider decision than a patch release should make.
+
 ## 1.2.5
 
 Two flags on `capture` did nothing and said nothing; a third refusal knew the
