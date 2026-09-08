@@ -11887,6 +11887,14 @@ var FORMAT_WANT = {
   "CommitLore-Version": "semver"
 };
 var UNKNOWN_KEY_WANT = "a key from SPEC \xA73 or X-<Name>";
+var unknownKeyWant = (key) => {
+  if (KNOWN_KEYS.some((known) => known.toLowerCase() === key.toLowerCase())) {
+    return UNKNOWN_KEY_WANT;
+  }
+  const prefixed = `X-${key}`;
+  if (!EXTENSION_KEY_RE.test(prefixed)) return UNKNOWN_KEY_WANT;
+  return `a key from SPEC \xA73, or ${prefixed} if this is your own metadata`;
+};
 var PROSE_KEY_WANT = 'a key from SPEC \xA73 or X-<Name> \u2014 or, if this line is a sentence rather than metadata, reword it: git reads the last paragraph as trailers, so prose beginning "Word:" becomes one. Moving the record block below it works too.';
 var looksLikeProse = (value) => /\s/.test(value.trim()) && /[.!?]$/.test(value.trim());
 var RULED_OUT_CODE_SPAN_WANT = 'alternative | reason \u2014 the alternative opens a code span that closes after the separator, so the first "|" sits inside quoted text; there is no escape, so rephrase the alternative to hold no "|"';
@@ -11923,7 +11931,7 @@ var violationFor = (trailer, field) => {
       value: trailer.value,
       rule: "unknown-key",
       got: trailer.key,
-      want: looksLikeProse(trailer.value) ? PROSE_KEY_WANT : UNKNOWN_KEY_WANT
+      want: looksLikeProse(trailer.value) ? PROSE_KEY_WANT : unknownKeyWant(trailer.key)
     };
   }
   const enumWant = ENUM_WANT[trailer.key];
@@ -18124,7 +18132,16 @@ var runCapture = (opts) => {
 var runCapturePipeline = (opts) => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
   const transcript = readCallerFile(transcriptPath);
-  const diff = diffPath ? readCallerFile(diffPath) : execGitOrThrow(["diff", "--cached"], { cwd });
+  const callerDiff = diffPath === void 0 ? void 0 : readCallerFile(diffPath);
+  const diff = execGitOrThrow(["diff", "--cached"], { cwd });
+  if (callerDiff !== void 0 && callerDiff !== diff) {
+    throw markCaptureError(
+      new Error(
+        `--diff ${JSON.stringify(diffPath)} is not the staged diff. A capture transaction binds to the staged diff -- prepare, verify and stage each recompute it, so --diff can assert what is staged but cannot override it. Stage the change you are recording; to record against a commit that already exists, soft-reset it first (git reset --soft HEAD~1).`
+      ),
+      "usage"
+    );
+  }
   const prepareResult = prepareCaptureContext({
     cwd,
     transcript,
@@ -18143,7 +18160,7 @@ commitlore capture: the built-in defaults were used for this capture
   if (!draftPath) {
     return {
       outcome: "empty",
-      nonce: null,
+      nonce: prepareResult.nonce,
       staged: false,
       prompt: prepareResult.prompt,
       transcript_window: prepareResult.transcript_window,
@@ -18263,7 +18280,10 @@ var register3 = (program3) => {
   ).option(
     "--transcript <path>",
     "path to the session transcript file (the prompt carries its last 256 KiB; COMMITLORE_TRANSCRIPT_BUDGET_BYTES changes that, and verification always reads all of it)"
-  ).option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
+  ).option(
+    "--diff <path>",
+    "assert the staged diff equals this file; the transaction always binds to the staged diff, so this cannot select a different one"
+  ).option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
     "--unattended",
     `declare this capture unattended: prepared, verified and staged without asking. Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`
   ).addHelpText(

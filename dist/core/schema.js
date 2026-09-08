@@ -52,6 +52,43 @@ const FORMAT_WANT = {
 };
 const UNKNOWN_KEY_WANT = 'a key from SPEC §3 or X-<Name>';
 /**
+ * Name the `X-` form the author could have written, rather than its shape (#881).
+ *
+ * `X-<Name>` is already in the answer, and it was not enough: Claude Code tells
+ * every session to end its commit message with `Claude-Session:`, so the key
+ * arrives by default, the hook refuses it, the commit is lost, and the agent —
+ * which cannot see the repository's earlier commits — writes it again. Reported
+ * twice in one day in two repositories by the same author, the second time after
+ * already knowing about the first, because `X-` is not the kind of thing that
+ * stays in mind between repositories. Naming `X-Claude-Session` turns a refused
+ * commit into a corrected one.
+ *
+ * Not a rewrite: SPEC §6 says the message is not modified, and silently renaming
+ * someone's trailer would be worse than refusing it. This only says the name.
+ *
+ * Two keys are deliberately not offered the prefix:
+ *
+ * - one whose value reads as a sentence, which keeps the #647 answer instead —
+ *   that author's problem is that their prose became metadata, and `X-` is the
+ *   wrong door for them. That branch is chosen before this function is called.
+ * - one that differs from a SPEC §3 key only by case. `limit:` is `Limit:`
+ *   miswritten, not an extension, and `X-limit` would be a valid record holding
+ *   the wrong key. SPEC §3 matches case-sensitively and `KNOWN_KEYS` still does,
+ *   so the plain answer — which names §3 first — is the useful one here.
+ *
+ * Anything the prefix cannot rescue (a leading digit, an underscore) falls back
+ * too: `EXTENSION_KEY_RE` is asked rather than assumed.
+ */
+const unknownKeyWant = (key) => {
+    if (KNOWN_KEYS.some((known) => known.toLowerCase() === key.toLowerCase())) {
+        return UNKNOWN_KEY_WANT;
+    }
+    const prefixed = `X-${key}`;
+    if (!EXTENSION_KEY_RE.test(prefixed))
+        return UNKNOWN_KEY_WANT;
+    return `a key from SPEC §3, or ${prefixed} if this is your own metadata`;
+};
+/**
  * The same violation, told to someone who did not write a trailer (#647).
  *
  * `Live: the delete now reaches State A.` at the end of a body is parsed as a
@@ -165,7 +202,7 @@ const violationFor = (trailer, field) => {
             value: trailer.value,
             rule: 'unknown-key',
             got: trailer.key,
-            want: looksLikeProse(trailer.value) ? PROSE_KEY_WANT : UNKNOWN_KEY_WANT,
+            want: looksLikeProse(trailer.value) ? PROSE_KEY_WANT : unknownKeyWant(trailer.key),
         };
     }
     const enumWant = ENUM_WANT[trailer.key];

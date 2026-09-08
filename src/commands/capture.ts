@@ -210,14 +210,37 @@ const runCapturePipeline = (opts: {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
 
   const transcript = readCallerFile(transcriptPath);
-  // Prepare hashes `git diff --cached` itself, so verification has to be given
-  // the same bytes. This used to default to the empty string, whose hash never
-  // matches -- every record was refused with `source-mismatch` and the command
-  // printed `no record staged`, so `capture --draft` could not succeed at all
-  // unless the caller happened to pass a --diff file byte-identical to the
-  // staged diff. A caller-supplied --diff that differs is still a real mismatch
-  // and is still refused.
-  const diff = diffPath ? readCallerFile(diffPath) : execGitOrThrow(['diff', '--cached'], { cwd });
+  // The transaction binds to the staged diff and only to that: prepare hashes
+  // `git diff --cached` itself, and stage recomputes it a third time before
+  // writing, because every binding is computed server-side and never from the
+  // caller (capture-stage.ts). So `--diff` can assert what is staged; it cannot
+  // override it.
+  //
+  // It used to default to the empty string, whose hash never matches -- every
+  // record was refused with `source-mismatch` and the command printed `no record
+  // staged`, so `capture --draft` could not succeed at all unless the caller
+  // happened to pass a --diff file byte-identical to the staged diff.
+  //
+  // A --diff that differs is still refused. What #877 is about is where that
+  // refusal surfaced: prepare wrote a pending file for a run that could not
+  // succeed, and verify then blamed the draft -- `source-mismatch: diff hash
+  // does not match the prepared transaction` -- for a fault belonging entirely
+  // to the flag. The reporter re-checked quotes and locators that were never
+  // wrong. It is refused here instead, before prepare, naming the flag.
+  const callerDiff = diffPath === undefined ? undefined : readCallerFile(diffPath);
+  const diff = execGitOrThrow(['diff', '--cached'], { cwd });
+  if (callerDiff !== undefined && callerDiff !== diff) {
+    throw markCaptureError(
+      new Error(
+        `--diff ${JSON.stringify(diffPath)} is not the staged diff. A capture transaction ` +
+          'binds to the staged diff -- prepare, verify and stage each recompute it, so --diff ' +
+          'can assert what is staged but cannot override it. Stage the change you are ' +
+          'recording; to record against a commit that already exists, soft-reset it first ' +
+          '(git reset --soft HEAD~1).',
+      ),
+      'usage',
+    );
+  }
 
   // 1. Prepare: compute bindings, generate prompt, persist prepared transaction
   const prepareResult = prepareCaptureContext({
@@ -239,10 +262,17 @@ const runCapturePipeline = (opts: {
   }
 
   // 2. If no draft provided, print the prompt contract and exit (prompt-only mode)
+  //
+  // The nonce is reported, not dropped (#878). Prepare has already persisted the
+  // transaction under it, and prompt-only is the step `--out` exists for: get the
+  // nonce, hand the prompt to a model, come back with --draft. Returning null
+  // here made `if (options.out && result.nonce)` false on exactly that run, so
+  // --out wrote nothing and said nothing, and a scripted caller had no handle on
+  // which transaction it was completing until verify failed several steps later.
   if (!draftPath) {
     return {
       outcome: 'empty',
-      nonce: null,
+      nonce: prepareResult.nonce,
       staged: false,
       prompt: prepareResult.prompt,
       transcript_window: prepareResult.transcript_window,
@@ -396,7 +426,11 @@ export const register = (program: Command): void => {
       'path to the session transcript file (the prompt carries its last 256 KiB; ' +
         'COMMITLORE_TRANSCRIPT_BUDGET_BYTES changes that, and verification always reads all of it)',
     )
-    .option('--diff <path>', 'path to the diff file (defaults to the staged diff)')
+    .option(
+      '--diff <path>',
+      'assert the staged diff equals this file; the transaction always binds to the staged diff, ' +
+        'so this cannot select a different one',
+    )
     .option('--draft <path>', 'path to the draft JSON file (omit for prompt-only mode)')
     .option('--out <path>', 'write the pending nonce to a file')
     .option('--shadow', 'measure historical capture candidates without writing anything')

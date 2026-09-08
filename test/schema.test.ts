@@ -193,12 +193,50 @@ describe('validateRecord', () => {
     });
 
     // The other half, and the reason the value decides rather than the key: a
-    // key someone meant as a key gets the short answer. spec/fixtures/invalid/
-    // 03-unknown-key.txt pins this same reading through the conformance suite.
-    it('keeps the plain answer for a key that was meant as a key', () => {
+    // key someone meant as a key is not told their sentence became metadata.
+    // What it is told changed in #881 — the answer now names the X- form the
+    // author could have written instead of describing its shape. spec/fixtures/
+    // invalid/03-unknown-key.json pins this same reading through the conformance
+    // suite; the violation it pins is unchanged, and `Constraint` is still
+    // refused. Only the advice moved, which test/validate.test.ts already
+    // records as advisory prose rather than the conformance contract.
+    it('names the extension form for a key that was meant as a key', () => {
       const violations = validateRecord([
         { key: 'Constraint', value: 'must ship by friday per the compliance deadline' },
       ]);
+
+      expect(violations.map((v) => v.rule)).toEqual(['unknown-key']);
+      expect(violations[0]?.want).toBe(
+        'a key from SPEC §3, or X-Constraint if this is your own metadata',
+      );
+    });
+
+    // #881: the reported case. Claude Code tells every session to end its commit
+    // message with this key, so it arrives by default and the refusal has to
+    // carry the repair or the same commit is written, refused and written again.
+    it('names X-Claude-Session when refusing Claude-Session', () => {
+      const violations = validateRecord([
+        { key: 'Claude-Session', value: 'https://claude.ai/code/session_abc123' },
+      ]);
+
+      expect(violations.map((v) => v.rule)).toEqual(['unknown-key']);
+      expect(violations[0]?.want).toContain('X-Claude-Session');
+      expect(violations[0]?.want, 'SPEC §3 still comes first').toContain('a key from SPEC §3');
+    });
+
+    // The guard the hint made necessary. `limit:` is `Limit:` miswritten, not an
+    // extension, and `X-limit` would be a valid record carrying the wrong key.
+    it('does not offer the X- form for a SPEC §3 key that differs only by case', () => {
+      const violations = validateRecord([{ key: 'limit', value: 'the cache times out at 30s' }]);
+
+      expect(violations.map((v) => v.rule)).toEqual(['unknown-key']);
+      expect(violations[0]?.want).toBe('a key from SPEC §3 or X-<Name>');
+    });
+
+    // A key the prefix cannot rescue: EXTENSION_KEY_RE requires a letter after
+    // `X-`, so `X-2fa-mode` is not valid either and must not be suggested.
+    it('keeps the plain answer for a key that X- cannot make valid', () => {
+      const violations = validateRecord([{ key: '2fa-mode', value: 'totp' }]);
 
       expect(violations.map((v) => v.rule)).toEqual(['unknown-key']);
       expect(violations[0]?.want).toBe('a key from SPEC §3 or X-<Name>');
