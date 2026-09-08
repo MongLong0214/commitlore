@@ -4,6 +4,6 @@
     { "key": "Constraint", "value": "must ship by friday per the compliance deadline" }
   ],
   "violations": [
-    { "key": "Constraint", "value": "must ship by friday per the compliance deadline", "rule": "unknown-key", "got": "Constraint", "want": "a key from SPEC §3 or X-<Name>" }
+    { "key": "Constraint", "value": "must ship by friday per the compliance deadline", "rule": "unknown-key", "got": "Constraint", "want": "a key from SPEC §3, or X-Constraint if this is your own metadata" }
   ]
 }
