@@ -62,6 +62,34 @@ const isLaunchableEntry = (value: unknown): boolean =>
   isJsonObject(value) && typeof value['command'] === 'string' && value['command'].trim() !== '';
 
 /**
+ * `${VAR}` and `${VAR:-default}`, expanded the way a host expands them before
+ * it launches the server.
+ *
+ * A registration is a launch instruction for a host, and the hosts that read
+ * this file substitute environment placeholders in `command` and `args` first —
+ * which is what lets one committed file name a path that only the host knows,
+ * `${CLAUDE_PLUGIN_ROOT}` being the one this repository's own registration uses
+ * (#870). Every reader here answers questions about that launch: what command a
+ * host will run, whether it is ours, and — in doctor's unattended-initiator
+ * check — whether it actually answers an MCP initialize. Reading the raw text
+ * answered those questions about a command no host ever runs, and the probe
+ * spawned the literal `${...}` as a path.
+ *
+ * An unset placeholder with no default is left as written rather than expanded
+ * to nothing. A host refuses that registration outright, and `""/dist/x.mjs`
+ * would turn the refusal into a plausible-looking path whose failure names a
+ * file nobody wrote.
+ */
+const expandHostPlaceholders = (value: string): string =>
+  value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (whole, name: string, fallback: string | undefined) => {
+    const set = process.env[name];
+    // `:-` is shell semantics, which the syntax is borrowed from: an empty
+    // value takes the default, because an empty path is not a path.
+    if (set !== undefined && set !== '') return set;
+    return fallback ?? whole;
+  });
+
+/**
  * The command a registration under our key names, or null when there is none a
  * host could launch.
  *
@@ -74,7 +102,10 @@ export const registeredMcpCommand = (cwd: string): string | null => {
   return launch?.command ?? null;
 };
 
-/** The complete launch command a host will use, when its argv is parseable. */
+/**
+ * The complete launch command a host will use, when its argv is parseable, with
+ * `${VAR}` placeholders expanded as the host would expand them.
+ */
 export const registeredMcpLaunch = (cwd: string): { command: string; args: string[] } | null => {
   const path = mcpRegistrationPath(cwd);
   if (path === null) return null;
@@ -91,7 +122,10 @@ export const registeredMcpLaunch = (cwd: string): { command: string; args: strin
   if (!isLaunchableEntry(entry)) return null;
   const args = (entry as JsonObject)['args'];
   if (args !== undefined && (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string'))) return null;
-  return { command: String((entry as JsonObject)['command']), args: (args ?? []) as string[] };
+  return {
+    command: expandHostPlaceholders(String((entry as JsonObject)['command'])),
+    args: ((args ?? []) as string[]).map(expandHostPlaceholders),
+  };
 };
 
 /**

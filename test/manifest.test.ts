@@ -50,6 +50,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { createTestRepo } from './git-fixtures.js';
+import { startStub } from './mcp-client.js';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -171,20 +172,72 @@ describe('plugin manifest: entry points are runnable from a clean clone', () => 
     expect(run.stdout.trim()).toBe(manifest.version);
   });
 
-  it('the Codex MCP declaration resolves the plugin-local bundle', () => {
-    const manifest = readJson(clonePath('.codex-plugin/plugin.json')) as PluginManifest;
+  /**
+   * #870: the declaration named `./dist/commitlore.mjs` and set `"cwd": "."`,
+   * and both of those resolve against the *session's* working directory, never
+   * the plugin's. So the plugin's MCP server died at launch with
+   * `MODULE_NOT_FOUND` in every session whose cwd was not a built commitlore
+   * checkout — which is every real use, and the one cwd where the defect cannot
+   * appear is this repository, where the old check ran.
+   *
+   * Everything below therefore launches from a directory that is not a
+   * checkout, with the placeholder expanded the way a host expands it before
+   * spawning. Reverting `.mcp.json` fails these and passes the old one.
+   */
+  const pluginLaunch = (): { entry: string; args: string[] } => {
     const mcp = readJson(clonePath('.mcp.json')) as {
-      mcpServers: { commitlore: { command: string; args: string[]; cwd: string } };
+      mcpServers: { commitlore: { command: string; args: string[]; cwd?: string } };
     };
     const server = mcp.mcpServers.commitlore;
-    const run = spawnSync(server.command, [server.args[0]!, '--version'], {
-      cwd: clonePath(server.cwd),
+    expect(
+      server.cwd,
+      'a "cwd" here is resolved against the session, not the plugin (#870)',
+    ).toBeUndefined();
+    expect(
+      server.args[0],
+      'the entry point must be bound to the plugin root, not the session cwd (#870)',
+    ).toContain('${CLAUDE_PLUGIN_ROOT');
+    const expand = (arg: string): string =>
+      arg.replace(/\$\{CLAUDE_PLUGIN_ROOT(?::-[^}]*)?\}/g, cloneDir);
+    return { entry: expand(server.args[0]!), args: server.args.slice(1).map(expand) };
+  };
+
+  it('the MCP declaration resolves the bundle against the plugin root, not the session cwd', () => {
+    const manifest = readJson(clonePath('.claude-plugin/plugin.json')) as PluginManifest;
+    const codex = readJson(clonePath('.codex-plugin/plugin.json')) as PluginManifest;
+    const { entry } = pluginLaunch();
+    const run = spawnSync(process.execPath, [entry, '--version'], {
+      // Deliberately not the clone: this is the cwd a real session has.
+      cwd: tempDir('foreign-cwd'),
       encoding: 'utf8',
     });
 
-    expect(run.status).toBe(0);
+    expect(run.status, run.stderr).toBe(0);
     expect(run.stdout.trim()).toBe(manifest.version);
-    expect(manifest.mcpServers).toBe('./.mcp.json');
+    expect(codex.mcpServers).toBe('./.mcp.json');
+  });
+
+  it('that launch reaches an MCP initialize from a cwd that is not a checkout', async () => {
+    // `--version` proves the module resolves; this proves the server the host
+    // actually asked for comes up and answers. The old configuration exited
+    // before a byte was exchanged, and the only visible symptom was one line
+    // about a cached connection failure.
+    const { entry, args } = pluginLaunch();
+    const stub = startStub(tempDir('foreign-session'), entry, args);
+    try {
+      const initialized = await stub.request('initialize', {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'manifest', version: '1' },
+      });
+      expect(
+        initialized.error,
+        `initialize failed: ${JSON.stringify(initialized.error)}; stderr: ${stub.stderr()}`,
+      ).toBeUndefined();
+      expect(initialized.result?.['serverInfo']).toMatchObject({ name: 'commitlore' });
+    } finally {
+      await stub.close();
+    }
   });
 
   it('scripts/commitlore-run.sh resolves the plugin entry point via CLAUDE_PLUGIN_ROOT', () => {
