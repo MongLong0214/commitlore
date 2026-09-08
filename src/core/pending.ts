@@ -20,8 +20,18 @@ import { isFullObjectId } from './types.js';
 // Types
 // ---------------------------------------------------------------------------
 
-/** The three verification gaps, in canonical order (T-1024's closed vocabulary). */
-export type GuardGap = 'history-unavailable' | 'shallow-history' | 'notes-unfetched';
+/**
+ * The verification gaps, in canonical order (T-1024's closed vocabulary).
+ *
+ * `proposal-windowed` (#884) says the advisory read the same bounded window the
+ * prompt carries rather than the whole session, so an empty `matches` array is
+ * silence about the window and not about the transcript.
+ */
+export type GuardGap =
+  | 'history-unavailable'
+  | 'shallow-history'
+  | 'notes-unfetched'
+  | 'proposal-windowed';
 
 export interface GuardAdvisory {
   matches: RenderedGuardMatch[];

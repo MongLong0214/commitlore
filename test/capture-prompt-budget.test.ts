@@ -228,3 +228,110 @@ describe('#873 capture returns a prompt a model can read, and says what it is', 
     expect(verified.accepted).toHaveLength(1);
   });
 });
+
+/**
+ * #884: the prompt was bounded and the guard beside it was not.
+ *
+ * `prepareValues` handed `computeGuardAdvisory` the *whole* transcript while
+ * `buildHarvestPromptWithWindow` on the next line took a 256 KiB window of it.
+ * `guard` normalises its proposal through `normalizeForMatch`, whose
+ * `\p{Script=Latin}\p{M}*` global replace collects one match per letter into a
+ * single array; on a 74,173,844-byte session that array crossed V8's 2^27
+ * FixedArray ceiling and the process aborted with
+ * `Fatal JavaScript invalid size error 134217728`, exit 133, before a byte of
+ * JSON was written. Measured on both 1.2.5 and 1.2.3, so it was a standing
+ * limit rather than a regression, and the native stack named
+ * `Runtime_RegExpExecMultiple` as the frame that died.
+ *
+ * `computeGuardAdvisory` documents that it never throws and degrades to a gap.
+ * A fatal engine abort is not catchable, so that contract could not hold while
+ * the input was unbounded — the input had to stop being unbounded.
+ *
+ * The two properties below are what hold it:
+ *
+ * 1. The guard reads the window, not the session. Asserted by where a reviving
+ *    phrase sits rather than by any size, because a test that only counted
+ *    bytes would pass against the old code too.
+ * 2. It says so. Silence about a window must not read as a clean scan of the
+ *    whole transcript.
+ */
+describe('#884 the guard advisory reads the same window the prompt carries', () => {
+  const RULED_OUT = 'Use shared Redis cache for sessions';
+  const REVIVES = 'We should use a shared Redis cache for sessions to share state across replicas.';
+
+  /** A repo whose history rules out an alternative the transcript can revive. */
+  const makeRepoWithRuledOut = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'capture-guard-window-'));
+    scratch.push(dir);
+    execSync('git init --quiet --initial-branch=main', { cwd: dir });
+    execSync('git config user.name "Test"', { cwd: dir });
+    execSync('git config user.email "test@test.com"', { cwd: dir });
+    execSync('git config commit.gpgsign false', { cwd: dir });
+    writeFileSync(join(dir, 'a.txt'), 'hello\n');
+    execSync('git add a.txt', { cwd: dir });
+    execSync(
+      `git commit -m "feat: sessions\n\nRuled-out: ${RULED_OUT} | race condition under failover\nRecord-Id: r-window884" --no-verify --quiet`,
+      { cwd: dir },
+    );
+    writeFileSync(join(dir, 'a.txt'), 'hello\nworld\n');
+    execSync('git add a.txt', { cwd: dir });
+    return dir;
+  };
+
+  const withBudget = <T>(bytes: string, body: () => T): T => {
+    const previous = process.env['COMMITLORE_TRANSCRIPT_BUDGET_BYTES'];
+    process.env['COMMITLORE_TRANSCRIPT_BUDGET_BYTES'] = bytes;
+    try {
+      return body();
+    } finally {
+      if (previous === undefined) delete process.env['COMMITLORE_TRANSCRIPT_BUDGET_BYTES'];
+      else process.env['COMMITLORE_TRANSCRIPT_BUDGET_BYTES'] = previous;
+    }
+  };
+
+  it('does not match a ruled-out alternative that only appears outside the window', () => {
+    const cwd = makeRepoWithRuledOut();
+    // The reviving sentence is line 1, and the window keeps only the tail.
+    const transcript = `${REVIVES}\n${transcriptOf(4000)}`;
+
+    const prepared = withBudget('2048', () => prepareCaptureContext({ cwd, transcript }));
+
+    expect(prepared.transcript_window.truncated).toBe(true);
+    expect(prepared.transcript_window.first_line).toBeGreaterThan(1);
+    // Reading the whole transcript is what this used to do, and it is what
+    // killed the process. Matching here means the guard saw line 1.
+    expect(prepared.guard_advisory!.matches).toHaveLength(0);
+  });
+
+  it('still matches the same alternative when it appears inside the window', () => {
+    const cwd = makeRepoWithRuledOut();
+    // Same repo, same phrase, same budget — only its position changes. Without
+    // this the fix could be "the guard never matches anything" and pass above.
+    const transcript = `${transcriptOf(4000)}\n${REVIVES}`;
+
+    const prepared = withBudget('2048', () => prepareCaptureContext({ cwd, transcript }));
+
+    expect(prepared.transcript_window.truncated).toBe(true);
+    expect(prepared.guard_advisory!.matches.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('records proposal-windowed so an empty match list is not read as a clean scan', () => {
+    const cwd = makeRepoWithRuledOut();
+    const transcript = `${REVIVES}\n${transcriptOf(4000)}`;
+
+    const prepared = withBudget('2048', () => prepareCaptureContext({ cwd, transcript }));
+
+    expect(prepared.guard_advisory!.gaps).toContain('proposal-windowed');
+  });
+
+  it('does not claim a gap when the whole session fitted', () => {
+    const cwd = makeRepoWithRuledOut();
+
+    const prepared = prepareCaptureContext({ cwd, transcript: REVIVES });
+
+    expect(prepared.transcript_window.truncated).toBe(false);
+    expect(prepared.guard_advisory!.gaps).not.toContain('proposal-windowed');
+    // And the advisory still works on the unwindowed path.
+    expect(prepared.guard_advisory!.matches.length).toBeGreaterThanOrEqual(1);
+  });
+});
