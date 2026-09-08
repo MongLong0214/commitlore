@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { buildReport, installCommand } from '../src/commands/update.js';
+import { packageVersion } from '../src/core/paths.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch = (label: string): string => mkdtempSync(join(tmpdir(), `cl-upgrade-${label}-`));
@@ -145,5 +146,63 @@ describe('T-1603 ADR-0037 is enforced, not described', () => {
     const calls = readFileSync(log, 'utf8').trim().split('\n').filter((l) => l !== '');
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) expect(call.startsWith('ls-remote')).toBe(true);
+  });
+});
+
+/**
+ * #885 (incidental): `upgrade` reported `latest v1.2.3` on a machine running
+ * 1.2.5, and added "this is the newest release".
+ *
+ * The answer is cached in `~/.cache/commitlore/latest-release.json` for a day,
+ * and only `upgrade` acting calls `forgetCachedRelease`. A release installed any
+ * other way — `install.sh`, the plugin marketplace, a manual checkout — leaves
+ * yesterday's answer standing, and the command then reports a tag older than the
+ * binary printing it. Nothing was wrong with the lookup; the cache had simply
+ * outlived the fact.
+ *
+ * A `latest` older than the version already running cannot be the latest, and
+ * that is the whole rule. Equality still serves from the cache, or the cache
+ * would never serve the case it exists for.
+ */
+describe('#885 a cached latest older than the running version is re-asked', () => {
+  it('re-asks rather than reporting a tag older than the binary printing it', async () => {
+    const home = scratch('home-stale');
+
+    // Yesterday: the newest tag really was older than what is installed now.
+    const primed = await buildReport({
+      COMMITLORE_INSTALL_SOURCE: remoteWithTags(['v0.0.1']),
+      HOME: home,
+    });
+    expect(primed.latest, 'the cache was not primed').toBe('v0.0.1');
+
+    // Today: a newer release exists, and the day-long cache still holds v0.0.1.
+    const report = await buildReport({
+      COMMITLORE_INSTALL_SOURCE: remoteWithTags(['v0.0.1', 'v99.0.0']),
+      HOME: home,
+    });
+
+    expect(report.latest).toBe('v99.0.0');
+    expect(report.updateAvailable).toBe(true);
+  });
+
+  it('still serves the cache when it agrees with the running version', async () => {
+    const home = scratch('home-current');
+    const current = `v${packageVersion()}`;
+
+    const primed = await buildReport({
+      COMMITLORE_INSTALL_SOURCE: remoteWithTags([current]),
+      HOME: home,
+    });
+    expect(primed.latest).toBe(current);
+
+    // The remote has moved, but "up to date" is exactly the answer the cache
+    // exists to hold. Re-asking here would make the cache decorative.
+    const report = await buildReport({
+      COMMITLORE_INSTALL_SOURCE: remoteWithTags([current, 'v99.0.0']),
+      HOME: home,
+    });
+
+    expect(report.latest).toBe(current);
+    expect(report.updateAvailable).toBe(false);
   });
 });

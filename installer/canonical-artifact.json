@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "a9983e1d679fb5ac209c43b7b3e67c5c14fa540d7153a40421194cae60e96310"
+    "sha256": "c59faab78dff7c40886adfe086d62f6f558f8187ba66675fe3e4f492330465ed"
   },
   "artifact": {
-    "sha256": "33af8c43e7d90253bcdfecee3baede439188ef1a57ff179f0e0268ccaa933d81",
+    "sha256": "097bf2a837cf30f59bad6bbeb0727e005803f9233e256881b2996b00411ba682",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -206,11 +206,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/delivery-mcp-runtime-identity.js",
-        "sha256": "6038899e6b1e95ef69c6768d84f2696d0eb7543b3ce4f314f3ea990699d71d25"
+        "sha256": "4333840dcd848966df31297dbfdc93afb0237b7d2797cec814e54ca667a3b23f"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-mcp-runtime-identity.js.map",
-        "sha256": "b611a531784f09d7e88553d51d68253cb6e74efa10b161d3a77f5c5143dd030a"
+        "sha256": "64c663124806428166cd109054021ec9cc58eff885b273fe6fb51cd89ab5f434"
       },
       {
         "path": "dist/commands/doctor/checks/history-history-depth.d.ts",
@@ -602,11 +602,11 @@
       },
       {
         "path": "dist/commands/update.js",
-        "sha256": "ccb26bd71499b36d27ef8e94f358896e593bb21ee111d8021528b0eff97266b1"
+        "sha256": "738f9bb29dd9fd86b57fa0f672d01307b83c17adf4670bbc0f2ffcbc00e69b61"
       },
       {
         "path": "dist/commands/update.js.map",
-        "sha256": "753c3619e3cc58cbc01415a6931a6f8415d4d06affa5de97ded2c054477ae860"
+        "sha256": "658910611ceed64bdbcadc16c10d94f321b94170eb4a796ebacf760c2b20c3b8"
       },
       {
         "path": "dist/commands/validate.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "e5c54a1bcada00b43660db4b1de9e30c08b475f013eb6de34b2225e1777625ba"
+        "sha256": "a6f7cd5532fd0c0967637a176b1217cb09a3136090e2bcb38d5ff29e2131274b"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -702,11 +702,11 @@
       },
       {
         "path": "dist/core/capture-prepare.js",
-        "sha256": "dbfd507ae6b20f19d6aab3edc776f815279e2f2d631c4c37a866be2ca7b94297"
+        "sha256": "3e52098c3f2b1525d0a6df264a358dc8a21759ac0b18654109e2bef7d45da637"
       },
       {
         "path": "dist/core/capture-prepare.js.map",
-        "sha256": "9e3ba12b2a7dceea12de96c417235a95e3409febaeb7d3cd606724ca35379ad1"
+        "sha256": "58580a32c31fd4a28b0f0bc6a175995e2f18bde25287e736f6082f3ea7ad3924"
       },
       {
         "path": "dist/core/capture-shadow.d.ts",
@@ -806,15 +806,15 @@
       },
       {
         "path": "dist/core/harvest.d.ts",
-        "sha256": "3acccd3fd069dcd81636aa8262c9c425604731fab47eaf9e75b817d57916823c"
+        "sha256": "0dc07b9032e3fb831f849d56f86a02bbc931f1a73730bd8a2db6284bc90b88fc"
       },
       {
         "path": "dist/core/harvest.js",
-        "sha256": "47dd78f3dfe82757b7d71d2c2e96a3d8fef69d42a49e6611a6463352b139baea"
+        "sha256": "3b26739f987ee5af1d1c6a0299db60b2b640297de2cde365a87597a1a4362e2c"
       },
       {
         "path": "dist/core/harvest.js.map",
-        "sha256": "27166b15d3c43f9949ec5650d490286f68c34e753845e928189c2b809917957c"
+        "sha256": "1c82a6d89ed5215144cc6009b71edf13bff6f3f32282d13d824a8d859d7f570f"
       },
       {
         "path": "dist/core/hermes-config.d.ts",
@@ -950,7 +950,7 @@
       },
       {
         "path": "dist/core/pending.d.ts",
-        "sha256": "e59a5ef0a1f371f5db10bf07f0abc61a23982e82694918012e2b84e9d9ba6a06"
+        "sha256": "9c3ec73fd052c96f1ba85ac167f27ce4571d8c098405b80c5e1e14b5ecf8bfcf"
       },
       {
         "path": "dist/core/pending.js",
@@ -958,7 +958,7 @@
       },
       {
         "path": "dist/core/pending.js.map",
-        "sha256": "ea9effb2e216cc6da4c7b9b019eac47f1e41150ab838fbafbd9cd70db30052e0"
+        "sha256": "ed2ba9bbbdbe4116f0415c3eb79892f6c6e2caa91f970c2c835e7c90340d5fa1"
       },
       {
         "path": "dist/core/query.d.ts",

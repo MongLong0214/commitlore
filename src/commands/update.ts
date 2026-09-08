@@ -32,7 +32,12 @@ import { join } from 'node:path';
 
 import type { Command } from 'commander';
 
-import { latestRelease, sourceUrl, type CheckOutcome } from '../core/latest-release.js';
+import {
+  forgetCachedRelease,
+  latestRelease,
+  sourceUrl,
+  type CheckOutcome,
+} from '../core/latest-release.js';
 import { packageVersion, readInstalledFile } from '../core/paths.js';
 import { isNewerRelease } from '../core/release-version.js';
 
@@ -87,7 +92,25 @@ export const buildReport = async (
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<UpgradeReport> => {
   const current = packageVersion();
-  const { outcome, checkedAt } = await latestRelease({ env });
+  let result = await latestRelease({ env });
+  // A "latest" older than the version already running cannot be the latest
+  // (#885). The answer is cached for a day and only `upgrade` acting clears it,
+  // so a release installed any other way -- install.sh, the plugin marketplace,
+  // a manual checkout -- leaves the previous answer standing, and `upgrade`
+  // then reports an older tag as `latest` and says "this is the newest
+  // release". Reported against 1.2.5 while the cache still held v1.2.3.
+  //
+  // Only strictly-older re-asks. Equal is the ordinary up-to-date answer and
+  // must stay cached, or the cache would never serve the case it exists for.
+  if (
+    result.cached &&
+    result.outcome.kind === 'resolved' &&
+    isNewerRelease(`v${current}`, result.outcome.tag)
+  ) {
+    forgetCachedRelease(env['HOME']);
+    result = await latestRelease({ env });
+  }
+  const { outcome, checkedAt } = result;
   const latest = outcome.kind === 'resolved' ? outcome.tag : null;
   const unknown = describe(outcome);
   return {

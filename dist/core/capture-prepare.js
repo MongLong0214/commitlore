@@ -9,7 +9,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { markCaptureError } from './capture-outcome.js';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch } from './guard.js';
-import { buildHarvestPromptWithWindow } from './harvest.js';
+import { windowTranscript, buildHarvestPromptWithWindow } from './harvest.js';
 import { policySourceLabel, resolvePolicy } from './capture-policy.js';
 import { createPending, makePreparedPending, } from './pending.js';
 import { isFullObjectId } from './types.js';
@@ -49,6 +49,20 @@ const deriveGuardGaps = (result) => {
 /**
  * Compute the guard advisory for a capture. Never throws — any error becomes
  * a recorded gap. The capture must always succeed regardless of guard outcome.
+ *
+ * "Never throws" was not enough (#884). This was handed the *whole* transcript
+ * while the prompt beside it was already windowed, and `guard` normalises its
+ * proposal through `normalizeForMatch` — whose `\p{Script=Latin}\p{M}*` global
+ * replace collects one match per letter. On a 74 MB session that array passed
+ * V8's 2^27 FixedArray ceiling and the process died inside
+ * `Runtime_RegExpExecMultiple` with `invalid size error 134217728`, exit 133,
+ * before a byte of JSON was written. A fatal engine abort is not catchable, so
+ * the try/catch below could not honour its own contract; the input had to stop
+ * being unbounded instead.
+ *
+ * `proposalTruncated` records that the advisory saw the window rather than the
+ * session, so an empty `matches` array is never mistaken for a clean scan of
+ * the whole transcript.
  */
 const computeGuardAdvisory = (opts) => {
     try {
@@ -63,9 +77,12 @@ const computeGuardAdvisory = (opts) => {
                 ? {}
                 : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         });
+        const gaps = deriveGuardGaps(result);
+        if (opts.proposalTruncated)
+            gaps.push('proposal-windowed');
         return {
             matches: result.matches.map(renderGuardMatch),
-            gaps: deriveGuardGaps(result),
+            gaps,
             disclosure: GUARD_DISCLOSURE,
         };
     }
@@ -73,7 +90,9 @@ const computeGuardAdvisory = (opts) => {
         // Guard failure degrades to a recorded gap — never a capture failure
         return {
             matches: [],
-            gaps: ['history-unavailable'],
+            gaps: opts.proposalTruncated
+                ? ['history-unavailable', 'proposal-windowed']
+                : ['history-unavailable'],
             disclosure: GUARD_DISCLOSURE,
         };
     }
@@ -114,10 +133,16 @@ const prepareValues = (opts) => {
         throw markCaptureError(new Error(`unattended capture is off for this repository (${policySourceLabel(policy)}: "unattended": true with mode "auto" opts in) — nothing was prepared`), 'rejected');
     }
     const diffPaths = extractPathsFromDiff(diff);
+    // Windowed once, then used for both the advisory and the prompt. The guard
+    // reads the same bytes the model is shown: an advisory computed over the
+    // whole session could warn about a decision that is not in the prompt at all,
+    // and reading the whole session is what killed the process in #884.
+    const windowed = windowTranscript(transcript);
     const advisory = opts.skipGuard === true
         ? null
         : computeGuardAdvisory({
-            proposal: transcript,
+            proposal: windowed.text,
+            proposalTruncated: windowed.window.truncated,
             paths: diffPaths,
             cwd,
             ...(opts.readOnly ? { readOnly: true } : {}),
@@ -127,7 +152,7 @@ const prepareValues = (opts) => {
                 ? {}
                 : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         });
-    const harvest = buildHarvestPromptWithWindow({ transcript, diff });
+    const harvest = buildHarvestPromptWithWindow({ transcript, diff }, windowed);
     return {
         base_head: baseHead,
         staged_diff_hash: stagedDiffHash,
