@@ -253,7 +253,7 @@ describe('Codex plugin package', () => {
       mcpServers: string;
     };
     const mcp = JSON.parse(readFileSync(join(ROOT, '.mcp.json'), 'utf8')) as {
-      mcpServers: { commitlore: { command: string; args: string[]; cwd: string } };
+      mcpServers: { commitlore: { command: string; args: string[] } };
     };
 
     expect(manifest).toMatchObject({
@@ -262,10 +262,12 @@ describe('Codex plugin package', () => {
       skills: './skills/',
       mcpServers: './.mcp.json',
     });
+    // #870: the entry point is bound to the plugin root. A relative path, or a
+    // `cwd`, resolves against whatever directory the session was started in —
+    // so the server died at launch everywhere but a built checkout.
     expect(mcp.mcpServers.commitlore).toEqual({
       command: 'node',
-      args: ['./dist/commitlore.mjs', 'mcp'],
-      cwd: '.',
+      args: ['${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs', 'mcp'],
     });
   });
 

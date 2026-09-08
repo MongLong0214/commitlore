@@ -20339,6 +20339,11 @@ var MCP_SERVER_ARGS = ["mcp"];
 var isJsonObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isLaunchableEntry = (value) => isJsonObject(value) && typeof value["command"] === "string" && value["command"].trim() !== "";
+var expandHostPlaceholders = (value) => value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (whole, name, fallback) => {
+  const set = process.env[name];
+  if (set !== void 0 && set !== "") return set;
+  return fallback ?? whole;
+});
 var registeredMcpCommand = (cwd) => {
   const launch = registeredMcpLaunch(cwd);
   return launch?.command ?? null;
@@ -20359,7 +20364,10 @@ var registeredMcpLaunch = (cwd) => {
   if (!isLaunchableEntry(entry)) return null;
   const args = entry["args"];
   if (args !== void 0 && (!Array.isArray(args) || !args.every((arg) => typeof arg === "string"))) return null;
-  return { command: String(entry["command"]), args: args ?? [] };
+  return {
+    command: expandHostPlaceholders(String(entry["command"])),
+    args: (args ?? []).map(expandHostPlaceholders)
+  };
 };
 var registrationIsOurs = (cwd) => registeredMcpCommand(cwd) === MCP_SERVER_COMMAND;
 var holdsLaunchableRegistration = (servers) => isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY) && isLaunchableEntry(servers[MCP_SERVER_KEY]);

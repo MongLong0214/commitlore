@@ -1376,6 +1376,45 @@ describe('#527 unattended capture initiator', () => {
     });
   }
 
+  /**
+   * #870: this repository's own registration names its entry point as
+   * `${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs`, because the hosts that read
+   * `.mcp.json` expand placeholders before they spawn anything. The reader
+   * returned the raw text, so the probe launched a literal `${...}` as a path
+   * and reported a working registration unhealthy — a report that sends an
+   * operator to repair the one thing that is not broken.
+   */
+  it('probes the launch a host would run, with ${VAR} placeholders expanded', () => {
+    const repo = initRepo('unattended-placeholder');
+    enableUnattended(repo);
+    const command = mcpWrapper(repo, 'commitlore');
+    // A default rather than a set variable: the expansion is what is under
+    // test, and a test that exports the answer first proves less.
+    registerMcp(repo, `\${COMMITLORE_TEST_UNSET:-${command}}`);
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.evidence?.['initiator']).toBe('capture-tools-advertised');
+  });
+
+  /**
+   * The other half of the same rule. An unset placeholder with no default is
+   * left as written, because a host refuses that registration outright and
+   * expanding it to nothing would turn the refusal into a plausible-looking
+   * path whose failure names a file nobody wrote.
+   */
+  it('leaves an unset placeholder with no default as written', () => {
+    const repo = initRepo('unattended-placeholder-unset');
+    enableUnattended(repo);
+    registerMcp(repo, '${COMMITLORE_TEST_UNSET}/dist/commitlore.mjs');
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('${COMMITLORE_TEST_UNSET}');
+  });
+
   it.each([
     ['a dead command', (repo: string) => join(repo, 'missing'), 'command-not-found'],
     ['a command that is a directory', (repo: string) => repo, 'command-is-directory'],

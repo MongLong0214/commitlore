@@ -4,6 +4,56 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.2
+
+One line of configuration, and the plugin's MCP server had never started for
+anybody.
+
+**The plugin's MCP server died at launch everywhere but a commitlore checkout
+(#870).** `.mcp.json` named the entry point as `./dist/commitlore.mjs` and set
+`"cwd": "."`, and both of those resolve against the *session's* working
+directory rather than the plugin's install directory. So node was asked for
+`<session-cwd>/dist/commitlore.mjs`, which does not exist, and the server exited
+in under 60ms with `MODULE_NOT_FOUND`. Capture is MCP-only, so a session with
+the plugin installed made commits carrying no records at all, and the only
+visible symptom was one line saying a connection failure had been cached. It was
+identical in the `0.8.0` and `1.2.0` plugin caches, so no release ever shipped a
+working one. The entry point is now
+`${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs` with no `cwd` — the form
+[ADR-0026](docs/adr/ADR-0026-node-only-distribution.md) and the F14 ticket had
+both documented while the file said otherwise.
+
+**The defect was invisible to every check because they all ran in the one place
+it cannot appear.** A checkout is the one cwd where a session-relative path is
+also the plugin's path, and that is where the suite, the release gate and the
+maintainers all work. The manifest checks now launch from a directory that is
+not a checkout, and one of them drives the server to an MCP `initialize` rather
+than stopping at "something resolved" — the same distinction #483 forced on the
+plugin entry point two releases ago.
+
+**A registration is read the way a host reads it.** `.mcp.json` is a launch
+instruction for a host, and hosts expand `${VAR}` and `${VAR:-default}` before
+they spawn anything; the readers here returned the raw text. Doctor's
+unattended-initiator probe therefore launched a literal `${...}` as a path and
+would have called this repository's own registration unhealthy — sending an
+operator to repair the one thing that is not broken. An unset placeholder with
+no default is left as written on purpose: a host refuses that registration
+outright, and expanding it to nothing would turn the refusal into a
+plausible-looking path whose failure names a file nobody wrote.
+
+**The default is what keeps this repository working on itself.** `:-.` is not
+decoration. This repository's `.mcp.json` is also an ordinary project file here,
+loaded by a host that sets no plugin root, and without the fallback the
+dogfooding install would break in exchange for fixing the plugin.
+
+**Not verified.** Codex reads the same `.mcp.json`, declared by
+`.codex-plugin/plugin.json`, and whether Codex performs the same placeholder
+expansion was not measured — no Codex install was available to this change. What
+is measured is that the Claude Code plugin path now launches from a foreign cwd
+and answers `initialize`. If Codex does not expand, its launch is no worse than
+the relative path it had before, and that is a claim about the shape of the
+change, not a test result.
+
 ## 1.2.1
 
 A security release, and one line that had been asserting something nobody checked.
