@@ -42,7 +42,7 @@ import { POLICY_FILE_NAME } from '../src/core/capture-policy.js';
 import { REQUIRE_SIGNED_DIRECTIVE_KEY } from '../src/core/trusted-authors.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
-import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
+import { CHAINED_HOOK_NAME, HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
 import {
   CLAUDE_HOOK_MARKER,
   claudeSettingsPath,
@@ -654,6 +654,96 @@ describe('doctor: hook runtime', () => {
     expect(runtime?.status).toBe('fail');
     expect(runtime?.detail).toMatch(/unclear|cannot determine/i);
     expect(runtime?.detail).not.toContain('carries no node');
+  });
+
+  /**
+   * #876. The stub runs the hook it preserved at install time first and exits
+   * with that hook's code, so a preserved hook that calls `node` by name dies
+   * with 127 before commitlore is reached. Probed as one process, the row read
+   * that as commitlore's hook failing and prescribed `hooks install`, which
+   * reported the file unchanged and left the failure exactly where it was. The
+   * row has to name the file that produced the exit and offer a fix that can
+   * move it.
+   */
+  const chainedPath = (repo: string): string => join(dirname(hookPath(repo)), CHAINED_HOOK_NAME);
+
+  it('names the preserved hook, not the installed one, when the preserved hook cannot find node', () => {
+    const repo = initRepo('doctor-runtime-chained-no-node');
+    installedHook(repo);
+    // The shape of the reporter's hook: a repository's own commit-msg calling
+    // node by name, which is fine on an interactive PATH and 127 on git's.
+    writeScript(chainedPath(repo), '#!/bin/sh\nexec node /nonexistent/lint-commit.js "$@"\n');
+    chmodSync(chainedPath(repo), 0o755);
+
+    const report = runDoctor({ cwd: repo });
+    const runtime = report.checks.find((entry) => entry.id === 'hook-runtime');
+    expect(runtime?.status).toBe('fail');
+    expect(runtime?.detail).toContain(chainedPath(repo));
+    expect(runtime?.detail).toMatch(/commitlore's hook is not what failed/);
+    expect(runtime?.detail).toContain('node');
+    expect(runtime?.fix).toContain(chainedPath(repo));
+    expect(runtime?.fix).not.toContain('hooks install');
+    // The row the reporter read was `commit-msg-hook`, which inherits the
+    // runtime's outcome. It has to inherit the remedy too, or it keeps saying
+    // `hooks install` under an outcome that just explained why that cannot help.
+    const installation = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+    expect(installation?.status).toBe('fail');
+    expect(installation?.blockedBy).toBe('hook-runtime');
+    expect(installation?.fix).toContain(chainedPath(repo));
+    expect(installation?.fix).not.toContain('hooks install');
+    // Evidence paths are normalised (a home prefix becomes `~`), so the name
+    // is what is pinned, not the absolute string.
+    expect(runtime?.evidence['chained_hook_path']?.endsWith(`/${CHAINED_HOOK_NAME}`)).toBe(true);
+    expect(runtime?.evidence['exit_code']).toBe('127');
+  });
+
+  it('names the preserved hook when it exits non-zero for a reason unrelated to node', () => {
+    const repo = initRepo('doctor-runtime-chained-broken');
+    installedHook(repo);
+    writeScript(chainedPath(repo), '#!/bin/sh\necho "lint config missing" >&2\nexit 3\n');
+    chmodSync(chainedPath(repo), 0o755);
+
+    const runtime = runtimeCheck(repo);
+    expect(runtime?.status).toBe('fail');
+    expect(runtime?.detail).toContain(chainedPath(repo));
+    expect(runtime?.detail).toContain('lint config missing');
+    expect(runtime?.detail).not.toMatch(/the hook cannot find a node interpreter/);
+    expect(runtime?.fix).toContain(chainedPath(repo));
+    expect(runtime?.fix).not.toContain('hooks install');
+    expect(runtime?.evidence['exit_code']).toBe('3');
+  });
+
+  it('still runs the installed hook, and blames it, once the preserved hook has passed', () => {
+    const repo = initRepo('doctor-runtime-chained-ok-then-node-gone');
+    installedHook(repo);
+    writeScript(chainedPath(repo), '#!/bin/sh\nexit 0\n');
+    chmodSync(chainedPath(repo), 0o755);
+    git(repo, ['config', '--local', 'commitlore.node', '/nonexistent/node']);
+
+    const runtime = runtimeCheck(repo);
+    expect(runtime?.status).toBe('fail');
+    expect(runtime?.detail).not.toMatch(/commitlore's hook is not what failed/);
+    expect(runtime?.fix).toContain('hooks install');
+    expect(runtime?.evidence['chained_hook_path']).toBeUndefined();
+  });
+
+  it('reports ok when the preserved hook passes and so does the installed one', () => {
+    const repo = initRepo('doctor-runtime-chained-ok');
+    installedHook(repo);
+    writeScript(chainedPath(repo), '#!/bin/sh\nexit 0\n');
+    chmodSync(chainedPath(repo), 0o755);
+
+    expect(runtimeCheck(repo)?.status).toBe('ok');
+  });
+
+  it('ignores a preserved hook without its execute bit, as the stub does', () => {
+    // `[ -x "$chained" ]` in the stub: git would not have run this file either.
+    const repo = initRepo('doctor-runtime-chained-inert');
+    installedHook(repo);
+    writeScript(chainedPath(repo), '#!/bin/sh\nexit 1\n');
+    chmodSync(chainedPath(repo), 0o644);
+
+    expect(runtimeCheck(repo)?.status).toBe('ok');
   });
 });
 

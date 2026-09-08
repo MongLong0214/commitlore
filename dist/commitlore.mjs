@@ -18365,7 +18365,7 @@ var register3 = (program3) => {
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync as rmSync6, writeFileSync as writeFileSync14, mkdirSync as mkdirSync10 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { dirname as dirname11, join as join17, resolve as resolve17 } from "node:path";
+import { dirname as dirname12, join as join17, resolve as resolve17 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/pricing.ts";
@@ -19782,6 +19782,7 @@ var checkHook = (ctx, runtime) => {
   ];
   if (runtime !== void 0 && runtime.status !== "ok") {
     const inherited = `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`;
+    const inheritedFix = runtime.fix ?? install;
     if (runtime.status === "skipped") {
       return blocked(
         runtime,
@@ -19791,7 +19792,7 @@ var checkHook = (ctx, runtime) => {
           title2,
           "skipped",
           inherited,
-          install,
+          inheritedFix,
           false,
           false,
           {
@@ -19809,7 +19810,7 @@ var checkHook = (ctx, runtime) => {
         title2,
         runtime.status,
         inherited,
-        install,
+        inheritedFix,
         false,
         void 0,
         { evidence: { ...hookEvidence, runtime_status: runtime.status } }
@@ -19840,9 +19841,22 @@ var checkHook = (ctx, runtime) => {
 };
 
 // src/commands/doctor/checks/capture-hook-runtime.ts
-import { existsSync as existsSync11, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { accessSync as accessSync2, constants as fsConstants, existsSync as existsSync11, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
-import { join as join8, resolve as resolve9 } from "node:path";
+import { dirname as dirname7, join as join8, resolve as resolve9 } from "node:path";
+var isExecutable = (path2) => {
+  try {
+    accessSync2(path2, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+var classifyFailure = (status, said) => {
+  if (status === 127 || /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said)) return "node-missing";
+  if (/^\s*at\s|\.js:\d+/.test(said)) return "node-threw";
+  return "unclear";
+};
 var checkHookRuntime = (ctx) => {
   const { opts, git: git2, spawn: spawn3, env } = ctx;
   const title2 = "hook runtime";
@@ -19885,15 +19899,50 @@ var checkHookRuntime = (ctx) => {
     );
   }
   const probe = join8(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
+  const hookEnv = { PATH: "/usr/bin:/bin", HOME: env["HOME"] ?? "" };
   try {
+    const chained = join8(dirname7(hook), CHAINED_HOOK_NAME);
+    if (isExecutable(chained)) {
+      writeFileSync5(probe, PROBE_MESSAGE);
+      const preserved = spawn3("/bin/sh", ["-c", '"$0" "$1"', chained, probe], {
+        shell: false,
+        encoding: "utf8",
+        cwd,
+        env: hookEnv
+      });
+      const exit = preserved.error === void 0 ? preserved.status : null;
+      if (preserved.error !== void 0 || exit !== 0) {
+        const spoke = `${preserved.stderr ?? ""}`.trim();
+        const said = preserved.error?.message ?? (spoke.split("\n")[0] ?? "");
+        const shape = preserved.error === void 0 ? classifyFailure(exit, said) : "unclear";
+        const because = shape === "node-missing" ? `it calls node by name and git's PATH has none: ${said}` : shape === "node-threw" ? `its node process ran but threw (exit ${String(exit)}): ${said}` : `it exited ${String(exit ?? "unavailable")} under the restricted PATH: ${said || "no output"}`;
+        return check(
+          id2,
+          category2,
+          title2,
+          "fail",
+          `commitlore's hook is not what failed. It runs the hook it preserved first, and that hook -- ${chained} -- stops the commit before commitlore is reached: ${because}. That file was this repository's commit-msg hook before commitlore was installed; \`hooks install\` rewrites only commitlore's own and leaves it as it is`,
+          shape === "node-missing" ? `edit ${chained} to call node by absolute path (or remove it if it is no longer wanted)` : `fix or remove ${chained}`,
+          false,
+          void 0,
+          {
+            evidence: {
+              hook_path: hook,
+              chained_hook_path: chained,
+              exit_code: String(exit ?? "unavailable"),
+              ...preserved.error === void 0 ? {} : { error: preserved.error.message },
+              ...streamEvidence("stderr", preserved.stderr ?? "")
+            }
+          }
+        );
+      }
+    }
     writeFileSync5(probe, PROBE_MESSAGE);
     const run = spawn3("/bin/sh", [hook, probe], {
       shell: false,
       encoding: "utf8",
       cwd,
-      // No node, and no PATH entry that could supply one. `git` must stay
-      // reachable: the hook reads its own config through it.
-      env: { PATH: "/usr/bin:/bin", HOME: env["HOME"] ?? "" }
+      env: hookEnv
     });
     if (run.error !== void 0) {
       return check(
@@ -19918,8 +19967,9 @@ var checkHookRuntime = (ctx) => {
     if (run.status !== 0) {
       const spoke = `${run.stderr ?? ""}`.trim();
       const said = spoke.split("\n")[0] ?? "";
-      const nodeMissing = run.status === 127 || /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said);
-      const nodeThrew = /^\s*at\s|\.js:\d+/.test(said);
+      const shape = classifyFailure(run.status, said);
+      const nodeMissing = shape === "node-missing";
+      const nodeThrew = shape === "node-threw";
       const containmentRefused2 = /outside the install this hook trusts/.test(spoke);
       let detail;
       if (containmentRefused2) {
@@ -20998,7 +21048,7 @@ var checkDirectiveTrustMode = (ctx) => {
 
 // src/mcp/lifecycle.ts
 import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync14, statSync as statSync6, writeFileSync as writeFileSync7, writeSync } from "node:fs";
-import { dirname as dirname7, join as join10, resolve as resolve10 } from "node:path";
+import { dirname as dirname8, join as join10, resolve as resolve10 } from "node:path";
 var MAX_BYTES = 64 * 1024;
 var LIFECYCLE_FILE = "mcp-lifecycle.log";
 var lifecyclePath = (cwd = process.cwd()) => {
@@ -21019,7 +21069,7 @@ var write = (cwd, line2) => {
   try {
     const path2 = lifecyclePath(cwd);
     if (path2 === null) return;
-    mkdirSync4(dirname7(path2), { recursive: true });
+    mkdirSync4(dirname8(path2), { recursive: true });
     appendFileSync(path2, `${line2}
 `);
     trim(path2);
@@ -22035,7 +22085,7 @@ var checkInstallationIntegrity = (_ctx) => {
 import { spawn as spawn2, spawnSync as spawnSync6 } from "node:child_process";
 import { mkdirSync as mkdirSync5, readFileSync as readFileSync15, renameSync as renameSync4, rmSync as rmSync3, writeFileSync as writeFileSync8 } from "node:fs";
 import { homedir as homedir2, tmpdir } from "node:os";
-import { dirname as dirname8, join as join12 } from "node:path";
+import { dirname as dirname9, join as join12 } from "node:path";
 
 // src/core/release-version.ts
 var RELEASE_TAG = /^v?(\d+)\.(\d+)\.(\d+)$/;
@@ -22106,7 +22156,7 @@ var readCache = (path2) => {
 };
 var writeCache = (path2, entry) => {
   try {
-    mkdirSync5(dirname8(path2), { recursive: true });
+    mkdirSync5(dirname9(path2), { recursive: true });
     const scratch = `${path2}.${process.pid}.tmp`;
     writeFileSync8(scratch, `${JSON.stringify(entry)}
 `, "utf8");
@@ -22914,7 +22964,7 @@ import {
   unlinkSync as unlinkSync5,
   writeFileSync as writeFileSync12
 } from "node:fs";
-import { basename as basename2, dirname as dirname9, join as join14, resolve as resolve15 } from "node:path";
+import { basename as basename2, dirname as dirname10, join as join14, resolve as resolve15 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash7, randomBytes as randomBytes5 } from "node:crypto";
@@ -23536,7 +23586,7 @@ var resolveHooksDir = (cwd) => {
   }
   return resolve15(cwd, result.stdout.trim());
 };
-var isExecutable = (path2) => {
+var isExecutable2 = (path2) => {
   try {
     return (statSync7(path2).mode & 73) !== 0;
   } catch {
@@ -23564,7 +23614,7 @@ var readHookStatus = (cwd = process.cwd()) => {
     state: readHookState(hookPath),
     chainedPath,
     chained: existsSync19(chainedPath),
-    chainedExecutable: isExecutable(chainedPath),
+    chainedExecutable: isExecutable2(chainedPath),
     recordedTarget: readRecordedHookTarget(cwd)
   };
 };
@@ -23592,9 +23642,9 @@ var resolveEntryForRecord = (entry, cwd) => {
   return null;
 };
 var versionFreeEntryFor = (bundle) => {
-  const versionDir = dirname9(dirname9(bundle));
+  const versionDir = dirname10(dirname10(bundle));
   if (!/^v\d/.test(basename2(versionDir))) return null;
-  const candidate = join14(dirname9(versionDir), "current", "dist", "commitlore.mjs");
+  const candidate = join14(dirname10(versionDir), "current", "dist", "commitlore.mjs");
   try {
     return realpathSync4(candidate) === realpathSync4(bundle) ? candidate : null;
   } catch {
@@ -23942,14 +23992,14 @@ var performUpgrade = (tag, deps) => {
 
 // src/core/agents-guidance.ts
 import { existsSync as existsSync20, readFileSync as readFileSync22, renameSync as renameSync9, rmSync as rmSync5, statSync as statSync8, writeFileSync as writeFileSync13 } from "node:fs";
-import { basename as basename3, dirname as dirname10, join as join16, resolve as resolve16 } from "node:path";
+import { basename as basename3, dirname as dirname11, join as join16, resolve as resolve16 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
 var AGENTS_SECTION_END = "<!-- commitlore:end -->";
 var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var shippedAgentsPath = () => {
   const source = fileURLToPath2(import.meta.url);
-  const here = dirname10(source);
+  const here = dirname11(source);
   return basename3(here) === "dist" ? resolve16(here, "..", "AGENTS.md") : resolve16(here, "..", "..", "AGENTS.md");
 };
 var readCommitloreAgentsSection = () => {
@@ -24567,12 +24617,12 @@ var runDemo = async (opts = {}) => {
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
       throw new Error("demo: temporary directory overlaps with user repository \u2014 aborting");
     }
-    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname11(tmpDir));
+    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname12(tmpDir));
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
     const targetFullPath = join17(tmpDir, targetPath);
-    mkdirSync10(dirname11(targetFullPath), { recursive: true });
+    mkdirSync10(dirname12(targetFullPath), { recursive: true });
     writeFileSync14(targetFullPath, "export const calculatePrice = () => {};\n");
     git(["add", "."], tmpDir);
     git(["commit", "-m", predecessorCommitMessage], tmpDir);
@@ -25040,7 +25090,7 @@ var register15 = (program3) => {
 import { spawnSync as spawnSync9 } from "node:child_process";
 import { copyFileSync, existsSync as existsSync22, mkdirSync as mkdirSync11, readFileSync as readFileSync26, renameSync as renameSync10, statSync as statSync9, writeFileSync as writeFileSync17 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
-import { basename as basename4, dirname as dirname12, join as join18, resolve as resolve19 } from "node:path";
+import { basename as basename4, dirname as dirname13, join as join18, resolve as resolve19 } from "node:path";
 
 // src/core/hermes-config.ts
 import { relative as relative2, resolve as resolve18, sep as sep3 } from "node:path";
@@ -25321,7 +25371,7 @@ var backupPathFor = (configPath) => {
   }
 };
 var atomicallyWrite = (path2, contents, mode) => {
-  const temporary = join18(dirname12(path2), `.${basename4(path2)}.commitlore-${process.pid}.tmp`);
+  const temporary = join18(dirname13(path2), `.${basename4(path2)}.commitlore-${process.pid}.tmp`);
   try {
     if (mode === void 0) writeFileSync17(temporary, contents, "utf8");
     else writeFileSync17(temporary, contents, { encoding: "utf8", mode });
@@ -25367,7 +25417,7 @@ var runHermesInstall = (options = {}) => {
   const dataRoot2 = options.dataRoot ?? join18(dataHome, "commitlore");
   const versionedSkills = join18(dataRoot2, `v${runtimeIdentity().version}`, "hermes", "skills");
   const skillsDir = options.skillsDir ?? (existsSync22(versionedSkills) ? versionedSkills : installedPath("hermes", "skills"));
-  const detected = options.detected ?? (existsSync22(dirname12(configPath)) || commandExists("hermes"));
+  const detected = options.detected ?? (existsSync22(dirname13(configPath)) || commandExists("hermes"));
   const report = [];
   const verified = [];
   if (!detected) {
@@ -25399,7 +25449,7 @@ var runHermesInstall = (options = {}) => {
   }
   if (edit.added.length > 0) {
     try {
-      mkdirSync11(dirname12(configPath), { recursive: true });
+      mkdirSync11(dirname13(configPath), { recursive: true });
       if (existsSync22(configPath)) {
         const backup = backupPathFor(configPath);
         copyFileSync(configPath, backup);
@@ -25539,7 +25589,7 @@ var register17 = (program3) => {
 
 // src/commands/inject.ts
 import { readFileSync as readFileSync27, realpathSync as realpathSync6 } from "node:fs";
-import { basename as basename5, dirname as dirname13, isAbsolute as isAbsolute3, join as join19, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
+import { basename as basename5, dirname as dirname14, isAbsolute as isAbsolute3, join as join19, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash9 } from "node:crypto";
@@ -25950,7 +26000,7 @@ var canonical = (target) => {
       const real = realpathSync6(current);
       return tail.length === 0 ? real : join19(real, ...tail);
     } catch {
-      const parent = dirname13(current);
+      const parent = dirname14(current);
       if (parent === current) return absolute;
       tail.unshift(basename5(current));
       current = parent;
@@ -26111,8 +26161,8 @@ var register18 = (program3) => {
 };
 
 // src/commands/installer-hosts.ts
-import { accessSync as accessSync2, constants as constants2, existsSync as existsSync23, mkdirSync as mkdirSync12, renameSync as renameSync11, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync18, readFileSync as readFileSync28 } from "node:fs";
-import { delimiter as delimiter2, dirname as dirname14, extname, isAbsolute as isAbsolute4, join as join20 } from "node:path";
+import { accessSync as accessSync3, constants as constants2, existsSync as existsSync23, mkdirSync as mkdirSync12, renameSync as renameSync11, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync18, readFileSync as readFileSync28 } from "node:fs";
+import { delimiter as delimiter2, dirname as dirname15, extname, isAbsolute as isAbsolute4, join as join20 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync as spawnSync10 } from "node:child_process";
 var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
@@ -26137,8 +26187,8 @@ var commandOf = (format, entry) => {
 var entryFor = (format, wrapper) => format === "json-mcp" ? { type: "local", command: [wrapper, "mcp"], enabled: true } : { command: wrapper, args: ["mcp"] };
 var atomicTemporaryName = (target, unique) => `.${target.split(/[/\\]/).pop() ?? target}.commitlore-${unique}.tmp`;
 var atomicJsonWrite = (path2, value) => {
-  mkdirSync12(dirname14(path2), { recursive: true });
-  const temporary = join20(dirname14(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
+  mkdirSync12(dirname15(path2), { recursive: true });
+  const temporary = join20(dirname15(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
   try {
     writeFileSync18(temporary, `${JSON.stringify(value, null, 2)}
 `, { encoding: "utf8", mode: 384 });
@@ -26227,8 +26277,8 @@ command = ${escaped}
 args = ["mcp"]
 `;
   try {
-    mkdirSync12(dirname14(path2), { recursive: true });
-    const temporary = join20(dirname14(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
+    mkdirSync12(dirname15(path2), { recursive: true });
+    const temporary = join20(dirname15(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
     try {
       writeFileSync18(temporary, next, { encoding: "utf8", mode: 384 });
       if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") throw new Error("interrupted before atomic rename");
@@ -26259,7 +26309,7 @@ var executableExtensions = (command) => {
 var isExecutableFile2 = (path2) => {
   try {
     if (statSync10(path2, { throwIfNoEntry: false })?.isFile() !== true) return false;
-    accessSync2(path2, constants2.X_OK);
+    accessSync3(path2, constants2.X_OK);
     return true;
   } catch {
     return false;
