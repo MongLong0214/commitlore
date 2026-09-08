@@ -4,6 +4,65 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.5
+
+Two flags on `capture` did nothing and said nothing; a third refusal knew the
+fix and did not say it.
+
+**`capture --out` exited 0 and never wrote the file (#878).** The flag is
+documented as "write the pending nonce to a file", and prompt-only mode — get the
+nonce, hand the prompt to a model, come back with `--draft` — is the step it
+exists for. That was the one run where the pipeline reported `nonce: null` while
+prepare had already persisted a real transaction under a real nonce, so the write
+was guarded out. Measured by the reporter as 3 runs, 3 exit 0, 3 missing files,
+with and without `--diff`. The nonce is now reported, so `--out` writes it and
+`--json` carries it.
+
+**`capture --diff` was accepted, ignored by prepare, and honoured by verify
+(#877).** Passing the *same* `--diff` file to both steps failed whenever that
+file was not byte-identical to the staged diff:
+`discarded record 0 (source-mismatch): diff hash does not match the prepared
+transaction`. That message is about the draft's sources, and the fault was
+entirely the flag's — the reporter spent several attempts re-checking quotes and
+locators that were never wrong.
+
+The refusal itself was right and stays. A capture transaction binds to the staged
+diff, which prepare, verify and stage each recompute independently, because every
+binding is computed server-side and never from the caller. `--diff` cannot select
+a different diff; it can only assert what is staged. So it is now refused where
+that is decidable — up front, exit 2, naming the flag and naming the way out
+(`git reset --soft`, which is what the reporter had to find on their own) — rather
+than several steps later against the record. A run refused this way also leaves no
+pending transaction behind; the old path wrote two per attempt.
+
+`--diff` byte-identical to the staged diff keeps working, and the help text now
+says what the flag does rather than implying an override it never had.
+
+**`unknown-key` now names the `X-` form the author could have written (#881).**
+Claude Code instructs every session to end its commit message with
+`Claude-Session:`, so the key arrives by default, the hook refuses it, the commit
+is lost, and an agent that cannot see the repository's earlier commits writes it
+again. Reported twice in one day in two repositories by the same author, the
+second time after already knowing about the first, because `X-` is not the kind of
+thing that stays in mind between repositories.
+
+```
+31: unknown-key Claude-Session — got "Claude-Session",
+    want "a key from SPEC §3, or X-Claude-Session if this is your own metadata"
+```
+
+Nothing is accepted that was not accepted before, and nothing is rewritten: SPEC
+§6 says the message is not modified, and silently renaming someone's trailer would
+be worse than refusing it. This only says the name. Two keys are deliberately not
+offered the prefix — one whose value reads as a sentence, which keeps the #647
+answer, because that author's problem is that their prose became metadata; and one
+that differs from a SPEC §3 key only by case, because `X-limit` would be a valid
+record carrying the wrong key.
+
+`spec/fixtures/invalid/03-unknown-key.expected.json` moves with it. The violation
+it pins is unchanged and `Constraint:` is still refused; only the advisory `want`
+text differs.
+
 ## 1.2.4
 
 `doctor` blamed the hook that worked, and prescribed reinstalling it.
