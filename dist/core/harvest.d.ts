@@ -136,7 +136,17 @@ export declare const buildHarvestContract: () => string;
  * randomness, no model — so the same transcript, diff and budget always produce
  * the same bytes.
  */
-export declare const buildHarvestPromptWithWindow: (input: HarvestInput) => {
+export declare const buildHarvestPromptWithWindow: (input: HarvestInput, 
+/**
+ * A window the caller already computed. `windowTranscript` splits the whole
+ * transcript to find its tail, so a caller that needs the window for its own
+ * reasons — capture hands the same bytes to the guard (#884) — passes it back
+ * rather than paying for a second split of a session that can be tens of MB.
+ */
+precomputed?: {
+    text: string;
+    window: TranscriptWindow;
+}) => {
     prompt: string;
     window: TranscriptWindow;
 };

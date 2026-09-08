@@ -420,10 +420,17 @@ export const buildHarvestContract = () => {
  * randomness, no model — so the same transcript, diff and budget always produce
  * the same bytes.
  */
-export const buildHarvestPromptWithWindow = (input) => {
+export const buildHarvestPromptWithWindow = (input, 
+/**
+ * A window the caller already computed. `windowTranscript` splits the whole
+ * transcript to find its tail, so a caller that needs the window for its own
+ * reasons — capture hands the same bytes to the guard (#884) — passes it back
+ * rather than paying for a second split of a session that can be tens of MB.
+ */
+precomputed) => {
     const entries = loadVocabulary().filter((entry) => entry.key !== 'Verified');
     const diff = input.diff.trim() === '' ? '(no diff)' : input.diff.replace(/\n+$/, '');
-    const { text, window } = windowTranscript(input.transcript);
+    const { text, window } = precomputed ?? windowTranscript(input.transcript);
     const prompt = [
         '# CommitLore harvest',
         '',

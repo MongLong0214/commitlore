@@ -12274,10 +12274,10 @@ var buildHarvestContract = () => {
     ""
   ].join("\n");
 };
-var buildHarvestPromptWithWindow = (input) => {
+var buildHarvestPromptWithWindow = (input, precomputed) => {
   const entries = loadVocabulary().filter((entry) => entry.key !== "Verified");
   const diff = input.diff.trim() === "" ? "(no diff)" : input.diff.replace(/\n+$/, "");
-  const { text, window } = windowTranscript(input.transcript);
+  const { text, window } = precomputed ?? windowTranscript(input.transcript);
   const prompt = [
     "# CommitLore harvest",
     "",
@@ -16973,15 +16973,17 @@ var computeGuardAdvisory = (opts) => {
       ...opts.requireSignedDirective === true ? { requireSignedDirective: true } : {},
       ...opts.trustedSignerFingerprints === void 0 ? {} : { trustedSignerFingerprints: opts.trustedSignerFingerprints }
     });
+    const gaps = deriveGuardGaps(result);
+    if (opts.proposalTruncated) gaps.push("proposal-windowed");
     return {
       matches: result.matches.map(renderGuardMatch),
-      gaps: deriveGuardGaps(result),
+      gaps,
       disclosure: GUARD_DISCLOSURE
     };
   } catch {
     return {
       matches: [],
-      gaps: ["history-unavailable"],
+      gaps: opts.proposalTruncated ? ["history-unavailable", "proposal-windowed"] : ["history-unavailable"],
       disclosure: GUARD_DISCLOSURE
     };
   }
@@ -17026,8 +17028,10 @@ var prepareValues = (opts) => {
     );
   }
   const diffPaths = extractPathsFromDiff(diff);
+  const windowed = windowTranscript(transcript);
   const advisory = opts.skipGuard === true ? null : computeGuardAdvisory({
-    proposal: transcript,
+    proposal: windowed.text,
+    proposalTruncated: windowed.window.truncated,
     paths: diffPaths,
     cwd,
     ...opts.readOnly ? { readOnly: true } : {},
@@ -17035,7 +17039,7 @@ var prepareValues = (opts) => {
     ...opts.requireSignedDirective === true ? { requireSignedDirective: true } : {},
     ...opts.trustedSignerFingerprints === void 0 ? {} : { trustedSignerFingerprints: opts.trustedSignerFingerprints }
   });
-  const harvest2 = buildHarvestPromptWithWindow({ transcript, diff });
+  const harvest2 = buildHarvestPromptWithWindow({ transcript, diff }, windowed);
   return {
     base_head: baseHead,
     staged_diff_hash: stagedDiffHash,
@@ -21269,6 +21273,17 @@ var checkMcpLifecycle = (ctx) => {
 
 // src/commands/doctor/checks/delivery-mcp-runtime-identity.ts
 var identityOf2 = (runtime) => `${runtime.entrypointRealpath} (root ${runtime.packageRoot})`;
+var pidsByIdentity = (runtimes) => {
+  const grouped = /* @__PURE__ */ new Map();
+  for (const runtime of runtimes) {
+    const key = identityOf2(runtime);
+    const pids = grouped.get(key);
+    if (pids === void 0) grouped.set(key, [runtime.pid]);
+    else pids.push(runtime.pid);
+  }
+  return grouped;
+};
+var withPids = (identity, pids) => `${identity} pid ${pids.join(", ")}`;
 var missingAssets = (runtime) => [
   ...runtime.bundlePresent ? [] : ["dist/commitlore.mjs"],
   ...runtime.specPresent ? [] : ["spec/SPEC.md"]
@@ -21316,13 +21331,22 @@ var checkMcpRuntimeIdentity = (ctx) => {
   }
   const identities = [...new Map(scan2.runtimes.map((runtime) => [identityOf2(runtime), runtime])).values()];
   if (identities.length > 1) {
+    const grouped = pidsByIdentity(scan2.runtimes);
+    const allPids = scan2.runtimes.map((runtime) => runtime.pid);
     return check(
       id2,
       category2,
       title2,
       "warn",
-      `${identities.length} distinct live CommitLore runtimes are answering MCP \u2014 runtime mismatch: ` + identities.map(identityOf2).join("; "),
-      null,
+      `${identities.length} distinct live CommitLore runtimes are answering MCP \u2014 runtime mismatch: ` + identities.map((runtime) => withPids(identityOf2(runtime), grouped.get(identityOf2(runtime)) ?? [])).join("; ") + // #885: the row named versions and stopped, so an operator could not tell
+      // whether it was cosmetic. These runtimes write. Each answers with the
+      // build it started on, so records committed in one repository on one day
+      // can come from more than one of them, and nothing on the commit says
+      // which. Deliberately does not name one of them as the stale one:
+      // r-liveruntime660 ruled that out, because a copied or stale install can
+      // report the same version as a current one.
+      ". Each keeps writing records with the build it started on, so this repository can receive records from more than one of them",
+      `restart the host sessions that own these pids so every session answers from one install (${allPids.join(", ")}) \u2014 a host resolves the launcher once at session start and holds that runtime until the session ends, so an upgrade does not reach a session already running`,
       false,
       // Machine state, not this repository's -- see the note above.
       false,
@@ -21331,7 +21355,8 @@ var checkMcpRuntimeIdentity = (ctx) => {
           discovery: scan2.detail,
           runtime_count: String(scan2.runtimes.length),
           distinct_identities: String(identities.length),
-          package_roots: identities.map((runtime) => runtime.packageRoot).join(", ")
+          package_roots: identities.map((runtime) => runtime.packageRoot).join(", "),
+          pids: allPids.join(", ")
         }
       }
     );
@@ -22291,6 +22316,12 @@ var latestRelease = async (opts = {}) => {
     writeCache(path2, { version: CACHE_VERSION, checkedAt, outcome, ttlMs: ttlFor(outcome, previous) });
   }
   return { outcome, cached: false, checkedAt };
+};
+var forgetCachedRelease = (home) => {
+  try {
+    rmSync3(cachePath(home), { force: true });
+  } catch {
+  }
 };
 var latestReleaseSync = (opts = {}) => {
   const env = opts.env ?? process.env;
@@ -23883,7 +23914,12 @@ var describe = (outcome) => {
 };
 var buildReport2 = async (env = process.env) => {
   const current = packageVersion();
-  const { outcome, checkedAt } = await latestRelease({ env });
+  let result = await latestRelease({ env });
+  if (result.cached && result.outcome.kind === "resolved" && isNewerRelease(`v${current}`, result.outcome.tag)) {
+    forgetCachedRelease(env["HOME"]);
+    result = await latestRelease({ env });
+  }
+  const { outcome, checkedAt } = result;
   const latest2 = outcome.kind === "resolved" ? outcome.tag : null;
   const unknown2 = describe(outcome);
   return {
