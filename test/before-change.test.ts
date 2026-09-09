@@ -140,6 +140,61 @@ describe('commitlore_before_change', () => {
     expect(result.active_decisions).toEqual([]);
   });
 
+  /**
+   * #889: with a proposal supplied and history unreadable, the guard is skipped
+   * and never starts — but the response called that `timed-out`. A completed
+   * git failure presented as an expiry, with no guard execution and no elapsed
+   * time behind it. Measured against a directory that is not a repository
+   * (`git rev-parse --git-dir` exits 128), the whole call returned in ~37 ms
+   * claiming it had timed out.
+   *
+   * The two cases below are the pair: the existing unavailable-history tests
+   * all pass no proposal, so none of them reaches this branch.
+   */
+  describe('#889 unreadable history is not reported as a guard timeout', () => {
+    const nonRepo = (): string => mkdtempSync(join(tmpdir(), 'no-git-889-'));
+
+    it('does not call a skipped guard timed-out', () => {
+      const dir = nonRepo();
+      try {
+        const result = beforeChange({ path: 'src/example.ts', cwd: dir, proposal: 'update example implementation' });
+
+        // The gap is the fail-closed half and must survive untouched.
+        expect(result.verification_gaps).toContain('history-unavailable');
+        expect(result.guard_confidence).not.toBe('timed-out');
+        expect(result.guard_confidence).toBe('unavailable');
+        expect(result.possible_revival_matches).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    // Not an elapsed-time threshold: the reporter asked for the guard's absence
+    // to be proven rather than timed, and a duration assertion would be the
+    // fragile oracle they warned against. `unavailable` is only reachable from
+    // the branch that skips guard(), so the value is the proof.
+    it('keeps the no-proposal answer distinct from the skipped-guard answer', () => {
+      const dir = nonRepo();
+      try {
+        const withProposal = beforeChange({ path: 'src/example.ts', cwd: dir, proposal: 'a proposal' });
+        const without = beforeChange({ path: 'src/example.ts', cwd: dir });
+
+        expect(without.guard_confidence).toBe('not-run');
+        expect(withProposal.guard_confidence).toBe('unavailable');
+        // Both still report the gap; only the guard field separates them.
+        expect(without.verification_gaps).toContain('history-unavailable');
+        expect(withProposal.verification_gaps).toContain('history-unavailable');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('leaves the healthy-history proposal answer experimental', () => {
+      const result = beforeChange({ path: 'src/auth.ts', cwd: repoDir, proposal: 'switch to a shared cache' });
+      expect(result.guard_confidence).toBe('experimental');
+    });
+  });
+
   // Fail-closed: unreadable repo reports gap
   it('unreadable repository reports verification gap rather than empty context', async () => {
     const emptyTmp = mkdtempSync(join(tmpdir(), 'no-git-'));

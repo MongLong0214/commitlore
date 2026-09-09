@@ -26,6 +26,8 @@ import {
 } from './types.js';
 
 const RECORD_ID_KEY = 'Record-Id';
+/** Rewritten per block by the notes mirroring, so it is not payload content. */
+const PROVENANCE_KEY = 'Provenance';
 const SUPERSEDES_KEY = 'Supersedes';
 const FOLLOWS_KEY = 'Follows';
 const EXPIRES_KEY = 'Expires';
@@ -422,11 +424,59 @@ const undecidableExpiry = (ordered: TimedRecord[]): Set<string> => {
   return found;
 };
 
+/** `payloadSignature` without the provenance stamp the mirroring rewrites. */
+const payloadSignatureWithoutProvenance = (record: StaleRecord): string =>
+  record.trailers
+    .filter((trailer) => trailer.key !== RECORD_ID_KEY && trailer.key !== PROVENANCE_KEY)
+    .map((trailer) => `${trailer.key} ${trailer.value}`)
+    .sort()
+    .join('');
+
+/**
+ * Whether a note is its own commit's mirror rather than a rival declaration.
+ *
+ * `squash-preserve --target` writes the branch's records onto the notes ref and
+ * stamps each block with its own `Provenance: inherited <sha>` — never
+ * inherited, rewritten per block, by design (core/squash.ts). When the same
+ * records are also composed into that commit's message, the note and the
+ * message differ by exactly that stamp and by nothing else, and the group was
+ * called ambiguous and withheld (#890).
+ *
+ * The workflow that produces it is the one the tool recommends: the merge
+ * helper's own output tells the operator to pass `--target` so the records are
+ * mirrored where git will not parse them as trailers. A record hidden because
+ * it was stored successfully in both supported places is a bad trade, and the
+ * operator who hit it had no way to see where either declaration was.
+ *
+ * Only the stamp is forgiven. Any other difference — a changed `Limit:`, an
+ * added or dropped trailer — still diverges and still withholds, which is
+ * r-refint74's rule and the reason it exists: notes are remote-reachable, so
+ * divergent note content must not inherit an identity a human approved.
+ */
+const isOwnCommitMirror = (record: StaleRecord, group: StaleRecord[]): boolean => {
+  if (record.source !== 'notes' || record.sha === undefined) return false;
+  const signature = payloadSignatureWithoutProvenance(record);
+  return group.some(
+    (sibling) =>
+      sibling.source === 'commit' &&
+      sibling.sha === record.sha &&
+      payloadSignatureWithoutProvenance(sibling) === signature,
+  );
+};
+
+/**
+ * A notes mirror diverging from the commit block it mirrors. Each note that is
+ * its own commit's mirror is dropped before the comparison, so the message
+ * block speaks for the pair; everything else is compared in full as before.
+ */
+const notesPayloadDiverges = (group: StaleRecord[]): boolean => {
+  if (!group.some((record) => record.source === 'notes')) return false;
+  const rivals = group.filter((record) => !isOwnCommitMirror(record, group));
+  return new Set(rivals.map(payloadSignature)).size > 1;
+};
+
 const hasAmbiguousGroup = (group: StaleRecord[]): boolean =>
-  sharesACommit(group) ||
-  instantConflicts(group).size > 0 ||
-  (group.some((record) => record.source === 'notes') &&
-    new Set(group.map(payloadSignature)).size > 1);
+  sharesACommit(group) || instantConflicts(group).size > 0 || notesPayloadDiverges(group);
 
 /** Whether a record cannot be safely merged because its identity is ambiguous. */
 export const hasAmbiguousIdCollision = (records: StaleRecord[]): boolean =>
