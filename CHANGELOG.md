@@ -4,6 +4,106 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.7
+
+Three diagnostics that named a cause they had not established. One prescribed a
+remedy that would have done harm; another hid a record for being stored
+correctly.
+
+**`squash-conservation` could not tell an abandoned branch from a squashed one
+(#888).** It reported records "declared on a branch not reachable from HEAD" and
+concluded a squash had dropped them. A squash is one cause. The other is a
+branch closed without merging — an ordinary and correct outcome, where the
+records are absent because the work is absent.
+
+The two are identical in the commit graph, which is all the check looked at, so
+it prescribed the same remedy for both:
+
+```
+fix: commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>
+```
+
+On an abandoned branch that is not merely unnecessary. `--target` mirrors the
+branch's records onto whatever commit it is handed, with no check that the
+commit contains the work, so following the advice writes decision records
+describing work that was deliberately discarded onto a commit that does not
+contain it. Reported against a pull request closed as superseded, where there
+was no "commit that squashed it" for `--target` to name at all.
+
+**The content separates them**, and the check now uses it: a squash carries the
+branch's tree into HEAD even though its commits are gone, while an abandoned
+branch's tree is nowhere. Each branch is classified by comparing the blob of
+every path it touched against HEAD's, and the row says which case it is and
+prescribes accordingly — `squash-preserve` for a branch whose changes reached
+HEAD, and nothing to do for one whose changes did not.
+
+**The finding set is unchanged.** Every record reported before is still
+reported; only the claim and the remedy vary. The classification is deliberately
+asymmetric for that reason — "never merged" requires that *no* touched path
+exist in HEAD, and a squash whose files `main` has since edited falls to
+"could not be determined", which still prescribes preserving. A vaguer message
+is a cheap mistake; a dropped finding is not.
+
+This is not identification by content, which this project has repeatedly found
+unsafe: records are still matched by `Record-Id` exactly as before. What the
+content decides is what happened to the *branch*.
+
+**A record stored in both supported places was withheld as declared twice
+(#890).** `context` hid a record whose declarations were a trailer block in a
+commit's message and the same records on the notes ref for that same commit —
+both CommitLore's own storage, and the second one produced by following the
+tool's own advice. The merge helper's output tells the operator to pass
+`--target` so the records are mirrored where git will not parse them as
+trailers; doing so is what created the second declaration.
+
+The rule was already right and the comparison was not. Exact commit and note
+mirrors are meant to be one logical record, with only divergent note payloads
+colliding — but the comparison weighed every trailer except `Record-Id`, while
+the mirroring stamps each block it writes with its own `Provenance: inherited
+<sha>`, by design. The two disagreed about what "same content" means, so a
+mirror written by the tool was never identical to the block it mirrored and the
+exact-mirror path could not fire for the case it exists for.
+
+A note is now recognised as its own commit's mirror when it sits on that
+commit's sha and matches the message block once the provenance stamp is set
+aside. **Only the stamp is forgiven, and only within one commit.** A note whose
+`Limit:` changed, one carrying a trailer the message does not, and one missing a
+trailer the message has all still collide and are still withheld — notes are
+remote-reachable, and divergent note content must not inherit an identity a
+human approved. Two different commits declaring one id and differing only in
+provenance still collide too, because there "which is current" is a real
+question.
+
+**The withholding message also stops making the operator guess.** It reported
+that a record was declared more than once without saying where either
+declaration was, and the reporter deleted a branch and rebuilt the index before
+finding the note. Each collision now names its own locations:
+
+```
+... r-branch890aa in 10a0f5d2's commit message and in its note on
+refs/notes/commitlore, which differ
+```
+
+**`before_change` reported a timeout that never happened (#889).** With
+unreadable Git history and a proposal supplied, the guard is skipped and never
+starts — and the response called that `guard_confidence: "timed-out"`. A
+completed Git failure presented as an expiry, with no guard execution and no
+elapsed time behind it. Measured against a directory that is not a repository:
+the whole call returned in about 37 ms claiming it had timed out.
+
+There is now a fourth value, `unavailable`, meaning a proposal was supplied and
+the guard could not run. `not-run` keeps its documented meaning — no proposal was
+supplied — so the two cases stay distinct, and `verification_gaps` still carries
+`history-unavailable` as the reason. The fail-closed behaviour is untouched:
+unreadable history is still reported as a gap and never as a verified empty
+answer.
+
+`timed-out` stays in the enum and is now emitted by nothing. F11 specifies a
+bounded guard leg that returns it on expiry; that bound was never implemented,
+and this branch was its only emitter. It is the specified name for a real
+expiry, and it stays unreachable until something actually bounds the guard and
+can say so from a measured elapsed time.
+
 ## 1.2.6
 
 A long session killed the process outright, and an upgrade nobody could see had

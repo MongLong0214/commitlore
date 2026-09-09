@@ -21,6 +21,7 @@ import { buildId, runtimeIdentity } from '../core/runtime-identity.js';
 import type { Command } from 'commander';
 
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
+import { NOTES_REF } from '../core/notes.js';
 import {
   CONSUMER_SCAN_BUDGET_MS,
   LIMIT_KEY,
@@ -63,6 +64,34 @@ const SECTIONS: readonly Section[] = [
 ];
 
 const SECTION_KEYS: readonly string[] = SECTIONS.map((section) => section.key);
+
+/**
+ * Where one collided `Record-Id`'s declarations actually are (#890).
+ *
+ * The three causes leave different traces, and the record already carries
+ * enough to tell them apart: more than one sha is two commits declaring the
+ * same identity, and a single sha contributing both sources is a note that
+ * diverged from the message it mirrors. Saying which costs a clause and saves
+ * the hunt — the operator who reported this deleted a branch and rebuilt the
+ * index before finding the note.
+ */
+const collisionSite = (record: GradedRecord): string => {
+  const id = record.recordId ?? 'a record with no id';
+  const shas = record.shas.map((sha) => sha.slice(0, 8));
+  if (shas.length > 1) return `${id} in commits ${shas.join(' and ')}`;
+  const at = shas[0] ?? record.sha.slice(0, 8);
+  if (record.sources.includes('commit') && record.sources.includes('notes')) {
+    return `${id} in ${at}'s commit message and in its note on ${NOTES_REF}, which differ`;
+  }
+  if (record.sources.includes('notes')) return `${id} in notes on ${NOTES_REF} at ${at}`;
+  return `${id} more than once in ${at}'s commit message`;
+};
+
+/** The first few sites, so one pathological repository cannot flood the line. */
+const collisionSites = (collisions: readonly GradedRecord[]): string => {
+  const named = collisions.slice(0, 3).map(collisionSite).join('; ');
+  return collisions.length > 3 ? `${named}; and ${collisions.length - 3} more` : named;
+};
 
 export const withholdBlocked = (result: QueryResult): QueryResult => {
   const blocked = result.records.filter(
@@ -133,8 +162,15 @@ export const withholdBlocked = (result: QueryResult): QueryResult => {
             // made in the same second declare it with different values
             // (issue #350). Naming only the first cause sends a reader
             // hunting for a note that is not there.
+            //
+            // Naming *none* of them sends them hunting too (#890). The
+            // reporter deleted a branch and rebuilt the index chasing the
+            // cause this sentence did not state. Each collision now says where
+            // its declarations are, which is the one thing the record already
+            // knows and this line was throwing away.
             `withheld the content of ${collisions.length} record(s) whose Record-Id is declared ` +
-              'more than once with no way to tell which declaration is current',
+              'more than once with no way to tell which declaration is current: ' +
+              collisionSites(collisions),
           ]),
     ],
   };

@@ -22,8 +22,24 @@
 import { type RenderedGuardMatch } from './guard.js';
 /** The three verification gaps this codebase checks for, in canonical order. */
 export type VerificationGap = 'history-unavailable' | 'shallow-history' | 'notes-unfetched' | 'unread-commits';
-/** Guard confidence enum — qualifies `possible_revival_matches` only. */
-export type GuardConfidence = 'not-run' | 'experimental' | 'timed-out';
+/**
+ * Guard confidence enum — qualifies `possible_revival_matches` only.
+ *
+ * - `not-run`      no `proposal` was supplied, so nothing was asked.
+ * - `experimental` the guard ran; the matches carry ADR-0020's grade.
+ * - `unavailable`  a proposal was supplied and the guard could not run. Today
+ *                  the only cause is unreadable history, which
+ *                  `verification_gaps` names (#889).
+ * - `timed-out`    the guard leg was cut short by its own bound.
+ *
+ * **Nothing emits `timed-out`.** F11 specifies a bounded guard leg that returns
+ * it on expiry, and that bound was never implemented — the value's only emitter
+ * was the unreadable-history branch below, which is not a timeout and never
+ * measured one. It stays in the enum because it is the specified name for a
+ * real expiry, and it stays unreachable until something actually bounds the
+ * guard and can say so from a measured elapsed time.
+ */
+export type GuardConfidence = 'not-run' | 'experimental' | 'unavailable' | 'timed-out';
 /** One active decision record, as surfaced to the caller. */
 export interface ActiveDecision {
     recordId: string | null;
