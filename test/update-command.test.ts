@@ -124,6 +124,42 @@ describe('T-1603 ADR-0037 is enforced, not described', () => {
     expect(report.latest).toBe('v98.0.0');
   });
 
+  /**
+   * #893: `--force` is documented as "act even when the newest release is not
+   * newer than this one", so it is what an operator reaches for when the
+   * version looks stuck. It acted on whatever the resolver had decided and
+   * printed `upgraded to v1.2.6` on a machine already running 1.2.6 — a
+   * success line for a reinstall of the same bytes, which is what made the
+   * operator believe an upgrade had happened.
+   */
+  it('--force names its target and refuses a no-op instead of reporting success', () => {
+    const current = `v${packageVersion()}`;
+    const out = execFileSync(process.execPath, [cli, 'upgrade', '--force'], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        COMMITLORE_INSTALL_SOURCE: remoteWithTags([current]),
+        HOME: scratch('home-force-noop'),
+      },
+    });
+
+    expect(out).toContain('nothing to install');
+    expect(out).toContain('Nothing was changed');
+    expect(out, 'reported an upgrade it did not perform').not.toContain('upgraded to');
+  });
+
+  it('names the source the answer came from', () => {
+    const source = remoteWithTags(['v96.0.0']);
+    const out = execFileSync(process.execPath, [cli, 'upgrade', '--check'], {
+      encoding: 'utf8',
+      env: { ...process.env, COMMITLORE_INSTALL_SOURCE: source, HOME: scratch('home-src-cli') },
+    });
+
+    // "this is the newest release" and "the newest release I was told about
+    // yesterday" were the same sentence; the source is what separates them.
+    expect(out).toContain(`source     ${source}`);
+  });
+
   it('starts nothing but the check it owns', () => {
     // A comment saying the CLI does not replace itself is not a guard (#723).
     // `git` is replaced with a recorder for the length of the run; anything
@@ -160,11 +196,24 @@ describe('T-1603 ADR-0037 is enforced, not described', () => {
  * binary printing it. Nothing was wrong with the lookup; the cache had simply
  * outlived the fact.
  *
- * A `latest` older than the version already running cannot be the latest, and
- * that is the whole rule. Equality still serves from the cache, or the cache
- * would never serve the case it exists for.
+ * #893 finished it. 1.2.6 re-asked only when the cached tag was strictly older
+ * than the running version, reasoning that the equal case is every up-to-date
+ * machine and re-asking it would spawn `git ls-remote` on every upgrade. The
+ * equal case is precisely the one that goes stale: a machine on 1.2.6 with
+ * `v1.2.6` cached kept being told it was current for the rest of the day after
+ * 1.2.7 shipped, and `--force` reinstalled the version it already had.
+ *
+ * The cost was measured wrong rather than weighed wrong. `buildReport` has one
+ * caller — the `upgrade` command — and the day-long cache exists for the
+ * ambient callers (`core/update-notice.ts`, and `latestReleaseSync` under
+ * `doctor` and `init`), none of which come through here. So the command that
+ * exists to ask, asks.
+ *
+ * A test here previously asserted the opposite ("still serves the cache when it
+ * agrees with the running version"). It pinned the defect, and it is replaced
+ * rather than deleted so the reversal is visible.
  */
-describe('#885 a cached latest older than the running version is re-asked', () => {
+describe('#885/#893 upgrade does not serve a stale latest', () => {
   it('re-asks rather than reporting a tag older than the binary printing it', async () => {
     const home = scratch('home-stale');
 
@@ -185,7 +234,11 @@ describe('#885 a cached latest older than the running version is re-asked', () =
     expect(report.updateAvailable).toBe(true);
   });
 
-  it('still serves the cache when it agrees with the running version', async () => {
+  // The #893 case, and the one the replaced test asserted backwards. A machine
+  // that is up to date today is the machine that will be out of date tomorrow,
+  // so "the cached answer agrees with the running version" is not a reason to
+  // stop asking — it is the state every stale answer starts from.
+  it('asks again even when the cached answer agrees with the running version', async () => {
     const home = scratch('home-current');
     const current = `v${packageVersion()}`;
 
@@ -193,16 +246,26 @@ describe('#885 a cached latest older than the running version is re-asked', () =
       COMMITLORE_INSTALL_SOURCE: remoteWithTags([current]),
       HOME: home,
     });
-    expect(primed.latest).toBe(current);
+    expect(primed.latest, 'the cache was not primed').toBe(current);
 
-    // The remote has moved, but "up to date" is exactly the answer the cache
-    // exists to hold. Re-asking here would make the cache decorative.
     const report = await buildReport({
       COMMITLORE_INSTALL_SOURCE: remoteWithTags([current, 'v99.0.0']),
       HOME: home,
     });
 
-    expect(report.latest).toBe(current);
-    expect(report.updateAvailable).toBe(false);
+    expect(report.latest).toBe('v99.0.0');
+    expect(report.updateAvailable).toBe(true);
+  });
+
+  // The reporter could not tell "newest" from "newest as of yesterday" from the
+  // output, so the answer now says what it consulted.
+  it('names the source it resolved the answer from', async () => {
+    const source = remoteWithTags(['v99.0.0']);
+    const report = await buildReport({
+      COMMITLORE_INSTALL_SOURCE: source,
+      HOME: scratch('home-source'),
+    });
+
+    expect(report.source).toBe(source);
   });
 });
