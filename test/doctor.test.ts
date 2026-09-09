@@ -1303,12 +1303,84 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     rebuildIndex(openIndex({ cwd: repo }));
   };
 
+  /**
+   * A branch closed without merging (#888): its commits are unreachable from
+   * HEAD exactly as a squashed branch's are, and its content never lands. It
+   * touches a path of its own so the two cases stay distinguishable by content.
+   */
+  const abandonBranch = (repo: string, recordId: string): void => {
+    git(repo, ['checkout', '--quiet', '-b', 'abandoned']);
+    writeFileSync(join(repo, 'abandoned.ts'), 'export const y = 2;\n');
+    git(repo, ['add', '--', 'abandoned.ts']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      `add the abandoned work\n\nLimit: superseded before review\nRecord-Id: ${recordId}\n`,
+    ]);
+    git(repo, ['checkout', '--quiet', 'main']);
+  };
+
   it('skips when no local branch looks like a squash source', () => {
     const repo = initRepo('squash-conservation-none');
     git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'first']);
 
     const report = runDoctor({ cwd: repo });
     expect(statusOf(report, 'squash-conservation')).toBe('skipped');
+  });
+
+  /**
+   * #888: a branch closed without merging is unreachable from HEAD in exactly
+   * the same way a squashed one is, so the check called both squashes and
+   * prescribed `squash-preserve` for both. That prescription is not merely
+   * unnecessary on an abandoned branch — `--target` mirrors records onto
+   * whatever commit it is handed without checking the commit contains the
+   * work, so following it writes provenance for work that was deliberately
+   * discarded.
+   *
+   * Reported against a real pull request closed as superseded: every file it
+   * touched already existed on `main` in an equal or newer version, and there
+   * was no "commit that squashed it" for `--target` to name.
+   */
+  it('does not prescribe squash-preserve for a branch that was never merged', () => {
+    const repo = initRepo('squash-conservation-abandoned');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    abandonBranch(repo, 'r-abandoned01');
+
+    const report = runDoctor({ cwd: repo });
+    const entry = report.checks.find((check) => check.id === 'squash-conservation');
+
+    // The record is still reported — the finding set does not change, only the
+    // claim and the remedy. Silence here would be the worse failure.
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('r-abandoned01');
+    expect(entry?.detail).toContain('never merged');
+    expect(entry?.fix, 'prescribed a remedy that would manufacture provenance').not.toContain(
+      'squash-preserve',
+    );
+    expect(entry?.evidence['unmerged_count']).toBe('1');
+  });
+
+  it('still prescribes squash-preserve for the squashed branch when both kinds are present', () => {
+    const repo = initRepo('squash-conservation-mixed');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    abandonBranch(repo, 'r-mixedaband1');
+    growFeatureBranch(repo, 'r-mixedsquash');
+    squashWithoutPreserving(repo);
+
+    const report = runDoctor({ cwd: repo });
+    const entry = report.checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    // Both are reported, and each is described by what actually happened to it.
+    expect(entry?.detail).toContain('r-mixedsquash');
+    expect(entry?.detail).toContain('r-mixedaband1');
+    expect(entry?.detail).toContain('so it was squashed');
+    expect(entry?.detail).toContain('never merged');
+    // The remedy survives for the branch that earns it.
+    expect(entry?.fix).toContain('squash-preserve');
+    expect(entry?.evidence['squashed_count']).toBe('1');
+    expect(entry?.evidence['unmerged_count']).toBe('1');
   });
 
   it('warns when a squashed branch left a Record-Id behind that HEAD cannot find', () => {
