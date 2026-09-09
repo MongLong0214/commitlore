@@ -4,6 +4,56 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.11
+
+A third backfill round in the same repository, and the two failures it found are
+both the tool answering a question nobody asked.
+
+**A wholly valid draft could attach zero records and call it convergence
+(#907).** `--draft` applies in batches over the target list and stops after two
+that produce nothing. An entry whose `records` is an empty array produces
+nothing — and that is the honest answer for a commit the session found no
+context in, so a well-formed draft is mostly made of them. A 40-commit draft
+whose records all sat at target #21 or beyond therefore converged on the twenty
+honest empties above them and attached nothing, reporting `stopped: converged`
+at exit 0. A reader who did not diff the note mirror would conclude the draft
+was rejected on content.
+
+Worse, the workaround it rewarded was padding: the reporter had to insert a
+real record among the early targets to keep the walk alive long enough to reach
+the later ones.
+
+Only entries that claim at least one record are worked now, so an empty batch
+means what convergence assumes it means — records that failed verification, not
+commits nobody drafted for. A malformed `records` is still worked, because it
+has to reach the parser and be reported rather than be dropped for looking
+empty.
+
+**Running outside a repository reported a zero-length history as a normal walk
+(#907).** Every sha came back `unknown-commit` under `history: 0 commits
+walked`, at exit 0 — visually identical to the stale-window failure fixed in
+1.2.10, so the natural response was to raise `--limit`, which cannot help when
+there is no repository to walk. The reporter hit it three times chaining `cd
+<scratchpad> && commitlore backfill`. It now refuses the way git does, at exit
+2.
+
+**The `Ruled-out` rejection described the wrong fix (#902, reopened by
+measurement).** The message said to quote where the alternative "was actually
+turned down", which reads as *quote more context*. Three drafting rounds
+answered it by selecting quotes that argued the alternative would be bad — a
+counterfactual consequence — and all seven of the third round's records failed.
+The checker scans for the act of evaluating and dropping: considered, rejected,
+ruled out, decided against, abandoned, superseded, `instead`, `rather than`. An
+argument against the alternative is not one of those.
+
+Both the rejection message and the recording contract now say that, and say
+which half is not enough. The contract matters more: it is read before a draft
+is written, and the rejection is read after the record is already discarded.
+
+The bar itself did not move. Widening the marker list was ruled out previously
+and stays ruled out — a rule that accepts reasoning about an alternative would
+accept most prose that merely mentions one.
+
 ## 1.2.10
 
 Two reports about `backfill`, and one habit under both: the command reasons in
