@@ -375,28 +375,60 @@ describe('backfill forcing provenance', () => {
   });
 });
 
+/**
+ * Convergence used to reach into the draft (#901).
+ *
+ * `runBatches` stops after two consecutive batches that produced nothing, and
+ * apply mode walked every target — so a commit the draft named could sit past
+ * the stop condition and never be worked. The previous test here pinned exactly
+ * that: "the draft covers only the oldest target, which sits in the third batch
+ * — reachable only if the run ignores its own stop condition", asserting
+ * `attached: 0` and no notes. That is the behaviour the reporter hit; raising
+ * `--limit` appeared to fix a window when it was also giving the walk more
+ * chances to arrive before converging.
+ *
+ * A draft names the commits it means, so apply mode now works exactly those.
+ * Convergence still applies to them — an empty batch there means records that
+ * failed verification, which is a real reason to stop — and the cost it was
+ * built for lives in prompt mode, where each target spends a prompt rather than
+ * a map lookup.
+ */
 describe('backfill convergence', () => {
-  let fixture: Fixture;
-  let result: BackfillResult;
-
-  beforeAll(() => {
-    fixture = buildFixture('backfill-converge');
-    /* The draft covers only the oldest target, which sits in the third batch —
-       reachable only if the run ignores its own stop condition. */
+  it('works a drafted commit that sits past where the walk used to converge', () => {
+    const fixture = buildFixture('backfill-converge');
     const draft = draftFile(fixture, {
       commits: [{ sha: fixture.upload, records: [uploadRecord()] }],
     });
-    result = run(fixture, { draft, batchSize: 1 });
+
+    const result = run(fixture, { draft, batchSize: 1 });
+
+    expect(result.report.attached).toBe(1);
+    expect(noteShas(fixture.dir)).toEqual([fixture.upload]);
   });
 
-  it('stops after two consecutive batches that produced nothing', () => {
+  it('still converges on consecutive drafted commits that produce nothing', () => {
+    const fixture = buildFixture('backfill-converge-fail');
+    // Three drafted commits whose quotes are not in their sources, so every
+    // batch produces nothing and the stop condition is the one under test.
+    const absent = (sha: string) => ({
+      sha,
+      records: [
+        {
+          trailers: [{ key: 'Limit', value: 'a limit nobody wrote' }],
+          evidence: [
+            { key: 'Limit', source: 'transcript', quote: 'no such sentence anywhere', locator: 'L1-L1' },
+          ],
+        },
+      ],
+    });
+    const draft = draftFile(fixture, {
+      commits: [absent(fixture.tidy), absent(fixture.parser), absent(fixture.upload)],
+    });
+
+    const result = run(fixture, { draft, batchSize: 1 });
+
     expect(result.report.stoppedBy).toBe('converged');
     expect(result.report.batches).toBe(2);
-  });
-
-  it('does not walk the whole target list once it has converged', () => {
-    expect(result.report.targets).toBe(3);
-    expect(result.report.batches).toBeLessThan(result.report.targets);
     expect(result.report.attached).toBe(0);
     expect(noteShas(fixture.dir)).toEqual([]);
   });

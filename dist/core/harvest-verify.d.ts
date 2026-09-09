@@ -87,6 +87,17 @@ export declare const verifyDraft: (draft: DraftRecord[], sources: Sources) => Ve
 /** One line of summary, then one line per discarded record. For terminals and logs. */
 export declare const formatResult: (result: VerifyResult) => string;
 /**
+ * What a session should do about each reason. Instructions, not explanations:
+ * the session is being asked to act, and "drop the record" is on every one of
+ * them because dropping is always a correct answer here.
+ */
+/**
+ * Exported so `backfill` can print it too (#902). `harvest` shows it in its
+ * repair round; backfill has no repair round by design, which left its authors
+ * with a reason and no statement of what shape would pass.
+ */
+export declare const REPAIR_GUIDANCE: Readonly<Record<RejectionReason, string>>;
+/**
  * Builds the text handed back to the draft generator for another attempt.
  *
  * This function generates a prompt; it does not run one. The CLI holds no key

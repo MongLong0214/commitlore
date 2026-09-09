@@ -378,7 +378,12 @@ export const formatResult = (result) => {
  * the session is being asked to act, and "drop the record" is on every one of
  * them because dropping is always a correct answer here.
  */
-const REPAIR_GUIDANCE = {
+/**
+ * Exported so `backfill` can print it too (#902). `harvest` shows it in its
+ * repair round; backfill has no repair round by design, which left its authors
+ * with a reason and no statement of what shape would pass.
+ */
+export const REPAIR_GUIDANCE = {
     'evidence-not-found': 'Copy the quote out of the transcript or the diff character for character. ' +
         'Only whitespace may differ. If you cannot find the sentence, drop the record.',
     'evidence-missing': 'Add a citation for every decision-context key the record carries, or drop the record.',

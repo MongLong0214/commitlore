@@ -16,15 +16,44 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import { dataRoot, performUpgrade, pointsAtTarget, resolvedCurrent } from '../src/commands/update.js';
 
-const scratch = (label: string): string => mkdtempSync(join(tmpdir(), `cl-upg-${label}-`));
+const temporaries: string[] = [];
+const scratch = (label: string): string => {
+  const dir = mkdtempSync(join(tmpdir(), `cl-upg-${label}-`));
+  temporaries.push(dir);
+  return dir;
+};
+
+afterAll(() => {
+  for (const dir of temporaries) rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * #903: written once for the whole file. A fresh executable per run is a fresh
+ * macOS provenance evaluation per run, keyed on file identity, so the verdict
+ * cache can never hit; the log stays per-run by arriving through the
+ * environment rather than by living beside the shims.
+ */
+const CALL_LOG_VAR = 'COMMITLORE_TEST_CALL_LOG';
+let shimDir: string | undefined;
+const shims = (): string => {
+  if (shimDir !== undefined) return shimDir;
+  const dir = scratch('bin');
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const line = (name: string) => `echo "${name} $*" >> "\${${CALL_LOG_VAR}:-/dev/null}"`;
+  writeFileSync(join(dir, 'git'), `#!/bin/sh\n${line('git')}\nexec ${realGit} "$@"\n`);
+  writeFileSync(join(dir, 'sh'), `#!/bin/sh\n${line('sh')}\nexec /bin/sh "$@"\n`);
+  execFileSync('chmod', ['+x', join(dir, 'git'), join(dir, 'sh')]);
+  shimDir = dir;
+  return dir;
+};
 
 /** A data root with `old` installed and `current` pointing at it. */
 const machineOn = (old: string): { home: string; root: string } => {
@@ -213,17 +242,19 @@ describe('T-1606 the read-only form stays read-only', () => {
 
   /** Records everything the run starts, by shadowing the binaries on PATH. */
   const runRecorded = (args: readonly string[], extra: NodeJS.ProcessEnv): string[] => {
-    const bin = scratch('bin');
-    const log = join(bin, 'calls.log');
-    const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
-    writeFileSync(join(bin, 'git'), `#!/bin/sh\necho "git $@" >> ${log}\nexec ${realGit} "$@"\n`);
-    writeFileSync(join(bin, 'sh'), `#!/bin/sh\necho "sh $@" >> ${log}\nexec /bin/sh "$@"\n`);
-    execFileSync('chmod', ['+x', join(bin, 'git'), join(bin, 'sh')]);
+    const bin = shims();
+    const log = join(scratch('log'), 'calls.log');
 
     try {
       execFileSync(process.execPath, [CLI, 'upgrade', ...args], {
         encoding: 'utf8',
-        env: { ...process.env, PATH: `${bin}:${process.env['PATH'] ?? ''}`, HOME: scratch('home'), ...extra },
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env['PATH'] ?? ''}`,
+          HOME: scratch('home'),
+          [CALL_LOG_VAR]: log,
+          ...extra,
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch {
