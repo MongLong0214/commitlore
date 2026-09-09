@@ -164,8 +164,17 @@ export const beforeChange = (opts) => {
             confidence = 'experimental';
         }
         else {
-            // History unavailable but proposal given — guard cannot run meaningfully
-            confidence = 'timed-out';
+            // History unavailable but a proposal was given, so the guard is skipped
+            // here and never starts. This reported `timed-out` (#889): a completed
+            // git failure presented as an expiry, with no guard execution and no
+            // elapsed time behind it. Measured against a directory that is not a
+            // repository — `git rev-parse --git-dir` exits 128 — the whole call
+            // returned in ~37 ms claiming it had timed out.
+            //
+            // The gap already says why in `verification_gaps`; this says only that
+            // the guard did not produce an answer, which is the honest reading of an
+            // empty `possible_revival_matches` here.
+            confidence = 'unavailable';
         }
     }
     const cacheKey = buildCacheKey(head, path, opts.proposal, at);

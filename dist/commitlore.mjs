@@ -14878,6 +14878,7 @@ import { Buffer as Buffer2, isUtf8 } from "node:buffer";
 
 // src/core/stale.ts
 var RECORD_ID_KEY2 = "Record-Id";
+var PROVENANCE_KEY = "Provenance";
 var SUPERSEDES_KEY = "Supersedes";
 var FOLLOWS_KEY = "Follows";
 var EXPIRES_KEY = "Expires";
@@ -15053,7 +15054,20 @@ var undecidableExpiry = (ordered) => {
   }
   return found;
 };
-var hasAmbiguousGroup = (group) => sharesACommit(group) || instantConflicts(group).size > 0 || group.some((record2) => record2.source === "notes") && new Set(group.map(payloadSignature)).size > 1;
+var payloadSignatureWithoutProvenance = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2 && trailer.key !== PROVENANCE_KEY).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
+var isOwnCommitMirror = (record2, group) => {
+  if (record2.source !== "notes" || record2.sha === void 0) return false;
+  const signature = payloadSignatureWithoutProvenance(record2);
+  return group.some(
+    (sibling) => sibling.source === "commit" && sibling.sha === record2.sha && payloadSignatureWithoutProvenance(sibling) === signature
+  );
+};
+var notesPayloadDiverges = (group) => {
+  if (!group.some((record2) => record2.source === "notes")) return false;
+  const rivals = group.filter((record2) => !isOwnCommitMirror(record2, group));
+  return new Set(rivals.map(payloadSignature)).size > 1;
+};
+var hasAmbiguousGroup = (group) => sharesACommit(group) || instantConflicts(group).size > 0 || notesPayloadDiverges(group);
 var hasAmbiguousIdCollision = (records) => [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
 var hasDeclaredSuccession = (recordId, ordered) => {
   let declarations2 = 0;
@@ -15106,7 +15120,7 @@ var sharesACommit = (group) => {
 var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 
 // src/core/grade.ts
-var PROVENANCE_KEY = "Provenance";
+var PROVENANCE_KEY2 = "Provenance";
 var BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
 var INJECTION_PATTERNS = [
   {
@@ -15508,7 +15522,7 @@ var scanRecord = (record2) => {
 };
 var provenanceOf = (record2) => {
   if (record2.provenance !== void 0) return record2.provenance;
-  const raw = trailerValues(record2.trailers, PROVENANCE_KEY)[0];
+  const raw = trailerValues(record2.trailers, PROVENANCE_KEY2)[0];
   return parseProvenance(raw) ?? { kind: "unknown" };
 };
 var lifecycleOf = (record2, at, folded) => {
@@ -15715,7 +15729,7 @@ var RULED_OUT_KEY = "Ruled-out";
 var WARN_KEY = "Warn";
 var CONSUMER_SCAN_BUDGET_MS = 3e3;
 var RECORD_ID_KEY3 = "Record-Id";
-var PROVENANCE_KEY2 = "Provenance";
+var PROVENANCE_KEY3 = "Provenance";
 var LIFECYCLE_KEYS = [RECORD_ID_KEY3, "Supersedes", "Expires"];
 var SYNTHETIC_PREFIX = "commit:";
 var MAX_ALIASES = 64;
@@ -16045,7 +16059,7 @@ var mergeByIdentity = (records, states) => {
     }
     const state = states.get(identity);
     const recordId = trailerValue2(trailers, RECORD_ID_KEY3);
-    const provenanceValue = trailerValue2(trailers, PROVENANCE_KEY2);
+    const provenanceValue = trailerValue2(trailers, PROVENANCE_KEY3);
     const provenance = parseProvenance(provenanceValue);
     const identityCollision = hasAmbiguousIdCollision(ordered);
     merged.push({
@@ -17107,7 +17121,7 @@ var prepareCaptureContextReadOnly = (opts) => {
 
 // src/core/capture-verify.ts
 import { createHash as createHash4 } from "node:crypto";
-var PROVENANCE_KEY3 = "Provenance";
+var PROVENANCE_KEY4 = "Provenance";
 var sha2562 = (input) => createHash4("sha256").update(input).digest("hex");
 var recordIdOf = (record2) => record2.trailers.find((t) => t.key === "Record-Id")?.value;
 var recordIdSeed = (record2) => record2.trailers.filter((trailer) => trailer.key !== "Record-Id").map((trailer) => JSON.stringify([trailer.key, trailer.value])).sort().join("\n");
@@ -17330,9 +17344,9 @@ var runVerifyCaptureRecords = (opts) => {
     if (resolvePolicy(cwd).policy.mode === "auto") {
       for (const verified of accepted) {
         const trailers = verified.record.trailers.filter(
-          (trailer) => trailer.key !== PROVENANCE_KEY3
+          (trailer) => trailer.key !== PROVENANCE_KEY4
         );
-        trailers.push({ key: PROVENANCE_KEY3, value: "drafted" });
+        trailers.push({ key: PROVENANCE_KEY4, value: "drafted" });
         verified.record.trailers = trailers;
       }
     }
@@ -21405,7 +21419,7 @@ var checkHistoryDepth = (ctx) => hasShallowHistory(ctx.opts.cwd ?? process.cwd()
 
 // src/core/squash.ts
 var RECORD_ID_KEY4 = "Record-Id";
-var PROVENANCE_KEY4 = "Provenance";
+var PROVENANCE_KEY5 = "Provenance";
 var EXPIRES_KEY2 = "Expires";
 var VERSION_KEY = "CommitLore-Version";
 var UNIT = "";
@@ -21573,7 +21587,7 @@ var foldGroup = (members) => {
   const slots = /* @__PURE__ */ new Map();
   for (const record2 of members) {
     for (const trailer of record2.trailers) {
-      if (trailer.key === PROVENANCE_KEY4 || trailer.key === RECORD_ID_KEY4) continue;
+      if (trailer.key === PROVENANCE_KEY5 || trailer.key === RECORD_ID_KEY4) continue;
       if (SINGLE_VALUED.has(trailer.key)) {
         const list = candidates.get(trailer.key) ?? [];
         list.push({ value: trailer.value, sha: record2.sha });
@@ -21608,7 +21622,7 @@ var planSquash = (records) => {
     const block = [...payload];
     if (group.recordId !== void 0) block.push({ key: RECORD_ID_KEY4, value: group.recordId });
     if (newest !== void 0) {
-      block.push({ key: PROVENANCE_KEY4, value: `inherited ${newest.sha}` });
+      block.push({ key: PROVENANCE_KEY5, value: `inherited ${newest.sha}` });
     }
     return block;
   });
@@ -21690,6 +21704,31 @@ var squashCandidates = (ctx, head) => {
     branchesChecked: branches.length
   };
 };
+var branchContentFate = (ctx, candidate, head) => {
+  const { opts, git: git2 } = ctx;
+  const changed = git2(
+    ["diff", "--name-only", `${candidate.base}..${candidate.sha}`],
+    gitOptions2(opts)
+  );
+  if (changed.code !== 0) return "unknown";
+  const paths = changed.stdout.split("\n").filter((line2) => line2 !== "");
+  if (paths.length === 0) return "unknown";
+  let matching = 0;
+  let missingFromHead = 0;
+  for (const path2 of paths) {
+    const onBranch = git2(["rev-parse", "--verify", "--quiet", `${candidate.sha}:${path2}`], gitOptions2(opts));
+    const onHead = git2(["rev-parse", "--verify", "--quiet", `${head}:${path2}`], gitOptions2(opts));
+    if (onBranch.code !== 0) return "unknown";
+    if (onHead.code !== 0) {
+      missingFromHead += 1;
+      continue;
+    }
+    if (onHead.stdout.trim() === onBranch.stdout.trim()) matching += 1;
+  }
+  if (matching === paths.length) return "present-in-head";
+  if (missingFromHead === paths.length) return "absent-from-head";
+  return "unknown";
+};
 var scanLimitDetail = (scan2) => scan2.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES ? `; only the first ${MAX_SQUASH_CANDIDATE_BRANCHES} of ${scan2.branchesSeen} local branches were checked` : "";
 var scanEvidence = (scan2, evidence) => scan2.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES ? {
   ...evidence,
@@ -21741,6 +21780,7 @@ var checkSquashConservation = (ctx) => {
   const lost = [];
   let uncheckable = 0;
   let checked = 0;
+  const headSha2 = head.stdout.trim();
   for (const candidate of candidates) {
     let records;
     try {
@@ -21762,8 +21802,11 @@ var checkSquashConservation = (ctx) => {
         runQuery({ cwd, allHistory: true }).records.map((record2) => record2.recordId).filter((recordId) => recordId !== void 0)
       );
     }
+    let fate = null;
     for (const recordId of ids) {
-      if (!known.has(recordId)) lost.push({ branch: candidate.branch, recordId });
+      if (known.has(recordId)) continue;
+      fate ??= branchContentFate(ctx, candidate, headSha2);
+      lost.push({ branch: candidate.branch, recordId, fate });
     }
   }
   if (checked === 0) {
@@ -21788,15 +21831,30 @@ var checkSquashConservation = (ctx) => {
     );
   }
   if (lost.length > 0) {
-    const named = lost.slice(0, 5).map((entry) => `${entry.recordId} (${entry.branch})`).join(", ");
+    const FATE_NOTE = {
+      "present-in-head": "its changes are in HEAD, so it was squashed",
+      "absent-from-head": "none of its changes are in HEAD, so it was never merged",
+      unknown: "whether its changes reached HEAD could not be determined"
+    };
+    const named = lost.slice(0, 5).map((entry) => `${entry.recordId} (${entry.branch} \u2014 ${FATE_NOTE[entry.fate]})`).join(", ");
     const more = lost.length > 5 ? `, and ${lost.length - 5} more` : "";
+    const preservable = lost.filter((entry) => entry.fate !== "absent-from-head");
+    const abandonedOnly = preservable.length === 0;
+    const fix = abandonedOnly ? (
+      // #888: this used to prescribe squash-preserve here too. `--target`
+      // mirrors the records onto whatever commit it is handed without
+      // checking that the commit contains the work, so running it on a
+      // branch that was closed unmerged writes provenance for work that was
+      // deliberately discarded.
+      "nothing to preserve \u2014 these branches were closed without merging, and their records describe work HEAD does not contain; delete the branches, or leave them"
+    ) : `commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, then commit or attach the result` + (preservable.length === lost.length ? "" : ` (only the ${preservable.length} on a branch whose changes reached HEAD)`);
     return check(
       id2,
       category2,
       title2,
       "warn",
       `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan2)}`,
-      "commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, then commit or attach the result",
+      fix,
       false,
       void 0,
       {
@@ -21804,7 +21862,10 @@ var checkSquashConservation = (ctx) => {
           candidates: String(candidates.length),
           checked: String(checked),
           uncheckable: String(uncheckable),
-          lost_count: String(lost.length)
+          lost_count: String(lost.length),
+          squashed_count: String(lost.filter((entry) => entry.fate === "present-in-head").length),
+          unmerged_count: String(lost.filter((entry) => entry.fate === "absent-from-head").length),
+          undetermined_count: String(lost.filter((entry) => entry.fate === "unknown").length)
         })
       }
     );
@@ -35105,6 +35166,21 @@ var SECTIONS = [
   { label: "warnings", key: WARN_KEY }
 ];
 var SECTION_KEYS = SECTIONS.map((section2) => section2.key);
+var collisionSite = (record2) => {
+  const id2 = record2.recordId ?? "a record with no id";
+  const shas = record2.shas.map((sha) => sha.slice(0, 8));
+  if (shas.length > 1) return `${id2} in commits ${shas.join(" and ")}`;
+  const at = shas[0] ?? record2.sha.slice(0, 8);
+  if (record2.sources.includes("commit") && record2.sources.includes("notes")) {
+    return `${id2} in ${at}'s commit message and in its note on ${NOTES_REF}, which differ`;
+  }
+  if (record2.sources.includes("notes")) return `${id2} in notes on ${NOTES_REF} at ${at}`;
+  return `${id2} more than once in ${at}'s commit message`;
+};
+var collisionSites = (collisions) => {
+  const named = collisions.slice(0, 3).map(collisionSite).join("; ");
+  return collisions.length > 3 ? `${named}; and ${collisions.length - 3} more` : named;
+};
 var withholdBlocked = (result) => {
   const blocked2 = result.records.filter(
     (record2) => record2.trust === "blocked" && record2.withheldTrailerKeys === void 0
@@ -35161,7 +35237,13 @@ var withholdBlocked = (result) => {
         // made in the same second declare it with different values
         // (issue #350). Naming only the first cause sends a reader
         // hunting for a note that is not there.
-        `withheld the content of ${collisions.length} record(s) whose Record-Id is declared more than once with no way to tell which declaration is current`
+        //
+        // Naming *none* of them sends them hunting too (#890). The
+        // reporter deleted a branch and rebuilt the index chasing the
+        // cause this sentence did not state. Each collision now says where
+        // its declarations are, which is the one thing the record already
+        // knows and this line was throwing away.
+        `withheld the content of ${collisions.length} record(s) whose Record-Id is declared more than once with no way to tell which declaration is current: ` + collisionSites(collisions)
       ]
     ]
   };
@@ -35686,7 +35768,7 @@ var beforeChange = (opts) => {
       matches = guardResult.matches.map(renderGuardMatch);
       confidence = "experimental";
     } else {
-      confidence = "timed-out";
+      confidence = "unavailable";
     }
   }
   const cacheKey = buildCacheKey(head, path2, opts.proposal, at);

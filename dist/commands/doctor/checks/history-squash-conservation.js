@@ -51,6 +51,51 @@ const squashCandidates = (ctx, head) => {
         branchesChecked: branches.length,
     };
 };
+/**
+ * Compares blob ids per touched path rather than trees or patch ids.
+ *
+ * `git cherry` and `patch-id` cannot answer this: a squash collapses N commits
+ * into one whose diff matches none of them individually, so a genuine squash
+ * reads as "not applied" to both. `merge-tree --write-tree` would answer it
+ * directly but needs Git 2.38, and this project declares no Git floor —
+ * `git rev-parse <rev>:<path>` works everywhere.
+ *
+ * Deliberately asymmetric. `present-in-head` demands that *every* touched path
+ * resolve to the same blob in HEAD, and `absent-from-head` that *no* touched
+ * path exists in HEAD at all. A squash whose files `main` has since edited
+ * satisfies neither and lands on `unknown`, which still prescribes preserving —
+ * the direction that cannot lose a record.
+ */
+const branchContentFate = (ctx, candidate, head) => {
+    const { opts, git } = ctx;
+    const changed = git(['diff', '--name-only', `${candidate.base}..${candidate.sha}`], gitOptions(opts));
+    if (changed.code !== 0)
+        return 'unknown';
+    const paths = changed.stdout.split('\n').filter((line) => line !== '');
+    if (paths.length === 0)
+        return 'unknown';
+    let matching = 0;
+    let missingFromHead = 0;
+    for (const path of paths) {
+        const onBranch = git(['rev-parse', '--verify', '--quiet', `${candidate.sha}:${path}`], gitOptions(opts));
+        const onHead = git(['rev-parse', '--verify', '--quiet', `${head}:${path}`], gitOptions(opts));
+        // A path deleted by the branch has no blob on either side; it says nothing
+        // either way, so it is neither a match nor a miss.
+        if (onBranch.code !== 0)
+            return 'unknown';
+        if (onHead.code !== 0) {
+            missingFromHead += 1;
+            continue;
+        }
+        if (onHead.stdout.trim() === onBranch.stdout.trim())
+            matching += 1;
+    }
+    if (matching === paths.length)
+        return 'present-in-head';
+    if (missingFromHead === paths.length)
+        return 'absent-from-head';
+    return 'unknown';
+};
 const scanLimitDetail = (scan) => scan.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES
     ? `; only the first ${MAX_SQUASH_CANDIDATE_BRANCHES} of ${scan.branchesSeen} local branches were checked`
     : '';
@@ -113,6 +158,7 @@ export const checkSquashConservation = (ctx) => {
     const lost = [];
     let uncheckable = 0;
     let checked = 0;
+    const headSha = head.stdout.trim();
     for (const candidate of candidates) {
         let records;
         try {
@@ -139,9 +185,14 @@ export const checkSquashConservation = (ctx) => {
                 .records.map((record) => record.recordId)
                 .filter((recordId) => recordId !== undefined));
         }
+        // Classified once per branch, and only when the branch has actually lost
+        // something — an ok run pays nothing for it.
+        let fate = null;
         for (const recordId of ids) {
-            if (!known.has(recordId))
-                lost.push({ branch: candidate.branch, recordId });
+            if (known.has(recordId))
+                continue;
+            fate ??= branchContentFate(ctx, candidate, headSha);
+            lost.push({ branch: candidate.branch, recordId, fate });
         }
     }
     if (checked === 0) {
@@ -156,18 +207,44 @@ export const checkSquashConservation = (ctx) => {
         });
     }
     if (lost.length > 0) {
+        const FATE_NOTE = {
+            'present-in-head': 'its changes are in HEAD, so it was squashed',
+            'absent-from-head': 'none of its changes are in HEAD, so it was never merged',
+            unknown: 'whether its changes reached HEAD could not be determined',
+        };
         const named = lost
             .slice(0, 5)
-            .map((entry) => `${entry.recordId} (${entry.branch})`)
+            .map((entry) => `${entry.recordId} (${entry.branch} — ${FATE_NOTE[entry.fate]})`)
             .join(', ');
         const more = lost.length > 5 ? `, and ${lost.length - 5} more` : '';
-        return check(id, category, title, 'warn', `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan)}`, 'commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ' +
-            'then commit or attach the result', false, undefined, {
+        // Only branches whose work actually landed are worth preserving records
+        // for. `unknown` is grouped with them deliberately: prescribing a
+        // preservation that turns out to be unnecessary costs a discarded plan,
+        // while withholding it from a real squash loses the record for good.
+        const preservable = lost.filter((entry) => entry.fate !== 'absent-from-head');
+        const abandonedOnly = preservable.length === 0;
+        const fix = abandonedOnly
+            ? // #888: this used to prescribe squash-preserve here too. `--target`
+                // mirrors the records onto whatever commit it is handed without
+                // checking that the commit contains the work, so running it on a
+                // branch that was closed unmerged writes provenance for work that was
+                // deliberately discarded.
+                'nothing to preserve — these branches were closed without merging, and their records ' +
+                    'describe work HEAD does not contain; delete the branches, or leave them'
+            : `commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ` +
+                `then commit or attach the result` +
+                (preservable.length === lost.length
+                    ? ''
+                    : ` (only the ${preservable.length} on a branch whose changes reached HEAD)`);
+        return check(id, category, title, 'warn', `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan)}`, fix, false, undefined, {
             evidence: scanEvidence(scan, {
                 candidates: String(candidates.length),
                 checked: String(checked),
                 uncheckable: String(uncheckable),
                 lost_count: String(lost.length),
+                squashed_count: String(lost.filter((entry) => entry.fate === 'present-in-head').length),
+                unmerged_count: String(lost.filter((entry) => entry.fate === 'absent-from-head').length),
+                undetermined_count: String(lost.filter((entry) => entry.fate === 'unknown').length),
             }),
         });
     }
