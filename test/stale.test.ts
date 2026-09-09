@@ -518,6 +518,55 @@ describe('findIdCollisions', () => {
     ).toHaveLength(1);
   });
 
+  /**
+   * #898: a `Follows:` whose target is declared in the SAME commit was reported
+   * `dangling-ref` — "want an existing Record-Id in history" — about a record
+   * present in that very commit.
+   *
+   * `findDanglingRefs` was never the problem: it builds `declared` from the
+   * whole stream with no ordering rule. The stream was. `collectRecords`
+   * extracted trailers with `parseCommitMessage`, which is git's view of a
+   * message: the last paragraph only. A squash that preserves each source
+   * record as its own block therefore arrived as one record carrying the final
+   * block, and every id declared above it was invisible.
+   *
+   * `validate` and the index already read every block, which is why
+   * `validate -c HEAD` said "references ok" about the same commit `stale`
+   * called dangling. This asserts the rule the fold applies; the collector's
+   * half is covered in test/stale-multiblock.test.ts.
+   */
+  it('accepts a reference whose target is declared by another block of the same commit', () => {
+    const violations = findDanglingRefs([
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [trailer('Limit', 'the earlier decision'), trailer('Record-Id', 'r-earlier898')],
+      },
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [
+          trailer('Limit', 'the later refinement'),
+          trailer('Record-Id', 'r-later898'),
+          trailer('Follows', 'r-earlier898'),
+        ],
+      },
+    ]);
+    expect(violations).toEqual([]);
+  });
+
+  it('still flags a reference to an id no block declares', () => {
+    const violations = findDanglingRefs([
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [trailer('Record-Id', 'r-only898'), trailer('Follows', 'r-doesnotexist9')],
+      },
+    ]);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.value).toBe('r-doesnotexist9');
+  });
+
   it('flags two commit-sourced blocks under the same sha sharing a Record-Id (bug-issue-92)', () => {
     // The shape `parseRecordBlocks` recovers from one message that carries
     // two blocks (SPEC §2.4): both blocks are `source: 'commit'` at the same

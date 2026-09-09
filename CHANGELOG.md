@@ -4,6 +4,64 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.9
+
+Three reports from one repository in one morning, and they share a cause: a
+squash that preserves every record produces shapes the rest of the tool had not
+been taught to read.
+
+**`stale` called a `Follows:` dangling when its target was in the same commit
+(#898).** It reported `want an existing Record-Id in history` about a record
+present in that very commit. The rule was never wrong — `findDanglingRefs`
+builds its set from the whole stream with no ordering requirement. The stream
+was. The scan extracted a commit's trailers with git's view of a message, which
+is the last paragraph only, so a message carrying several record blocks arrived
+as a single record holding the final block and every id declared above it was
+invisible.
+
+`validate` and the index have always read every block, which is why
+`validate -c HEAD` said `references ok` about the commit `stale` called dangling
+— the same disagreement, on one commit, from two parsers. The scan now reads
+every block too. A commit still counts as one commit, so a multi-block history
+is not overstated and does not trip the truncation flag early.
+
+**`squash-conservation` reported records as lost when they were on the tracked
+upstream (#897).** The check reads local `HEAD`. The reporter's squash had
+landed on `origin/main` and their checkout had not caught up, so thirteen
+records were named as absent while `git log origin/main` found every one of
+them. They verified against the remote, the check reads HEAD, and both were
+right about different refs — which is also why an index rebuild changed nothing.
+
+A record the tracked upstream carries is no longer a loss; the row says it is on
+`origin/main` and that this checkout is behind. Scoped to the tracked upstream
+rather than every remote-tracking ref, because a feature branch pushed to
+`origin` and never merged carries its ids too, and counting those would excuse
+the loss this check exists to find.
+
+It also stops asserting more than it measured. `undetermined` findings rendered
+under the sentence *"do not appear in HEAD's history"*, a positive claim the
+check had not established; the row now says they could not be found there. This
+matters because the remedy it recommends writes a duplicate note, which is the
+withheld-record condition of #890 — the wrong warning could manufacture the
+corruption.
+
+**A staged capture expired silently (#896).** Five minutes after prepare, and
+when it lapsed the record was dropped with nothing said: the commit succeeded
+without it. Four records were lost this way in one working day, surfaced only
+afterwards by `doctor` as a count — by which time the transcript needed to
+re-capture may be gone. One of them carried a `Warn:` about what a green check
+does not prove and an `Unverified:` denying a coverage claim. Both had passed
+verification; neither reached history.
+
+Skipping an expired record is right: it binds to the tree it was prepared for.
+Saying nothing was not. The hook now names it on the commit that misses the
+window, and only for a record that was otherwise attachable — a record that
+fails another gate stays quiet, as before. It reports and does not block.
+
+Not changed, and left for its own decision: the five-minute window itself, and
+whether a record whose tree moved could be re-bound rather than expired. Both
+were suggested in #896; the second touches the binding every capture rests on.
+
 ## 1.2.8
 
 `upgrade` could not reach the release it was pointed at, and this one is 1.2.6's
