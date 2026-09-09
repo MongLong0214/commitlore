@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "d3daec6a7451baabb033846e3e750c15cc4552afff821cade65ec5049d2474d4"
+    "sha256": "f72c51557d8b32bb3790e5d656e1390332fcbccc0c9d645c63e4a118308b873d"
   },
   "artifact": {
-    "sha256": "5b87c00ae3d74b934c1c1ebc51558c4774dddd3c5e415e939bbdadd42f45223c",
+    "sha256": "1b81d8e6cea37cede494053e66e117e9654c6d10bda841588019c33af967342a",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "e47d239d250088c97e339c1e445b75d012dc2edb0edb1c9a82bac2a4606b5b4a"
+        "sha256": "5c81635359445849f79466a3e5c150a0ce22b0f9e18dad6e81575d7723ad4daf"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -654,11 +654,11 @@
       },
       {
         "path": "dist/core/backfill.js",
-        "sha256": "fb0140ce07363604e974eab74dec8c9ce91f796d274def5112e06c7af12d9c08"
+        "sha256": "a4bc3715174191a10ce54bd7a1595ba0ee3c69b3477a8ff3a45dd118ea4e8fc1"
       },
       {
         "path": "dist/core/backfill.js.map",
-        "sha256": "d985c65cd300a1a4863d870ed9ed3886dc9058d395b5a623193ce9679636084e"
+        "sha256": "ea192be29f7783d1fdb60bfe09616aeeaf7eabe884bd543eb8b9d7d930d0e98b"
       },
       {
         "path": "dist/core/before-change.d.ts",
@@ -798,11 +798,11 @@
       },
       {
         "path": "dist/core/harvest-verify.js",
-        "sha256": "6c74bc11f7c391f570c9c93db87d008ff1c581f1603c5e5c830df014285d5880"
+        "sha256": "826e1eb5741aae7def610756c6aac51881291013fec8566ba480f72849c98a42"
       },
       {
         "path": "dist/core/harvest-verify.js.map",
-        "sha256": "1f523023c5eb77d79022284d27c438dc0f791f81602a45647f0d06191ace7ed0"
+        "sha256": "6045e1fcb58ccca535886aa927210adae7a36cead077731f19341fac76aabbb2"
       },
       {
         "path": "dist/core/harvest.d.ts",
@@ -810,11 +810,11 @@
       },
       {
         "path": "dist/core/harvest.js",
-        "sha256": "3b26739f987ee5af1d1c6a0299db60b2b640297de2cde365a87597a1a4362e2c"
+        "sha256": "ce2bd7501007737bdbe1756c5eb1da839af5b2c2ef04816e6f64ce79c54e3170"
       },
       {
         "path": "dist/core/harvest.js.map",
-        "sha256": "1c82a6d89ed5215144cc6009b71edf13bff6f3f32282d13d824a8d859d7f570f"
+        "sha256": "3e3d68877ad88ea23619db28e8111d7a4f8025b51ab4ea004a8ef268bc3420ad"
       },
       {
         "path": "dist/core/hermes-config.d.ts",

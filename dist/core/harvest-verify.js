@@ -387,8 +387,11 @@ export const REPAIR_GUIDANCE = {
     'evidence-not-found': 'Copy the quote out of the transcript or the diff character for character. ' +
         'Only whitespace may differ. If you cannot find the sentence, drop the record.',
     'evidence-missing': 'Add a citation for every decision-context key the record carries, or drop the record.',
-    'ruled-out-no-rejection': 'Quote the place where the alternative was actually turned down, not where it was ' +
-        'first suggested. If the source only mentions the alternative, drop the Ruled-out trailer.',
+    'ruled-out-no-rejection': 'The quote must name the alternative being evaluated and dropped — considered, rejected, ' +
+        'ruled out, decided against, abandoned, superseded, or chosen against with "instead" or ' +
+        '"rather than". Describing why the alternative would be bad is not enough: a consequence ' +
+        'argues against it, it does not record that anyone turned it down. If the source only ' +
+        'reasons about the alternative and never says it was dropped, drop the Ruled-out trailer.',
     'verified-unsupported': 'Remove Verified from the draft. Record it only from the command or test run that performed the check.',
     enum: 'Use one of the values listed for that key, exactly. A synonym is a violation, not a shortcut.',
     format: 'Match the value grammar the vocabulary states for that key.',
