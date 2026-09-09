@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "d91f27c03e7385115b658e6c97e6a6aa7894aeee87ac92693b3266ecb7ff5052"
+    "sha256": "d3daec6a7451baabb033846e3e750c15cc4552afff821cade65ec5049d2474d4"
   },
   "artifact": {
-    "sha256": "df410db3ecfa47f2b100fd962367e69d13ea1053016974191784d94e8b00f637",
+    "sha256": "5b87c00ae3d74b934c1c1ebc51558c4774dddd3c5e415e939bbdadd42f45223c",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "f2f8f4ed419fa287712da93f4cba8818bdf731210ea64ef57540728c7190c38e"
+        "sha256": "e47d239d250088c97e339c1e445b75d012dc2edb0edb1c9a82bac2a4606b5b4a"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -654,11 +654,11 @@
       },
       {
         "path": "dist/core/backfill.js",
-        "sha256": "01191e0b98b5ccebca061f641fc00da3153c8a0d5238ef23d79ca6d983ee460e"
+        "sha256": "fb0140ce07363604e974eab74dec8c9ce91f796d274def5112e06c7af12d9c08"
       },
       {
         "path": "dist/core/backfill.js.map",
-        "sha256": "4d037efd2ea1dcdf71906b0faa7b2bb7d31c61ea8e35b7a2c538d94faa0ae34f"
+        "sha256": "d985c65cd300a1a4863d870ed9ed3886dc9058d395b5a623193ce9679636084e"
       },
       {
         "path": "dist/core/before-change.d.ts",
@@ -794,15 +794,15 @@
       },
       {
         "path": "dist/core/harvest-verify.d.ts",
-        "sha256": "f8a272bbdd17c7aae3fe30339c6dd3299ffaad24a19672acf0e497750307a651"
+        "sha256": "e0f8fc0e53b71f28203e6cfbf91dca8fa29048e117c83215ca96e3c546692cc9"
       },
       {
         "path": "dist/core/harvest-verify.js",
-        "sha256": "a9d00fd7ce9e76e7befc480a60011d5629763381b7ad66fe8f09e641e8ba8b0b"
+        "sha256": "6c74bc11f7c391f570c9c93db87d008ff1c581f1603c5e5c830df014285d5880"
       },
       {
         "path": "dist/core/harvest-verify.js.map",
-        "sha256": "fb82e61dfca716864ef9f1d7d37188747775cdddf94fef97879d0693d2694dbb"
+        "sha256": "1f523023c5eb77d79022284d27c438dc0f791f81602a45647f0d06191ace7ed0"
       },
       {
         "path": "dist/core/harvest.d.ts",

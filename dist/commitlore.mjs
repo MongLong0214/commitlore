@@ -14011,6 +14011,26 @@ var promptMode = (state, options, targets, prs) => {
     return produced;
   });
 };
+var QUOTES_ALREADY_CHECKED = /* @__PURE__ */ new Set([
+  "ruled-out-no-rejection",
+  "enum",
+  "format",
+  "unknown-key"
+]);
+var collateral = (rejected) => {
+  const failing = rejected.reason === "ruled-out-no-rejection" ? "Ruled-out" : null;
+  const machinery = /* @__PURE__ */ new Set(["Record-Id", "Provenance"]);
+  const others = rejected.record.trailers.filter(
+    (trailer) => !machinery.has(trailer.key) && trailer.key !== failing
+  );
+  if (others.length === 0) return "";
+  const keys = [...new Set(others.map((trailer) => trailer.key))].join(", ");
+  return QUOTES_ALREADY_CHECKED.has(rejected.reason) ? ` \u2014 ${others.length} other trailer(s) in this record passed the re-read and were not stored (${keys})` : ` \u2014 ${others.length} other trailer(s) in this record were dropped with it (${keys})`;
+};
+var repairHint = (reason) => {
+  const guidance = REPAIR_GUIDANCE[reason];
+  return guidance === void 0 ? "" : `. Fix: ${guidance}`;
+};
 var assembleRecord = (state, sha, entry, sources) => {
   let review;
   try {
@@ -14029,7 +14049,11 @@ var assembleRecord = (state, sha, entry, sources) => {
   }));
   const verified = verifyDraft(forced, sources);
   for (const rejected of verified.rejected) {
-    state.report.discarded.push({ sha, reason: rejected.reason, detail: rejected.detail });
+    state.report.discarded.push({
+      sha,
+      reason: rejected.reason,
+      detail: `${rejected.detail}${collateral(rejected)}${repairHint(rejected.reason)}`
+    });
   }
   if (verified.accepted.length === 0) return null;
   const trailers = forceReconstructed(
@@ -14050,11 +14074,12 @@ var assembleRecord = (state, sha, entry, sources) => {
     skip(state, sha, "invalid-record", "the assembled record carries no decision context");
     return null;
   }
-  return trailers;
+  return { trailers, records: verified.accepted.length };
 };
 var applyMode = (state, options, targets, recorded, prs, raw) => {
   const entries = /* @__PURE__ */ new Map();
   const targetShas = new Set(targets.map((target) => target.sha));
+  const extra = [];
   for (const entry of parseDraftDocument(raw)) {
     const sha = resolveCommit(options.cwd, entry.sha);
     if (sha === null) {
@@ -14070,12 +14095,13 @@ var applyMode = (state, options, targets, recorded, prs, raw) => {
       continue;
     }
     if (!targetShas.has(sha)) {
-      skip(state, sha, "not-a-target", "the commit is outside the selected targets \u2014 raise --limit to include it");
-      continue;
+      extra.push({ sha, subject: subjectOf(options.cwd, sha) });
+      targetShas.add(sha);
     }
     entries.set(sha, entry);
   }
-  runBatches(state, targets, options.batchSize ?? DEFAULT_BATCH_SIZE, (batch) => {
+  const worked = [...targets.filter((target) => entries.has(target.sha)), ...extra];
+  runBatches(state, worked, options.batchSize ?? DEFAULT_BATCH_SIZE, (batch) => {
     let produced = 0;
     for (const target of batch) {
       const entry = entries.get(target.sha);
@@ -14083,8 +14109,9 @@ var applyMode = (state, options, targets, recorded, prs, raw) => {
       const found = prs.fetch(target.sha);
       state.report.pullRequests.collected += found.length;
       const sources = collectSources(options.cwd, target.sha, found);
-      const trailers = assembleRecord(state, target.sha, entry, sources);
-      if (trailers === null) continue;
+      const assembled = assembleRecord(state, target.sha, entry, sources);
+      if (assembled === null) continue;
+      const { trailers } = assembled;
       state.report.estimatedTokens += estimateTokens(sources.transcript) + estimateTokens(sources.diff);
       if (options.dryRun !== true) {
         try {
@@ -14094,7 +14121,7 @@ var applyMode = (state, options, targets, recorded, prs, raw) => {
           continue;
         }
       }
-      state.report.attached += 1;
+      state.report.attached += assembled.records;
       produced += 1;
     }
     return produced;
