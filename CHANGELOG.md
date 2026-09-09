@@ -4,6 +4,70 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.10
+
+Two reports about `backfill`, and one habit under both: the command reasons in
+commits, while its input, its verification and its failures are all about
+records. A third is about the test suite, which had been quietly filling the
+temp directory with executables.
+
+**`--draft` skipped commits it had been told to work (#901).** Target selection
+is bounded by `--limit`, which defaults to 50, and a draft's shas were checked
+for membership in that window — a sha outside it was refused as `not-a-target`
+even though the draft named it explicitly. Raising `--limit` looked like the fix
+and was not, because a second stop sat behind the first: apply mode walked the
+whole window in batches and converged after two that produced nothing, and every
+commit without a draft entry produces nothing. A drafted commit far enough down
+the walk was never reached at any limit; raising the limit only moved where the
+empty batches fell, which is why the same command succeeded and failed on the
+same repository.
+
+A draft now names its own targets. A sha outside the window is worked because
+the draft named it, and apply mode works only the commits the draft covers — so
+convergence counts batches of drafted work rather than batches of empty walking,
+and still stops on drafted commits that yield nothing.
+
+**One rejected trailer took the rest of its record with it, silently (#901,
+#902).** Verification is per record, so a `Ruled-out:` whose quote shows the
+alternative being mentioned rather than turned down fails the whole record. The
+trailers beside it disappeared without a word — and because the grounding check
+runs only after the quote check has passed, those siblings had provably survived
+the re-read. The rejection line now names them and distinguishes the two cases:
+trailers that passed the re-read and were not stored, from trailers dropped
+along with a record that failed earlier.
+
+**A rejection said what was wrong and not what would pass (#902).** `harvest`
+prints repair guidance in its repair round; `backfill` has no repair round, so
+its authors got the diagnosis without the remedy and had to guess at the shape.
+The same guidance catalogue is now printed on backfill's rejections.
+
+**The summary counted commits and labelled them records (#902).** `attached`
+incremented once per commit while a commit's records are assembled together, so
+a commit carrying two records reported one attached and the arithmetic in the
+summary did not add up. It counts records now.
+
+**The test suite left a new pair of executables in the temp directory on every
+run, and removed none of them (#903).** Two test files shadow `git` and `sh` on
+`PATH` to record what a run starts. Both wrote a fresh shim pair per test case
+and neither cleaned up, so a full suite left about sixty directories behind;
+this machine had accumulated 1,433. macOS evaluates an executable's provenance
+on its first exec and caches the verdict against file identity, so a new file
+every time is an evaluation every time — a cache that cannot hit, and against a
+saturated `syspolicyd` the exec does not return at all. Both files now write the
+shim pair once and delete every scratch directory they make; the log they read
+back moves to its own path and reaches the shims through the environment.
+
+This is a defect in the test suite and not in the installed tool, which the
+report's framing ("on every invocation") suggests. The shipped hook writer
+touches only `.git/hooks/`, once per install, through a temporary file it
+renames into place. The two stuck processes in the report are still real, both
+were ours, and both came from a killed test run.
+
+Not changed: `--with-prs` remains opt-in. #902 suggests making it the default,
+which would spawn `gh` on every run of a command that otherwise touches only the
+local repository; that is a product decision rather than a defect, and it is
+open.
+
 ## 1.2.9
 
 Three reports from one repository in one morning, and they share a cause: a
