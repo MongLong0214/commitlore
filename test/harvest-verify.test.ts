@@ -386,7 +386,16 @@ describe('the bounded repair loop', () => {
     const prompt = buildRepairFeedback(rejectedFrom(draftOf('draft-ruled-out-mention.json')));
 
     expect(prompt).toContain('ruled-out-no-rejection');
-    expect(prompt).toContain('where the alternative was actually turned down');
+    expect(prompt).toContain('evaluated and dropped');
+    /*
+     * #902: three rounds were drafted against the old wording, which read as
+     * "quote more context". The drafter answered it by selecting quotes that
+     * argued the alternative was bad -- a counterfactual consequence -- and all
+     * seven failed, because the checker scans for the act of turning it down.
+     * The guidance has to separate those two things or it sends the next author
+     * the same way.
+     */
+    expect(prompt).toContain('not enough');
   });
 
   it('has nothing to say when nothing was rejected', () => {
