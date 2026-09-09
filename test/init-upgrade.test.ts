@@ -11,16 +11,48 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(PACKAGE_ROOT, 'dist', 'commitlore.mjs');
-const scratch = (label: string): string => mkdtempSync(join(tmpdir(), `cl-initup-${label}-`));
+
+const temporaries: string[] = [];
+const scratch = (label: string): string => {
+  const dir = mkdtempSync(join(tmpdir(), `cl-initup-${label}-`));
+  temporaries.push(dir);
+  return dir;
+};
+
+afterAll(() => {
+  for (const dir of temporaries) rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * #903: the shim pair is written once for the whole file, not once per run.
+ * macOS evaluates an executable's provenance on its first exec and caches the
+ * verdict against file identity, so a fresh pair per test is a fresh evaluation
+ * per test — a cache that can never hit, and on a saturated `syspolicyd` the
+ * exec does not return. The log has to stay per-run, so it moves out of the
+ * shim directory and reaches the shims through the environment instead.
+ */
+const CALL_LOG_VAR = 'COMMITLORE_TEST_CALL_LOG';
+let shimDir: string | undefined;
+const shims = (): string => {
+  if (shimDir !== undefined) return shimDir;
+  const dir = scratch('bin');
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const line = (name: string) => `echo "${name} $*" >> "\${${CALL_LOG_VAR}:-/dev/null}"`;
+  writeFileSync(join(dir, 'git'), `#!/bin/sh\n${line('git')}\nexec ${realGit} "$@"\n`);
+  writeFileSync(join(dir, 'sh'), `#!/bin/sh\n${line('sh')}\nexec /bin/sh "$@"\n`);
+  execFileSync('chmod', ['+x', join(dir, 'git'), join(dir, 'sh')]);
+  shimDir = dir;
+  return dir;
+};
 
 const remoteWithTags = (tags: readonly string[]): string => {
   const dir = join(scratch('remote'), 'origin');
@@ -46,12 +78,8 @@ const runRecorded = (
   args: readonly string[],
   extra: NodeJS.ProcessEnv,
 ): { calls: string[]; out: string; code: number } => {
-  const bin = scratch('bin');
-  const log = join(bin, 'calls.log');
-  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
-  writeFileSync(join(bin, 'git'), `#!/bin/sh\necho "git $*" >> ${log}\nexec ${realGit} "$@"\n`);
-  writeFileSync(join(bin, 'sh'), `#!/bin/sh\necho "sh $*" >> ${log}\nexec /bin/sh "$@"\n`);
-  execFileSync('chmod', ['+x', join(bin, 'git'), join(bin, 'sh')]);
+  const bin = shims();
+  const log = join(scratch('log'), 'calls.log');
 
   const repo = join(scratch('repo'), 'repo');
   execFileSync('git', ['init', '--quiet', '--initial-branch=main', repo]);
@@ -65,7 +93,13 @@ const runRecorded = (
     out = execFileSync(process.execPath, [CLI, 'init', ...args], {
       encoding: 'utf8',
       cwd: repo,
-      env: { ...process.env, PATH: `${bin}:${process.env['PATH'] ?? ''}`, HOME: scratch('home'), ...extra },
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env['PATH'] ?? ''}`,
+        HOME: scratch('home'),
+        [CALL_LOG_VAR]: log,
+        ...extra,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
@@ -136,12 +170,8 @@ describe('T-1607 the three ways --upgrade can fail are three facts', () => {
 
 describe('T-1607 only two commands may spawn an installer', () => {
   it.each([['status'], ['doctor'], ['query']])('%s spawns none', (name) => {
-    const bin = scratch('bin');
-    const log = join(bin, 'calls.log');
-    const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
-    writeFileSync(join(bin, 'git'), `#!/bin/sh\necho "git $*" >> ${log}\nexec ${realGit} "$@"\n`);
-    writeFileSync(join(bin, 'sh'), `#!/bin/sh\necho "sh $*" >> ${log}\nexec /bin/sh "$@"\n`);
-    execFileSync('chmod', ['+x', join(bin, 'git'), join(bin, 'sh')]);
+    const bin = shims();
+    const log = join(scratch('log'), 'calls.log');
 
     const repo = join(scratch('repo'), 'repo');
     execFileSync('git', ['init', '--quiet', '--initial-branch=main', repo]);
@@ -153,6 +183,7 @@ describe('T-1607 only two commands may spawn an installer', () => {
           ...process.env,
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
           HOME: scratch('home'),
+          [CALL_LOG_VAR]: log,
           COMMITLORE_INSTALL_SOURCE: remoteWithTags(['v99.0.0']),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
