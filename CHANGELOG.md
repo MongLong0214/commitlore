@@ -4,6 +4,49 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.8
+
+`upgrade` could not reach the release it was pointed at, and this one is 1.2.6's
+fault.
+
+**It reported 1.2.6 as newest while 1.2.7 was the newest release, and `--force`
+installed 1.2.6 (#893).** Nothing was wrong with the lookup — `git ls-remote`
+sees every tag. The answer is cached for a day, and 1.2.6 taught the command to
+re-ask only when the cached tag was *strictly older* than the running version,
+on the reasoning that the equal case is every up-to-date machine and re-asking
+it would spawn `git ls-remote` on every invocation.
+
+The equal case is exactly the one that goes stale. A machine on 1.2.6 with
+`v1.2.6` cached keeps being told it is current for the rest of the day after
+1.2.7 ships, and there was no way through: `--force` acted on the same stale
+value and reported `upgraded to v1.2.6` on a machine already running 1.2.6.
+The previous direction of this bug was harmless — the newer version was already
+in place. This one is not, because the operator cannot get the new release
+through the tool's own path.
+
+**The cost was measured wrong rather than weighed wrong.** `buildReport` has one
+caller, the `upgrade` command itself. The day-long cache exists for the ambient
+callers — the update notice, and `doctor` and `init` through
+`latestReleaseSync` — and none of them come through it. So the command whose
+whole purpose is to ask now asks, every time, and the extra lookup falls only on
+someone who typed it. The cache is refreshed rather than bypassed, so the
+ambient callers get the fresh answer too.
+
+**`--force` no longer confirms an upgrade it did not perform.** It names the
+target before installing, and when the newest release is the version already
+installed it says so and changes nothing, rather than reinstalling the same
+bytes under a success message.
+
+**The answer says where it came from.** "This is the newest release" and "this
+is the newest release I was told about yesterday" were the same sentence; the
+output now carries the source it resolved against.
+
+```
+installed  1.2.8
+latest     v1.2.8
+source     https://github.com/MongLong0214/commitlore.git
+```
+
 ## 1.2.7
 
 Three diagnostics that named a cause they had not established. One prescribed a
