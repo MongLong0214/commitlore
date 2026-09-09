@@ -68,23 +68,27 @@ const describe = (outcome) => {
 };
 export const buildReport = async (env = process.env) => {
     const current = packageVersion();
-    let result = await latestRelease({ env });
-    // A "latest" older than the version already running cannot be the latest
-    // (#885). The answer is cached for a day and only `upgrade` acting clears it,
-    // so a release installed any other way -- install.sh, the plugin marketplace,
-    // a manual checkout -- leaves the previous answer standing, and `upgrade`
-    // then reports an older tag as `latest` and says "this is the newest
-    // release". Reported against 1.2.5 while the cache still held v1.2.3.
+    // Somebody typed `upgrade`. Asking is the whole command, so it asks (#893).
     //
-    // Only strictly-older re-asks. Equal is the ordinary up-to-date answer and
-    // must stay cached, or the cache would never serve the case it exists for.
-    if (result.cached &&
-        result.outcome.kind === 'resolved' &&
-        isNewerRelease(`v${current}`, result.outcome.tag)) {
-        forgetCachedRelease(env['HOME']);
-        result = await latestRelease({ env });
-    }
-    const { outcome, checkedAt } = result;
+    // 1.2.6 re-asked only when the cached answer was strictly older than the
+    // running version, on the reasoning that the equal case is every up-to-date
+    // machine and re-asking it would spawn `git ls-remote` on every upgrade
+    // (r-runtimevis885). The equal case is exactly the one that goes stale: a
+    // machine on 1.2.6 with `v1.2.6` cached keeps being told it is current for
+    // the rest of the day after 1.2.7 ships, and `--force` then reinstalls the
+    // version it already has. Reported with 1.2.7 an hour old.
+    //
+    // The cost objection was measured wrong rather than weighed wrong. The
+    // day-long cache exists for the *ambient* callers -- `core/update-notice.ts`,
+    // and `latestReleaseSync` under `doctor` and `init` -- and none of them come
+    // through here. This function has exactly one caller, the `upgrade` command
+    // itself, so the extra lookup lands only on someone who asked for it.
+    //
+    // Dropping the cache rather than passing `fresh` is deliberate: `fresh` skips
+    // the write too, which would leave the stale entry in place for the ambient
+    // notice to keep serving.
+    forgetCachedRelease(env['HOME']);
+    const { outcome, checkedAt } = await latestRelease({ env });
     const latest = outcome.kind === 'resolved' ? outcome.tag : null;
     const unknown = describe(outcome);
     return {
@@ -107,6 +111,10 @@ const render = (report) => {
         return `${lines.join('\n')}\n`;
     }
     lines.push(`latest     ${report.latest ?? 'unknown'}`);
+    // Where the answer came from (#893). "This is the newest release" was
+    // indistinguishable from "this is the newest release I was told about a day
+    // ago", and the reporter had no way to tell those apart from the output.
+    lines.push(`source     ${report.source}`);
     lines.push(report.updateAvailable
         ? `\na newer release is available. To upgrade:\n\n  ${report.command}`
         : '\nthis is the newest release.');
@@ -135,6 +143,19 @@ export const register = (program) => {
         // A typo must not silently downgrade a machine.
         if (!report.updateAvailable && options.force !== true)
             return;
+        // `--force` is the escape hatch for "the version looks stuck", so it must
+        // not confirm an upgrade it did not perform (#893). It acted on whatever
+        // the resolver had decided and printed `upgraded to v1.2.6` on a machine
+        // already running 1.2.6 -- a success message for a reinstall of the same
+        // bytes, which is the reading that made the operator believe the tool had
+        // done something. Naming the target and refusing the no-op costs nothing
+        // and cannot be misread. Exit 0: being current is not an error.
+        if (report.latest === `v${report.current}`) {
+            process.stdout.write(`\n${report.current} is already installed and ${report.latest} is the newest release, ` +
+                'so there is nothing to install. Nothing was changed.\n');
+            return;
+        }
+        process.stdout.write(`\ninstalling ${report.latest}\n`);
         const blocked = process.env['COMMITLORE_NO_AUTO_UPDATE'];
         if (blocked !== undefined && blocked !== '') {
             // Stops the action and not the report: it says what it would have done
