@@ -619,10 +619,23 @@ const applyMode = (state, options, targets, recorded, prs, raw) => {
      * #901: raising --limit appeared to fix the window when it was also giving
      * the walk more chances to reach the commit before converging.
      *
-     * Convergence still applies to the drafted set, where an empty batch means
-     * records that failed verification rather than commits nobody drafted for.
+     * #907: an entry whose `records` is an empty array is the same no-op wearing
+     * the draft's clothes. It is the honest answer for a commit the session found
+     * nothing in, and a well-formed draft is mostly made of them -- so counting
+     * them towards convergence let a wholly valid draft attach nothing and call
+     * it success, and rewarded padding early entries to keep the walk alive. Only
+     * entries that claim at least one record are worked, which makes an empty
+     * batch mean what convergence assumes: records that failed verification.
+     *
+     * A malformed `records` is deliberately still worked -- it must reach the
+     * parser and be reported, not be dropped for looking empty.
      */
-    const worked = [...targets.filter((target) => entries.has(target.sha)), ...extra];
+    const claimsRecords = (entry) => !(Array.isArray(entry.records) && entry.records.length === 0);
+    const drafted = (target) => {
+        const entry = entries.get(target.sha);
+        return entry !== undefined && claimsRecords(entry);
+    };
+    const worked = [...targets.filter(drafted), ...extra.filter(drafted)];
     runBatches(state, worked, options.batchSize ?? DEFAULT_BATCH_SIZE, (batch) => {
         let produced = 0;
         for (const target of batch) {
@@ -739,6 +752,17 @@ export const backfill = (options = {}) => {
     const budget = options.budgetTokens;
     if (budget !== undefined && (!Number.isInteger(budget) || budget < 0)) {
         throw new Error(`--budget-tokens is not a non-negative integer: ${String(budget)}`);
+    }
+    /*
+     * #907: outside a repository every sha came back `unknown-commit` over a
+     * zero-length history, which reads exactly like the stale-window failure in
+     * #901 -- so the natural response was to raise `--limit`, which cannot help
+     * when there is no repository to walk. Refuse the way git does instead. The
+     * reporter hit this three times chaining `cd <scratchpad> && commitlore
+     * backfill`.
+     */
+    if (execGit(['rev-parse', '--git-dir'], gitOpts(options.cwd)).code !== 0) {
+        throw new Error('not a git repository — backfill reads history, so it must run inside one');
     }
     const mode = modeOf(options);
     const state = { report: emptyReport(mode, options), prompts: [], stopped: null };

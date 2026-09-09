@@ -12130,7 +12130,14 @@ var RULES = [
   "6. When unsure, emit less. Everything you emit will be read by an agent that",
   "   cannot check it.",
   "7. Do not emit Verified. Reading a transcript or diff cannot prove a check ran.",
-  "   Record Verified only from the command or test run that performed the check."
+  "   Record Verified only from the command or test run that performed the check.",
+  "8. A Ruled-out quote must show the alternative being evaluated and dropped \u2014",
+  "   considered, rejected, ruled out, decided against, abandoned, superseded, or",
+  '   chosen against with "instead" or "rather than". Reasoning about why the',
+  "   alternative would be bad is not a rejection: a consequence argues against",
+  "   it, it does not record that anyone turned it down. If the source only",
+  "   argues and never drops, omit the Ruled-out trailer rather than quoting the",
+  "   argument."
 ];
 var vocabularyList = (entries) => entries.flatMap((entry) => [
   `- \`${entry.key}:\` = ${entry.grammar} (${entry.repeatable ? "repeatable" : "single-valued"})`,
@@ -12698,7 +12705,7 @@ var verifyDraft = (draft, sources) => {
 var REPAIR_GUIDANCE = {
   "evidence-not-found": "Copy the quote out of the transcript or the diff character for character. Only whitespace may differ. If you cannot find the sentence, drop the record.",
   "evidence-missing": "Add a citation for every decision-context key the record carries, or drop the record.",
-  "ruled-out-no-rejection": "Quote the place where the alternative was actually turned down, not where it was first suggested. If the source only mentions the alternative, drop the Ruled-out trailer.",
+  "ruled-out-no-rejection": 'The quote must name the alternative being evaluated and dropped \u2014 considered, rejected, ruled out, decided against, abandoned, superseded, or chosen against with "instead" or "rather than". Describing why the alternative would be bad is not enough: a consequence argues against it, it does not record that anyone turned it down. If the source only reasons about the alternative and never says it was dropped, drop the Ruled-out trailer.',
   "verified-unsupported": "Remove Verified from the draft. Record it only from the command or test run that performed the check.",
   enum: "Use one of the values listed for that key, exactly. A synonym is a violation, not a shortcut.",
   format: "Match the value grammar the vocabulary states for that key.",
@@ -14100,7 +14107,12 @@ var applyMode = (state, options, targets, recorded, prs, raw) => {
     }
     entries.set(sha, entry);
   }
-  const worked = [...targets.filter((target) => entries.has(target.sha)), ...extra];
+  const claimsRecords = (entry) => !(Array.isArray(entry.records) && entry.records.length === 0);
+  const drafted = (target) => {
+    const entry = entries.get(target.sha);
+    return entry !== void 0 && claimsRecords(entry);
+  };
+  const worked = [...targets.filter(drafted), ...extra.filter(drafted)];
   runBatches(state, worked, options.batchSize ?? DEFAULT_BATCH_SIZE, (batch) => {
     let produced = 0;
     for (const target of batch) {
@@ -14193,6 +14205,9 @@ var backfill = (options = {}) => {
   const budget = options.budgetTokens;
   if (budget !== void 0 && (!Number.isInteger(budget) || budget < 0)) {
     throw new Error(`--budget-tokens is not a non-negative integer: ${String(budget)}`);
+  }
+  if (execGit(["rev-parse", "--git-dir"], gitOpts(options.cwd)).code !== 0) {
+    throw new Error("not a git repository \u2014 backfill reads history, so it must run inside one");
   }
   const mode = modeOf(options);
   const state = { report: emptyReport(mode, options), prompts: [], stopped: null };

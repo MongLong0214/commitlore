@@ -305,6 +305,13 @@ const RULES = [
   '   cannot check it.',
   '7. Do not emit Verified. Reading a transcript or diff cannot prove a check ran.',
   '   Record Verified only from the command or test run that performed the check.',
+  '8. A Ruled-out quote must show the alternative being evaluated and dropped —',
+  '   considered, rejected, ruled out, decided against, abandoned, superseded, or',
+  '   chosen against with "instead" or "rather than". Reasoning about why the',
+  '   alternative would be bad is not a rejection: a consequence argues against',
+  '   it, it does not record that anyone turned it down. If the source only',
+  '   argues and never drops, omit the Ruled-out trailer rather than quoting the',
+  '   argument.',
 ];
 
 /**

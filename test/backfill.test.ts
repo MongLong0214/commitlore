@@ -432,6 +432,47 @@ describe('backfill convergence', () => {
     expect(result.report.attached).toBe(0);
     expect(noteShas(fixture.dir)).toEqual([]);
   });
+
+  /*
+   * #907: a well-formed draft is mostly `"records": []` -- the honest answer for
+   * a commit the session found nothing in. Counting those towards convergence
+   * let a wholly valid draft attach nothing and report success, and made padding
+   * an early entry the way to reach a later one.
+   */
+  it('reaches a record past two commits the draft answered with no records', () => {
+    const fixture = buildFixture('backfill-empty-entries');
+    const draft = draftFile(fixture, {
+      commits: [
+        { sha: fixture.tidy, records: [] },
+        { sha: fixture.parser, records: [] },
+        { sha: fixture.upload, records: [uploadRecord()] },
+      ],
+    });
+
+    // batchSize 1 puts the two empty entries in consecutive batches, which is
+    // exactly the shape that used to converge before reaching the third.
+    const result = run(fixture, { draft, batchSize: 1 });
+
+    expect(result.report.attached).toBe(1);
+    expect(result.report.stoppedBy).not.toBe('converged');
+    expect(noteShas(fixture.dir)).toEqual([fixture.upload]);
+  });
+});
+
+describe('backfill outside a repository', () => {
+  /*
+   * #907: every sha came back `unknown-commit` over a zero-length history, which
+   * is visually identical to the stale-window failure in #901 -- so the natural
+   * response was to raise `--limit`, which cannot help when there is no
+   * repository at all.
+   */
+  it('refuses instead of reporting a zero-length history as a normal walk', () => {
+    const outside = tempDir('backfill-no-repo');
+    const draft = join(outside, 'draft.json');
+    writeFileSync(draft, JSON.stringify({ commits: [{ sha: 'deadbeef1234567', records: [] }] }));
+
+    expect(() => backfill({ cwd: outside, draft })).toThrow(/not a git repository/);
+  });
 });
 
 describe('backfill budget caps', () => {
