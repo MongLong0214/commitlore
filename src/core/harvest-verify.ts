@@ -497,7 +497,12 @@ export const formatResult = (result: VerifyResult): string => {
  * the session is being asked to act, and "drop the record" is on every one of
  * them because dropping is always a correct answer here.
  */
-const REPAIR_GUIDANCE: Readonly<Record<RejectionReason, string>> = {
+/**
+ * Exported so `backfill` can print it too (#902). `harvest` shows it in its
+ * repair round; backfill has no repair round by design, which left its authors
+ * with a reason and no statement of what shape would pass.
+ */
+export const REPAIR_GUIDANCE: Readonly<Record<RejectionReason, string>> = {
   'evidence-not-found':
     'Copy the quote out of the transcript or the diff character for character. ' +
     'Only whitespace may differ. If you cannot find the sentence, drop the record.',
