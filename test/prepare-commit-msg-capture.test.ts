@@ -270,6 +270,64 @@ describe('prepare-commit-msg capture guard', () => {
     expect(msg).not.toContain('Record-Id:');
   });
 
+  /**
+   * #896: skipping it is right; saying nothing about it is not. The record binds
+   * to the tree it was prepared for and is correctly dropped once the window
+   * lapses, but the author got a clean commit with no trailer and no statement
+   * that one was discarded — indistinguishable from "there was nothing to
+   * record". Four records were lost this way in one working day, surfaced only
+   * afterwards by `doctor` as a count, by which time the transcript needed to
+   * re-capture may be gone.
+   */
+  it('says so when an otherwise attachable record expired, and still does not block', async () => {
+    const past = new Date(Date.now() - 4 * 60_000).toISOString();
+    writePendingFile(repoDir, { expires_at: past });
+
+    const warnings: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process.stderr as any).write = (chunk: any, ...rest: any[]): boolean => {
+      warnings.push(String(chunk));
+      return write(chunk, ...(rest as []));
+    };
+    try {
+      await runHook(messageFile, repoDir);
+    } finally {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (process.stderr as any).write = write;
+    }
+
+    const said = warnings.join('');
+    expect(said, 'the drop was silent').toContain('expired');
+    expect(said).toContain('was not attached');
+    // Reporting, not blocking: the message is still written and unchanged.
+    const msg = readFileSync(messageFile, 'utf8');
+    expect(msg).toBe('test commit\n');
+  });
+
+  it('stays quiet about a lapsed record this commit could not have carried anyway', async () => {
+    // Wrong HEAD as well as expired: it was never attachable here, so naming it
+    // would be noise on every commit rather than a report about this one.
+    const past = new Date(Date.now() - 4 * 60_000).toISOString();
+    writePendingFile(repoDir, { expires_at: past, base_head: 'f'.repeat(40) });
+
+    const warnings: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process.stderr as any).write = (chunk: any, ...rest: any[]): boolean => {
+      warnings.push(String(chunk));
+      return write(chunk, ...(rest as []));
+    };
+    try {
+      await runHook(messageFile, repoDir);
+    } finally {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (process.stderr as any).write = write;
+    }
+
+    expect(warnings.join('')).not.toContain('expired');
+  });
+
   // -----------------------------------------------------------------------
   // Gate 4: Unconsumed
   // -----------------------------------------------------------------------

@@ -221,6 +221,36 @@ const usesTemporaryCommitIndex = (cwd: string): boolean => {
   return resolve(cwd, currentIndex) !== resolve(cwd, gitDir.stdout.trim(), 'index');
 };
 
+/**
+ * An expired staged capture is dropped, and the commit succeeds without it
+ * (#896). Nothing said so. The record binds to the tree it was prepared for and
+ * is correctly skipped once that binding lapses, but the author gets a clean
+ * commit with no trailer and no statement that one was discarded -- which is
+ * indistinguishable from "there was nothing to record".
+ *
+ * Measured by the reporter in one working day: four staged records dropped this
+ * way, surfaced only by `doctor` afterwards as a count. One of them carried a
+ * `Warn:` about what a green check does not prove and an `Unverified:` denying a
+ * coverage claim -- both verified, neither in history. By the time a count
+ * appears, the transcript that would allow a re-capture may be gone.
+ *
+ * Said at the moment it happens, on the commit that misses the window, because
+ * that is the first occurrence rather than the twenty-fourth. It reports and
+ * does not block: a hook that fails a commit because the recorder lapsed would
+ * be worse than the silence it replaces.
+ */
+const reportExpired = (pending: PendingRecord): void => {
+  const label = captureLabel(pending);
+  const expiredAt = pending.expires_at;
+  const agoMinutes =
+    expiredAt === null ? null : Math.max(0, Math.round((Date.now() - new Date(expiredAt).getTime()) / 60_000));
+  const when = agoMinutes === null ? '' : ` ${agoMinutes} minute(s) ago`;
+  process.stderr.write(
+    `commitlore: staged capture ${label} expired${when} and was not attached; ` +
+      'this commit carries no record. Re-run capture to record it, or see `commitlore pending show`.\n',
+  );
+};
+
 const reportDiffMismatch = (pending: PendingRecord, cwd: string): void => {
   const label = captureLabel(pending);
   const detail = usesTemporaryCommitIndex(cwd)
@@ -313,12 +343,20 @@ const applyCaptureRecord = (messageFile: string, cwd: string): void => {
       continue;
     }
 
-    // Gate 3: Unexpired (expires_at must be non-null and in the future)
-    if (!pending.expires_at) continue;
-    if (now >= new Date(pending.expires_at).getTime()) continue;
-
     // Gate 5: Policy identity unchanged
     if (pending.policy_identity_hash !== currentPolicyHash) continue;
+
+    // Gate 3: Unexpired (expires_at must be non-null and in the future).
+    //
+    // Checked last so that anything reaching it was attachable but for the
+    // deadline: the report below then names a record this commit could have
+    // carried, rather than every lapsed file in the directory (#896). A record
+    // that also fails another gate stays silent here, as it was before.
+    if (!pending.expires_at) continue;
+    if (now >= new Date(pending.expires_at).getTime()) {
+      reportExpired(pending);
+      continue;
+    }
 
     eligible.push(pending);
   }
