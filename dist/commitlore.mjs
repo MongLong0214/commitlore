@@ -23975,12 +23975,8 @@ var describe = (outcome) => {
 };
 var buildReport2 = async (env = process.env) => {
   const current = packageVersion();
-  let result = await latestRelease({ env });
-  if (result.cached && result.outcome.kind === "resolved" && isNewerRelease(`v${current}`, result.outcome.tag)) {
-    forgetCachedRelease(env["HOME"]);
-    result = await latestRelease({ env });
-  }
-  const { outcome, checkedAt } = result;
+  forgetCachedRelease(env["HOME"]);
+  const { outcome, checkedAt } = await latestRelease({ env });
   const latest2 = outcome.kind === "resolved" ? outcome.tag : null;
   const unknown2 = describe(outcome);
   return {
@@ -24004,6 +24000,7 @@ var render = (report) => {
 `;
   }
   lines.push(`latest     ${report.latest ?? "unknown"}`);
+  lines.push(`source     ${report.source}`);
   lines.push(
     report.updateAvailable ? `
 a newer release is available. To upgrade:
@@ -24030,6 +24027,17 @@ var register10 = (program3) => {
     process.stdout.write(render(report));
     if (report.latest === null) return;
     if (!report.updateAvailable && options.force !== true) return;
+    if (report.latest === `v${report.current}`) {
+      process.stdout.write(
+        `
+${report.current} is already installed and ${report.latest} is the newest release, so there is nothing to install. Nothing was changed.
+`
+      );
+      return;
+    }
+    process.stdout.write(`
+installing ${report.latest}
+`);
     const blocked2 = process.env["COMMITLORE_NO_AUTO_UPDATE"];
     if (blocked2 !== void 0 && blocked2 !== "") {
       process.stdout.write(
