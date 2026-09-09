@@ -12,7 +12,7 @@ import { identityCarriesInjection, scanInjection, scanTrailer } from '../core/gr
 import { execGit, canonicalCommittedAt } from '../core/git.js';
 import { listRecordShas, notesAvailability, readRecord, } from '../core/notes.js';
 import { findDanglingRefs, findIdCollisions, foldLifecycle, isStale, } from '../core/stale.js';
-import { parseCommitMessage } from '../core/trailers.js';
+import { parseRecordBlocks } from '../core/trailers.js';
 /**
  * How many commits a scan reads when `--all-history` is not given. A bounded
  * default keeps `stale` fast on a deep repository; the cost is that anything
@@ -47,21 +47,37 @@ const EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambigu
  * is impossible.
  */
 const CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
+/**
+ * Every record block in the message, not just the last one (#898).
+ *
+ * This used `parseCommitMessage`, which is git's view: the last paragraph only.
+ * A squash that preserves each source record as its own block therefore reached
+ * the fold as a single record carrying the final block, and every id declared in
+ * an earlier block was invisible. A `Follows:` pointing at one of them was then
+ * reported as `dangling-ref` — "want an existing Record-Id in history" — about a
+ * record present in the very same commit.
+ *
+ * `validate` already reads every block through `parseRecordBlocks`, and so does
+ * the index, which is why the two disagreed on one commit: `validate -c HEAD`
+ * said references ok while `stale` called the same reference dangling.
+ *
+ * A commit with no blocks still yields one record with no trailers, so the
+ * commit count and the notes-mirror comparison below keep their shape.
+ */
 const parseChunk = (chunk) => {
     const firstSep = chunk.indexOf(UNIT);
     if (firstSep === -1)
-        return null;
+        return [];
     const secondSep = chunk.indexOf(UNIT, firstSep + 1);
     if (secondSep === -1)
-        return null;
+        return [];
+    const sha = chunk.slice(0, firstSep);
+    const committedAt = canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep));
     const message = chunk.slice(secondSep + 1);
-    const trailers = CANDIDATE_LINE_RE.test(message) ? parseCommitMessage(message) : [];
-    return {
-        sha: chunk.slice(0, firstSep),
-        committedAt: canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep)),
-        trailers,
-        source: 'commit',
-    };
+    const blocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocks(message) : [];
+    if (blocks.length === 0)
+        return [{ sha, committedAt, trailers: [], source: 'commit' }];
+    return blocks.map((trailers) => ({ sha, committedAt, trailers, source: 'commit' }));
 };
 /**
  * Reads the record stream from git, newest commit first (the fold reorders it).
@@ -83,11 +99,27 @@ export const collectRecords = (opts = {}) => {
     const commitRecords = result.stdout
         .split('\u0000')
         .filter((chunk) => chunk.length > 0)
-        .map(parseChunk)
-        .filter((record) => record !== null);
-    const commitsBySha = new Map(commitRecords.map((record) => [record.sha, record]));
+        .flatMap(parseChunk);
+    // One commit may now contribute several records, so anything that counts
+    // commits counts distinct shas. Counting records here would report a
+    // multi-block repository as larger than it is, and would trip the truncation
+    // flag below on a history well short of the scan limit.
+    const shas = new Set(commitRecords.map((record) => record.sha));
+    // The mirror comparison is against everything the commit declares, across all
+    // of its blocks -- a note mirroring one block of a squash must still count as
+    // mirrored.
+    const trailersBySha = new Map();
+    for (const record of commitRecords) {
+        const existing = trailersBySha.get(record.sha);
+        if (existing === undefined) {
+            trailersBySha.set(record.sha, { committedAt: record.committedAt, trailers: [...record.trailers] });
+        }
+        else {
+            existing.trailers.push(...record.trailers);
+        }
+    }
     const noteRecords = listRecordShas({ cwd }).flatMap((sha) => {
-        const commit = commitsBySha.get(sha);
+        const commit = trailersBySha.get(sha);
         if (commit === undefined)
             return [];
         const trailers = readRecord(sha, { cwd });
@@ -98,8 +130,8 @@ export const collectRecords = (opts = {}) => {
     });
     return {
         records: [...commitRecords, ...noteRecords],
-        commits: commitRecords.length,
-        truncated: opts.allHistory !== true && commitRecords.length >= DEFAULT_SCAN_LIMIT,
+        commits: shas.size,
+        truncated: opts.allHistory !== true && shas.size >= DEFAULT_SCAN_LIMIT,
         notes,
     };
 };

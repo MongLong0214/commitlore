@@ -21704,6 +21704,24 @@ var squashCandidates = (ctx, head) => {
     branchesChecked: branches.length
   };
 };
+var upstreamRecordIds = (ctx) => {
+  const { opts, git: git2 } = ctx;
+  const upstream = git2(
+    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+    gitOptions2(opts)
+  );
+  if (upstream.code !== 0) return null;
+  const ref = upstream.stdout.trim();
+  if (ref === "") return null;
+  const log = git2(["log", ref, "--format=%B"], gitOptions2(opts));
+  if (log.code !== 0) return null;
+  const ids = /* @__PURE__ */ new Set();
+  for (const match of log.stdout.matchAll(/^Record-Id:[ \t]*(\S+)[ \t]*$/gm)) {
+    const id2 = match[1];
+    if (id2 !== void 0) ids.add(id2);
+  }
+  return { ref, ids };
+};
 var branchContentFate = (ctx, candidate, head) => {
   const { opts, git: git2 } = ctx;
   const changed = git2(
@@ -21728,6 +21746,12 @@ var branchContentFate = (ctx, candidate, head) => {
   if (matching === paths.length) return "present-in-head";
   if (missingFromHead === paths.length) return "absent-from-head";
   return "unknown";
+};
+var upstreamNote = (upstream, onUpstreamOnly) => {
+  if (upstream === null || onUpstreamOnly.length === 0) return "";
+  const named = [...new Set(onUpstreamOnly.map((entry) => entry.recordId))].slice(0, 5).join(", ");
+  const more = onUpstreamOnly.length > 5 ? `, and ${onUpstreamOnly.length - 5} more` : "";
+  return `. A further ${onUpstreamOnly.length} record(s) are already on ${upstream.ref} and are not lost \u2014 this checkout is behind it: ${named}${more}`;
 };
 var scanLimitDetail = (scan2) => scan2.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES ? `; only the first ${MAX_SQUASH_CANDIDATE_BRANCHES} of ${scan2.branchesSeen} local branches were checked` : "";
 var scanEvidence = (scan2, evidence) => scan2.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES ? {
@@ -21777,7 +21801,9 @@ var checkSquashConservation = (ctx) => {
     );
   }
   let known = null;
+  let upstreamKnown = null;
   const lost = [];
+  const onUpstreamOnly = [];
   let uncheckable = 0;
   let checked = 0;
   const headSha2 = head.stdout.trim();
@@ -21802,9 +21828,14 @@ var checkSquashConservation = (ctx) => {
         runQuery({ cwd, allHistory: true }).records.map((record2) => record2.recordId).filter((recordId) => recordId !== void 0)
       );
     }
+    if (upstreamKnown === null) upstreamKnown = upstreamRecordIds(ctx);
     let fate = null;
     for (const recordId of ids) {
       if (known.has(recordId)) continue;
+      if (upstreamKnown !== null && upstreamKnown.ids.has(recordId)) {
+        onUpstreamOnly.push({ branch: candidate.branch, recordId });
+        continue;
+      }
       fate ??= branchContentFate(ctx, candidate, headSha2);
       lost.push({ branch: candidate.branch, recordId, fate });
     }
@@ -21853,7 +21884,7 @@ var checkSquashConservation = (ctx) => {
       category2,
       title2,
       "warn",
-      `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan2)}`,
+      `${lost.length} record(s) declared on a branch not reachable from HEAD could not be found in HEAD's history: ${named}${more}${upstreamNote(upstreamKnown, onUpstreamOnly)}${scanLimitDetail(scan2)}`,
       fix,
       false,
       void 0,
@@ -21865,12 +21896,14 @@ var checkSquashConservation = (ctx) => {
           lost_count: String(lost.length),
           squashed_count: String(lost.filter((entry) => entry.fate === "present-in-head").length),
           unmerged_count: String(lost.filter((entry) => entry.fate === "absent-from-head").length),
-          undetermined_count: String(lost.filter((entry) => entry.fate === "unknown").length)
+          undetermined_count: String(lost.filter((entry) => entry.fate === "unknown").length),
+          on_upstream_count: String(onUpstreamOnly.length)
         })
       }
     );
   }
-  const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)${scanLimitDetail(scan2)}` : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD${scanLimitDetail(scan2)}`;
+  const reach = upstreamKnown !== null && onUpstreamOnly.length > 0 ? `every declared Record-Id is accounted for \u2014 ${onUpstreamOnly.length} of them on ${upstreamKnown.ref} rather than in this checkout, which is behind it` : "every declared Record-Id is reachable from HEAD";
+  const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, ${reach} (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)${scanLimitDetail(scan2)}` : `${checked} squash-shaped branch(es) checked, ${reach}${scanLimitDetail(scan2)}`;
   return check(
     id2,
     category2,
@@ -21885,7 +21918,11 @@ var checkSquashConservation = (ctx) => {
         candidates: String(candidates.length),
         checked: String(checked),
         uncheckable: String(uncheckable),
-        lost_count: "0"
+        lost_count: "0",
+        // Only when it says something. `scanEvidence` sets the same precedent
+        // for the branch cap, and a key that is always "0" on a healthy
+        // repository is churn in every pinned report.
+        ...onUpstreamOnly.length === 0 ? {} : { on_upstream_count: String(onUpstreamOnly.length) }
       })
     }
   );
@@ -23565,6 +23602,16 @@ var usesTemporaryCommitIndex = (cwd) => {
   if (gitDir.code !== 0) return false;
   return resolve14(cwd, currentIndex) !== resolve14(cwd, gitDir.stdout.trim(), "index");
 };
+var reportExpired = (pending2) => {
+  const label = captureLabel(pending2);
+  const expiredAt = pending2.expires_at;
+  const agoMinutes = expiredAt === null ? null : Math.max(0, Math.round((Date.now() - new Date(expiredAt).getTime()) / 6e4));
+  const when = agoMinutes === null ? "" : ` ${agoMinutes} minute(s) ago`;
+  process.stderr.write(
+    `commitlore: staged capture ${label} expired${when} and was not attached; this commit carries no record. Re-run capture to record it, or see \`commitlore pending show\`.
+`
+  );
+};
 var reportDiffMismatch = (pending2, cwd) => {
   const label = captureLabel(pending2);
   const detail = usesTemporaryCommitIndex(cwd) ? "this commit uses a temporary index whose staged diff differs from the verified capture" : "the staged diff differs from the verified capture";
@@ -23614,9 +23661,12 @@ var applyCaptureRecord = (messageFile, cwd) => {
       reportDiffMismatch(pending3, cwd);
       continue;
     }
-    if (!pending3.expires_at) continue;
-    if (now >= new Date(pending3.expires_at).getTime()) continue;
     if (pending3.policy_identity_hash !== currentPolicyHash) continue;
+    if (!pending3.expires_at) continue;
+    if (now >= new Date(pending3.expires_at).getTime()) {
+      reportExpired(pending3);
+      continue;
+    }
     eligible.push(pending3);
   }
   eligible.sort(compareCaptureCandidates);
@@ -35511,17 +35561,15 @@ var EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguou
 var CANDIDATE_LINE_RE2 = /^[A-Za-z][A-Za-z0-9-]*:/m;
 var parseChunk = (chunk) => {
   const firstSep = chunk.indexOf(UNIT2);
-  if (firstSep === -1) return null;
+  if (firstSep === -1) return [];
   const secondSep = chunk.indexOf(UNIT2, firstSep + 1);
-  if (secondSep === -1) return null;
+  if (secondSep === -1) return [];
+  const sha = chunk.slice(0, firstSep);
+  const committedAt = canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep));
   const message = chunk.slice(secondSep + 1);
-  const trailers = CANDIDATE_LINE_RE2.test(message) ? parseCommitMessage(message) : [];
-  return {
-    sha: chunk.slice(0, firstSep),
-    committedAt: canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep)),
-    trailers,
-    source: "commit"
-  };
+  const blocks = CANDIDATE_LINE_RE2.test(message) ? parseRecordBlocks(message) : [];
+  if (blocks.length === 0) return [{ sha, committedAt, trailers: [], source: "commit" }];
+  return blocks.map((trailers) => ({ sha, committedAt, trailers, source: "commit" }));
 };
 var collectRecords = (opts = {}) => {
   const cwd = opts.cwd ?? process.cwd();
@@ -35536,10 +35584,19 @@ var collectRecords = (opts = {}) => {
     }
     throw new Error(`git log failed (exit ${result.code}): ${result.stderr.trim()}`);
   }
-  const commitRecords = result.stdout.split("\0").filter((chunk) => chunk.length > 0).map(parseChunk).filter((record2) => record2 !== null);
-  const commitsBySha = new Map(commitRecords.map((record2) => [record2.sha, record2]));
+  const commitRecords = result.stdout.split("\0").filter((chunk) => chunk.length > 0).flatMap(parseChunk);
+  const shas = new Set(commitRecords.map((record2) => record2.sha));
+  const trailersBySha = /* @__PURE__ */ new Map();
+  for (const record2 of commitRecords) {
+    const existing = trailersBySha.get(record2.sha);
+    if (existing === void 0) {
+      trailersBySha.set(record2.sha, { committedAt: record2.committedAt, trailers: [...record2.trailers] });
+    } else {
+      existing.trailers.push(...record2.trailers);
+    }
+  }
   const noteRecords = listRecordShas({ cwd }).flatMap((sha) => {
-    const commit = commitsBySha.get(sha);
+    const commit = trailersBySha.get(sha);
     if (commit === void 0) return [];
     const trailers = readRecord(sha, { cwd });
     const mirrored = trailers.every(
@@ -35549,8 +35606,8 @@ var collectRecords = (opts = {}) => {
   });
   return {
     records: [...commitRecords, ...noteRecords],
-    commits: commitRecords.length,
-    truncated: opts.allHistory !== true && commitRecords.length >= DEFAULT_SCAN_LIMIT,
+    commits: shas.size,
+    truncated: opts.allHistory !== true && shas.size >= DEFAULT_SCAN_LIMIT,
     notes
   };
 };
