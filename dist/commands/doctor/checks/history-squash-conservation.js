@@ -52,6 +52,45 @@ const squashCandidates = (ctx, head) => {
     };
 };
 /**
+ * Record ids declared on the branch this checkout tracks (#897).
+ *
+ * `known` is HEAD's history, and a checkout that is merely behind its remote
+ * therefore reads as a repository that lost records. The reporter's case: the
+ * squash landed on `origin/main`, their local branch had not caught up, and the
+ * check named thirteen records as absent while `git log origin/main` found
+ * every one of them. They had verified against the remote; the check reads
+ * HEAD. Both were right about different refs, which is why an index rebuild
+ * changed nothing.
+ *
+ * Scoped to the tracked upstream rather than every remote-tracking ref. A
+ * feature branch pushed to `origin` but never merged carries its ids too, and
+ * counting those would excuse exactly the loss this check exists to find.
+ *
+ * A literal `^Record-Id:` scan rather than the parser, because the question is
+ * only whether the identity appears at all, and the reporter proposed the same:
+ * an id is a literal string. Anchoring to the declaration form matters —
+ * `Supersedes: r-x` names an id without declaring it, and must not count.
+ */
+const upstreamRecordIds = (ctx) => {
+    const { opts, git } = ctx;
+    const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], gitOptions(opts));
+    if (upstream.code !== 0)
+        return null;
+    const ref = upstream.stdout.trim();
+    if (ref === '')
+        return null;
+    const log = git(['log', ref, '--format=%B'], gitOptions(opts));
+    if (log.code !== 0)
+        return null;
+    const ids = new Set();
+    for (const match of log.stdout.matchAll(/^Record-Id:[ \t]*(\S+)[ \t]*$/gm)) {
+        const id = match[1];
+        if (id !== undefined)
+            ids.add(id);
+    }
+    return { ref, ids };
+};
+/**
  * Compares blob ids per touched path rather than trees or patch ids.
  *
  * `git cherry` and `patch-id` cannot answer this: a squash collapses N commits
@@ -95,6 +134,18 @@ const branchContentFate = (ctx, candidate, head) => {
     if (missingFromHead === paths.length)
         return 'absent-from-head';
     return 'unknown';
+};
+/**
+ * Names the records the tracked upstream already carries, so the row cannot be
+ * read as a loss when the only thing missing is a pull (#897).
+ */
+const upstreamNote = (upstream, onUpstreamOnly) => {
+    if (upstream === null || onUpstreamOnly.length === 0)
+        return '';
+    const named = [...new Set(onUpstreamOnly.map((entry) => entry.recordId))].slice(0, 5).join(', ');
+    const more = onUpstreamOnly.length > 5 ? `, and ${onUpstreamOnly.length - 5} more` : '';
+    return (`. A further ${onUpstreamOnly.length} record(s) are already on ${upstream.ref} and are not lost` +
+        ` — this checkout is behind it: ${named}${more}`);
 };
 const scanLimitDetail = (scan) => scan.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES
     ? `; only the first ${MAX_SQUASH_CANDIDATE_BRANCHES} of ${scan.branchesSeen} local branches were checked`
@@ -155,7 +206,9 @@ export const checkSquashConservation = (ctx) => {
         });
     }
     let known = null;
+    let upstreamKnown = null;
     const lost = [];
+    const onUpstreamOnly = [];
     let uncheckable = 0;
     let checked = 0;
     const headSha = head.stdout.trim();
@@ -185,12 +238,23 @@ export const checkSquashConservation = (ctx) => {
                 .records.map((record) => record.recordId)
                 .filter((recordId) => recordId !== undefined));
         }
+        if (upstreamKnown === null)
+            upstreamKnown = upstreamRecordIds(ctx);
         // Classified once per branch, and only when the branch has actually lost
         // something — an ok run pays nothing for it.
         let fate = null;
         for (const recordId of ids) {
             if (known.has(recordId))
                 continue;
+            // Present on the branch this checkout tracks: the record is not lost, the
+            // checkout is behind (#897). Reported separately so the operator learns
+            // to pull rather than to run squash-preserve -- which would write a
+            // duplicate note for a record the upstream already carries, producing the
+            // withheld-record condition of #890.
+            if (upstreamKnown !== null && upstreamKnown.ids.has(recordId)) {
+                onUpstreamOnly.push({ branch: candidate.branch, recordId });
+                continue;
+            }
             fate ??= branchContentFate(ctx, candidate, headSha);
             lost.push({ branch: candidate.branch, recordId, fate });
         }
@@ -236,7 +300,8 @@ export const checkSquashConservation = (ctx) => {
                 (preservable.length === lost.length
                     ? ''
                     : ` (only the ${preservable.length} on a branch whose changes reached HEAD)`);
-        return check(id, category, title, 'warn', `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan)}`, fix, false, undefined, {
+        return check(id, category, title, 'warn', `${lost.length} record(s) declared on a branch not reachable from HEAD could not be found in ` +
+            `HEAD's history: ${named}${more}${upstreamNote(upstreamKnown, onUpstreamOnly)}${scanLimitDetail(scan)}`, fix, false, undefined, {
             evidence: scanEvidence(scan, {
                 candidates: String(candidates.length),
                 checked: String(checked),
@@ -245,19 +310,32 @@ export const checkSquashConservation = (ctx) => {
                 squashed_count: String(lost.filter((entry) => entry.fate === 'present-in-head').length),
                 unmerged_count: String(lost.filter((entry) => entry.fate === 'absent-from-head').length),
                 undetermined_count: String(lost.filter((entry) => entry.fate === 'unknown').length),
+                on_upstream_count: String(onUpstreamOnly.length),
             }),
         });
     }
+    // "Reachable from HEAD" would be false for a record this checkout has not
+    // pulled yet, so the ok row says where each one actually is (#897).
+    const reach = upstreamKnown !== null && onUpstreamOnly.length > 0
+        ? `every declared Record-Id is accounted for — ${onUpstreamOnly.length} of them on ` +
+            `${upstreamKnown.ref} rather than in this checkout, which is behind it`
+        : 'every declared Record-Id is reachable from HEAD';
     const detail = uncheckable > 0
-        ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD ` +
+        ? `${checked} squash-shaped branch(es) checked, ${reach} ` +
             `(${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)${scanLimitDetail(scan)}`
-        : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD${scanLimitDetail(scan)}`;
+        : `${checked} squash-shaped branch(es) checked, ${reach}${scanLimitDetail(scan)}`;
     return check(id, category, title, 'ok', detail, null, false, undefined, {
         evidence: scanEvidence(scan, {
             candidates: String(candidates.length),
             checked: String(checked),
             uncheckable: String(uncheckable),
             lost_count: '0',
+            // Only when it says something. `scanEvidence` sets the same precedent
+            // for the branch cap, and a key that is always "0" on a healthy
+            // repository is churn in every pinned report.
+            ...(onUpstreamOnly.length === 0
+                ? {}
+                : { on_upstream_count: String(onUpstreamOnly.length) }),
         }),
     });
 };

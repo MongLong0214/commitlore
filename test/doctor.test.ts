@@ -1361,6 +1361,55 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     expect(entry?.evidence['unmerged_count']).toBe('1');
   });
 
+  /**
+   * #897: the check reads local HEAD, and a checkout that is merely behind its
+   * remote therefore reads as a repository that lost records. The reporter saw
+   * thirteen named as absent while `git log origin/main` found every one of
+   * them — they verified against the remote, the check reads HEAD, and both
+   * were right about different refs. An index rebuild changed nothing because a
+   * rebuild re-derives the same HEAD-scoped answer.
+   *
+   * It matters beyond a false warning: acting on it runs `squash-preserve
+   * --target` and writes a duplicate note for a record the upstream already
+   * carries, which is the withheld-record condition of #890.
+   */
+  const withUpstreamCarrying = (repo: string, recordId: string): void => {
+    const base = git(repo, ['rev-parse', 'HEAD']).trim();
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    writeFileSync(join(repo, 'feature.ts'), 'export const x = 1;\n');
+    git(repo, ['add', '--', 'feature.ts']);
+    git(repo, ['commit', '--quiet', '-m', `add the feature\n\nLimit: capped\nRecord-Id: ${recordId}\n`]);
+    git(repo, ['checkout', '--quiet', 'main']);
+    git(repo, ['merge', '--squash', 'feature']);
+    // The squash message carries the branch's record, the way a preserving
+    // merge helper writes it.
+    git(repo, ['commit', '--quiet', '-m', `Squash in the feature\n\nLimit: capped\nRecord-Id: ${recordId}\n`]);
+    const squash = git(repo, ['rev-parse', 'HEAD']).trim();
+
+    // The squash exists only on the tracked upstream; this checkout is behind.
+    git(repo, ['remote', 'add', 'origin', 'https://example.invalid/r.git']);
+    git(repo, ['update-ref', 'refs/remotes/origin/main', squash]);
+    git(repo, ['checkout', '--quiet', '-B', 'main', base]);
+    git(repo, ['config', 'branch.main.remote', 'origin']);
+    git(repo, ['config', 'branch.main.merge', 'refs/heads/main']);
+  };
+
+  it('does not call a record lost when the tracked upstream carries it', () => {
+    const repo = initRepo('squash-conservation-upstream');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    withUpstreamCarrying(repo, 'r-upstream8971');
+
+    const report = runDoctor({ cwd: repo });
+    const entry = report.checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toContain('origin/main');
+    expect(entry?.detail, 'told the operator to preserve a record the remote already has').not.toContain(
+      'squash-preserve',
+    );
+    expect(entry?.evidence['on_upstream_count']).toBe('1');
+  });
+
   it('still prescribes squash-preserve for the squashed branch when both kinds are present', () => {
     const repo = initRepo('squash-conservation-mixed');
     git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
