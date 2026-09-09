@@ -59,7 +59,13 @@ import {
   type DraftRecord,
   type DraftRejection,
 } from './harvest.js';
-import { verifyDraft, type RejectionReason, type Sources } from './harvest-verify.js';
+import {
+  REPAIR_GUIDANCE,
+  verifyDraft,
+  type RejectedRecord,
+  type RejectionReason,
+  type Sources,
+} from './harvest-verify.js';
 import { closeIndex, openIndex, scanTrailers, updateIndex } from './index-db.js';
 import { writeRecord } from './notes.js';
 import { validateRecord } from './schema.js';
@@ -714,12 +720,81 @@ const promptMode = (
  * Every trailer that survives to the mirror came out of a record the verifier
  * accepted, and the only trailer this module adds is the one it is required to.
  */
+/**
+ * What else went with a rejected record (#901).
+ *
+ * `verifyDraft` grades a whole record, so a draft carrying two grounded
+ * `Limit:` trailers and one `Ruled-out:` that fails is discarded entire. That
+ * is defensible for a record's identity and is unchanged here. What was missing
+ * is the report: the rejection named the failing trailer and said nothing about
+ * the others, so an author who did not re-read the whole record lost evidence
+ * they had and had to resubmit it alone.
+ *
+ * The claim about the re-read is only made where it is true. `verifyDraft`
+ * chains its rules and stops at the first failure, so a rejection for
+ * `ruled-out-no-rejection` or `invalid` is reached only after `unfoundEvidence`
+ * has confirmed every citation in the record — including the surviving ones.
+ * A rejection for a quote that was not found proves nothing about its siblings,
+ * and there the line says only what was dropped.
+ */
+const QUOTES_ALREADY_CHECKED: ReadonlySet<string> = new Set([
+  'ruled-out-no-rejection',
+  'enum',
+  'format',
+  'unknown-key',
+]);
+
+const collateral = (rejected: RejectedRecord): string => {
+  const failing = rejected.reason === 'ruled-out-no-rejection' ? 'Ruled-out' : null;
+  // Identity and provenance are this command's own, not the author's: backfill
+  // stamps `Provenance: reconstructed` on every draft record, so counting it
+  // would tell the author they lost a trailer they never wrote.
+  const machinery = new Set(['Record-Id', 'Provenance']);
+  const others = rejected.record.trailers.filter(
+    (trailer) => !machinery.has(trailer.key) && trailer.key !== failing,
+  );
+  if (others.length === 0) return '';
+  const keys = [...new Set(others.map((trailer) => trailer.key))].join(', ');
+  return QUOTES_ALREADY_CHECKED.has(rejected.reason)
+    ? ` — ${others.length} other trailer(s) in this record passed the re-read and were not stored (${keys})`
+    : ` — ${others.length} other trailer(s) in this record were dropped with it (${keys})`;
+};
+
+/**
+ * The repair guidance, which backfill never showed (#902).
+ *
+ * `harvest` prints it in its repair round. Backfill has no repair round by
+ * design, so the author saw the reason and the detail and nothing about what
+ * shape would have passed — and two independent drafting sessions read
+ * `ruled-out-no-rejection` as "quote more context" and over-read design prose
+ * again. There is no repair round to add; there is a sentence to print.
+ */
+const repairHint = (reason: RejectionReason): string => {
+  const guidance = REPAIR_GUIDANCE[reason];
+  return guidance === undefined ? '' : `. Fix: ${guidance}`;
+};
+
+/**
+ * The assembled trailer block, and how many of the draft's records survived to
+ * make it (#902).
+ *
+ * A commit's records are merged into one block, so the caller used to count one
+ * per commit and print that as a record total: a round that stored 25 records
+ * across 13 commits reported `attached 13 records`, and a reader who trusts the
+ * line under-counts what was written by half.
+ */
+interface AssembledRecord {
+  trailers: Trailer[];
+  /** Draft records that survived verification for this commit. */
+  records: number;
+}
+
 const assembleRecord = (
   state: RunState,
   sha: string,
   entry: DraftCommitEntry,
   sources: Sources,
-): Trailer[] | null => {
+): AssembledRecord | null => {
   let review;
   try {
     review = parseDraft(JSON.stringify({ records: entry.records }));
@@ -739,7 +814,11 @@ const assembleRecord = (
 
   const verified = verifyDraft(forced, sources);
   for (const rejected of verified.rejected) {
-    state.report.discarded.push({ sha, reason: rejected.reason, detail: rejected.detail });
+    state.report.discarded.push({
+      sha,
+      reason: rejected.reason,
+      detail: `${rejected.detail}${collateral(rejected)}${repairHint(rejected.reason)}`,
+    });
   }
   if (verified.accepted.length === 0) return null;
 
@@ -766,7 +845,7 @@ const assembleRecord = (
     return null;
   }
 
-  return trailers;
+  return { trailers, records: verified.accepted.length };
 };
 
 const applyMode = (
@@ -779,6 +858,24 @@ const applyMode = (
 ): void => {
   const entries = new Map<string, DraftCommitEntry>();
   const targetShas = new Set(targets.map((target) => target.sha));
+
+  /**
+   * A draft names the commits it means (#901). `--limit` bounds how many
+   * recordless commits to *offer*, and by the time a draft exists that choice
+   * has been made — so a commit the draft names is worked whether or not this
+   * run's window happens to reach it.
+   *
+   * Before, `--prompt-only --limit 20` could offer a commit that a later plain
+   * `--draft` refused as outside its own default-50 window, and the same file
+   * attached unchanged under `--limit 5000`. The window is the run's, not the
+   * draft's, and nothing about a draft entry depends on where a fresh walk
+   * would have stopped.
+   *
+   * The other gates are untouched: a sha git cannot resolve is still unknown,
+   * a commit that already carries a record is still refused, and a duplicate is
+   * still refused. Only "outside this run's window" stops being a reason.
+   */
+  const extra: BackfillTarget[] = [];
 
   for (const entry of parseDraftDocument(raw)) {
     const sha = resolveCommit(options.cwd, entry.sha);
@@ -795,13 +892,27 @@ const applyMode = (
       continue;
     }
     if (!targetShas.has(sha)) {
-      skip(state, sha, 'not-a-target', 'the commit is outside the selected targets — raise --limit to include it');
-      continue;
+      extra.push({ sha, subject: subjectOf(options.cwd, sha) });
+      targetShas.add(sha);
     }
     entries.set(sha, entry);
   }
 
-  runBatches(state, targets, options.batchSize ?? DEFAULT_BATCH_SIZE, (batch) => {
+  /*
+   * Apply mode works exactly the commits the draft names, in target order.
+   *
+   * Every other target is a no-op here -- the loop below skips a target with no
+   * entry -- but `runBatches` stops after EMPTY_BATCH_LIMIT consecutive batches
+   * that produced nothing, so those no-ops could converge the run before it
+   * reached a drafted commit further down the list. That is the other half of
+   * #901: raising --limit appeared to fix the window when it was also giving
+   * the walk more chances to reach the commit before converging.
+   *
+   * Convergence still applies to the drafted set, where an empty batch means
+   * records that failed verification rather than commits nobody drafted for.
+   */
+  const worked = [...targets.filter((target) => entries.has(target.sha)), ...extra];
+  runBatches(state, worked, options.batchSize ?? DEFAULT_BATCH_SIZE, (batch) => {
     let produced = 0;
     for (const target of batch) {
       const entry = entries.get(target.sha);
@@ -813,8 +924,9 @@ const applyMode = (
       state.report.pullRequests.collected += found.length;
       const sources = collectSources(options.cwd, target.sha, found);
 
-      const trailers = assembleRecord(state, target.sha, entry, sources);
-      if (trailers === null) continue;
+      const assembled = assembleRecord(state, target.sha, entry, sources);
+      if (assembled === null) continue;
+      const { trailers } = assembled;
 
       state.report.estimatedTokens += estimateTokens(sources.transcript) + estimateTokens(sources.diff);
 
@@ -826,7 +938,10 @@ const applyMode = (
           continue;
         }
       }
-      state.report.attached += 1;
+      // Records, not commits (#902). A commit's records are merged into one
+      // block and written once, so counting the write counted commits and
+      // printed the total as records.
+      state.report.attached += assembled.records;
       produced += 1;
     }
     return produced;
