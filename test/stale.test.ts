@@ -563,6 +563,114 @@ describe('findIdCollisions', () => {
     expect(violations[0]?.value).toBe('r-collide');
   });
 
+  /**
+   * #890: `squash-preserve --target` mirrors a branch's records onto the notes
+   * ref and stamps each block with its own `Provenance: inherited <sha>` --
+   * never inherited, rewritten per block, by design (core/squash.ts). When the
+   * merge helper also composes those records into the merge commit's message,
+   * the note and the message differ by exactly that stamp, and the record was
+   * withheld as declared twice with no way to tell which was current.
+   *
+   * The workflow that produces it is the one the tool recommends: the merge
+   * helper's own output tells the operator to pass `--target`. A record hidden
+   * because it was stored successfully in both supported places is a bad trade.
+   */
+  it('does not flag a note that mirrors its own commit and differs only in Provenance', () => {
+    const violations = findIdCollisions([
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [trailer('Limit', 'assert cleanup before endpointFor()'), trailer('Record-Id', 'r-mirror')],
+      },
+      {
+        sha: 'c1',
+        source: 'notes',
+        trailers: [
+          trailer('Limit', 'assert cleanup before endpointFor()'),
+          trailer('Record-Id', 'r-mirror'),
+          trailer('Provenance', 'inherited 0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f'),
+        ],
+      },
+    ]);
+    expect(violations).toEqual([]);
+  });
+
+  /**
+   * Only the stamp is forgiven. This is r-refint74's rule and the reason it
+   * exists: notes are remote-reachable, so a note whose content diverged must
+   * not inherit an identity a human approved.
+   */
+  it('still flags a mirror that also changed a payload trailer', () => {
+    const violations = findIdCollisions([
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [trailer('Limit', 'approved content'), trailer('Record-Id', 'r-tampered')],
+      },
+      {
+        sha: 'c1',
+        source: 'notes',
+        trailers: [
+          trailer('Limit', 'attacker content'),
+          trailer('Record-Id', 'r-tampered'),
+          trailer('Provenance', 'inherited 0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f'),
+        ],
+      },
+    ]);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.value).toBe('r-tampered');
+  });
+
+  it('still flags a mirror that added a trailer beyond the stamp', () => {
+    const violations = findIdCollisions([
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [trailer('Limit', 'approved content'), trailer('Record-Id', 'r-extra')],
+      },
+      {
+        sha: 'c1',
+        source: 'notes',
+        trailers: [
+          trailer('Limit', 'approved content'),
+          trailer('Record-Id', 'r-extra'),
+          trailer('Provenance', 'inherited 0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f'),
+          trailer('Certainty', 'firm'),
+        ],
+      },
+    ]);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.value).toBe('r-extra');
+  });
+
+  /**
+   * The forgiveness is scoped to one commit's own mirror. Two different commits
+   * declaring one id, differing only in Provenance, are still two declarations
+   * and nothing here says which is current.
+   */
+  it('still flags a Provenance-only difference between two different commits', () => {
+    const violations = findIdCollisions([
+      {
+        sha: 'c1',
+        source: 'commit',
+        committedAt: '2026-03-01T12:00:00Z',
+        trailers: [trailer('Limit', 'same content'), trailer('Record-Id', 'r-twoshas')],
+      },
+      {
+        sha: 'c2',
+        source: 'notes',
+        committedAt: '2026-03-01T12:00:01Z',
+        trailers: [
+          trailer('Limit', 'same content'),
+          trailer('Record-Id', 'r-twoshas'),
+          trailer('Provenance', 'inherited 0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f'),
+        ],
+      },
+    ]);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.value).toBe('r-twoshas');
+  });
+
   it('flags a same-second conflict that a declared succession cannot order (issue #350)', () => {
     // `Supersedes:` names the intent but not the order. Both commits landed in
     // the same committer second, so nothing in history says which declaration
