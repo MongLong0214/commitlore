@@ -4,6 +4,40 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.12
+
+**`doctor` called a deliberately fail-closed hook broken, and offered to break it
+(#910).** The preserved `commit-msg` hook is probed under a PATH carrying no
+interpreter, and any non-zero exit was a `fail` prescribing `fix or remove`. A
+hook written to refuse when it cannot run its own check therefore failed that
+row permanently — and the remedy on offer was to make it fail open, which
+reopens the class of defect the hook exists to close. The reporting repository
+had closed exactly that defect days earlier: a missing interpreter used to make
+their hook blame the message, announcing that the message wrote a record git
+would not store, about a check that had never run.
+
+The probe itself was measuring the right thing. `PATH=/usr/bin:/bin` is close to
+what a commit started from a GUI or a daemon actually gets, so a fail-closed hook
+does block those commits and that is worth a row. What the check could not do was
+tell a deliberate refusal from a broken script, because it read only the exit
+code.
+
+It now asks the same question twice. A hook that accepts the probe when an
+interpreter is on PATH and refuses when none is, is PATH-sensitive rather than
+broken: that is the repository's own decision, and it reports as a `warn` naming
+the consequence — commits started where git's PATH has no interpreter are blocked
+by it — with nothing prescribed and no effect on `doctor`'s exit code. A hook
+that fails under either PATH is broken whatever it intended, and still reports
+`fail`.
+
+CommitLore's own hook keeps the stricter contract: it must work with no node on
+PATH, because it records its interpreter.
+
+The `commit-msg hook` row inherits the runtime's outcome, and a finding that
+names nothing to repair used to acquire `commitlore hooks install` on the way
+out. That was the same misdirection removed in #876, in a milder form; a fix of
+nothing now passes through as nothing.
+
 ## 1.2.11
 
 A third backfill round in the same repository, and the two failures it found are

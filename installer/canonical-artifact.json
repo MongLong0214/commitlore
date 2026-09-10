@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "f72c51557d8b32bb3790e5d656e1390332fcbccc0c9d645c63e4a118308b873d"
+    "sha256": "ae8190288d20fc5f41faf62b758424e4fcc1fd1ae18e5678ab08e762bfbca27a"
   },
   "artifact": {
-    "sha256": "1b81d8e6cea37cede494053e66e117e9654c6d10bda841588019c33af967342a",
+    "sha256": "2c4ab980b56e1ba890c4f8ee4eb38f4dcc2a5ca8934d52484f703d92cfc4429a",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -98,11 +98,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/capture-commit-msg-hook.js",
-        "sha256": "a73e61a8306fdc5662d2277db6ba910686795e890f4d74f80288ebfdb6d8c1cc"
+        "sha256": "5e2645f8614af9e4095e75fc4727d33f3ceff4b1f45a3ee84d40f0b5da98a7c2"
       },
       {
         "path": "dist/commands/doctor/checks/capture-commit-msg-hook.js.map",
-        "sha256": "43aa3b25291294f104ecec701783bfa2c66dc222d9e7bf767b5fd932b57c8a02"
+        "sha256": "666ef25b565e77ef3572e06718ef38f20c98bf3bd72f03c0a75fe99319b80695"
       },
       {
         "path": "dist/commands/doctor/checks/capture-hook-runtime.d.ts",
@@ -110,11 +110,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/capture-hook-runtime.js",
-        "sha256": "94cad831b61540a1091f3ac8b59ca9c7385bc1928e0c36b89c29eb2fa2e892ee"
+        "sha256": "139c46972569591d23efc1da68c98a9bf49cd7f837a04a0fd9c6f3ed956ef9c1"
       },
       {
         "path": "dist/commands/doctor/checks/capture-hook-runtime.js.map",
-        "sha256": "e71f3739c57dfcaad23f75e26d7e1e929ad7265f410928d9aa24f6def2dffbb0"
+        "sha256": "4e43a36c92dacff4f72fac5fb93cbb9de2b79d48937991a428124e394cbb6747"
       },
       {
         "path": "dist/commands/doctor/checks/capture-pending-backlog.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "5c81635359445849f79466a3e5c150a0ce22b0f9e18dad6e81575d7723ad4daf"
+        "sha256": "b948f96615b6d919858c8fd010219c7354813dc3fdbf40fa831de82921ea2926"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
