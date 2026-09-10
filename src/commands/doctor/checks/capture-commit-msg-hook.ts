@@ -119,7 +119,11 @@ export const checkHook = (ctx: DoctorContext, runtime?: DoctorCheck): DoctorChec
     // finding is the only fix that moves this one. Prescribing `hooks install`
     // here regardless is how a preserved hook's failure came to carry a remedy
     // that reinstalls the hook which worked (#876).
-    const inheritedFix = runtime.fix ?? install;
+    // #910: a runtime finding that names nothing to repair passes that through.
+    // A row blocked on "the preserved hook refuses deliberately, and nothing here
+    // needs repairing" must not acquire `hooks install` on the way out — the same
+    // mistake as #876, milder: a remedy that reinstalls the hook which worked.
+    const inheritedFix = runtime.fix === null ? null : (runtime.fix ?? install);
     // A skipped runtime would make this row a skip too, and a skip has to name
     // a reason. Inheriting the runtime's is the only answer that stays true —
     // this row did not look for the same reason that one did not. The branch is
