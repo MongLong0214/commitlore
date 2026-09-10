@@ -112,6 +112,43 @@ export const checkHookRuntime = (ctx) => {
                 const spoke = `${preserved.stderr ?? ''}`.trim();
                 const said = preserved.error?.message ?? (spoke.split('\n')[0] ?? '');
                 const shape = preserved.error === undefined ? classifyFailure(exit, said) : 'unclear';
+                /*
+                 * #910: a preserved hook that refuses when it cannot run its own check is
+                 * behaving correctly, and this row called it a broken installation and
+                 * prescribed "fix or remove" -- which for a fail-closed hook means making
+                 * it fail open, reopening the defect it was written to close.
+                 *
+                 * CommitLore cannot read intent, and parsing the hook's prose for it was
+                 * ruled out: the wording is the repository's and this check is not the
+                 * place to standardise it. What it can do is ask the same question twice.
+                 * Under an inherited PATH the interpreter is present, so a hook that
+                 * passes there and refuses here is PATH-sensitive rather than broken --
+                 * the operator's own decision, reported as a fact with its consequence.
+                 * A hook that fails under any PATH is broken whatever it intended, and
+                 * that is still this check's finding to make.
+                 *
+                 * CommitLore's own hook keeps the stricter contract: it is required to
+                 * work with no node on PATH, because it records its interpreter.
+                 */
+                writeFileSync(probe, PROBE_MESSAGE);
+                const withPath = spawn('/bin/sh', ['-c', '"$0" "$1"', chained, probe], {
+                    shell: false,
+                    encoding: 'utf8',
+                    cwd,
+                    env: { ...hookEnv, PATH: env['PATH'] ?? hookEnv.PATH },
+                });
+                const pathSensitive = withPath.error === undefined && withPath.status === 0;
+                if (pathSensitive) {
+                    return check(id, category, title, 'warn', `commitlore's hook runs. The hook it preserved -- ${chained} -- accepts this message when an interpreter is on PATH and refuses when none is: ${(said || `exit ${String(exit ?? 'unavailable')}`).replace(/[.\s]+$/, '')}. A hook written to refuse rather than pass a check it could not run is doing that deliberately, and nothing here needs repairing; the consequence is that commits started where git's PATH carries no interpreter (a GUI or a daemon, not a shell) are blocked by it, with that message`, null, false, undefined, {
+                        evidence: {
+                            hook_path: hook,
+                            chained_hook_path: chained,
+                            exit_code: String(exit ?? 'unavailable'),
+                            exit_code_with_path: '0',
+                            ...streamEvidence('stderr', preserved.stderr ?? ''),
+                        },
+                    });
+                }
                 const because = shape === 'node-missing'
                     ? `it calls node by name and git's PATH has none: ${said}`
                     : shape === 'node-threw'

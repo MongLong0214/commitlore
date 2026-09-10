@@ -19862,7 +19862,7 @@ var checkHook = (ctx, runtime) => {
   ];
   if (runtime !== void 0 && runtime.status !== "ok") {
     const inherited = `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`;
-    const inheritedFix = runtime.fix ?? install;
+    const inheritedFix = runtime.fix === null ? null : runtime.fix ?? install;
     if (runtime.status === "skipped") {
       return blocked(
         runtime,
@@ -19995,6 +19995,35 @@ var checkHookRuntime = (ctx) => {
         const spoke = `${preserved.stderr ?? ""}`.trim();
         const said = preserved.error?.message ?? (spoke.split("\n")[0] ?? "");
         const shape = preserved.error === void 0 ? classifyFailure(exit, said) : "unclear";
+        writeFileSync5(probe, PROBE_MESSAGE);
+        const withPath = spawn3("/bin/sh", ["-c", '"$0" "$1"', chained, probe], {
+          shell: false,
+          encoding: "utf8",
+          cwd,
+          env: { ...hookEnv, PATH: env["PATH"] ?? hookEnv.PATH }
+        });
+        const pathSensitive = withPath.error === void 0 && withPath.status === 0;
+        if (pathSensitive) {
+          return check(
+            id2,
+            category2,
+            title2,
+            "warn",
+            `commitlore's hook runs. The hook it preserved -- ${chained} -- accepts this message when an interpreter is on PATH and refuses when none is: ${(said || `exit ${String(exit ?? "unavailable")}`).replace(/[.\s]+$/, "")}. A hook written to refuse rather than pass a check it could not run is doing that deliberately, and nothing here needs repairing; the consequence is that commits started where git's PATH carries no interpreter (a GUI or a daemon, not a shell) are blocked by it, with that message`,
+            null,
+            false,
+            void 0,
+            {
+              evidence: {
+                hook_path: hook,
+                chained_hook_path: chained,
+                exit_code: String(exit ?? "unavailable"),
+                exit_code_with_path: "0",
+                ...streamEvidence("stderr", preserved.stderr ?? "")
+              }
+            }
+          );
+        }
         const because = shape === "node-missing" ? `it calls node by name and git's PATH has none: ${said}` : shape === "node-threw" ? `its node process ran but threw (exit ${String(exit)}): ${said}` : `it exited ${String(exit ?? "unavailable")} under the restricted PATH: ${said || "no output"}`;
         return check(
           id2,
