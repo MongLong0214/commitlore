@@ -697,6 +697,51 @@ describe('doctor: hook runtime', () => {
     expect(runtime?.evidence['exit_code']).toBe('127');
   });
 
+  /*
+   * #910: the reporter's hook refuses when it cannot run its own check, and says
+   * which of the two things happened. `doctor` read only the exit code, called a
+   * healthy installation broken, and prescribed "fix or remove" -- which for a
+   * fail-closed hook means making it fail open, reopening the defect it closes.
+   *
+   * The discriminator is behavioural rather than a reading of the hook's prose:
+   * a hook that accepts the probe when an interpreter is on PATH and refuses when
+   * none is, is PATH-sensitive; one that fails under either is broken whatever it
+   * intended, and the two tests around this one still say `fail`.
+   */
+  it('warns rather than fails when the preserved hook refuses only for want of an interpreter', () => {
+    const repo = initRepo('doctor-runtime-chained-fail-closed');
+    installedHook(repo);
+    // Refuses when it cannot find node, accepts the message when it can. The
+    // shape agent-control-plane adopted to stop a missing interpreter being
+    // reported as a bad message.
+    writeScript(
+      chainedPath(repo),
+      [
+        '#!/bin/sh',
+        'if command -v node >/dev/null 2>&1; then exit 0; fi',
+        'echo "commit-msg: could not run the trailer check — no \\`node\\` on the PATH git gave this hook." >&2',
+        'exit 1',
+      ].join('\n') + '\n',
+    );
+    chmodSync(chainedPath(repo), 0o755);
+
+    const report = runDoctor({ cwd: repo });
+    const runtime = report.checks.find((entry) => entry.id === 'hook-runtime');
+    expect(runtime?.status).toBe('warn');
+    expect(runtime?.detail).toContain(chainedPath(repo));
+    expect(runtime?.detail).toMatch(/accepts this message when an interpreter is on PATH/);
+    // The prescription that would reopen the defect must be gone from both rows.
+    expect(runtime?.fix).toBeNull();
+    expect(runtime?.evidence['exit_code_with_path']).toBe('0');
+
+    const installation = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+    expect(installation?.status).toBe('warn');
+    expect(installation?.fix).toBeNull();
+
+    // A deliberate refusal is not a broken installation, so doctor must not exit 1.
+    expect(report.exitCode).toBe(0);
+  });
+
   it('names the preserved hook when it exits non-zero for a reason unrelated to node', () => {
     const repo = initRepo('doctor-runtime-chained-broken');
     installedHook(repo);
