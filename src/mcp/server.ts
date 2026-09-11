@@ -619,7 +619,12 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         'or notes: "unfetched" means the answer is unknown, not empty. coverage: "partial" means this ' +
         'answer is missing records — the scan stopped at its time budget, so absence of a record is not ' +
         'evidence the record does not exist; run `commitlore init` and ask again before concluding anything ' +
-        'from what is not there.' +
+        'from what is not there. coverage: "complete" is not the converse: it says only that the scan was ' +
+        'not truncated, never that the answer is whole. Read vantage as well — every record here is one ' +
+        'the commit in vantage.head can reach, and vantage.behind > 0 means the checkout is behind its ' +
+        'upstream and records written in those commits are absent, so an empty answer is not evidence ' +
+        'that nothing was recorded. vantage.ref: null is a detached head, usually a review worktree, where ' +
+        'that narrower scope is deliberate — state it rather than treat it as a fault.' +
         '\n\nRecording: when a change carries decision context the diff cannot show — a constraint that shaped ' +
         'it, an alternative tried and dropped and why, a warning for whoever touches it next — record it before ' +
         `committing: ${PREPARE_CAPTURE_TOOL} with this session's transcript, then ${VERIFY_CAPTURE_TOOL}, then ` +

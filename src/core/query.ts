@@ -48,8 +48,11 @@ import {
   execGit,
   hasShallowHistory,
   historyAvailability,
+  readVantage,
   SHALLOW_HISTORY_CAVEAT,
+  vantageCaveat,
   type HistoryAvailability,
+  type Vantage,
 } from './git.js';
 import {
   closeIndex,
@@ -285,6 +288,20 @@ export interface QueryResult {
    * the whole of what a path is subject to.
    */
   unreadCommits: number;
+  /**
+   * Where this answer was read from (#930).
+   *
+   * Every field above describes a *source* or the *scan*, and all of them stay
+   * healthy while the walk starts from the wrong commit: the commit source only
+   * ever reads `rev-list HEAD`. So a checkout behind its own already-fetched
+   * upstream answers with zero records, `coverage: "complete"`, `history:
+   * "ready"` and `notes: "present"` — byte-identical to a repository where
+   * nobody ever wrote one, which is the sentence `notes` exists to prevent.
+   *
+   * `vantage.behind` is the signal; the rest is the vantage stated so a caller
+   * can see what the answer is scoped to rather than infer it.
+   */
+  vantage: Vantage;
   /** Anything the caller should be told about how the answer was produced. */
   diagnostics: string[];
 }
@@ -1039,6 +1056,14 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       );
     }
 
+    // The same shape as the two above: a typed field for a consumer that
+    // branches, and a diagnostic for one that only reads prose. Both, because
+    // the failure this reports is an *empty* answer, and a caller who has to
+    // know to look at a new field to find that out is the defect rebuilt.
+    const vantage = readVantage(cwd);
+    const behindCaveat = vantageCaveat(vantage);
+    if (behindCaveat !== null) diagnostics.push(behindCaveat);
+
     return {
       records:
         opts.limit === undefined ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
@@ -1054,6 +1079,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       notes,
       unreadCommits: unread,
       coverage: unread > 0 ? 'partial' : 'complete',
+      vantage,
       diagnostics,
     };
   } finally {

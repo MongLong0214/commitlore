@@ -54,7 +54,7 @@ ok      unattended capture initiator — unattended capture is off; no host init
 ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
-ok      history depth — full history is available
+ok      history depth — full history is available, and HEAD is on main and tracks nothing
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
 skipped squash conservation — no local branch looks like the source of a squash — nothing to check
 ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way"
@@ -87,7 +87,7 @@ ok      unattended capture initiator — unattended capture is off; no host init
 ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
-ok      history depth — full history is available
+ok      history depth — full history is available, and HEAD is on main and tracks nothing
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
 skipped squash conservation — no local branch looks like the source of a squash — nothing to check
 ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way"
@@ -116,7 +116,7 @@ ok      unattended capture initiator — unattended capture is off; no host init
 ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
-ok      history depth — full history is available
+ok      history depth — full history is available, and HEAD is on main and tracks nothing
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
 skipped squash conservation — no local branch looks like the source of a squash — nothing to check
 ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way",
@@ -141,7 +141,7 @@ ok      unattended capture initiator — unattended capture is off; no host init
 ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
-ok      history depth — full history is available
+ok      history depth — full history is available, and HEAD is on main and tracks nothing
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
 skipped squash conservation — no local branch looks like the source of a squash — nothing to check
 ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way",

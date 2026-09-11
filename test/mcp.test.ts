@@ -748,6 +748,11 @@ describe('commitlore_query', () => {
       'runtime',
       'scanned',
       'unreadCommits',
+      // #930: the vantage the walk started from. It reaches MCP through the same
+      // `contextJson` the CLI serializes, so it is listed for the same reason as
+      // `runtime` — and because an agent deciding whether an empty answer means
+      // "nothing was recorded" is exactly the caller this tool exists for.
+      'vantage',
     ]);
     const [record] = overMcp['records'] as Record<string, unknown>[];
     expect(Object.keys(record ?? {}).sort()).toEqual([
