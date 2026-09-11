@@ -129,6 +129,51 @@ export const hasShallowHistory = (cwd) => {
     const shallow = execGit(['rev-parse', '--git-path', 'shallow'], { cwd });
     return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
+export const readVantage = (cwd) => {
+    /*
+     * One `rev-parse`, not three. It takes several arguments and prints a line
+     * for each, and every case this has to answer leaves usable output even when
+     * it exits non-zero -- a detached head prints the sha and `HEAD` alongside
+     * `fatal: HEAD does not point to a branch`, and a branch with no upstream
+     * prints the sha and its ref. This runs on the injection path, where the
+     * measured baseline already sits at 74% of that path's test budget under
+     * load, so three spawns for facts one call carries is not a cost worth paying.
+     *
+     * Lines are matched by shape rather than by position, because which of them
+     * are present is exactly what varies between those cases.
+     */
+    const read = execGit(['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD', '@{upstream}'], {
+        cwd,
+    });
+    const lines = read.stdout.split('\n').map((line) => line.trim()).filter((line) => line !== '');
+    const sha = lines.find((line) => isFullObjectId(line)) ?? '';
+    // `refs/heads/x`, never the bare `HEAD` a detached head prints -- reading that
+    // as a branch name is the mistake `symbolic-ref` was here to avoid.
+    const branchRef = lines.find((line) => line.startsWith('refs/heads/'));
+    const branch = branchRef === undefined ? null : branchRef.slice('refs/heads/'.length);
+    const upstreamRef = lines.find((line) => line.startsWith('refs/remotes/'));
+    const upstream = upstreamRef === undefined ? null : upstreamRef.slice('refs/remotes/'.length);
+    if (upstream === null) {
+        return { head: sha === '' ? null : sha, ref: branch, upstream: null, behind: null };
+    }
+    const counted = execGit(['rev-list', '--count', `HEAD..${upstream}`], { cwd });
+    const parsed = Number.parseInt(counted.stdout.trim(), 10);
+    return {
+        head: sha === '' ? null : sha,
+        ref: branch,
+        upstream,
+        // A git that cannot answer leaves this unknown rather than zero: reporting
+        // 0 here would be this defect rebuilt, an unknown presented as an all-clear.
+        behind: counted.code === 0 && Number.isInteger(parsed) ? parsed : null,
+    };
+};
+/** The caveat for a vantage that is behind, in the words a caller can act on. */
+export const vantageCaveat = (vantage) => vantage.behind === null || vantage.behind === 0
+    ? null
+    : `this checkout is ${String(vantage.behind)} commit(s) behind ${vantage.upstream ?? 'its upstream'}, ` +
+        'and records written in them are absent from this answer — an empty result here is not ' +
+        'evidence that nothing was recorded. ' +
+        'fix: git merge --ff-only, or ask again from a checkout that is up to date';
 /**
  * Git's `%cI` for a UTC commit, spelled one way (#650).
  *

@@ -51,6 +51,21 @@ export interface JsonOutput {
     };
     /** Whether this answer read everything it was asked about (#631, #669). */
     coverage: 'complete' | 'partial';
+    /**
+     * Where the answer was read from (#930).
+     *
+     * `coverage` answers "was the scan truncated". It cannot answer "was the walk
+     * started from a commit that can reach the records", and a checkout behind its
+     * own fetched upstream returns zero records with every other field green. A
+     * client deciding whether an empty answer means "nothing was recorded" has to
+     * read `vantage.behind` as well.
+     */
+    vantage: {
+        head: string | null;
+        ref: string | null;
+        upstream: string | null;
+        behind: number | null;
+    };
     at: string;
     paths: string[];
     aliases: string[];

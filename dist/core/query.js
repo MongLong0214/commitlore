@@ -43,7 +43,7 @@
  * `Supersedes:` them (correct — they have no identity to name) while a
  * date-form `Expires:` still retires them through the same fold.
  */
-import { execGit, hasShallowHistory, historyAvailability, SHALLOW_HISTORY_CAVEAT, } from './git.js';
+import { execGit, hasShallowHistory, historyAvailability, readVantage, SHALLOW_HISTORY_CAVEAT, vantageCaveat, } from './git.js';
 import { closeIndex, ensureIndex, filterTrailers, indexUnread, queryTrailers, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeDeclarations, noteAuthorsOf, signerFingerprintsOf, } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
@@ -709,6 +709,14 @@ export const runQuery = (opts = {}) => {
                 `that exist upstream (git fetch does not fetch ${NOTES_REF} by default). ` +
                 'fix: commitlore doctor --fix, then git fetch');
         }
+        // The same shape as the two above: a typed field for a consumer that
+        // branches, and a diagnostic for one that only reads prose. Both, because
+        // the failure this reports is an *empty* answer, and a caller who has to
+        // know to look at a new field to find that out is the defect rebuilt.
+        const vantage = readVantage(cwd);
+        const behindCaveat = vantageCaveat(vantage);
+        if (behindCaveat !== null)
+            diagnostics.push(behindCaveat);
         return {
             records: opts.limit === undefined ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
             fromIndex: source.fromIndex,
@@ -723,6 +731,7 @@ export const runQuery = (opts = {}) => {
             notes,
             unreadCommits: unread,
             coverage: unread > 0 ? 'partial' : 'complete',
+            vantage,
             diagnostics,
         };
     }
