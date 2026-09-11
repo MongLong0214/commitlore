@@ -151,8 +151,22 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
   {
     id: 'tool.shell-invocation',
     family: 'tool-invocation',
+    // The shell noun has to sit where the verb's *destination* sits: as its
+    // object (`run the terminal`), behind a preposition (`paste this into your
+    // terminal`), or as an interpreter the verb names outright (`execute
+    // bash`). The earlier form — verb, up to 24 characters, shell noun — read
+    // every noun compound as an instruction. In the reporter's repository a
+    // *run* is one execution of the suite and its *terminal* is the end-state
+    // record that execution writes, so `stamping a run terminal is fine` had
+    // every record about that codebase's central object withheld (#931); the
+    // same shape hid three of this repository's own `Verified:` lines (`npm run
+    // build, bash spec/verify.sh`). The object form also stands down when the
+    // verb is itself a modified noun — `the run the terminal writes` — because
+    // an imperative never carries an article; the prepositional form does not,
+    // since `after the build, run this in your terminal` is the instruction
+    // with a decoy in front of it.
     pattern:
-      /\b(?:run|execute|paste|type|enter)\b[^.!?]{0,24}\b(?:shell|terminal|bash|zsh|command line|command prompt)\b/,
+      /(?<!\b(?:a|an|the|each|every|any|its|their|our|my|your|this|that|these|those|one|same|single|previous|latest|current|failed|passed|green|red|nightly|dry|test|ci)\s)\b(?:run|execute|paste|type|enter)\s+(?:the|this|these|those|that|a|an|your|my|its|their|our)\s+(?:[a-z-]+\s+)?(?:shell|terminal|bash|zsh|command line|command prompt)\b|\b(?:run|execute|paste|type|enter)\b[^.!?]{0,24}\b(?:in|into|inside|within|at|on|via|through|from|with|under|using)\s+(?:(?:the|this|that|these|those|a|an|your|my|its|their|our|any|every|each|some)\s+)?(?:[a-z-]+\s+){0,2}(?:shell|terminal|bash|zsh|command line|command prompt)\b|\b(?:run|execute)\s+(?:bash|zsh)\b/,
     negatable: true,
     intent: 'asks for the value to be typed into a shell',
   },
@@ -618,6 +632,26 @@ export const scanTrailer = (trailer: Trailer): string[] => scanInjection(rendere
  */
 export const identityCarriesInjection = (recordId: string): boolean =>
   scanInjection(recordId).length > 0 || scanInjection(`Record-Id: ${recordId}`).length > 0;
+
+/**
+ * Why a trailer would be withheld, said to the one person who can still change
+ * it (#931). Grading is a read-time judgement: the author of a record that
+ * trips a pattern got `staged` from capture and `shape ok` from the commit-msg
+ * hook, and learned at query time, from a different reader, that every trailer
+ * of the record was gone. Capture verification and `validate` both say this,
+ * through one function, so the author hears the same sentence twice rather
+ * than two sentences that might disagree.
+ */
+export const explainWithholding = (key: string, patterns: readonly string[]): string => {
+  const named = INJECTION_PATTERNS.filter((entry) => patterns.includes(entry.id)).map(
+    (entry) => `${entry.id} (${entry.intent})`,
+  );
+  return (
+    `${key}: reads as an instruction to an agent — it matches ${named.join(', ')} — so every ` +
+    'reader would be served this record as [blocked] with all of its trailers withheld (SPEC §7). ' +
+    'Reword the value so it describes rather than instructs, or drop the trailer'
+  );
+};
 
 /*
  * Every trailer is scanned in the form an agent is shown, including the ones

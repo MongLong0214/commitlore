@@ -1,0 +1,5 @@
+chore(release): re-check before tagging
+
+Warn: Re-check with `npm run typecheck, npm run build, bash spec/verify.sh` before tagging; the manifest pins the source hash.
+Record-Id: r-inj041
+Provenance: authored
