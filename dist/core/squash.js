@@ -56,8 +56,9 @@
  */
 import { execGit } from './git.js';
 import { listRecordShas, readRecordBlocks, writeRecordBlocks } from './notes.js';
-import { parseCommitMessage, parseRecordBlocks, serializeTrailers } from './trailers.js';
+import { parseCommitMessage, parseRecordBlocksWithAtom, readTrailersAtom, serializeTrailers, } from './trailers.js';
 import { BLAST_VALUES, CERTAINTY_VALUES, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
+export const newRangeCache = () => ({ messages: new Map() });
 const RECORD_ID_KEY = 'Record-Id';
 const PROVENANCE_KEY = 'Provenance';
 const EXPIRES_KEY = 'Expires';
@@ -180,23 +181,43 @@ export const collectRange = (range, opts = {}) => {
         // inherit every record in the repository onto one merge commit.
         throw new Error(`expected a range <base>..<head>, got ${JSON.stringify(range)}`);
     }
-    const result = execGit(['log', '--reverse', '-z', `--format=${LOG_FORMAT}`, '--end-of-options', range, '--'], gitOptions(opts));
+    const selection = ['--reverse', '--end-of-options', range, '--'];
+    const result = execGit(['log', '-z', `--format=${LOG_FORMAT}`, ...selection], gitOptions(opts));
     if (result.code !== 0) {
         throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine(result.stderr)}`);
     }
     // One `git notes list` instead of one `git notes show` per commit: most
     // commits carry no note, and the mirror is usually far smaller than the range.
-    const mirrored = new Set(listRecordShas(opts));
+    // With a cache, one for the whole invocation rather than one per range.
+    const mirrored = opts.cache?.mirrored ?? new Set(listRecordShas(opts));
+    if (opts.cache !== undefined)
+        opts.cache.mirrored = mirrored;
+    const chunks = result.stdout.split(NUL).filter((chunk) => chunk.length > 0);
+    // The last block of every commit in the range from one more process
+    // (`TRAILERS_ATOM`), so a message pays a process only for the earlier blocks
+    // of SPEC §2.4. Run only when at least two uncached messages would read it:
+    // the doctor row walks one short range per candidate branch, and for a
+    // single message the walk costs exactly the process it saves.
+    const messageCache = opts.cache?.messages;
+    const wouldUseAtom = chunks.filter((chunk) => {
+        const at = chunk.indexOf(UNIT);
+        if (at === -1 || messageCache?.has(chunk.slice(0, at)) === true)
+            return false;
+        return CANDIDATE_LINE_RE.test(chunk.slice(at + 1));
+    }).length;
+    const atoms = wouldUseAtom >= 2 ? readTrailersAtom(selection, gitOptions(opts)) : undefined;
     const collected = [];
-    for (const chunk of result.stdout.split(NUL)) {
-        if (chunk.length === 0)
-            continue;
+    for (const chunk of chunks) {
         const separator = chunk.indexOf(UNIT);
         if (separator === -1)
             continue;
         const sha = chunk.slice(0, separator);
         const message = chunk.slice(separator + 1);
-        const messageBlocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocks(message) : [];
+        const cachedBlocks = opts.cache?.messages.get(sha);
+        const messageBlocks = cachedBlocks ??
+            (CANDIDATE_LINE_RE.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha)) : []);
+        if (cachedBlocks === undefined)
+            opts.cache?.messages.set(sha, messageBlocks);
         const noteBlocks = mirrored.has(sha) ? readRecordBlocks(sha, opts) : [];
         const blocks = mergeCommitBlocks(messageBlocks, noteBlocks);
         for (const trailers of blocks) {

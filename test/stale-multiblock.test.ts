@@ -25,6 +25,8 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { buildReport, collectRecords } from '../src/commands/stale.js';
+import { writeRecordBlocks } from '../src/core/notes.js';
+import type { Trailer } from '../src/core/types.js';
 
 const scratch: string[] = [];
 afterAll(() => {
@@ -115,5 +117,95 @@ describe('#898 the stale scan reads every record block in a message', () => {
 
     expect(report.danglingRefs).toHaveLength(1);
     expect(report.danglingRefs[0]?.value).toBe('r-doesnotexist9');
+  });
+});
+
+/**
+ * The same defect on the notes mirror. `squash-preserve --target` writes one
+ * block per inherited record into a single note (`core/squash.ts`
+ * `writeRecordBlocks`), and the index reads every one of them back through
+ * `parseRecordBlocks` (`core/index-db.ts`). `collectRecords` read the note with
+ * `readRecord`, which is `parseCommitMessage` — git's last paragraph — so every
+ * block above the last was invisible to `stale`, and only to `stale`. In this
+ * repository 7 of 11 notes carry more than one block; one carries 25.
+ */
+describe('the stale scan reads every record block in a note', () => {
+  const trailer = (key: string, value: string): Trailer => ({ key, value });
+  const rootOf = (dir: string): string => git(dir, ['rev-list', '--max-parents=0', 'HEAD']).trim();
+  const idsOf = (records: readonly { trailers: Trailer[] }[]): string[] =>
+    records
+      .map((record) => record.trailers.find((item) => item.key === 'Record-Id')?.value)
+      .filter((id): id is string => id !== undefined)
+      .sort();
+
+  it('collects one notes record per block, not the last block only', () => {
+    const dir = squashedChain();
+    writeRecordBlocks(
+      rootOf(dir),
+      [
+        [trailer('Limit', 'the first inherited decision'), trailer('Record-Id', 'r-noteblock01')],
+        [trailer('Limit', 'the second inherited decision'), trailer('Record-Id', 'r-noteblock02')],
+      ],
+      { cwd: dir },
+    );
+
+    const scan = collectRecords({ cwd: dir, allHistory: true });
+    const notes = scan.records.filter((record) => record.source === 'notes');
+
+    // Reading only the last paragraph finds r-noteblock02 and nothing else.
+    expect(idsOf(notes)).toEqual(['r-noteblock01', 'r-noteblock02']);
+    // A note is not a commit: the count is still the two commits of the chain.
+    expect(scan.commits).toBe(2);
+  });
+
+  it('does not report a Follows: whose target is an earlier block of the same note as dangling', () => {
+    const dir = squashedChain();
+    writeRecordBlocks(
+      rootOf(dir),
+      [
+        [trailer('Limit', 'the first inherited decision'), trailer('Record-Id', 'r-noteblock01')],
+        [
+          trailer('Limit', 'the second inherited decision'),
+          trailer('Record-Id', 'r-noteblock02'),
+          trailer('Follows', 'r-noteblock01'),
+        ],
+      ],
+      { cwd: dir },
+    );
+
+    const report = buildReport(collectRecords({ cwd: dir, allHistory: true }), new Date());
+
+    expect(report.danglingRefs).toEqual([]);
+    // Three ids from the two commits, two from the note.
+    expect(report.totalRecords).toBe(5);
+  });
+
+  it('keeps a note-only block that precedes a block mirroring the commit', () => {
+    const dir = squashedChain();
+    const head = git(dir, ['rev-parse', 'HEAD']).trim();
+    // The last block mirrors the commit's own last block; the block before it
+    // exists only in the mirror. Under the last-paragraph read the mirrored
+    // block was dropped as a mirror and the note-only one was never seen.
+    writeRecordBlocks(
+      head,
+      [
+        [trailer('Limit', 'recorded only in the mirror'), trailer('Record-Id', 'r-noteonly01')],
+        [
+          trailer('Limit', 'the later refinement'),
+          trailer('Record-Id', 'r-later8980001'),
+          trailer('Follows', 'r-earlier89801'),
+          trailer('Blast', 'module'),
+        ],
+      ],
+      { cwd: dir },
+    );
+
+    const notes = collectRecords({ cwd: dir, allHistory: true }).records.filter(
+      (record) => record.source === 'notes',
+    );
+
+    // The mirrored block is one record with its commit (r-refint74) and stays
+    // dropped; the note-only block is a record of its own.
+    expect(idsOf(notes)).toEqual(['r-noteonly01']);
   });
 });

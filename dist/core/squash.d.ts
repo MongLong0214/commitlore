@@ -57,7 +57,34 @@
 import { type Trailer } from './types.js';
 export interface SquashOptions {
     cwd?: string;
+    /**
+     * What one invocation has already read, reused across its own ranges.
+     *
+     * `collectRange` is called once per candidate branch by the
+     * `squash-conservation` doctor row, and each call listed the whole notes
+     * mirror again and re-parsed every message the ranges have in common.
+     * Measured on this repository: 70 identical `git notes list` invocations for
+     * one answer, and 114 byte-identical spawns out of 800 for the row.
+     *
+     * The mirror is a property of the repository rather than of the range, and a
+     * sha's message is immutable, so both are read once. The caller owns the
+     * cache and it dies with the invocation, for the same reason the collector's
+     * does: module-level state would outlive a `git replace` or a fetch in a
+     * long-lived server.
+     *
+     * Absent means no reuse, which is right for `squash-preserve`, whose one call
+     * has nothing to share with.
+     */
+    cache?: RangeCache;
 }
+/** Per-invocation scratch for `collectRange`. Never share one across calls. */
+export interface RangeCache {
+    /** Record blocks by commit sha, from the message. */
+    readonly messages: Map<string, Trailer[][]>;
+    /** The note-annotated shas, listed once. */
+    mirrored?: ReadonlySet<string>;
+}
+export declare const newRangeCache: () => RangeCache;
 export interface AttachOptions extends SquashOptions {
     /** Replace an existing note on the target. Without it, one is an error. */
     force?: boolean;

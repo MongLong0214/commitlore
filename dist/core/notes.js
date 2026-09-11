@@ -119,9 +119,17 @@ const showNote = (sha, opts) => {
  * (T-204) and the inheritance path (T-302), not here.
  *
  * A note carrying several record blocks (SPEC §2.4, `writeRecordBlocks`)
- * answers here as one flat list — the message's own last paragraph, exactly
- * as `parseCommitMessage` sees it elsewhere. Callers that need every block
- * individually want `readRecordBlocks`.
+ * answers here with **the last block only** — the message's own last paragraph,
+ * exactly as `parseCommitMessage` sees it elsewhere. The earlier blocks are not
+ * folded in; they are dropped. Callers that need every block want
+ * `readRecordBlocks`, which is every caller that reads records rather than one
+ * record.
+ *
+ * The previous sentence here said "one flat list", which reads as all of them
+ * flattened and is how `stale` came to use this function: it reported one
+ * record for a note carrying several, disagreed with the index about the same
+ * repository, and called a `Follows:` dangling when its target sat in an
+ * earlier block of the same note.
  */
 export const readRecord = (sha, opts = {}) => {
     const note = showNote(sha, opts);

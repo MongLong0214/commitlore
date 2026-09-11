@@ -1543,6 +1543,179 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     expect(entry?.detail).toContain('reachable from HEAD');
   });
 
+  /**
+   * A file name outside ASCII. Under the default `core.quotePath`, `git diff`
+   * without `-z` prints it C-quoted, and the quoted spelling resolves to
+   * nothing in any tree, so every branch touching such a file landed on
+   * `unknown` — a squash reported as undetermined, and an abandoned branch
+   * told to identify a squash commit that never existed.
+   */
+  it('classifies a squashed branch whose file name is not ASCII', () => {
+    const repo = initRepo('squash-conservation-quoted');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    writeFileSync(join(repo, '설계.md'), '# 설계\n');
+    git(repo, ['add', '--', '설계.md']);
+    git(repo, ['commit', '--quiet', '-m', 'add the design note\n\nLimit: capped\nRecord-Id: r-quoted01\n']);
+    git(repo, ['checkout', '--quiet', 'main']);
+    squashWithoutPreserving(repo);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.evidence['squashed_count']).toBe('1');
+    expect(entry?.evidence['undetermined_count']).toBe('0');
+  });
+
+  /**
+   * A branch that deleted a file cannot be classified by blob comparison: the
+   * path has no blob on either side. Pinned so a faster comparison cannot
+   * quietly start counting the deletion as a match or as a miss.
+   */
+  it('leaves a branch that deleted a file undetermined', () => {
+    const repo = initRepo('squash-conservation-deletion');
+    writeFileSync(join(repo, 'doomed.ts'), 'export const gone = true;\n');
+    git(repo, ['add', '--', 'doomed.ts']);
+    git(repo, ['commit', '--quiet', '-m', 'seed']);
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    git(repo, ['rm', '--quiet', '--', 'doomed.ts']);
+    writeFileSync(join(repo, 'feature.ts'), 'export const x = 1;\n');
+    git(repo, ['add', '--', 'feature.ts']);
+    git(repo, ['commit', '--quiet', '-m', 'replace the doomed file\n\nLimit: capped\nRecord-Id: r-deletion01\n']);
+    git(repo, ['checkout', '--quiet', 'main']);
+    squashWithoutPreserving(repo);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.evidence['undetermined_count']).toBe('1');
+    expect(entry?.evidence['squashed_count']).toBe('0');
+  });
+
+  /**
+   * A rename is listed by its destination alone, the only path whose blob is on
+   * the branch. Abandoned rather than squashed, because a parser that took the
+   * source instead would still land the squashed case on the right answer by
+   * accident — neither tree has the source — and only this one exposes it.
+   */
+  it('classifies an abandoned branch that renamed a file', () => {
+    const repo = initRepo('squash-conservation-renamed');
+    writeFileSync(join(repo, 'before.ts'), 'export const same = 1;\n');
+    git(repo, ['add', '--', 'before.ts']);
+    git(repo, ['commit', '--quiet', '-m', 'seed']);
+    git(repo, ['checkout', '--quiet', '-b', 'renamer']);
+    git(repo, ['mv', '--', 'before.ts', 'after.ts']);
+    git(repo, ['commit', '--quiet', '-m', 'rename it\n\nLimit: capped\nRecord-Id: r-renamed01\n']);
+    git(repo, ['checkout', '--quiet', 'main']);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.evidence['unmerged_count']).toBe('1');
+    expect(entry?.evidence['undetermined_count']).toBe('0');
+  });
+
+  /**
+   * A submodule pointer, on an abandoned branch, with HEAD's pointer moved
+   * elsewhere. This is the shape that catches the regression the file ranks
+   * worst, and only this shape catches it.
+   *
+   * The tree diff carries gitlinks as mode 160000 entries, so the bumped
+   * pointer is compared like any other path. Someone later adding
+   * `--ignore-submodules` to that diff, or filtering 160000 out to mirror
+   * `diff.ignoreSubmodules`, makes the entry vanish -- and the loop reads a
+   * missing entry as "the trees agree", returns `present-in-head`, and
+   * prescribes `squash-preserve --target` for work HEAD never took. That is the
+   * manufactured provenance this check's own header calls the failure the tool
+   * exists to prevent.
+   *
+   * Abandoned rather than squashed on purpose: a squashed bump passes under
+   * that regression by accident, because "no entry" happens to be the right
+   * answer there. Only the abandoned one, with HEAD pointing somewhere else,
+   * flips.
+   *
+   * The gitlink is written with `update-index --cacheinfo`, so the target
+   * commit deliberately does not exist in this object store -- no second
+   * repository, no `.gitmodules`, no `protocol.file.allow`. That absence also
+   * keeps live the property that ruled out `cat-file --batch-check` for this
+   * loop: it reports such a gitlink `missing`, where a tree diff compares it.
+   */
+  it('leaves an abandoned branch undetermined when its only change is a submodule pointer', () => {
+    const repo = initRepo('squash-conservation-gitlink');
+    const link = (sha: string): void => {
+      git(repo, ['update-index', '--add', '--cacheinfo', `160000,${sha},sm`]);
+    };
+    writeFileSync(join(repo, 'keep.ts'), 'export const keep = 1;\n');
+    git(repo, ['add', '--', 'keep.ts']);
+    link('1111111111111111111111111111111111111111');
+    git(repo, ['commit', '--quiet', '-m', 'seed with a submodule']);
+
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    link('2222222222222222222222222222222222222222');
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'bump the submodule\n\nLimit: the pointer is the whole change\nRecord-Id: r-gitlink01\n',
+    ]);
+
+    // HEAD moves the same pointer somewhere else: the branch was abandoned, and
+    // its bump is not what HEAD holds.
+    git(repo, ['checkout', '--quiet', 'main']);
+    link('3333333333333333333333333333333333333333');
+    git(repo, ['commit', '--quiet', '-m', 'move the submodule elsewhere']);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    // Undetermined, not absent: HEAD holds a pointer at `sm` too, just a
+    // different one, so the branch is neither all-matching nor all-missing.
+    expect(entry?.evidence['undetermined_count']).toBe('1');
+    // The one answer that must not appear. `squashed` is what prescribes
+    // `--target`, and it is what a diff blind to gitlinks would produce.
+    expect(entry?.evidence['squashed_count']).toBe('0');
+  });
+
+  /**
+   * HEAD replaced the branch's file with a directory of the same name. The
+   * tree lookup the old loop used resolved `<head>:<path>` to a tree id, which
+   * equals no blob, so the path counted as neither a match nor a miss -- and
+   * `headHasTreeHere` is the one line of the replacement that preserves it.
+   * Nothing else touches that line.
+   */
+  it('counts a path HEAD turned into a directory as neither match nor miss', () => {
+    const repo = initRepo('squash-conservation-file-to-dir');
+    writeFileSync(join(repo, 'thing'), 'a file\n');
+    git(repo, ['add', '--', 'thing']);
+    git(repo, ['commit', '--quiet', '-m', 'seed']);
+
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    writeFileSync(join(repo, 'thing'), 'the branch edits it\n');
+    writeFileSync(join(repo, 'also.ts'), 'export const also = 1;\n');
+    git(repo, ['add', '--', 'thing', 'also.ts']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'edit the file\n\nLimit: capped\nRecord-Id: r-filetodir01\n',
+    ]);
+
+    git(repo, ['checkout', '--quiet', 'main']);
+    rmSync(join(repo, 'thing'), { force: true });
+    mkdirSync(join(repo, 'thing'), { recursive: true });
+    writeFileSync(join(repo, 'thing', 'child.txt'), 'now a directory\n');
+    git(repo, ['add', '--all', '--', 'thing']);
+    git(repo, ['commit', '--quiet', '-m', 'replace the file with a directory']);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    // `also.ts` is missing from HEAD and `thing` counts as neither, so the
+    // branch is neither all-matching nor all-missing.
+    expect(entry?.evidence['undetermined_count']).toBe('1');
+    expect(entry?.evidence['squashed_count']).toBe('0');
+  });
+
   it('discloses the 200-branch limit instead of reporting an unqualified subset', () => {
     const repo = initRepo('squash-conservation-capped');
     preservedSquash(repo, 'r-capped01');

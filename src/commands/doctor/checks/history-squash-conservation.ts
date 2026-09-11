@@ -6,7 +6,7 @@
  */
 
 import { runQuery } from '../../../core/query.js';
-import { collectRange } from '../../../core/squash.js';
+import { collectRange, newRangeCache } from '../../../core/squash.js';
 import { check, gitOptions, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /** Local branches this check will look at, past which a repository is skipped rather than walked exhaustively. */
@@ -145,7 +145,8 @@ const upstreamRecordIds = (ctx: DoctorContext): { ref: string; ids: Set<string> 
  * into one whose diff matches none of them individually, so a genuine squash
  * reads as "not applied" to both. `merge-tree --write-tree` would answer it
  * directly but needs Git 2.38, and this project declares no Git floor —
- * `git rev-parse <rev>:<path>` works everywhere.
+ * `git diff-tree` is plumbing whose raw format predates every Git this could
+ * meet.
  *
  * Deliberately asymmetric. `present-in-head` demands that *every* touched path
  * resolve to the same blob in HEAD, and `absent-from-head` that *no* touched
@@ -159,27 +160,77 @@ const branchContentFate = (
   head: string,
 ): BranchContentFate => {
   const { opts, git } = ctx;
+  // `-z`, because under the default `core.quotePath` a name outside ASCII (or
+  // holding a tab, a quote or a backslash) comes back C-quoted, and no tree
+  // lookup resolves the quoted spelling — every branch touching such a file
+  // read as `unknown`. `diff.relative` is pinned off because the paths are
+  // matched against a root-relative tree diff below, and a cwd-relative name
+  // would silently miss it and count as present. `--name-status` rather than
+  // `--name-only` only to learn which paths the branch deleted; the paths
+  // listed are the same, a rename or copy contributing its destination.
   const changed = git(
-    ['diff', '--name-only', `${candidate.base}..${candidate.sha}`],
+    ['-c', 'diff.relative=false', 'diff', '--name-status', '-z', `${candidate.base}..${candidate.sha}`],
     gitOptions(opts),
   );
   if (changed.code !== 0) return 'unknown';
-  const paths = changed.stdout.split('\n').filter((line) => line !== '');
+
+  const paths: string[] = [];
+  const tokens = changed.stdout.split('\0');
+  for (let i = 0; i < tokens.length; ) {
+    const status = tokens[i] ?? '';
+    if (status === '') break;
+    const width = status.startsWith('R') || status.startsWith('C') ? 3 : 2;
+    const path = tokens[i + width - 1];
+    i += width;
+    if (path === undefined) break;
+    // A path deleted by the branch has no blob on either side; it says nothing
+    // either way, so it is neither a match nor a miss.
+    if (status === 'D') return 'unknown';
+    paths.push(path);
+  }
   if (paths.length === 0) return 'unknown';
+
+  // One tree diff says what HEAD holds at every path, in place of two lookups
+  // per path. Not narrowed by pathspec on purpose: a pathspec is cwd-relative
+  // where `<rev>:<path>` is root-relative, `*` and a leading `:` are magic
+  // unless escaped, and each path would be an argv entry against the 32 KiB
+  // command line on Windows. The unnarrowed diff is bounded by the repository
+  // and costs bytes, not processes.
+  const diff = git(
+    ['diff-tree', '-r', '-z', '--no-renames', candidate.sha, head],
+    gitOptions(opts),
+  );
+  if (diff.code !== 0) return 'unknown';
+
+  const differs = new Map<string, { srcOid: string; dstOid: string; dstMode: string }>();
+  const raw = diff.stdout.split('\0');
+  for (let i = 0; i + 1 < raw.length; i += 2) {
+    const [, dstMode, srcOid, dstOid] = (raw[i] ?? '').split(' ');
+    const path = raw[i + 1];
+    if (dstMode === undefined || srcOid === undefined || dstOid === undefined || path === undefined) {
+      return 'unknown';
+    }
+    differs.set(path, { srcOid, dstOid, dstMode });
+  }
 
   let matching = 0;
   let missingFromHead = 0;
   for (const path of paths) {
-    const onBranch = git(['rev-parse', '--verify', '--quiet', `${candidate.sha}:${path}`], gitOptions(opts));
-    const onHead = git(['rev-parse', '--verify', '--quiet', `${head}:${path}`], gitOptions(opts));
-    // A path deleted by the branch has no blob on either side; it says nothing
-    // either way, so it is neither a match nor a miss.
-    if (onBranch.code !== 0) return 'unknown';
-    if (onHead.code !== 0) {
-      missingFromHead += 1;
+    const entry = differs.get(path);
+    // Not in the diff: the trees agree here, and the branch has the path, so
+    // HEAD holds the same blob.
+    if (entry === undefined) {
+      matching += 1;
       continue;
     }
-    if (onHead.stdout.trim() === onBranch.stdout.trim()) matching += 1;
+    if (entry.dstMode === '000000') {
+      // Gone from HEAD — unless HEAD grew a directory of that name, which a
+      // tree lookup resolves to a tree no blob equals: neither match nor miss.
+      const headHasTreeHere = [...differs.keys()].some((other) => other.startsWith(`${path}/`));
+      if (!headHasTreeHere) missingFromHead += 1;
+      continue;
+    }
+    if (entry.srcOid === entry.dstOid) matching += 1;
   }
 
   if (matching === paths.length) return 'present-in-head';
@@ -255,6 +306,10 @@ export const checkSquashConservation = (ctx: DoctorContext): DoctorCheck => {
   const category: Category = 'history';
   const cwd = opts.cwd ?? process.cwd();
 
+  // One cache for every candidate this row walks: the mirror is listed once
+  // instead of once per candidate, and a commit two ranges share is parsed once.
+  const cache = newRangeCache();
+
   const head = git(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
   if (head.code !== 0) {
     return check(
@@ -303,7 +358,7 @@ export const checkSquashConservation = (ctx: DoctorContext): DoctorCheck => {
   for (const candidate of candidates) {
     let records;
     try {
-      records = collectRange(`${candidate.base}..${candidate.sha}`, { cwd });
+      records = collectRange(`${candidate.base}..${candidate.sha}`, { cwd, cache });
     } catch {
       continue;
     }
