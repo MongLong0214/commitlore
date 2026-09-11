@@ -13894,10 +13894,15 @@ var buildEnvelope = (count2, withPrs) => [
   "  commitlore backfill --draft <file>",
   ...withPrs ? [
     "",
-    "Pass --with-prs on that command too. The verifier rebuilds these sources",
-    "from the repository, and rebuilding them without the pull request bodies",
-    "means your quotes from those bodies will not be found."
-  ] : [],
+    "Pull request bodies are part of the text above, and the verifier rebuilds",
+    "these sources from the repository. They are collected by default, so the",
+    "--draft call needs no flag \u2014 but if you pass --no-with-prs to it, quotes",
+    "taken from those bodies will not be found and those records are discarded."
+  ] : [
+    "",
+    "Pull request bodies were not collected for this prompt (--no-with-prs, or",
+    "gh is unavailable), so the text above is commit messages and diffs only."
+  ],
   "",
   "Reconstruction is checked, not trusted: every record is re-read against the",
   "same text you were given, and anything whose quote is not there is discarded",
@@ -14262,7 +14267,11 @@ var toBackfillOptions = (options) => {
     ...budgetTokens === void 0 ? {} : { budgetTokens },
     ...options.draft === void 0 ? {} : { draft: options.draft },
     ...options.batchSize === void 0 ? {} : { batchSize: options.batchSize },
-    withPrs: options.withPrs === true,
+    // #902: the CLI default lives here, not only in the commander declaration,
+    // so a caller that reaches runBackfill directly gets the same behaviour the
+    // command line does. `--no-with-prs` is the only thing that turns it off.
+    // The core keeps its own opt-in default: a programmatic caller states intent.
+    withPrs: options.withPrs !== false,
     promptOnly: options.promptOnly === true,
     dryRun: options.dryRun === true
   };
@@ -14375,7 +14384,9 @@ ${PREFIX} fix: commitlore doctor --fix, then git fetch, then rerun
   }
 };
 var register = (program3) => {
-  program3.command("backfill").description("reconstruct records for past commits that have none (all Provenance: reconstructed)").option("--limit <n>", `consider at most n commits with no record (default: ${DEFAULT_LIMIT})`).option("--with-prs", "collect linked pull request bodies through the gh CLI").option("--budget-tokens <n>", "stop emitting prompts past this estimated token count").option("--prompt-only", "print the reconstruction contract for the session and exit").option("--draft <file>", "verify a draft the session produced and attach what survives").option("--dry-run", "compute everything, write nothing").option("--json", "emit the report as JSON").addHelpText(
+  program3.command("backfill").description("reconstruct records for past commits that have none (all Provenance: reconstructed)").option("--limit <n>", `consider at most n commits with no record (default: ${DEFAULT_LIMIT})`).option("--no-with-prs", "reconstruct from commit messages and diffs only, without running gh").addOption(
+    new Option("--with-prs", "collect linked pull request bodies through gh (now the default)").default(true).hideHelp()
+  ).option("--budget-tokens <n>", "stop emitting prompts past this estimated token count").option("--prompt-only", "print the reconstruction contract for the session and exit").option("--draft <file>", "verify a draft the session produced and attach what survives").option("--dry-run", "compute everything, write nothing").option("--json", "emit the report as JSON").addHelpText(
     "after",
     "\nExit codes: 0 ran (discarded and skipped commits are reported, not failed on), 2 a usage error -- a bad flag, an unreadable --draft, a draft that is not a draft (SPEC \xA710)."
   ).action((options) => {

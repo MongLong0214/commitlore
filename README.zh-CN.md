@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh | sh -s v1.2.14
 ```
 
 <details>
 <summary>想先阅读安装器吗？</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh
-sh install.sh v1.2.13
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh
+sh install.sh v1.2.14
 
 # 或者跳过脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v1.2.13 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.14 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -105,13 +105,13 @@ CommitLore 把那份判断留在代码旁边。
 macOS 和 Linux：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh | sh -s v1.2.14
 ```
 
 Windows：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.ps1))) v1.2.13
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.ps1))) v1.2.14
 ```
 
 需要 Node.js 22.23.2+ 和 Git。脚本会在写入任何内容前检查两者。
@@ -281,7 +281,7 @@ jobs:
       - run: git fetch --no-tags --force origin
           '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.2.13
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.14
 ```
 
 由于 `pull_request_target` 以可写令牌运行，给下一位编辑此文件的人两条规则：不要在这里

@@ -4,6 +4,27 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.14
+
+**`backfill` collects pull request bodies by default (#902).** `--with-prs` was
+opt-in, and three rounds of real reconstruction in one repository showed the cost:
+every trailer that survived rounds two and three rested on pull request body text
+rather than a commit message. With the flag off, the command whose whole job is
+recovering context that was never recorded mostly recovers nothing.
+
+The stronger reason is an asymmetry that lost work quietly. The same function
+builds the text for the prompt and for verification, so the flag had to be passed
+to the `--draft` call as well — and a run that collected bodies for the prompt but
+not for the draft discarded exactly the quotes the session had taken from them.
+That refusal was correct about a document nobody had assembled the same way twice.
+Defaulting both sides on removes the way to get it wrong.
+
+The degraded path is unchanged. An absent or unauthenticated `gh` is a normal
+state of the world: the probe runs once, the run continues from commit messages
+and diffs, and the summary says which. `--no-with-prs` turns collection off for a
+repository whose pull requests are irrelevant, or to avoid one `gh` call per
+target commit.
+
 ## 1.2.13
 
 Three reports about the same habit from three directions: answering more
