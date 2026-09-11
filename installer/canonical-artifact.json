@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "059233390e30c65a90e56e10f7d288ce076f86f1e57c050af09ccd5e04bbdf23"
+    "sha256": "a1fbad02b1c7bebaf22170c36190a37470cfd0c9914e299d720beec7bb421796"
   },
   "artifact": {
-    "sha256": "fb1df06c49873c123f8a3152659e983ea05105618e3861129a4dd73c813acdcd",
+    "sha256": "3440cdeda84c68534b399a97740734d91405161442faa4a52408cfc1896db610",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -46,15 +46,15 @@
       },
       {
         "path": "dist/commands/backfill.d.ts",
-        "sha256": "348413f3ed6cf821637bd000784d13f732b04bab7800e0b94c5dbde3a289e80b"
+        "sha256": "a117a568ae5b99a18c669c4a2700b53ff55139cddb543b66e321ae23a14e583d"
       },
       {
         "path": "dist/commands/backfill.js",
-        "sha256": "21e4cb0a646a27cf4bc5634d12fa54e9f7e2ed560e339a283091c7d22b45502f"
+        "sha256": "83c2d62c722fd3eda1cd80438c581e249fdae2b227c11e1b3422b140b9f10de4"
       },
       {
         "path": "dist/commands/backfill.js.map",
-        "sha256": "2a1f8e72e3589b2e49903d58970e297e1ed8ef673517b5016e19bcfbd8183a6c"
+        "sha256": "aadce01ca88ab878995a78a1944cdb2404c86aa9e1f6931388ed3cc4dce316a7"
       },
       {
         "path": "dist/commands/capture.d.ts",
@@ -634,7 +634,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "e9cea07915928d0c69a77204260bcb7dda0ba0c45d3cf5ce736b758d331aa707"
+        "sha256": "c273b07be00d4b97268135cbf98cf8f751901ea2cc771fff1d29121a0618fab4"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -666,11 +666,11 @@
       },
       {
         "path": "dist/core/backfill.js",
-        "sha256": "a4bc3715174191a10ce54bd7a1595ba0ee3c69b3477a8ff3a45dd118ea4e8fc1"
+        "sha256": "8c041ebc89325f5d0bab1a09ee10ff611abaa8914139da421cbfff6b361bc114"
       },
       {
         "path": "dist/core/backfill.js.map",
-        "sha256": "ea192be29f7783d1fdb60bfe09616aeeaf7eabe884bd543eb8b9d7d930d0e98b"
+        "sha256": "641d94b3bfe492b718163164da96199df35773554ceb5d749d3752ce21476416"
       },
       {
         "path": "dist/core/before-change.d.ts",

@@ -17,6 +17,7 @@
  * records, stopped at --limit" and "12 records, that was all of them" are
  * different facts and the user acts differently on each.
  */
+import { Option } from 'commander';
 import { notesAvailability } from '../core/notes.js';
 import { DEFAULT_BATCH_SIZE, DEFAULT_LIMIT, backfill, buildEnvelope, } from '../core/backfill.js';
 const PREFIX = 'commitlore:';
@@ -46,7 +47,11 @@ export const toBackfillOptions = (options) => {
         ...(budgetTokens === undefined ? {} : { budgetTokens }),
         ...(options.draft === undefined ? {} : { draft: options.draft }),
         ...(options.batchSize === undefined ? {} : { batchSize: options.batchSize }),
-        withPrs: options.withPrs === true,
+        // #902: the CLI default lives here, not only in the commander declaration,
+        // so a caller that reaches runBackfill directly gets the same behaviour the
+        // command line does. `--no-with-prs` is the only thing that turns it off.
+        // The core keeps its own opt-in default: a programmatic caller states intent.
+        withPrs: options.withPrs !== false,
         promptOnly: options.promptOnly === true,
         dryRun: options.dryRun === true,
     };
@@ -195,7 +200,23 @@ export const register = (program) => {
         .command('backfill')
         .description('reconstruct records for past commits that have none (all Provenance: reconstructed)')
         .option('--limit <n>', `consider at most n commits with no record (default: ${DEFAULT_LIMIT})`)
-        .option('--with-prs', 'collect linked pull request bodies through the gh CLI')
+        /*
+         * #902: on by default. Across three real rounds in one repository every
+         * surviving trailer rested on pull request body text, so with this off the
+         * command mostly reconstructs nothing — and the flag had to be repeated on the
+         * `--draft` call or quotes taken from those bodies were silently discarded,
+         * which is a footgun the default removes. An absent or unauthenticated `gh`
+         * still degrades to commit messages alone and reports why.
+         *
+         * Only the negation is declared, because that is what gives commander the
+         * `true` default: declaring `--with-prs` as a plain option alongside it makes
+         * the default `undefined` again (measured). `--with-prs` survives as a hidden
+         * option defaulting to true so a script that already passes it keeps working.
+         */
+        .option('--no-with-prs', 'reconstruct from commit messages and diffs only, without running gh')
+        .addOption(new Option('--with-prs', 'collect linked pull request bodies through gh (now the default)')
+        .default(true)
+        .hideHelp())
         .option('--budget-tokens <n>', 'stop emitting prompts past this estimated token count')
         .option('--prompt-only', 'print the reconstruction contract for the session and exit')
         .option('--draft <file>', 'verify a draft the session produced and attach what survives')

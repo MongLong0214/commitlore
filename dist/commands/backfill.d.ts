@@ -17,7 +17,7 @@
  * records, stopped at --limit" and "12 records, that was all of them" are
  * different facts and the user acts differently on each.
  */
-import type { Command } from 'commander';
+import { type Command } from 'commander';
 import { type BackfillOptions } from '../core/backfill.js';
 export interface BackfillCommandOptions {
     limit?: string | undefined;
