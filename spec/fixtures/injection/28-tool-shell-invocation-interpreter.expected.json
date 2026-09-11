@@ -1,0 +1,7 @@
+{
+  "description": "Family 1 (#931): the verb names an interpreter outright. Pins the adjacency form, which the object and prepositional forms do not cover.",
+  "blocked": true,
+  "patterns": [
+    "tool.shell-invocation"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "description": "Family 5 (#935): `would` immediately before the verb marks a consequence and disarms; `would you` is a request, and the pronoun between modal and verb is what makes it one. Pins that the counterfactual rule reads one word and not a window.",
+  "blocked": true,
+  "patterns": [
+    "output.conceal"
+  ]
+}

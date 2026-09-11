@@ -1,0 +1,5 @@
+{
+  "description": "Benign (#931, second pattern): `the run below` is a noun with a comparison after it, not an instruction pointing at a payload. A determiner immediately before the word is what separates the readings — an English imperative cannot carry one.",
+  "blocked": false,
+  "patterns": []
+}

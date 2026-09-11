@@ -1,0 +1,5 @@
+{
+  "description": "Benign (#935): a `Ruled-out:` reason that opens with an interpreter's name as its subject. SPEC §3.1 requires the `|` and makes the first one the separator, so `| node on Windows reads` is punctuation followed by a noun, not a pipe into node. Verbatim from this repository's history (r-winred1124), where it withheld the record.",
+  "blocked": false,
+  "patterns": []
+}

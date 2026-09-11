@@ -1,0 +1,5 @@
+docs(roadmap): size the pilot against the full task set
+
+Warn: Planning from the pilot's control rate would have sized the run below what the full task set supports, and each run below that line was retried rather than counted.
+Record-Id: r-inj041
+Provenance: authored

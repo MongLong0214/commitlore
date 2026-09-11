@@ -93,6 +93,25 @@ const collisionSites = (collisions: readonly GradedRecord[]): string => {
   return collisions.length > 3 ? `${named}; and ${collisions.length - 3} more` : named;
 };
 
+/**
+ * Presents a blocked record: identity kept, every prose-bearing trailer gone.
+ *
+ * The whole record, not the matched trailer (#931). `matchedTrailerKeys` names
+ * the key that tripped the scanner so the diagnostic can say which line to
+ * edit; it is not a boundary between a hostile trailer and innocent siblings,
+ * because there is none. The siblings were written by the same author in the
+ * same commit, and the one attack shape the pattern table says it cannot see
+ * is a payload split across several trailers, each innocent
+ * (`INJECTION_PATTERNS`). A tripped trailer is the only signal that a split is
+ * under way, so withholding its siblings is the one place that blind spot is
+ * partly covered; serving them would hand over exactly the part of the payload
+ * the table could not recognise. #596 drew the same line for paths — a
+ * withheld record whose filenames still print is not withheld — and a sibling
+ * trailer is more attacker-controlled than a filename, not less. The cost is a
+ * false positive withholding an honest `Limit:` beside it; that cost now lands
+ * on the author at capture and commit time, where the wording can still
+ * change, rather than on every later reader.
+ */
 export const withholdBlocked = (result: QueryResult): QueryResult => {
   const blocked = result.records.filter(
     (record) => record.trust === 'blocked' && record.withheldTrailerKeys === undefined,

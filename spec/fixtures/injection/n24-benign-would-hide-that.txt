@@ -1,0 +1,5 @@
+docs(gate): keep one row per commitment
+
+Warn: One row per commitment; a merged row would hide that two of them were unplanned.
+Record-Id: r-inj046
+Provenance: authored

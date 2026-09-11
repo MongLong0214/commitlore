@@ -1,0 +1,5 @@
+{
+  "description": "Benign (#931): a list of commands that were run, the shape of this repository's own `Verified:` lines. `run build, bash` puts `run` within 24 characters of `bash` with no object, preposition or adjacency between them.",
+  "blocked": false,
+  "patterns": []
+}

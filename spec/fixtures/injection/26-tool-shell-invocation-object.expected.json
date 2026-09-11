@@ -1,0 +1,7 @@
+{
+  "description": "Family 1 (#931): the shell noun as the verb's direct object. Pins the object form after the pattern stopped reading a bare `run terminal` as an instruction.",
+  "blocked": true,
+  "patterns": [
+    "tool.shell-invocation"
+  ]
+}
