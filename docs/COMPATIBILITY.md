@@ -200,7 +200,7 @@ skill and MCP server.
 
 | Capability | Provided by | Value |
 |---|---|---|
-| MCP server | `.mcp.json` | `node ${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs mcp` |
+| MCP server | `.mcp.json` | `node ${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs mcp` |
 | capture skill | `skills/commitlore-codex/SKILL.md` | transcript-backed capture; claims lacking support are dropped, never cited by invention |
 | plugin identity | `.codex-plugin/plugin.json` | `commitlore` at the `package.json` version |
 
@@ -211,7 +211,7 @@ named in the middle column rather than one it assumed.
 
 | Capability | Provided by | Value |
 |---|---|---|
-| MCP server | `.mcp.json` | `node ${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs mcp` |
+| MCP server | `.mcp.json` | `node ${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs mcp` |
 | pre-edit context hook | `hooks/hooks.json` | `PreToolUse` on `Read\|Edit\|Write\|MultiEdit\|NotebookEdit` |
 | skills | `skills/` | `commitlore-commits`, `commitlore-codex`, `commitlore-query`, `commitlore-setup` |
 | plugin identity | `.claude-plugin/plugin.json` | `commitlore` at the `package.json` version |

@@ -267,7 +267,7 @@ describe('Codex plugin package', () => {
     // so the server died at launch everywhere but a built checkout.
     expect(mcp.mcpServers.commitlore).toEqual({
       command: 'node',
-      args: ['${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs', 'mcp'],
+      args: ['${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs', 'mcp'],
     });
   });
 
