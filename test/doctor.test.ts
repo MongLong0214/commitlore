@@ -551,7 +551,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     // 17 since runtime-identity joined the registry. The count is asserted so
     // a check cannot be dropped without someone noticing; when it moves, it
     // should move because a check was deliberately added or removed.
-    expect(report.checks).toHaveLength(20);
+    expect(report.checks).toHaveLength(21);
   });
 });
 
@@ -1214,6 +1214,7 @@ describe('doctor: report', () => {
       'history-depth',
       'index-health',
       'squash-conservation',
+      'squash-inheritance',
     ]);
     for (const entry of report.checks) {
       expect(['ok', 'warn', 'fail', 'skipped']).toContain(entry.status);
@@ -1258,7 +1259,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(20);
+    expect(parsed.checks).toHaveLength(21);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
@@ -1859,5 +1860,145 @@ setInterval(() => {}, 1_000);
     expect(check?.status).toBe('ok');
     expect(check?.evidence).toMatchObject({ initiator: 'capture-tools-advertised', registration: 'custom-preserved' });
     expect(readFileSync(config, 'utf8')).toBe(before);
+  });
+});
+
+/**
+ * #915: a squash merge drops the branch commits' trailers. Two paths cover that
+ * — the installed prepare-commit-msg hook for a local `git merge --squash`, and
+ * the `action/preserve` GitHub Action for the merge GitHub performs on its own
+ * servers, where no local hook runs at all.
+ *
+ * The Action was built, this repository runs it on itself, and no README
+ * mentioned it: the reporter made one record in twelve commits, the squash
+ * dropped it, and they found out only by going looking. Nothing was broken. The
+ * protection was simply not switched on, and no surface said so.
+ *
+ * `squash-conservation` is the after-the-fact half and reports records already
+ * gone. This row reports the exposure before the first loss.
+ */
+describe('#915 squash inheritance is reported before a record is lost', () => {
+  const inheritanceRow = (repo: string) =>
+    runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'squash-inheritance');
+
+  it('does not apply without a GitHub remote', () => {
+    const repo = initRepo('squash-inheritance-no-remote');
+    const row = inheritanceRow(repo);
+
+    expect(row?.status).toBe('ok');
+    expect(row?.detail).toContain('no GitHub remote');
+    expect(row?.evidence['github_remote']).toBe('none');
+  });
+
+  it('warns when a GitHub remote has no workflow running the action', () => {
+    const repo = initRepo('squash-inheritance-unprotected');
+    git(repo, ['remote', 'add', 'origin', 'https://github.com/example/example.git']);
+
+    const row = inheritanceRow(repo);
+    expect(row?.status).toBe('warn');
+    // The consequence, not just the absence: the author sees a green merge.
+    expect(row?.detail).toContain('lost');
+    expect(row?.detail).toContain('squash-conservation');
+    // A local squash is a different path and must not be implied to be at risk.
+    expect(row?.detail).toContain('prepare-commit-msg');
+    expect(row?.evidence['references_action']).toBe('false');
+  });
+
+  it('is satisfied by the marketplace reference form', () => {
+    const repo = initRepo('squash-inheritance-marketplace');
+    git(repo, ['remote', 'add', 'origin', 'git@github.com:example/example.git']);
+    writeScript(
+      join(repo, '.github', 'workflows', 'preserve.yml'),
+      'name: p\non:\n  pull_request_target:\n    types: [closed]\njobs:\n  p:\n    steps:\n' +
+        '      - uses: MongLong0214/commitlore/action/preserve@v1.0.0\n',
+    );
+
+    expect(inheritanceRow(repo)?.status).toBe('ok');
+  });
+
+  /*
+   * The form this repository's own workflow uses. The first draft of the detector
+   * required `commitlore` to appear in the path and reported this repository as
+   * unprotected while it was running the action on every merge — which is why the
+   * pattern is asserted against both shapes rather than the one that was written
+   * first.
+   */
+  it('is satisfied by the local checkout reference form', () => {
+    const repo = initRepo('squash-inheritance-local-form');
+    git(repo, ['remote', 'add', 'origin', 'https://github.com/example/example.git']);
+    writeScript(
+      join(repo, '.github', 'workflows', 'preserve.yml'),
+      'name: p\non: pull_request_target\njobs:\n  p:\n    steps:\n      - uses: ./action/preserve\n',
+    );
+
+    expect(inheritanceRow(repo)?.status).toBe('ok');
+  });
+
+  it('does not mistake an unrelated workflow for the action', () => {
+    const repo = initRepo('squash-inheritance-other-workflow');
+    git(repo, ['remote', 'add', 'origin', 'https://github.com/example/example.git']);
+    writeScript(
+      join(repo, '.github', 'workflows', 'ci.yml'),
+      'name: ci\non: push\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n',
+    );
+
+    const row = inheritanceRow(repo);
+    expect(row?.status).toBe('warn');
+    expect(row?.evidence['workflows_scanned']).toBe('1');
+  });
+});
+
+/**
+ * #915, second half: #888 stopped prescribing `squash-preserve` for a branch
+ * proven unmerged, and deliberately left `unknown` prescribing it — on the
+ * argument that an unnecessary preservation costs a discarded plan while
+ * withholding one from a real squash loses a record for good.
+ *
+ * That weighed the wrong cost, and `unknown` is not the rare case the grouping
+ * assumed. The fate is decided by comparing blobs, so an abandoned branch that
+ * edited a file HEAD still has satisfies neither arm — the path is present, the
+ * content differs — and lands on `unknown`. That is the ordinary shape of an
+ * abandoned branch. Following the printed fix there writes provenance for work
+ * HEAD never took, which is fabricating history rather than preserving it.
+ */
+describe('#915 an undetermined branch is not told to run --target blindly', () => {
+  /** Edits a file HEAD already has, so neither fate arm is satisfied. */
+  const undeterminedBranch = (repo: string, recordId: string): void => {
+    writeFileSync(join(repo, 'shared.ts'), 'export const v = 1;\n');
+    git(repo, ['add', '--', 'shared.ts']);
+    git(repo, ['commit', '--quiet', '-m', 'add shared']);
+    git(repo, ['checkout', '--quiet', '-b', 'undetermined']);
+    writeFileSync(join(repo, 'shared.ts'), 'export const v = 2;\n');
+    git(repo, ['add', '--', 'shared.ts']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      `change shared\n\nLimit: a constraint\nRecord-Id: ${recordId}\n`,
+    ]);
+    git(repo, ['checkout', '--quiet', 'main']);
+    // main moves on, so the branch's blob is neither absent nor matching.
+    writeFileSync(join(repo, 'shared.ts'), 'export const v = 3;\n');
+    git(repo, ['add', '--', 'shared.ts']);
+    git(repo, ['commit', '--quiet', '-m', 'main moves on']);
+  };
+
+  it('names the condition instead of prescribing --target for an undetermined fate', () => {
+    const repo = initRepo('squash-conservation-undetermined');
+    undeterminedBranch(repo, 'r-undetermined01');
+
+    const row = runDoctor({ cwd: repo }).checks.find(
+      (entry) => entry.id === 'squash-conservation',
+    );
+
+    expect(row?.status).toBe('warn');
+    expect(row?.evidence['undetermined_count']).toBe('1');
+    expect(row?.evidence['squashed_count']).toBe('0');
+    // The record is still reported: silence would be the worse failure.
+    expect(row?.detail).toContain('r-undetermined01');
+    // The command is still named — it is the right one once the squash commit is
+    // known — but the condition comes first, and the hazard is stated.
+    expect(row?.fix).toContain('identify the squash commit');
+    expect(row?.fix).toContain('does not check that the commit contains the work');
   });
 });

@@ -22,6 +22,7 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
   "history-depth",
   "index-health",
   "squash-conservation",
+  "squash-inheritance",
 ]
 `;
 
@@ -53,7 +54,8 @@ ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
-skipped squash conservation — no local branch looks like the source of a squash — nothing to check"
+skipped squash conservation — no local branch looks like the source of a squash — nothing to check
+ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way"
 `;
 
 exports[`#462 doctor text report, pinned > renders a stable report on a repository whose hook target resolves 1`] = `
@@ -84,7 +86,8 @@ ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
-skipped squash conservation — no local branch looks like the source of a squash — nothing to check"
+skipped squash conservation — no local branch looks like the source of a squash — nothing to check
+ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way"
 `;
 
 exports[`#470 doctor text report header > keeps the per-check tail byte-identical to the pre-ticket rows 1`] = `
@@ -111,7 +114,8 @@ ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
-skipped squash conservation — no local branch looks like the source of a squash — nothing to check",
+skipped squash conservation — no local branch looks like the source of a squash — nothing to check
+ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way",
   "working": "ok      cli runtime — <root><path> runs (<version>)
 ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
 ok      installation integrity — 3 shipped files are present and readable
@@ -134,6 +138,7 @@ ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
-skipped squash conservation — no local branch looks like the source of a squash — nothing to check",
+skipped squash conservation — no local branch looks like the source of a squash — nothing to check
+ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way",
 }
 `;

@@ -224,6 +224,76 @@ CommitLore 会问：
 受支持 skill host 的用户无需在每次 commit 时说“把这个记到 CommitLore”。剩下的限制是 host 是否
 发起流程，而不是每条 record 都要用户命令。
 
+## 使用 squash 合并的仓库
+
+squash 合并会把分支的多个提交替换为一个新提交，而该提交不携带分支的 trailer。如果你的
+仓库用 squash 按钮合并，那么在分支上创建的记录会在合并时丢失，除非有东西把它转移到执行
+squash 的那个提交上。
+
+有两条路径覆盖这一点，其中一条需要一次性设置。
+
+| squash 发生的位置 | 由什么转移记录 | 设置 |
+|---|---|---|
+| 本地 `git merge --squash` | 已安装的 `prepare-commit-msg` 钩子，从 `SQUASH_MSG` 读取 | 无需 — `commitlore init` 已完成 |
+| GitHub 的 **Squash and merge** 按钮 | `action/preserve` GitHub Action | 下面的工作流 |
+
+GitHub 在它自己的服务器上执行该合并，那里不会运行任何本地 git 钩子，因此本地钩子看不到
+它。在那一刻拥有所需信息的只有 Action：拉取请求、它的提交，以及它们被 squash 进入的那个
+提交。
+
+添加 `.github/workflows/commitlore-preserve.yml`：
+
+```yaml
+name: CommitLore squash inheritance
+
+# pull_request_target, not pull_request: a pull request from a fork gets a
+# read-only token on pull_request, so the job would build the record and then
+# fail to publish it.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write   # the one push to refs/notes/commitlore
+
+concurrency:
+  group: commitlore-notes
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # the merge commit is on the base branch, and a closed pull request
+          # has no merge ref left to check out
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      # the mirror this action writes; publishing from a checkout that never
+      # read it would fork the notes history
+      - run: git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+
+      # a squash merge usually deletes the branch, and then the pull request's
+      # own ref is the only one still reaching the commits that carry records
+      - run: git fetch --no-tags --force origin
+          '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
+
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.12
+```
+
+由于 `pull_request_target` 以可写令牌运行，给下一位编辑此文件的人两条规则：不要在这里
+**检出拉取请求的 head**，也不要**执行**任何从 `refs/commitlore/pr-head` 可达的东西。派生
+仓库的提交是作为读取 trailer 的数据到达的，不是要运行的代码。
+
+`commitlore doctor` 会在 `squash inheritance` 一行报告它是否已启用。它在记录**丢失之前**
+告知；`squash conservation` 那一行报告的是已经丢失的记录。
+
+如果你用合并提交或 rebase 合并，记录会自行保留，无需此设置。
+
+
 ## 现场报告，不是测量
 
 这是某人在一个无关仓库首次安装 v1.2.1 时的一次运行。这里没有测量任何东西，也没有写进
