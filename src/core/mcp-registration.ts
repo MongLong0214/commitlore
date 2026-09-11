@@ -80,7 +80,7 @@ const isLaunchableEntry = (value: unknown): boolean =>
  * would turn the refusal into a plausible-looking path whose failure names a
  * file nobody wrote.
  */
-const expandHostPlaceholders = (value: string): string =>
+export const expandHostPlaceholders = (value: string): string =>
   value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (whole, name: string, fallback: string | undefined) => {
     const set = process.env[name];
     // `:-` is shell semantics, which the syntax is borrowed from: an empty
