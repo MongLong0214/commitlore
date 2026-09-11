@@ -16,7 +16,7 @@ import { execGit, canonicalCommittedAt } from '../core/git.js';
 import {
   listRecordShas,
   notesAvailability,
-  readRecord,
+  readRecordBlocks,
   type NotesAvailability,
 } from '../core/notes.js';
 import {
@@ -27,7 +27,7 @@ import {
   type RecordState,
   type StaleRecord,
 } from '../core/stale.js';
-import { parseRecordBlocks } from '../core/trailers.js';
+import { parseRecordBlocksWithAtom, readTrailersAtom } from '../core/trailers.js';
 import type { Trailer, Violation } from '../core/types.js';
 
 /**
@@ -83,7 +83,43 @@ export interface CollectOptions {
   /** Read the whole reachable history instead of the most recent commits. */
   allHistory?: boolean;
   revision?: string;
+  /**
+   * What one invocation has already read, reused across its own walks.
+   *
+   * `validate --range` collects the whole reachable history once per commit in
+   * the range (`commands/validate.ts` `recordsFor`), so this repository's own
+   * CI step walked ~1500 commits 1486 times and re-read everything on every
+   * walk. Measured on run 34576438460: 2833s and 3578s for that one step, on
+   * each matrix leg, of every release.
+   *
+   * Both halves are cached because both were repeated. Commit messages are
+   * keyed by sha; the notes mirror is keyed by nothing at all, because its
+   * content is a function of the repository rather than of the revision being
+   * walked -- listing it and reading each note once per walk was 1980 of the
+   * 7887 spawns a 164-commit range still cost after only the commit half was
+   * cached.
+   *
+   * Safe because every cached value is a pure function of bytes that cannot
+   * change underneath one invocation: a sha's message, and a ref read once.
+   * The caller owns the cache and it dies with the invocation -- module-level
+   * state would outlive a `git replace` or a fetch in a long-lived MCP server,
+   * which is the one way these answers do change.
+   *
+   * Absent means no reuse, which is the right default for a single walk.
+   */
+  cache?: CollectCache;
 }
+
+/** Per-invocation scratch for `collectRecords`. Never share one across calls. */
+export interface CollectCache {
+  readonly commits: Map<string, CollectedRecord[]>;
+  /** Every record block of the note on a sha, as `readRecordBlocks` returns them. */
+  readonly notes: Map<string, Trailer[][]>;
+  /** The mirror, read once: its shas and whether it could be read at all. */
+  repository?: { shas: string[]; availability: NotesAvailability };
+}
+
+export const newCollectCache = (): CollectCache => ({ commits: new Map(), notes: new Map() });
 
 type RecordSource = NonNullable<StaleRecord['source']>;
 
@@ -115,19 +151,34 @@ export interface Scan {
  * A commit with no blocks still yields one record with no trailers, so the
  * commit count and the notes-mirror comparison below keep their shape.
  */
-const parseChunk = (chunk: string): CollectedRecord[] => {
+const parseChunk = (
+  chunk: string,
+  cache?: Map<string, CollectedRecord[]>,
+  atoms?: ReadonlyMap<string, string>,
+): CollectedRecord[] => {
   const firstSep = chunk.indexOf(UNIT);
   if (firstSep === -1) return [];
   const secondSep = chunk.indexOf(UNIT, firstSep + 1);
   if (secondSep === -1) return [];
 
   const sha = chunk.slice(0, firstSep);
+  const cached = cache?.get(sha);
+  // Keyed on the sha alone because the rest of the chunk is a function of it:
+  // `%cI` and `%B` of one commit are the same bytes on every walk.
+  if (cached !== undefined) return cached;
+
   const committedAt = canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep));
   const message = chunk.slice(secondSep + 1);
-  const blocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocks(message) : [];
+  const blocks = CANDIDATE_LINE_RE.test(message)
+    ? parseRecordBlocksWithAtom(message, atoms?.get(sha))
+    : [];
 
-  if (blocks.length === 0) return [{ sha, committedAt, trailers: [], source: 'commit' }];
-  return blocks.map((trailers) => ({ sha, committedAt, trailers, source: 'commit' }));
+  const records =
+    blocks.length === 0
+      ? [{ sha, committedAt, trailers: [], source: 'commit' as RecordSource }]
+      : blocks.map((trailers) => ({ sha, committedAt, trailers, source: 'commit' as RecordSource }));
+  cache?.set(sha, records);
+  return records;
 };
 
 /**
@@ -135,12 +186,18 @@ const parseChunk = (chunk: string): CollectedRecord[] => {
  */
 export const collectRecords = (opts: CollectOptions = {}): Scan => {
   const cwd = opts.cwd ?? process.cwd();
-  const notes = notesAvailability({ cwd });
-  const args = ['log', '-z', `--format=${LOG_FORMAT}`];
-  if (opts.allHistory !== true) args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
-  args.push('--end-of-options', opts.revision ?? 'HEAD');
+  // The mirror is a property of the repository, not of the revision walked, so
+  // one invocation reads it once however many walks it makes.
+  const mirror =
+    opts.cache?.repository ??
+    { shas: listRecordShas({ cwd }), availability: notesAvailability({ cwd }) };
+  if (opts.cache !== undefined) opts.cache.repository = mirror;
+  const notes = mirror.availability;
+  const selection: string[] = [];
+  if (opts.allHistory !== true) selection.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
+  selection.push('--end-of-options', opts.revision ?? 'HEAD');
 
-  const result = execGit(args, { cwd });
+  const result = execGit(['log', '-z', `--format=${LOG_FORMAT}`, ...selection], { cwd });
   if (result.code !== 0) {
     if (EMPTY_REPO_RE.test(result.stderr)) {
       return { records: [], commits: 0, truncated: false, notes };
@@ -148,10 +205,27 @@ export const collectRecords = (opts: CollectOptions = {}): Scan => {
     throw new Error(`git log failed (exit ${result.code}): ${result.stderr.trim()}`);
   }
 
-  const commitRecords = result.stdout
+  const chunks = result.stdout
     .split('\u0000')
-    .filter((chunk) => chunk.length > 0)
-    .flatMap(parseChunk);
+    .filter((chunk) => chunk.length > 0);
+
+  // One more process for the walk buys the last block of every commit in it
+  // (`TRAILERS_ATOM`, git's parser through `git log`), so a message pays a
+  // process only for the earlier blocks of SPEC §2.4, or when it carries a
+  // byte the atom cannot frame. On this repository that was 1285 processes
+  // per full walk, now under a hundred. Run only when at least two uncached
+  // messages would read it: for one, the walk costs the process it saves, and
+  // for none nothing would read the answer.
+  const commitCache = opts.cache?.commits;
+  const wouldUseAtom = chunks.filter((chunk) => {
+    const at = chunk.indexOf(UNIT);
+    if (at === -1 || commitCache?.has(chunk.slice(0, at)) === true) return false;
+    const second = chunk.indexOf(UNIT, at + 1);
+    return second !== -1 && CANDIDATE_LINE_RE.test(chunk.slice(second + 1));
+  }).length;
+  const atoms = wouldUseAtom >= 2 ? readTrailersAtom(selection, { cwd }) : undefined;
+
+  const commitRecords = chunks.flatMap((chunk) => parseChunk(chunk, commitCache, atoms));
 
   // One commit may now contribute several records, so anything that counts
   // commits counts distinct shas. Counting records here would report a
@@ -172,17 +246,31 @@ export const collectRecords = (opts: CollectOptions = {}): Scan => {
     }
   }
 
-  const noteRecords = listRecordShas({ cwd }).flatMap((sha): CollectedRecord[] => {
+  const noteRecords = mirror.shas.flatMap((sha): CollectedRecord[] => {
     const commit = trailersBySha.get(sha);
     if (commit === undefined) return [];
 
-    const trailers = readRecord(sha, { cwd });
-    const mirrored = trailers.every((note) =>
-      commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value),
-    );
-    return trailers.length === 0 || mirrored
-      ? []
-      : [{ sha, committedAt: commit.committedAt, trailers, source: 'notes' }];
+    // Every block of the note, not git's last paragraph. A note written by
+    // `squash-preserve --target` carries one block per inherited record (SPEC
+    // §1, §2.4; `core/notes.ts` `writeRecordBlocks`), and the index reads all
+    // of them back. Reading the note through `readRecord` -- `parseCommitMessage`,
+    // the last paragraph -- left every earlier block invisible here and only
+    // here: the #898 shape, on the mirror instead of the message.
+    const cachedNote = opts.cache?.notes.get(sha);
+    const blocks = cachedNote ?? readRecordBlocks(sha, { cwd });
+    if (cachedNote === undefined) opts.cache?.notes.set(sha, blocks);
+    // Each block is its own record, and each is judged a mirror on its own
+    // against everything the commit declares -- so a block that mirrors one
+    // block of a squash is dropped while a block the message never carried
+    // stays, whichever order they appear in.
+    return blocks.flatMap((trailers): CollectedRecord[] => {
+      const mirrored = trailers.every((note) =>
+        commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value),
+      );
+      return trailers.length === 0 || mirrored
+        ? []
+        : [{ sha, committedAt: commit.committedAt, trailers, source: 'notes' }];
+    });
   });
 
   return {

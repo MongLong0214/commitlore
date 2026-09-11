@@ -1,6 +1,6 @@
 {
   "name": "commitlore",
-  "version": "1.2.15",
+  "version": "1.2.16",
   "description": "Decision memory from Git history, with verified capture for coding sessions.",
   "author": {
     "name": "MongLong0214",

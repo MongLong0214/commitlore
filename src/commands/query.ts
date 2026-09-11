@@ -289,6 +289,21 @@ export interface JsonOutput {
   runtime: { version: string; build_id: string };
   /** Whether this answer read everything it was asked about (#631, #669). */
   coverage: 'complete' | 'partial';
+  /**
+   * Where the answer was read from (#930).
+   *
+   * `coverage` answers "was the scan truncated". It cannot answer "was the walk
+   * started from a commit that can reach the records", and a checkout behind its
+   * own fetched upstream returns zero records with every other field green. A
+   * client deciding whether an empty answer means "nothing was recorded" has to
+   * read `vantage.behind` as well.
+   */
+  vantage: {
+    head: string | null;
+    ref: string | null;
+    upstream: string | null;
+    behind: number | null;
+  };
   at: string;
   paths: string[];
   aliases: string[];
@@ -372,6 +387,10 @@ export const toJson = (command: string, result: QueryResult): JsonOutput => {
     // #669 put this on the query result; it never reached the answer a client
     // reads, which is the only place it does any work.
     coverage: presented.coverage,
+    // Serialized here and not only on the query result: the comment above is
+    // about #669 computing a field that never reached a client, and a vantage
+    // nobody can read is that defect with a different name.
+    vantage: presented.vantage,
     at: presented.at.toISOString(),
     paths: presented.paths,
     aliases: presented.aliases,

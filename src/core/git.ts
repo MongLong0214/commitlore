@@ -198,6 +198,107 @@ export const hasShallowHistory = (cwd: string): boolean => {
 };
 
 /**
+ * Where an answer was read from — the half of completeness nothing reported.
+ *
+ * Every other availability field describes a *source* or the *scan*: `history`
+ * says whether the object store could be read, `notes` whether the mirror was
+ * fetched, `coverage` and `unreadCommits` whether a budget truncated the walk.
+ * All of them stay healthy while the walk starts from the wrong commit. The
+ * commit source only ever reads `rev-list HEAD` (index-db.ts says so), so an
+ * answer is complete *with respect to a vantage the caller never sees* — and a
+ * checkout behind its own already-fetched upstream returns zero records with
+ * `coverage: "complete"`, byte-identical to a repository where nobody wrote one.
+ * That is the sentence `notes` exists to prevent, arriving by another door.
+ *
+ * `behind` is the whole signal, and the discrimination is the point:
+ *
+ *   at the tip                 behind 0     silent
+ *   behind its upstream        behind n     the dangerous case, and only it
+ *   detached (review worktree) upstream null, ref null -- stated, not warned:
+ *                              that vantage is deliberate, and warning on it
+ *                              would fire on every blind review
+ *   an unmerged local branch   behind 0     silent; HEAD is not missing what
+ *                              its own line never had
+ *
+ * Two cheaper-looking signals were measured and rejected because they fire on
+ * healthy checkouts: `rev-list --branches --remotes --not HEAD` counts 202 on
+ * this repository at the tip of main, and path-scoping it still counts 18 for
+ * README.md. Both are answering "does any unreachable commit exist", which is
+ * yes in every repository that has ever merged a branch.
+ *
+ * Cost, because r-4e29b7 asked for a number and had none: one `rev-parse` and
+ * at most one `rev-list --count`, 18-21 ms together on a 1500-commit repository
+ * with 623 refs, against 436 ms for the `context` call that carries it. Skipped
+ * entirely when there is no upstream to be behind.
+ */
+export interface Vantage {
+  /** The commit walked from. Every record in the answer is reachable from it. */
+  readonly head: string | null;
+  /** The branch HEAD is on, or null when detached. */
+  readonly ref: string | null;
+  /** The tracked upstream, or null when the branch tracks nothing. */
+  readonly upstream: string | null;
+  /**
+   * Commits the upstream has that this vantage cannot reach, and whose records
+   * are therefore absent from the answer. `null` when there is no upstream to
+   * compare against -- unknown, not zero.
+   */
+  readonly behind: number | null;
+}
+
+export const readVantage = (cwd: string): Vantage => {
+  /*
+   * One `rev-parse`, not three. It takes several arguments and prints a line
+   * for each, and every case this has to answer leaves usable output even when
+   * it exits non-zero -- a detached head prints the sha and `HEAD` alongside
+   * `fatal: HEAD does not point to a branch`, and a branch with no upstream
+   * prints the sha and its ref. This runs on the injection path, where the
+   * measured baseline already sits at 74% of that path's test budget under
+   * load, so three spawns for facts one call carries is not a cost worth paying.
+   *
+   * Lines are matched by shape rather than by position, because which of them
+   * are present is exactly what varies between those cases.
+   */
+  const read = execGit(['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD', '@{upstream}'], {
+    cwd,
+  });
+  const lines = read.stdout.split('\n').map((line) => line.trim()).filter((line) => line !== '');
+
+  const sha = lines.find((line) => isFullObjectId(line)) ?? '';
+  // `refs/heads/x`, never the bare `HEAD` a detached head prints -- reading that
+  // as a branch name is the mistake `symbolic-ref` was here to avoid.
+  const branchRef = lines.find((line) => line.startsWith('refs/heads/'));
+  const branch = branchRef === undefined ? null : branchRef.slice('refs/heads/'.length);
+  const upstreamRef = lines.find((line) => line.startsWith('refs/remotes/'));
+  const upstream =
+    upstreamRef === undefined ? null : upstreamRef.slice('refs/remotes/'.length);
+
+  if (upstream === null) {
+    return { head: sha === '' ? null : sha, ref: branch, upstream: null, behind: null };
+  }
+
+  const counted = execGit(['rev-list', '--count', `HEAD..${upstream}`], { cwd });
+  const parsed = Number.parseInt(counted.stdout.trim(), 10);
+  return {
+    head: sha === '' ? null : sha,
+    ref: branch,
+    upstream,
+    // A git that cannot answer leaves this unknown rather than zero: reporting
+    // 0 here would be this defect rebuilt, an unknown presented as an all-clear.
+    behind: counted.code === 0 && Number.isInteger(parsed) ? parsed : null,
+  };
+};
+
+/** The caveat for a vantage that is behind, in the words a caller can act on. */
+export const vantageCaveat = (vantage: Vantage): string | null =>
+  vantage.behind === null || vantage.behind === 0
+    ? null
+    : `this checkout is ${String(vantage.behind)} commit(s) behind ${vantage.upstream ?? 'its upstream'}, ` +
+      'and records written in them are absent from this answer — an empty result here is not ' +
+      'evidence that nothing was recorded. ' +
+      'fix: git merge --ff-only, or ask again from a checkout that is up to date';
+
+/**
  * Git's `%cI` for a UTC commit, spelled one way (#650).
  *
  * `%cI` is strict ISO 8601, and git changed how it renders a zero offset:
