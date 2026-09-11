@@ -4,6 +4,59 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.16
+
+A release about what a tool says when it cannot see something, and about how
+much work it does to find out. Most of it came from one report — an MCP server
+answering "no records" from a checkout that was behind — and from following that
+question into the places where the same bytes were being read over and over.
+
+**An answer now says where it was read from (#930).** `coverage: "complete"`
+means the scan was not truncated. It reads as "this answer is whole", and every
+other field described a source or the scan too, so all of them stayed healthy
+while the walk started from the wrong commit. A checkout five commits behind its
+own already-fetched upstream returned zero records with `coverage: "complete"`,
+`history: "ready"` and `notes: "present"` — byte-identical to the answer from a
+repository where nobody ever wrote one, with the record one `git merge --ff-only`
+away. Every answer now carries `vantage`: the commit walked from, the branch or
+null for a detached head, the upstream, and how far behind it is. Behind fires;
+the tip, an unmerged branch and a review worktree stay quiet, because a signal
+that fires on healthy repositories is the one people learn to skip. `doctor`'s
+`history-depth` row reports the same fact beside the shallow-history one it
+already owned.
+
+**A branch touching a non-ASCII filename was never classified.**
+`squash-conservation` compared blobs path by path, and the paths came from `git
+diff --name-only`, which prints anything outside ASCII C-quoted. No tree resolves
+that spelling, so the lookup failed and the whole branch returned `unknown` — a
+squashed branch reported as undetermined, an abandoned one never told there was
+nothing to preserve. Silent, because `unknown` is the safe verdict and looks like
+caution. One `git diff-tree -r -z` now answers for every path at once.
+
+**`stale` read only the last block of a note.** Every other reader of the same
+bytes recovers all of them, so `stale` alone answered differently about the same
+repository: a two-block note yielded one record, and a `Follows:` whose target
+sat in an earlier block of the same note was reported dangling. The shape is what
+`squash-preserve --target` writes, so this was the path a preserved squash's own
+records travel.
+
+**Reading the same message once instead of once per walk.** `validate --range`
+collects the whole reachable history once per commit in the range and re-read
+everything each time. On this project's own CI that step took 47 and 60 minutes
+per matrix leg, on every release. The walks stay — each one's reachable set is
+the question being asked — but a message is parsed once, the notes mirror is read
+once, and the last trailer block now comes from git's own trailer atom in the
+`git log` the walk already runs, rather than from a separate `interpret-trailers`
+process per message. Measured on this repository, counting every git invocation:
+a 164-commit range went from more than 147,000 spawns, still running when it was
+stopped at 42 minutes, to 1,193. The answers are byte-identical.
+
+That last change replaces one parser with another, so it is carried by a
+differential test rather than by a benchmark: every commit in this repository's
+history plus 23 constructed hazards, both readers compared. It found one real
+failure — a value containing the atom's own separator bytes cannot be framed —
+and those messages are routed to the process reader.
+
 ## 1.2.15
 
 Six reports about `doctor`, and what they have in common is worse than any one of
