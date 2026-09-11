@@ -1716,9 +1716,9 @@ describe('--json', () => {
             ],
             "provenance": null,
             "recordId": "r-st2222",
-            "sha": "<sha-1>",
+            "sha": "<sha-2>",
             "shas": [
-              "<sha-1>",
+              "<sha-2>",
             ],
             "source": "commit",
             "sources": [
@@ -1752,15 +1752,15 @@ describe('--json', () => {
             ],
             "provenance": null,
             "recordId": "r-st1111",
-            "sha": "<sha-2>",
+            "sha": "<sha-3>",
             "shas": [
-              "<sha-2>",
+              "<sha-3>",
             ],
             "source": "commit",
             "sources": [
               "commit",
             ],
-            "supersededBy": "<sha-3>",
+            "supersededBy": "<sha-1>",
             "trailers": [
               {
                 "key": "Limit",
@@ -1780,6 +1780,12 @@ describe('--json', () => {
         },
         "scanned": 2,
         "unreadCommits": 0,
+        "vantage": {
+          "behind": null,
+          "head": "<sha-1>",
+          "ref": "main",
+          "upstream": null,
+        },
       }
     `);
   });
@@ -1810,6 +1816,16 @@ describe('--json', () => {
       // field is a contract change and belongs in the pinned shape.
       runtime: { version: expect.any(String), build_id: expect.any(String) },
       coverage: expect.any(String),
+      // #930: where the answer was read from. `coverage` says the scan was not
+      // truncated and cannot say the walk started somewhere that can reach the
+      // records, so a client deciding what an empty answer means reads this too.
+      // Declared for the same reason `runtime` is: a client reads this schema.
+      vantage: {
+        head: expect.any(String),
+        ref: expect.any(String),
+        upstream: null,
+        behind: null,
+      },
       at: '2026-01-20T00:00:00.000Z',
       paths: [],
       aliases: [],
