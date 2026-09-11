@@ -57,9 +57,24 @@ export interface StaleReport {
     /** The stale ones: superseded, expired, or flagged for review. */
     records: StaleReportRecord[];
     danglingRefs: Violation[];
+    /**
+     * #914: references whose target was not in the scanned window and could not be
+     * shown absent from history either. Separate from `danglingRefs` because that
+     * field is what a CI job fails on, and a truncated window cannot support the
+     * assertion `dangling-ref` makes. Always empty for `--all-history`.
+     */
+    unresolvedRefs: Violation[];
     idCollisions: Violation[];
 }
-export declare const buildReport: (scan: Scan, at: Date) => StaleReport;
+export declare const buildReport: (scan: Scan, at: Date, 
+/**
+ * Where to resolve a reference the window did not cover. Omitted by callers
+ * that hold no repository — they get `unresolvedRefs` rather than an assertion
+ * neither of us can support.
+ */
+resolveIn?: {
+    cwd?: string;
+}) => StaleReport;
 export declare const formatReport: (report: StaleReport) => string;
 /**
  * Exit status stays 0 even with findings: `stale` reports, it does not gate.

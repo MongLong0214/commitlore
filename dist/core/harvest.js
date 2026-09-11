@@ -202,7 +202,10 @@ const RULES = [
     '   cannot check it.',
     '7. Do not emit Verified. Reading a transcript or diff cannot prove a check ran.',
     '   Record Verified only from the command or test run that performed the check.',
-    '8. A Ruled-out quote must show the alternative being evaluated and dropped —',
+    '8. If the DIFF section reads `(no diff — nothing is staged)`, the diff is not',
+    '   part of the evidence for this capture and rule 1 has only the transcript to',
+    '   draw on. Do not record a claim that needs the change itself to support it.',
+    '9. A Ruled-out quote must show the alternative being evaluated and dropped —',
     '   considered, rejected, ruled out, decided against, abandoned, superseded, or',
     '   chosen against with "instead" or "rather than". Reasoning about why the',
     '   alternative would be bad is not a rejection: a consequence argues against',
@@ -436,7 +439,20 @@ export const buildHarvestPromptWithWindow = (input,
  */
 precomputed) => {
     const entries = loadVocabulary().filter((entry) => entry.key !== 'Verified');
-    const diff = input.diff.trim() === '' ? '(no diff)' : input.diff.replace(/\n+$/, '');
+    /*
+     * #911: `(no diff)` alone was too quiet — rule 1 is "cite or omit", and with
+     * nothing staged half the citable surface is gone while every rule still reads
+     * as though it were there.
+     *
+     * The explanation lives in the rules rather than here, and the reason is a
+     * pricing invariant: the token ledger prices a capture against a scaffold built
+     * with an empty diff, and asserts no real prompt is cheaper than that scaffold.
+     * Text that appears *only* in the no-diff branch inflates the scaffold above a
+     * prompt that carries a real diff, and `test/token-ledger.test.ts` caught
+     * exactly that. A rule is present in every prompt, so it prices identically and
+     * is read whether or not anything is staged.
+     */
+    const diff = input.diff.trim() === '' ? '(no diff — nothing is staged)' : input.diff.replace(/\n+$/, '');
     const { text, window } = precomputed ?? windowTranscript(input.transcript);
     const prompt = [
         '# CommitLore harvest',
