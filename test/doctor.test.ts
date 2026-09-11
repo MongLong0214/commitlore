@@ -319,6 +319,33 @@ describe('doctor: notes push', () => {
     expect(check?.status).toBe('ok');
     expect(check?.fix).toBeNull();
   });
+
+  /*
+   * Behind is not the same as unpushed, and the row used to call both unpushed.
+   * A clone whose mirror is an ancestor of the remote's has nothing to send, and
+   * telling it to push is how #890's duplicate note gets written.
+   */
+  it('reports ok when the local mirror is behind the remote rather than ahead', () => {
+    const { repo, sha } = repoWithRemote('doctor-push-behind');
+    writeRecord(sha, [{ key: 'Blast', value: 'local' }], { cwd: repo });
+    git(repo, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+    git(repo, ['push', '--quiet', 'origin', NOTES_REF]);
+    const firstMirror = git(repo, ['rev-parse', NOTES_REF]).trim();
+
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'second']);
+    const second = git(repo, ['rev-parse', 'HEAD']).trim();
+    writeRecord(second, [{ key: 'Blast', value: 'module' }], { cwd: repo });
+    git(repo, ['push', '--quiet', 'origin', NOTES_REF]);
+
+    // Rewind only the local mirror: the remote keeps the newer notes commit.
+    git(repo, ['update-ref', NOTES_REF, firstMirror]);
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'notes-push');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.detail).toContain('behind');
+    expect(check?.fix).toBeNull();
+    expect(check?.evidence?.['direction']).toBe('behind');
+  });
 });
 
 describe('doctor: commit-msg hook', () => {
