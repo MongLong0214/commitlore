@@ -18,6 +18,26 @@ export declare const MCP_SERVER_KEY = "commitlore";
 export declare const MCP_SERVER_COMMAND = "commitlore";
 export declare const MCP_SERVER_ARGS: readonly ["mcp"];
 /**
+ * `${VAR}` and `${VAR:-default}`, expanded the way a host expands them before
+ * it launches the server.
+ *
+ * A registration is a launch instruction for a host, and the hosts that read
+ * this file substitute environment placeholders in `command` and `args` first —
+ * which is what lets one committed file name a path that only the host knows,
+ * `${CLAUDE_PLUGIN_ROOT}` being the one this repository's own registration uses
+ * (#870). Every reader here answers questions about that launch: what command a
+ * host will run, whether it is ours, and — in doctor's unattended-initiator
+ * check — whether it actually answers an MCP initialize. Reading the raw text
+ * answered those questions about a command no host ever runs, and the probe
+ * spawned the literal `${...}` as a path.
+ *
+ * An unset placeholder with no default is left as written rather than expanded
+ * to nothing. A host refuses that registration outright, and `""/dist/x.mjs`
+ * would turn the refusal into a plausible-looking path whose failure names a
+ * file nobody wrote.
+ */
+export declare const expandHostPlaceholders: (value: string) => string;
+/**
  * The command a registration under our key names, or null when there is none a
  * host could launch.
  *

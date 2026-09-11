@@ -60,7 +60,7 @@ const isLaunchableEntry = (value) => isJsonObject(value) && typeof value['comman
  * would turn the refusal into a plausible-looking path whose failure names a
  * file nobody wrote.
  */
-const expandHostPlaceholders = (value) => value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (whole, name, fallback) => {
+export const expandHostPlaceholders = (value) => value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (whole, name, fallback) => {
     const set = process.env[name];
     // `:-` is shell semantics, which the syntax is borrowed from: an empty
     // value takes the default, because an empty path is not a path.
