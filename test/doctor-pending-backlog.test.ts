@@ -22,6 +22,7 @@ import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { runDoctor } from '../src/commands/doctor.js';
+import { runPendingShow } from '../src/commands/pending.js';
 import { execGit } from '../src/core/git.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -155,7 +156,20 @@ describe('#458 doctor: pending captures', () => {
     const result = backlogCheck();
     expect(result.status).toBe('warn');
     expect(result.detail).toMatch(/1 staged capture\(s\) expired before reaching a commit/);
-    expect(result.detail).toMatch(/never written to the history/);
+    /*
+     * #923: this used to pin `never written to the history`, which the row asserted
+     * from the binding rule without reading history. On the reporting repository
+     * that claim was wrong by a factor of thirty — 69 of 77 trailer lines were
+     * already on `origin/main` — and it pushed a reader toward re-attaching records
+     * that were already there. The row measures now, so the claim is gone and what
+     * is pinned instead is that it still distinguishes a dropped capture from a
+     * waiting one, which is what this case is about.
+     *
+     * This fixture writes a transaction with no records, so the honest answer is
+     * that the transaction failed and there was no decision inside it to lose.
+     */
+    expect(result.detail).toMatch(/no record lines at all/);
+    expect(result.detail).not.toMatch(/never written to the history/);
   });
 
   it('counts the earlier drafts separately from the staged loss', () => {
@@ -229,5 +243,79 @@ describe('#458 doctor: pending captures', () => {
     advance();
 
     expect(backlogCheck().detail).toContain('2026-07-31T05:09:57.336Z');
+  });
+});
+
+/**
+ * #920 reported that `pending show` emits a trailing comma after
+ * `guard_advisory.gaps`, which no strict parser accepts.
+ *
+ * It does not reproduce, and three measurements say so: the normal path parses,
+ * a hand-written transaction shaped like the reporter's (a `guard_advisory` with
+ * no `disclosure`, so `gaps` is the last key) parses, and the released 1.2.13
+ * binary parses both. The command serialises with `JSON.stringify`, which cannot
+ * emit a trailing comma, and `git log -S` finds no version of this file that ever
+ * assembled the object text by hand.
+ *
+ * The guard the report asked for is worth having anyway, and it is the reason this
+ * block exists rather than a fix: `pending show` is the only way to read a capture
+ * that never reached a commit, so the situation where someone reaches for it is
+ * recovery. A recovery script that cannot parse the output concludes the
+ * transaction is corrupt when the records are intact — the worst available
+ * reading. Every phase is covered because `guard_advisory` is populated for some
+ * and not others, and the reported defect lived in that block.
+ */
+describe('#920 pending show is parseable by a strict parser in every phase', () => {
+  // Seeds must be hex: `nonceOf` repeats the seed to 32 characters and
+  // `listPendingNonces` requires 32 hex, so a seed like `p` is silently unreadable
+  // and every assertion below it would pass against a null transaction.
+  const PHASES = [
+    ['prepared', '1'],
+    ['verified', '2'],
+    ['staged', '3'],
+    ['consumed', '4'],
+  ] as const;
+
+  for (const [phase, seed] of PHASES) {
+    it(`parses in the ${phase} phase`, () => {
+      const nonce = nonceOf(seed);
+      pending(nonce, phase, execGit(['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim());
+
+      const shown = runPendingShow({ nonce, cwd: repo });
+      expect(shown.transaction).not.toBeNull();
+      // The bytes the command writes, not the object it holds: the report was
+      // about serialisation, so asserting the object would test the wrong half.
+      const text = `${JSON.stringify(shown.transaction, null, 2)}\n`;
+      expect(() => JSON.parse(text) as unknown).not.toThrow();
+      expect(text).not.toMatch(/,\s*[}\]]/);
+    });
+  }
+
+  it('parses when guard_advisory carries gaps as its last key', () => {
+    // The reporter's exact shape: an advisory written before `disclosure` existed,
+    // so `gaps` is final and a stray separator would land where they saw one.
+    const nonce = nonceOf('e');
+    const dir = join(repo, '.git', 'commitlore', 'pending');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${nonce}.json`),
+      `${JSON.stringify({
+        version: 1,
+        nonce,
+        phase: 'staged',
+        base_head: execGit(['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim(),
+        created_at: '2026-09-08T08:13:30.419Z',
+        records: [{ trailers: [{ key: 'Limit', value: 'the cache times out at 30s' }] }],
+        guard_advisory: { matches: [], gaps: [] },
+      })}\n`,
+    );
+
+    const shown = runPendingShow({ nonce, cwd: repo });
+    // Without this the case passes vacuously: JSON.stringify(null) is `null`,
+    // which parses and carries no trailing comma.
+    expect(shown.transaction).not.toBeNull();
+    const text = `${JSON.stringify(shown.transaction, null, 2)}\n`;
+    expect(() => JSON.parse(text) as unknown).not.toThrow();
+    expect(text).not.toMatch(/,\s*[}\]]/);
   });
 });

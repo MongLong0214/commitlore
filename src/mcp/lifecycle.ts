@@ -125,6 +125,18 @@ export const recordServerStart = (
   at: Date = new Date(),
   output: typeof process.stdout = process.stdout,
 ): LifecycleRecorder => {
+  /*
+   * A server spawned by doctor's own MCP probe is not a session and must not be
+   * logged as one. Every doctor run appended a `started`/`exited` pair to a log
+   * whose only reader, `mcp-lifecycle`, counts host sessions -- measured at 231
+   * `started` on this repository, an unknown share of them doctor's own. The pair
+   * is also not guaranteed: the probe escalates to SIGKILL when SIGTERM has not
+   * finished within the grace window, and SIGKILL cannot be handled, so that path
+   * leaves a `started` with no `exited` and the row reports doctor's child as a
+   * session that never shut down cleanly. Recording nothing closes both.
+   */
+  if (process.env['COMMITLORE_MCP_PROBE_CHILD'] === '1') return { crash: () => {} };
+
   write(cwd, `started ${stamp(at)} pid ${String(process.pid)} identity ${formatRuntimeIdentity(runtimeIdentity())}`);
 
   // The lower number is only a fallback. A crash after stdin closes is still a

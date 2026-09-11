@@ -3,7 +3,7 @@
     "commitlore": {
       "command": "node",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs",
+        "${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs",
         "mcp"
       ]
     }

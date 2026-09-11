@@ -319,6 +319,33 @@ describe('doctor: notes push', () => {
     expect(check?.status).toBe('ok');
     expect(check?.fix).toBeNull();
   });
+
+  /*
+   * Behind is not the same as unpushed, and the row used to call both unpushed.
+   * A clone whose mirror is an ancestor of the remote's has nothing to send, and
+   * telling it to push is how #890's duplicate note gets written.
+   */
+  it('reports ok when the local mirror is behind the remote rather than ahead', () => {
+    const { repo, sha } = repoWithRemote('doctor-push-behind');
+    writeRecord(sha, [{ key: 'Blast', value: 'local' }], { cwd: repo });
+    git(repo, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+    git(repo, ['push', '--quiet', 'origin', NOTES_REF]);
+    const firstMirror = git(repo, ['rev-parse', NOTES_REF]).trim();
+
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'second']);
+    const second = git(repo, ['rev-parse', 'HEAD']).trim();
+    writeRecord(second, [{ key: 'Blast', value: 'module' }], { cwd: repo });
+    git(repo, ['push', '--quiet', 'origin', NOTES_REF]);
+
+    // Rewind only the local mirror: the remote keeps the newer notes commit.
+    git(repo, ['update-ref', NOTES_REF, firstMirror]);
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'notes-push');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.detail).toContain('behind');
+    expect(check?.fix).toBeNull();
+    expect(check?.evidence?.['direction']).toBe('behind');
+  });
 });
 
 describe('doctor: commit-msg hook', () => {
@@ -551,7 +578,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     // 17 since runtime-identity joined the registry. The count is asserted so
     // a check cannot be dropped without someone noticing; when it moves, it
     // should move because a check was deliberately added or removed.
-    expect(report.checks).toHaveLength(21);
+    expect(report.checks).toHaveLength(22);
   });
 });
 
@@ -1206,6 +1233,7 @@ describe('doctor: report', () => {
       'inject-version',
       'directive-trust-mode',
       'mcp-lifecycle',
+      'mcp-registration-runtime',
       'mcp-runtime-identity',
       'unattended-initiator',
       'policy-overlay',
@@ -1259,7 +1287,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(21);
+    expect(parsed.checks).toHaveLength(22);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
@@ -1635,7 +1663,7 @@ describe('#527 unattended capture initiator', () => {
 
   /**
    * #870: this repository's own registration names its entry point as
-   * `${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs`, because the hosts that read
+   * `${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs`, because the hosts that read
    * `.mcp.json` expand placeholders before they spawn anything. The reader
    * returned the raw text, so the probe launched a literal `${...}` as a path
    * and reported a working registration unhealthy — a report that sends an
@@ -1910,7 +1938,8 @@ describe('#915 squash inheritance is reported before a record is lost', () => {
     writeScript(
       join(repo, '.github', 'workflows', 'preserve.yml'),
       'name: p\non:\n  pull_request_target:\n    types: [closed]\njobs:\n  p:\n    steps:\n' +
-        '      - uses: MongLong0214/commitlore/action/preserve@v1.0.0\n',
+        '      - uses: MongLong0214/commitlore/action/preserve@v1.0.0\n' +
+        '        with:\n          cli-path: .commitlore-cli/dist/cli.js\n',
     );
 
     expect(inheritanceRow(repo)?.status).toBe('ok');
@@ -1928,7 +1957,8 @@ describe('#915 squash inheritance is reported before a record is lost', () => {
     git(repo, ['remote', 'add', 'origin', 'https://github.com/example/example.git']);
     writeScript(
       join(repo, '.github', 'workflows', 'preserve.yml'),
-      'name: p\non: pull_request_target\njobs:\n  p:\n    steps:\n      - uses: ./action/preserve\n',
+      'name: p\non: pull_request_target\njobs:\n  p:\n    steps:\n      - uses: ./action/preserve\n' +
+        '        with:\n          cli-path: dist/cli.js\n',
     );
 
     expect(inheritanceRow(repo)?.status).toBe('ok');
@@ -2000,5 +2030,217 @@ describe('#915 an undetermined branch is not told to run --target blindly', () =
     // known — but the condition comes first, and the hazard is stated.
     expect(row?.fix).toContain('identify the squash commit');
     expect(row?.fix).toContain('does not check that the commit contains the work');
+  });
+});
+
+/**
+ * #925: the row this project shipped in 1.2.13 could not be cleared by fixing the
+ * problem. A reporter turned the squash button off — the cheaper remedy, and the
+ * one the README names — and the row went on prescribing a `pull_request_target`
+ * workflow, which runs with a writable token against a fork's pull request. That
+ * is recommending a risk in exchange for nothing.
+ *
+ * The Ruled-out on r-squashdiscovery915 said this check 'cannot read the remote's
+ * merge setting'. It can: `gh api repos/<slug>` answers in one call. The reason
+ * given for warning unconditionally was wrong, which is why the gh probe is now
+ * part of the check and its absence is reported rather than assumed away.
+ */
+describe('#925 squash inheritance asks whether the squash button is reachable', () => {
+  const ghShim = (script: string): string => {
+    const dir = tempDir('doctor-gh-squash');
+    const path = join(dir, 'gh');
+    writeScript(path, script);
+    chmodSync(path, 0o755);
+    return dir;
+  };
+
+  const withPath = <T>(dir: string, body: () => T): T => {
+    const original = process.env['PATH'] ?? '';
+    process.env['PATH'] = `${dir}:${original}`;
+    try {
+      return body();
+    } finally {
+      process.env['PATH'] = original;
+    }
+  };
+
+  const repoOnGithub = (label: string): string => {
+    const repo = initRepo(label);
+    git(repo, ['remote', 'add', 'origin', 'https://github.com/example/example.git']);
+    return repo;
+  };
+
+  const row = (repo: string) =>
+    runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'squash-inheritance');
+
+  it('clears when the squash button is disabled', () => {
+    const repo = repoOnGithub('squash-button-off');
+    const gh = ghShim('#!/bin/sh\ncase "$*" in *repos/*) echo false ;; *) exit 1 ;; esac\n');
+
+    const entry = withPath(gh, () => row(repo));
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toContain('squash button is disabled');
+    expect(entry?.fix).toBeNull();
+    expect(entry?.evidence['squash_button']).toBe('false');
+  });
+
+  it('warns and names the cheaper remedy first when the button is enabled', () => {
+    const repo = repoOnGithub('squash-button-on');
+    const gh = ghShim('#!/bin/sh\ncase "$*" in *repos/*) echo true ;; *) exit 1 ;; esac\n');
+
+    const entry = withPath(gh, () => row(repo));
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('reachable today');
+    // The workflow it used to prescribe alone is the riskier of the two.
+    expect(entry?.fix).toMatch(/^either disable the squash button/);
+    expect(entry?.evidence['squash_button']).toBe('true');
+  });
+
+  it('says the setting is unknown rather than asserting exposure it did not check', () => {
+    const repo = repoOnGithub('squash-button-unknown');
+    const gh = ghShim('#!/bin/sh\nexit 1\n');
+
+    const entry = withPath(gh, () => row(repo));
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('could not be read');
+    expect(entry?.evidence['squash_button']).toBe('unknown');
+  });
+});
+
+/**
+ * The registration a host launches is a pairing of a command and the PATH that
+ * host inherits, and nothing checked the pairing. A user reported CONNECTION_CLOSED
+ * for a project-scoped server while their CLI worked; the repository's own
+ * mcp-lifecycle.log carried `started` lines for older versions and none for the
+ * installed one, which is what a spawn that never ran leaves behind — nothing.
+ *
+ * The bare name in `.mcp.json` is not the defect and must not be 'fixed': the file
+ * is committed, and core/mcp-registration.ts says why an absolute path is refused
+ * there — it would break for the next clone. So this reports the exposure instead
+ * of rewriting a shared file to suit one machine, the same way capture-hook-runtime
+ * probes the installed hook under the PATH git really gives it.
+ */
+describe('the MCP registration is launchable from the environment a host gets', () => {
+  const register = (repo: string, command: string): void => {
+    writeScript(
+      join(repo, '.mcp.json'),
+      `${JSON.stringify({ mcpServers: { commitlore: { command, args: ['mcp'] } } }, null, 2)}\n`,
+    );
+  };
+
+  const row = (repo: string) =>
+    runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'mcp-registration-runtime');
+
+  it('is ok when no registration names commitlore', () => {
+    const entry = row(initRepo('mcp-reg-none'));
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.evidence['registered_command']).toBe('none');
+  });
+
+  it('warns only when nothing on the machine can find the command', () => {
+    const repo = initRepo('mcp-reg-unresolvable');
+    register(repo, 'commitlore-that-is-not-installed');
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('nothing on this machine can find it');
+    // The consequence, which is the part that was silent: the server never runs,
+    // so it writes no lifecycle entry and there is no trace to find afterwards.
+    expect(entry?.detail).toContain('writes no lifecycle entry');
+    expect(entry?.evidence['resolves_here']).toBe('false');
+  });
+
+  /*
+   * The ordinary shape of a correct install: `~/.local/bin` is on a login shell's
+   * PATH and never on `/usr/bin:/bin`. The first version of this check warned here,
+   * which would have fired on every healthy repository `init` ever touched --
+   * exactly the 'warning nobody can clear' that #925 removed from the squash row.
+   * The fact is still stated, because it is the first thing to check when a host
+   * reports a closed connection.
+   */
+  it('does not warn when only a shell PATH resolves it, but says so', () => {
+    const repo = initRepo('mcp-reg-shell-only');
+    register(repo, 'node');
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toContain('would not');
+    expect(entry?.detail).toContain('closed connection');
+  });
+
+  it('is ok for a bare name every environment can find', () => {
+    const repo = initRepo('mcp-reg-resolvable');
+    // `sh` is on /usr/bin or /bin everywhere this runs.
+    register(repo, 'sh');
+
+    expect(row(repo)?.status).toBe('ok');
+  });
+
+  /*
+   * The failure this check was written for, with the reporter's own evidence.
+   * `.mcp.json` named `${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs`; the host did
+   * not set that variable, the `:-.` default resolved to the session's working
+   * directory, and node exited in 75ms with MODULE_NOT_FOUND. That is #870 exactly,
+   * preserved by the default added while fixing it.
+   *
+   * A check that asked only whether `command` resolves would have called this
+   * healthy: `node` always resolves. The entry point is the half that failed.
+   */
+  it('warns when the entry point in args does not exist, though the command resolves', () => {
+    const repo = initRepo('mcp-reg-entry-missing');
+    writeScript(
+      join(repo, '.mcp.json'),
+      `${JSON.stringify({
+        mcpServers: {
+          commitlore: { command: 'node', args: [join(repo, 'dist', 'commitlore.mjs'), 'mcp'] },
+        },
+      }, null, 2)}\n`,
+    );
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('does not exist');
+    // The consequence that made it invisible: our code never runs, so nothing is logged.
+    expect(entry?.detail).toContain('writes no');
+    expect(entry?.evidence['entry_resolves']).toBe('false');
+  });
+
+  it('warns when the entry point still carries an unexpanded placeholder', () => {
+    const repo = initRepo('mcp-reg-unexpanded');
+    writeScript(
+      join(repo, '.mcp.json'),
+      `${JSON.stringify({
+        mcpServers: {
+          commitlore: {
+            command: 'node',
+            args: ['${COMMITLORE_TEST_UNSET_ROOT}/dist/commitlore.mjs', 'mcp'],
+          },
+        },
+      }, null, 2)}\n`,
+    );
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('is unset here');
+    // The expansion is real, not a regex: a variable that IS set clears the row.
+    expect(entry?.detail).toContain('refused the registration outright');
+    expect(entry?.evidence['entry_resolves']).toBe('unexpanded');
+  });
+  it('warns when an absolute path does not exist here', () => {
+    const repo = initRepo('mcp-reg-missing-path');
+    register(repo, join(repo, 'no-such-binary'));
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.evidence['resolves']).toBe('false');
   });
 });

@@ -48,18 +48,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh | sh -s v1.2.14
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.sh | sh -s v1.2.15
 ```
 
 <details>
 <summary>Prefer to read the installer first?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh
-sh install.sh v1.2.14
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.sh
+sh install.sh v1.2.15
 
 # Or skip the script: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v1.2.14 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.15 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -109,13 +109,13 @@ preserve, not for narrating every change.
 macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh | sh -s v1.2.14
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.sh | sh -s v1.2.15
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.ps1))) v1.2.14
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.ps1))) v1.2.15
 ```
 
 Requires Node.js 22.23.2+ and Git. The script checks both before it writes anything.
@@ -299,7 +299,19 @@ jobs:
       - run: git fetch --no-tags --force origin
           '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.2.14
+      # The action runs CommitLore from a checkout of this repository: the
+      # package is private, so there is no published npm name to fall back to.
+      # `dist/` is committed (ADR-0011), so nothing needs building.
+      - uses: actions/checkout@v4
+        with:
+          repository: MongLong0214/commitlore
+          ref: v1.2.15
+          path: .commitlore-cli
+          persist-credentials: false
+
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.15
+        with:
+          cli-path: .commitlore-cli/dist/cli.js
 ```
 
 Two rules for whoever edits this next, because `pull_request_target` runs with a

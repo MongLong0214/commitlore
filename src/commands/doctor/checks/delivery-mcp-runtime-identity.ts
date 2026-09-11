@@ -128,7 +128,9 @@ export const checkMcpRuntimeIdentity = (ctx: DoctorContext): DoctorCheck => {
         // report the same version as a current one.
         '. Each keeps writing records with the build it started on, so this' +
         ' repository can receive records from more than one of them',
-      'restart the host sessions that own these pids so every session answers from one install' +
+      'reconnect the commitlore MCP server in the hosts that own these pids — that respawns it through ' +
+      'the wrapper the installer rewrote, and keeps the session (in Claude Code, /mcp). Restarting the ' +
+      'session does the same thing more expensively' +
         ` (${allPids.join(', ')}) — a host resolves the launcher once at session start and holds` +
         ' that runtime until the session ends, so an upgrade does not reach a session already running',
       false,

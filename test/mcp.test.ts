@@ -26,6 +26,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -295,11 +296,17 @@ interface Stub {
   close: () => Promise<void>;
 }
 
-const startStub = (cwd: string, entry: string = SERVER_ENTRY): Stub => {
+const startStub = (
+  cwd: string,
+  entry: string = SERVER_ENTRY,
+  /** #924: the server reads the installed release out of the environment. */
+  env: NodeJS.ProcessEnv = process.env,
+): Stub => {
   const child: ChildProcessWithoutNullStreams = spawn(process.execPath, [entry], {
     cwd,
     shell: false,
     stdio: ['pipe', 'pipe', 'pipe'],
+    env,
   });
 
   let out = '';
@@ -1519,6 +1526,119 @@ describe('no network, by inspection', () => {
         if (specifier.startsWith('.')) continue;
         expect(allowed.has(specifier), `${owned} imports ${specifier}`).toBe(true);
       }
+    }
+  });
+});
+
+/**
+ * #924: an upgrade cannot reach a running MCP host, and nothing stopped the stale
+ * runtime from writing records.
+ *
+ * A host resolves its launcher once at session start and holds it until the session
+ * ends. The reporter upgraded three times in one day and every capture still went
+ * to a **v1.2.0** server, thirteen releases behind, because their session had
+ * already resolved. The failure is quiet by construction: the older build accepts
+ * the same calls, returns the same shapes, and writes records that look correct, so
+ * whatever changed in thirteen releases silently did not apply to them.
+ *
+ * Driven over the real protocol rather than by unit-testing the comparison, because
+ * the claim being made is about what a caller receives from `prepare_capture` —
+ * `commitlore_runtime_identity` already answered honestly for anyone who thought to
+ * ask, and `doctor` reported it in an unrelated command. Neither is where the record
+ * gets written.
+ *
+ * Reported and not refused. Refusing would strand every currently-running host
+ * mid-session, including sessions belonging to other projects that the operator
+ * cannot restart — and unlike #911, where the staged-diff binding refuses the
+ * dangerous outcome downstream, nothing here catches a stale writer at all. That
+ * asymmetry argues for saying more, not for failing the call.
+ */
+describe('#924 prepare_capture names the build that is about to write', () => {
+  let liveRepo: string;
+  let liveStub: Stub;
+
+  beforeAll(async () => {
+    liveRepo = mkdtempSync(join(tmpdir(), 'commitlore-mcp-924-'));
+    temporaries.push(liveRepo);
+    createTestRepo({ path: liveRepo });
+    writeFileSync(join(liveRepo, 'a.ts'), 'export const a = 1;\n');
+    execGitOrThrow(['add', 'a.ts'], { cwd: liveRepo });
+    execGitOrThrow(['commit', '--no-verify', '-m', 'seed'], { cwd: liveRepo });
+    writeFileSync(join(liveRepo, 'a.ts'), 'export const a = 2;\n');
+    execGitOrThrow(['add', 'a.ts'], { cwd: liveRepo });
+  });
+
+  afterAll(async () => {
+    await liveStub?.close();
+  });
+
+  /** A data root whose `current` points at a version newer than any real release. */
+  const dataRootAt = (version: string): string => {
+    const base = mkdtempSync(join(tmpdir(), 'commitlore-924-root-'));
+    temporaries.push(base);
+    const installed = join(base, 'commitlore', version);
+    mkdirSync(installed, { recursive: true });
+    symlinkSync(installed, join(base, 'commitlore', 'current'));
+    return base;
+  };
+
+  it('reports the executing runtime', async () => {
+    liveStub = startStub(liveRepo);
+    await handshake(liveStub);
+
+    const prepared = await liveStub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: 'The vendor caps uploads at 5 MB.' },
+    });
+    const answer = toolJson(prepared);
+
+    // A string rather than an object: `formatRuntimeIdentity` is what every other
+    // surface prints, and two renderings of one identity become two identities.
+    expect(String(answer['runtime'])).toContain('version');
+    expect(answer['repository']).toBe(realpathSync(liveRepo));
+  });
+
+  it('says nothing is stale when no newer release is installed', async () => {
+    const stub = startStub(liveRepo, SERVER_ENTRY, {
+      ...process.env,
+      XDG_DATA_HOME: join(dataRootAt('v0.0.1')),
+    });
+    try {
+      await handshake(stub);
+      const prepared = await stub.request('tools/call', {
+        name: 'commitlore_prepare_capture',
+        arguments: { transcript: 'The vendor caps uploads at 5 MB.' },
+      });
+
+      expect(toolJson(prepared)['runtime_stale']).toBeNull();
+    } finally {
+      await stub.close();
+    }
+  });
+
+  it('names both versions and what to do when the installed release is newer', async () => {
+    const stub = startStub(liveRepo, SERVER_ENTRY, {
+      ...process.env,
+      XDG_DATA_HOME: join(dataRootAt('v99.0.0')),
+    });
+    try {
+      await handshake(stub);
+      const prepared = await stub.request('tools/call', {
+        name: 'commitlore_prepare_capture',
+        arguments: { transcript: 'The vendor caps uploads at 5 MB.' },
+      });
+      const stale = String(toolJson(prepared)['runtime_stale']);
+
+      expect(stale).toContain('99.0.0');
+      // The cheaper remedy has to be the one it names: reconnecting the server
+      // keeps the session, and telling an operator to restart everything when a
+      // reconnect would do is the same failure #925 fixed in the squash row.
+      expect(stale).toContain('Reconnecting this MCP server');
+      expect(stale).toContain('keeps the session');
+      // The nonce is still live: this reports, it does not refuse.
+      expect(toolJson(prepared)['nonce']).toMatch(/^[0-9a-f]{32}$/);
+    } finally {
+      await stub.close();
     }
   });
 });
