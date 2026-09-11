@@ -4,6 +4,61 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.17
+
+Two reports about the injection scanner, and a finding neither of them asked for:
+on this repository's own history the scanner's precision is zero. Not one of the
+thirteen records it withholds here is an attack. That is not an argument for
+deleting it — this corpus contains no attack, so there is nothing for it to catch
+— but it is the shape of a trade that was never stated, and it is now written
+into the table's own header.
+
+**A noun compound is not a shell invocation (#931).** `tool.shell-invocation`
+matched a verb, up to 24 characters, and a shell noun, which reads every noun
+compound as an instruction. In the reporting repository a *run* is one execution
+of a suite and its *terminal* is the record that execution writes, so records
+about the central object of that codebase were withheld for using its own
+vocabulary. The shell noun now has to sit where the verb's destination sits: its
+object (`run the terminal`), behind a preposition (`paste this into your
+terminal`), or as an interpreter the verb names (`execute bash`).
+
+The reporter suggested a determiner between the two words as evidence the first
+is a noun. Measured, that heuristic disarms `run the terminal` — which they
+themselves classify as an instruction — and `run this in bash`, while still
+blocking the benign row it was proposed to fix. Every narrowing here is measured
+against both fixture sets for that reason.
+
+**The author hears it now (#931).** Nothing on the capture or validate path had
+ever run the scanner over the draft being written: a record was verified, staged
+and committed under `shape ok · references ok`, and only appeared withheld later,
+to someone else. `capture` now refuses with a reason naming the trailer and the
+pattern, and the commit-msg hook warns on stderr — a warning rather than a
+refusal, because refusing there would make `--no-verify` the way past the
+scanner.
+
+**The mandated separator was read as a pipe (#935).** SPEC requires `|` between a
+`Ruled-out:` alternative and its reason, so every value of that key carries one
+by construction, and `tool.pipe-to-shell` hunts a pipe followed by an interpreter
+name. A reason that began "node on Windows reads…" was withheld for the grammar's
+own punctuation. The first pipe of a `Ruled-out:` value is now neutralised for
+that pattern alone; a second pipe is still a pipe.
+
+**`would` marks a counterfactual (#935).** A reason explaining why an alternative
+was refused describes what it *would* have done. `would` immediately before the
+verb now disarms an occurrence, under the same gate the existing negation and
+mention lists use. Only `would`: `could`, `might` and `should` all carry real
+instructions, and `would you hide this` is a request rather than a report.
+
+**Two records about the scanner were withheld by the scanner.** The record
+explaining why the suggested heuristic is unsafe had to quote the phrasings the
+refutation turned on; the record narrowing the patterns had to quote what they
+must still block. Neither fix could release them — one trips on a `Limit:` line
+that lists the remaining false positives by quoting them, so it is blocked by a
+phrasing it documents. Both are restated under new identities, with each quote
+behind a reporting verb, which is what the existing mention list reads. That is
+the loop the new capture-time warning exists to close, run by its author on the
+first records to need it.
+
 ## 1.2.16
 
 A release about what a tool says when it cannot see something, and about how
