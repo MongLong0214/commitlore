@@ -4,6 +4,82 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.13
+
+Three reports about the same habit from three directions: answering more
+confidently than the evidence allows, and staying quiet where the evidence is
+missing.
+
+**`stale` reported a truncated window's absence as a definite dangling reference
+(#914).** The default scan reads the most recent 1000 commits and says
+`truncated: true`. Inside that same report it emitted a `dangling-ref` wanting
+"an existing Record-Id in history" — an assertion about history made from a
+window the report itself declares incomplete. In the reporting repository three
+`Follows:` references sat inside the window while the `Record-Id` defining them
+sat at commit 1397 of 1554, so the finding was produced entirely by the
+truncation and cleared under `--all-history`.
+
+It is the inference this project refuses everywhere else and tells its own
+callers not to make: a partial scan means absence of a record is not evidence the
+record does not exist. A candidate is now resolved against the whole history
+before it is asserted, through the same reader that produced the window, so a
+default run still answers definitely and a CI job reading `danglingRefs` keeps
+working. Only a caller holding no repository gets `unresolvedRefs`, which is the
+honest answer where none can be computed.
+
+**`prepare_capture` succeeded over an empty staged diff and said so nowhere a
+caller reads (#911).** It returned a nonce, a prompt and `policy_error: null` for
+a repository with nothing staged; the prompt said `(no diff)` in prose and
+`staged_diff_hash` held the SHA-256 of the empty string. The contract's first
+rule is cite or omit, and with no diff half the citable surface is gone while
+every rule after it still reads as though it were there.
+
+It is not refused, and the reason is measured: the transaction binds to the
+staged diff, so a record prepared this way cannot reach a commit that has one —
+the commit is refused with "the staged diff differs from the verified capture".
+Refusing would also remove recording a decision that has no code change, and
+contradict the earlier decision not to withhold the contract when nothing is
+staged, which is exactly when someone is learning the format. So the absence is
+stated where it is read: `staged_diff_empty` as a field, and a contract rule
+naming what it costs. `repository` now travels with the response too — the report
+came from an MCP server owned by another process, answering about a tree that was
+not the caller's, with every other field internally consistent.
+
+**A squash-merge repository lost every record by default, and nothing said so
+(#915).** Two paths cover a squash. A local `git merge --squash` is carried by
+the installed `prepare-commit-msg` hook. The merge GitHub performs on its own
+servers runs no local hook at all and is carried by the `action/preserve` GitHub
+Action, which was built, which this repository has run on its own merges since,
+and which **no README mentioned**. The reporter made one record in twelve
+commits, the squash dropped it, and they found out only by going looking.
+
+Every README now documents the workflow, with the two rules that keep
+`pull_request_target` safe beside it. And `doctor` gains a `squash inheritance`
+row that reports whether the protection is switched on — before a record is lost,
+where `squash conservation` reports records already gone. It warns rather than
+fails: a repository merging with merge commits or rebase keeps its records
+either way, and nothing local can read the remote's merge setting.
+
+No hook was added. A `post-merge` hook is told by git that the merge was not a
+squash and given no way to name which branch was collapsed, so it could only
+re-run the conservation scan — measured here at 11.2s, with nine undetermined
+prescriptions and zero confirmed squashes, on every pull.
+
+**`doctor` prescribed fabricating provenance for a branch whose fate it could not
+determine (#915).** 1.2.7 stopped prescribing `squash-preserve` for a branch
+proven unmerged and deliberately left the undetermined case prescribing it, on
+the argument that an unnecessary preservation costs only a discarded plan. That
+weighed the wrong cost — `--target` mirrors records onto whatever commit it is
+handed without checking the commit contains the work, so on an abandoned branch
+it writes provenance for changes HEAD never took.
+
+And undetermined is not the rare case that grouping assumed. The fate is decided
+by comparing blobs, so an abandoned branch that edited a file HEAD still has
+satisfies neither arm and lands there — the ordinary shape of an abandoned
+branch. The command is still named, because it is still the right one once the
+squash commit is known, but the condition now comes first and the hazard is
+stated.
+
 ## 1.2.12
 
 **`doctor` called a deliberately fail-closed hook broken, and offered to break it

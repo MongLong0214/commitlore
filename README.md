@@ -48,18 +48,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh | sh -s v1.2.12
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
 ```
 
 <details>
 <summary>Prefer to read the installer first?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh
-sh install.sh v1.2.12
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh
+sh install.sh v1.2.13
 
 # Or skip the script: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v1.2.12 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.13 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -109,13 +109,13 @@ preserve, not for narrating every change.
 macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh | sh -s v1.2.12
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.ps1))) v1.2.12
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.ps1))) v1.2.13
 ```
 
 Requires Node.js 22.23.2+ and Git. The script checks both before it writes anything.
@@ -238,6 +238,81 @@ every eligible commit is assessed automatically.
 Users on supported skill hosts do not need to say "record this in CommitLore" on
 every commit. The remaining limitation is host initiation, not a required
 per-record user command.
+
+
+## Squash-merge repositories
+
+A squash merge replaces a branch's commits with one new commit, and that commit
+does not carry the branch's trailers. If your repository merges with the squash
+button, a record made on a branch is dropped by the merge unless something
+carries it onto the commit that squashed it.
+
+Two paths cover that, and one of them needs a one-time setup:
+
+| How the squash happens | What carries the record | Setup |
+|---|---|---|
+| `git merge --squash` locally | The installed `prepare-commit-msg` hook, from `SQUASH_MSG` | None — `commitlore init` already did it |
+| GitHub's **Squash and merge** button | The `action/preserve` GitHub Action | The workflow below |
+
+GitHub performs that merge on its own servers, where no local git hook runs at
+all, so the local hook cannot see it. The Action is the only place that has what
+it needs at that moment: the pull request, its commits, and the commit they were
+squashed into.
+
+Add `.github/workflows/commitlore-preserve.yml`:
+
+```yaml
+name: CommitLore squash inheritance
+
+# pull_request_target, not pull_request: a pull request from a fork gets a
+# read-only token on pull_request, so the job would build the record and then
+# fail to publish it.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write   # the one push to refs/notes/commitlore
+
+concurrency:
+  group: commitlore-notes
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # the merge commit is on the base branch, and a closed pull request
+          # has no merge ref left to check out
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      # the mirror this action writes; publishing from a checkout that never
+      # read it would fork the notes history
+      - run: git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+
+      # a squash merge usually deletes the branch, and then the pull request's
+      # own ref is the only one still reaching the commits that carry records
+      - run: git fetch --no-tags --force origin
+          '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
+
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.13
+```
+
+Two rules for whoever edits this next, because `pull_request_target` runs with a
+writable token: never check out the pull request's head here, and never execute
+anything reachable from `refs/commitlore/pr-head`. The fork's commits arrive as
+data to read trailers from, not as code to run.
+
+`commitlore doctor` reports whether this is switched on, under
+`squash inheritance`. It says so **before** a record is lost;
+`squash conservation` is the row that reports records already gone.
+
+If you merge with merge commits or rebase, records survive on their own and this
+setup is unnecessary.
 
 
 ## A field report, not a measurement

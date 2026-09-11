@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh | sh -s v1.2.12
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
 ```
 
 <details>
 <summary>먼저 설치기를 읽어 보고 싶나요?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh
-sh install.sh v1.2.12
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh
+sh install.sh v1.2.13
 
 # 또는 스크립트를 건너뜁니다. 스크립트가 만드는 체크아웃은 직접 만들 수 있습니다.
-git clone --depth 1 --branch v1.2.12 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.13 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -107,13 +107,13 @@ CommitLore는 그 판단을 코드 곁에 보관합니다.
 macOS와 Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh | sh -s v1.2.12
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.ps1))) v1.2.12
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.ps1))) v1.2.13
 ```
 
 Node.js 22.23.2+와 Git이 필요합니다. 스크립트는 무엇이든 쓰기 전에 둘을 확인합니다.
@@ -229,6 +229,77 @@ CommitLore는 이렇게 묻습니다.
 
 지원되는 skill host 사용자는 매 commit마다 "이것을 CommitLore에 기록해"라고 말할 필요가 없습니다.
 남는 한계는 record마다 필요한 사용자 명령이 아니라 host가 시작하는가입니다.
+
+## squash 머지를 쓰는 레포지토리
+
+squash 머지는 브랜치의 커밋들을 새 커밋 하나로 대체하고, 그 커밋은 브랜치의 트레일러를
+갖고 있지 않습니다. squash 버튼으로 머지하는 레포라면, 브랜치에서 만든 레코드는 그것을
+squash한 커밋으로 옮겨주는 무언가가 없으면 머지 때 사라집니다.
+
+이를 덮는 경로가 두 개이고, 그중 하나는 한 번의 설정이 필요합니다.
+
+| squash가 일어나는 방식 | 레코드를 옮기는 주체 | 설정 |
+|---|---|---|
+| 로컬 `git merge --squash` | 설치된 `prepare-commit-msg` 훅이 `SQUASH_MSG`에서 읽어 처리 | 없음 — `commitlore init`이 이미 해둠 |
+| GitHub의 **Squash and merge** 버튼 | `action/preserve` GitHub Action | 아래 워크플로 |
+
+GitHub은 그 머지를 자기 서버에서 수행하고, 거기서는 로컬 git 훅이 하나도 실행되지
+않습니다. 그래서 로컬 훅은 이것을 볼 수 없습니다. 그 시점에 필요한 것 — 풀 리퀘스트,
+그 커밋들, 그리고 그것들이 합쳐진 커밋 — 을 가진 곳은 Action뿐입니다.
+
+`.github/workflows/commitlore-preserve.yml` 을 추가합니다.
+
+```yaml
+name: CommitLore squash inheritance
+
+# pull_request_target, not pull_request: a pull request from a fork gets a
+# read-only token on pull_request, so the job would build the record and then
+# fail to publish it.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write   # the one push to refs/notes/commitlore
+
+concurrency:
+  group: commitlore-notes
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # the merge commit is on the base branch, and a closed pull request
+          # has no merge ref left to check out
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      # the mirror this action writes; publishing from a checkout that never
+      # read it would fork the notes history
+      - run: git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+
+      # a squash merge usually deletes the branch, and then the pull request's
+      # own ref is the only one still reaching the commits that carry records
+      - run: git fetch --no-tags --force origin
+          '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
+
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.13
+```
+
+`pull_request_target` 은 쓰기 가능한 토큰으로 실행되므로, 다음에 이 파일을 고치는 사람을
+위한 두 가지 규칙이 있습니다. 여기서 **풀 리퀘스트의 head를 체크아웃하지 말 것**, 그리고
+`refs/commitlore/pr-head` 에서 도달 가능한 것을 **실행하지 말 것**. 포크의 커밋은
+트레일러를 읽을 데이터로 도착하는 것이며, 실행할 코드가 아닙니다.
+
+`commitlore doctor` 가 이것이 켜져 있는지 `squash inheritance` 행으로 보고합니다. 레코드를
+**잃기 전에** 알려줍니다. `squash conservation` 행은 이미 사라진 레코드를 보고하는 쪽입니다.
+
+머지 커밋이나 리베이스로 머지한다면 레코드는 그대로 살아남고 이 설정은 필요 없습니다.
+
 
 ## 현장 보고이지 측정은 아닙니다
 
