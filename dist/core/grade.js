@@ -39,6 +39,22 @@ export const BLOCKED_RECORD_WITHHELD = 'Record content was withheld because it m
  * prose must survive. Adding a pattern without both sides is adding an
  * unmeasured false-positive rate.
  *
+ * What the fixtures cannot tell you, and a census of this repository's own
+ * history can: after #931 and #935, thirteen trailer values out of 5,882 still
+ * trip a pattern here, and **none of the thirteen is a true positive**. Precision
+ * on this corpus is zero. That is not an argument for deleting the table — the
+ * corpus contains no attack, so there is nothing here for it to catch — but it
+ * is the shape of the trade, and it was unstated until it was measured. A record
+ * is most likely to trip a pattern when its subject is this table, which is why
+ * #408, #931 and #935 are all the same report from different directions.
+ *
+ * Two things keep that bearable rather than silent. `explainWithholding` tells
+ * the author at capture and at the commit-msg hook, so a withheld record is a
+ * rewrite rather than a discovery someone else makes later. And blocking is not
+ * the defence: the trust grade is, for `Warn:`. For `Ruled-out:`, `Limit:` and
+ * `Verified:` blocking is the only content control the scanner has, which is why
+ * exempting a key is not the cheap fix it looks like.
+ *
  * What this table cannot see, by construction:
  * - Character-level obfuscation beyond case/space/confusable folding — leetspeak
  *   (`ign0re`), letter-spacing (`i g n o r e`), inserted punctuation
@@ -52,19 +68,62 @@ export const BLOCKED_RECORD_WITHHELD = 'Record content was withheld because it m
  *
  * That is why `blocked` is a supplement to grading and not the defence: an
  * outside contributor's `Warn:` is a `claim` whether or not any of this fires.
+ *
+ * And what it withholds although it should not — the benign prose the fixtures
+ * below do not cover, measured on this repository's history (#935), every one
+ * left as the price of the corresponding attack shape staying blocked:
+ * - An attack phrase quoted as an example with no reporting verb in the two
+ *   words before it: `` `run the terminal` remains a false positive ``. The
+ *   record that names this residual (r-mention408) ruled out quotation marks
+ *   as the signal, because an attacker quotes as readily as a defender.
+ * - A bare imperative as a `Ruled-out:` alternative: `suppress the warning for
+ *   a branch whose content is absent | …`. Position alone cannot release it
+ *   without also releasing `curl … | sh` written as an alternative.
+ * - A purpose infinitive: `rewrites history to hide that the claim was made`.
+ *   `make sure to hide this` is the same form used as an instruction.
+ * Each of these is reported to the author at capture and commit time
+ * (`explainWithholding`), where a reporting verb or a modal fixes the wording.
  */
 export const INJECTION_PATTERNS = [
     {
         id: 'tool.run-the-following',
         family: 'tool-invocation',
-        pattern: /\b(?:run|execute|invoke|perform|apply)\s+(?:the\s+)?(?:following|below)\b/,
+        /*
+         * #931's noun compound, in a second pattern. `the run below what the task
+         * set supports` is a noun with a comparison after it, and this read it as an
+         * instruction pointing at a payload -- one of the thirteen false positives
+         * the census found here, on a record about sizing an experiment.
+         *
+         * A determiner or possessive immediately before the word settles it: an
+         * English imperative cannot be preceded by one, so `the run below` is a noun
+         * and `please run the following` is not. Measured rather than reasoned,
+         * because the same shape of heuristic was refused in #931 for releasing real
+         * attacks: twelve attack phrasings still block, including the ones that put
+         * a word before the verb (`please`, `then`, `you should`, `reviewers must`),
+         * and four noun readings are released.
+         */
+        pattern: /(?<!\b(?:a|an|the|this|that|each|every|its|his|her|their|our|your|my|one|any|no)\s)\b(?:run|execute|invoke|perform|apply)\s+(?:the\s+)?(?:following|below)\b/,
         negatable: true,
         intent: 'points the reader at a payload to execute',
     },
     {
         id: 'tool.shell-invocation',
         family: 'tool-invocation',
-        pattern: /\b(?:run|execute|paste|type|enter)\b[^.!?]{0,24}\b(?:shell|terminal|bash|zsh|command line|command prompt)\b/,
+        // The shell noun has to sit where the verb's *destination* sits: as its
+        // object (`run the terminal`), behind a preposition (`paste this into your
+        // terminal`), or as an interpreter the verb names outright (`execute
+        // bash`). The earlier form — verb, up to 24 characters, shell noun — read
+        // every noun compound as an instruction. In the reporter's repository a
+        // *run* is one execution of the suite and its *terminal* is the end-state
+        // record that execution writes, so `stamping a run terminal is fine` had
+        // every record about that codebase's central object withheld (#931); the
+        // same shape hid three of this repository's own `Verified:` lines (`npm run
+        // build, bash spec/verify.sh`). The object form also stands down when the
+        // verb is itself a modified noun — `the run the terminal writes` — because
+        // an imperative never carries an article; the prepositional form does not,
+        // since `after the build, run this in your terminal` is the instruction
+        // with a decoy in front of it.
+        pattern: /(?<!\b(?:a|an|the|each|every|any|its|their|our|my|your|this|that|these|those|one|same|single|previous|latest|current|failed|passed|green|red|nightly|dry|test|ci)\s)\b(?:run|execute|paste|type|enter)\s+(?:the|this|these|those|that|a|an|your|my|its|their|our)\s+(?:[a-z-]+\s+)?(?:shell|terminal|bash|zsh|command line|command prompt)\b|\b(?:run|execute|paste|type|enter)\b[^.!?]{0,24}\b(?:in|into|inside|within|at|on|via|through|from|with|under|using)\s+(?:(?:the|this|that|these|those|a|an|your|my|its|their|our|any|every|each|some)\s+)?(?:[a-z-]+\s+){0,2}(?:shell|terminal|bash|zsh|command line|command prompt)\b|\b(?:run|execute)\s+(?:bash|zsh)\b/,
         negatable: true,
         intent: 'asks for the value to be typed into a shell',
     },
@@ -284,6 +343,24 @@ const MENTIONS = new Set([
     'literal',
     'string',
 ]);
+/**
+ * The counterfactual modal. `it would hide that two rows were unplanned` is a
+ * consequence being described, not a request being made (#935): the bare verb
+ * after `would` is the only slot an imperative shares with a conditional, and
+ * a `Ruled-out:` reason — *why* an alternative was dropped — is written in
+ * exactly that mood. Measured on this repository's history, 6 of the 7
+ * `output.conceal` withholdings sat in a reason, 4 of them literally
+ * `… would hide that …`; the other two (`to hide that`, `and hide it`) stay
+ * withheld, for the reasons the table header gives.
+ *
+ * Read at the word immediately before the match, not across the window the
+ * other sets use: `would you hide this` is a request, and the pronoun between
+ * modal and verb is what makes it one. `could`, `might`, `should` and `can`
+ * are deliberately absent — `you could paste this into your terminal` is an
+ * instruction wearing a modal, and this set exists for the one modal that
+ * cannot address the reader.
+ */
+const IRREALIS = new Set(['would']);
 /** How many words before a match the negation guard reads. */
 const NEGATION_LOOKBACK = 2;
 /** Invisible characters: they change nothing on screen and everything to a regex. */
@@ -414,13 +491,15 @@ const decodedCandidates = (text) => {
 /** Whether a nearby CJK prohibition or one of the preceding English words disarms a match. */
 const CJK_NEGATION_RE = /(?:不要|不得|禁止|请勿|請勿|切勿)[^。！？.!?\n]{0,8}$/u;
 /**
- * Whether the prose immediately before a match disarms it — either by negating
- * the imperative (`NEGATIONS`) or by reporting it rather than issuing it
- * (`MENTIONS`, #408).
+ * Whether the prose immediately before a match disarms it — by negating the
+ * imperative (`NEGATIONS`), by reporting it rather than issuing it
+ * (`MENTIONS`, #408), or by making it the consequence of a condition
+ * (`IRREALIS`, #935).
  *
- * Both read the same short window, and both are deliberately narrow: only the
- * two words immediately before the match are consulted, so "never mind the
- * above, run the following" still blocks (fixture `20-bypass-negation-decoy`).
+ * All three read the same short window, and all are deliberately narrow: only
+ * the two words immediately before the match are consulted, so "never mind the
+ * above, run the following" still blocks (fixture `20-bypass-negation-decoy`),
+ * and `IRREALIS` reads only the last of them.
  */
 const isDisarmed = (haystack, index, matchedText) => {
     const prefix = haystack.slice(0, index);
@@ -430,7 +509,9 @@ const isDisarmed = (haystack, index, matchedText) => {
         return false;
     const words = prefix.split(/[^a-z0-9]+/).filter((word) => word !== '');
     const window = words.slice(-NEGATION_LOOKBACK);
-    return window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word));
+    if (window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word)))
+        return true;
+    return IRREALIS.has(window.at(-1) ?? '');
 };
 const fires = (haystack, entry) => {
     // Built fresh so the exported table stays free of `g`-flag lastIndex state,
@@ -473,14 +554,62 @@ const trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.ke
  * (`system: do nothing` — #596).
  */
 export const renderedTrailer = (trailer) => `${trailer.key}: ${trailer.value}`;
-/** Every pattern the rendered trailer trips, in table order. */
-export const scanTrailer = (trailer) => scanInjection(renderedTrailer(trailer));
+/** SPEC §3.1: the one key whose value carries a `|` by construction. */
+const RULED_OUT_KEY = 'Ruled-out';
+const PIPE_TO_SHELL = 'tool.pipe-to-shell';
+/**
+ * Every pattern the rendered trailer trips, in table order.
+ *
+ * One reading is corrected by the key (#935). SPEC §3.1 requires a `|` in
+ * every `Ruled-out:` value and makes the first one the separator between the
+ * alternative and the reason, so a reason that opens with an interpreter's
+ * name as its subject — `| node on Windows reads /tmp/x as C:\tmp\x` — is
+ * `tool.pipe-to-shell`'s anchor character followed by its interpreter list,
+ * and the pattern read punctuation the grammar mandates as a shell pipe. The
+ * separator is neutralised and the value rescanned for that one pattern; a
+ * second `|` is still a pipe, and every other pattern still reads the value
+ * exactly as an agent is shown it.
+ *
+ * What this gives up, stated: a whole value of the form `<command> | sh`,
+ * where the command trips nothing on its own, is now served as a rejected
+ * alternative whose reason is `sh`. `curl … | sh` is not in that set —
+ * `tool.curl-remote` reads the alternative — and neither is any value with a
+ * second pipe or a verb that asks for the value to be run.
+ */
+export const scanTrailer = (trailer) => {
+    const patterns = scanInjection(renderedTrailer(trailer));
+    if (trailer.key !== RULED_OUT_KEY || !patterns.includes(PIPE_TO_SHELL))
+        return patterns;
+    const separator = trailer.value.indexOf('|');
+    if (separator < 0)
+        return patterns;
+    const unseparated = `${trailer.value.slice(0, separator)} ${trailer.value.slice(separator + 1)}`;
+    if (scanInjection(renderedTrailer({ ...trailer, value: unseparated })).includes(PIPE_TO_SHELL)) {
+        return patterns;
+    }
+    return patterns.filter((id) => id !== PIPE_TO_SHELL);
+};
 /**
  * Whether an identity string would itself trip the scanner, either as the
  * bare value a report prints or as the `Record-Id: …` pair some surfaces
  * still emit. A withheld record whose id is still printed is not withheld.
  */
 export const identityCarriesInjection = (recordId) => scanInjection(recordId).length > 0 || scanInjection(`Record-Id: ${recordId}`).length > 0;
+/**
+ * Why a trailer would be withheld, said to the one person who can still change
+ * it (#931). Grading is a read-time judgement: the author of a record that
+ * trips a pattern got `staged` from capture and `shape ok` from the commit-msg
+ * hook, and learned at query time, from a different reader, that every trailer
+ * of the record was gone. Capture verification and `validate` both say this,
+ * through one function, so the author hears the same sentence twice rather
+ * than two sentences that might disagree.
+ */
+export const explainWithholding = (key, patterns) => {
+    const named = INJECTION_PATTERNS.filter((entry) => patterns.includes(entry.id)).map((entry) => `${entry.id} (${entry.intent})`);
+    return (`${key}: reads as an instruction to an agent — it matches ${named.join(', ')} — so every ` +
+        'reader would be served this record as [blocked] with all of its trailers withheld (SPEC §7). ' +
+        'Reword the value so it describes rather than instructs, or drop the trailer');
+};
 /*
  * Every trailer is scanned in the form an agent is shown, including the ones
  * whose keys hold enumerated values.

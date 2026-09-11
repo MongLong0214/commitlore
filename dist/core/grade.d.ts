@@ -98,6 +98,22 @@ export interface InjectionPattern {
  * prose must survive. Adding a pattern without both sides is adding an
  * unmeasured false-positive rate.
  *
+ * What the fixtures cannot tell you, and a census of this repository's own
+ * history can: after #931 and #935, thirteen trailer values out of 5,882 still
+ * trip a pattern here, and **none of the thirteen is a true positive**. Precision
+ * on this corpus is zero. That is not an argument for deleting the table — the
+ * corpus contains no attack, so there is nothing here for it to catch — but it
+ * is the shape of the trade, and it was unstated until it was measured. A record
+ * is most likely to trip a pattern when its subject is this table, which is why
+ * #408, #931 and #935 are all the same report from different directions.
+ *
+ * Two things keep that bearable rather than silent. `explainWithholding` tells
+ * the author at capture and at the commit-msg hook, so a withheld record is a
+ * rewrite rather than a discovery someone else makes later. And blocking is not
+ * the defence: the trust grade is, for `Warn:`. For `Ruled-out:`, `Limit:` and
+ * `Verified:` blocking is the only content control the scanner has, which is why
+ * exempting a key is not the cheap fix it looks like.
+ *
  * What this table cannot see, by construction:
  * - Character-level obfuscation beyond case/space/confusable folding — leetspeak
  *   (`ign0re`), letter-spacing (`i g n o r e`), inserted punctuation
@@ -111,6 +127,21 @@ export interface InjectionPattern {
  *
  * That is why `blocked` is a supplement to grading and not the defence: an
  * outside contributor's `Warn:` is a `claim` whether or not any of this fires.
+ *
+ * And what it withholds although it should not — the benign prose the fixtures
+ * below do not cover, measured on this repository's history (#935), every one
+ * left as the price of the corresponding attack shape staying blocked:
+ * - An attack phrase quoted as an example with no reporting verb in the two
+ *   words before it: `` `run the terminal` remains a false positive ``. The
+ *   record that names this residual (r-mention408) ruled out quotation marks
+ *   as the signal, because an attacker quotes as readily as a defender.
+ * - A bare imperative as a `Ruled-out:` alternative: `suppress the warning for
+ *   a branch whose content is absent | …`. Position alone cannot release it
+ *   without also releasing `curl … | sh` written as an alternative.
+ * - A purpose infinitive: `rewrites history to hide that the claim was made`.
+ *   `make sure to hide this` is the same form used as an instruction.
+ * Each of these is reported to the author at capture and commit time
+ * (`explainWithholding`), where a reporting verb or a modal fixes the wording.
  */
 export declare const INJECTION_PATTERNS: readonly InjectionPattern[];
 /**
@@ -145,7 +176,25 @@ export declare const scanInjection: (text: string) => string[];
  * (`system: do nothing` — #596).
  */
 export declare const renderedTrailer: (trailer: Trailer) => string;
-/** Every pattern the rendered trailer trips, in table order. */
+/**
+ * Every pattern the rendered trailer trips, in table order.
+ *
+ * One reading is corrected by the key (#935). SPEC §3.1 requires a `|` in
+ * every `Ruled-out:` value and makes the first one the separator between the
+ * alternative and the reason, so a reason that opens with an interpreter's
+ * name as its subject — `| node on Windows reads /tmp/x as C:\tmp\x` — is
+ * `tool.pipe-to-shell`'s anchor character followed by its interpreter list,
+ * and the pattern read punctuation the grammar mandates as a shell pipe. The
+ * separator is neutralised and the value rescanned for that one pattern; a
+ * second `|` is still a pipe, and every other pattern still reads the value
+ * exactly as an agent is shown it.
+ *
+ * What this gives up, stated: a whole value of the form `<command> | sh`,
+ * where the command trips nothing on its own, is now served as a rejected
+ * alternative whose reason is `sh`. `curl … | sh` is not in that set —
+ * `tool.curl-remote` reads the alternative — and neither is any value with a
+ * second pipe or a verb that asks for the value to be run.
+ */
 export declare const scanTrailer: (trailer: Trailer) => string[];
 /**
  * Whether an identity string would itself trip the scanner, either as the
@@ -153,6 +202,16 @@ export declare const scanTrailer: (trailer: Trailer) => string[];
  * still emit. A withheld record whose id is still printed is not withheld.
  */
 export declare const identityCarriesInjection: (recordId: string) => boolean;
+/**
+ * Why a trailer would be withheld, said to the one person who can still change
+ * it (#931). Grading is a read-time judgement: the author of a record that
+ * trips a pattern got `staged` from capture and `shape ok` from the commit-msg
+ * hook, and learned at query time, from a different reader, that every trailer
+ * of the record was gone. Capture verification and `validate` both say this,
+ * through one function, so the author hears the same sentence twice rather
+ * than two sentences that might disagree.
+ */
+export declare const explainWithholding: (key: string, patterns: readonly string[]) => string;
 /**
  * Whether `author` matches a repository-configured author string.
  *

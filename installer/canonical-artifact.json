@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "afe6f36fcaa5f63f12f2af7aec82c403943dab080edb32845964138bb8b769aa"
+    "sha256": "1f60371ad29f0add9df05d77f66089ef8289c2174c172c2ba2cc6b06a9a28f6e"
   },
   "artifact": {
-    "sha256": "ab0558cd44dc661e9639aa9b21d51e797c7e6b7bd4c927a50dd3883e82edfe9d",
+    "sha256": "884eca95564ec56f7c0fa54b52c0a42a6ca508f4dce053ef4cf61bfbb2dfd166",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -562,15 +562,15 @@
       },
       {
         "path": "dist/commands/query.d.ts",
-        "sha256": "848786b867c29d09790fa94678707307a744773bf5e36098a63210866e01608b"
+        "sha256": "def5c25b854abce30ec5a1e2ba76164b7c8c81207ae5912e14c8c92d18ac1634"
       },
       {
         "path": "dist/commands/query.js",
-        "sha256": "37706fb5c6e80d6325b5b50a174a975c8b24d56d4d715962d14fce4541cd7b19"
+        "sha256": "948efd7589893c17f6ff62e44c2291d6c24f2fb3f707818bf8112722e4b6aa4f"
       },
       {
         "path": "dist/commands/query.js.map",
-        "sha256": "439e352db4e515e2dbdf5d2288c392567c5b6429da2c3750d1432d61912b4575"
+        "sha256": "2b908bb5a426e93cf36386bad768f92556f04909fab70dcfc079fa39d72f95c3"
       },
       {
         "path": "dist/commands/squash-preserve.d.ts",
@@ -638,15 +638,15 @@
       },
       {
         "path": "dist/commands/validate.js",
-        "sha256": "310a80f51e8414f1b0ab27e4d9611efc531a15a0889cbd3ea5b4c01d67ea0b34"
+        "sha256": "294252c60696813de6a6b6aaea78d02127a3f85de051b07a69d1c2cbbcbcb967"
       },
       {
         "path": "dist/commands/validate.js.map",
-        "sha256": "36a279c236c36d91dbc0bffce64dbdcb3cd04b8cb9d78b7dfbc31ad0942cf879"
+        "sha256": "f3d5365efc070ac4f3e594e99fc1b22b668f263012879f804aa7f6e60e2f71f7"
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "1c85e568f051c60e3f0e6a97a2b359a5cbed375ca802b3cdaec1066b6fe41f25"
+        "sha256": "fe9c19563c2efbd92902589b9e7f4437d698d90220b4e1cc7213523de4ac866e"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -762,11 +762,11 @@
       },
       {
         "path": "dist/core/capture-verify.js",
-        "sha256": "ab475d0ca61515117954e75df1016c7d5f3de2783c78f43788d6d0c1b3456946"
+        "sha256": "c7b87c6ec80401dc4ecfc6a3ff86fffcf8c131d8b541e9fd57902616f16e2f3f"
       },
       {
         "path": "dist/core/capture-verify.js.map",
-        "sha256": "7534f2f31183902a048c506e8dfee71159fbf76867cbb0472f7d1018cfa9a09c"
+        "sha256": "5855998d4fdd7af3eb5c4e66c94bfb761e974c028f5e674e4ea9795beb8c9943"
       },
       {
         "path": "dist/core/codex-plugin.d.ts",
@@ -794,15 +794,15 @@
       },
       {
         "path": "dist/core/grade.d.ts",
-        "sha256": "51f385dea02bca3adf7c740b657f64784a35100af94a2130f7495b5e42a94b17"
+        "sha256": "4de544040c6088b5663c70a64f707682ccf0c05650cc5ebf2397b52d663e1934"
       },
       {
         "path": "dist/core/grade.js",
-        "sha256": "bb6b46cdfc6b8fccf159530ec9878e4d73df35a2190e25b255e5a8d552201246"
+        "sha256": "737b78171940b189947b6c2fea448f1722d4ec2a31e4eb19b0b25c269d127dfe"
       },
       {
         "path": "dist/core/grade.js.map",
-        "sha256": "93bd143450f4bd44edd2584e2a918e0d7a33628789d4801964696877b275783c"
+        "sha256": "e129dad42b7d2c50bed51abf6e7a82dba92678c412e5be91d02d0aaf681d2629"
       },
       {
         "path": "dist/core/guard.d.ts",
