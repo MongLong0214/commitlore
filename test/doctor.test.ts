@@ -551,7 +551,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     // 17 since runtime-identity joined the registry. The count is asserted so
     // a check cannot be dropped without someone noticing; when it moves, it
     // should move because a check was deliberately added or removed.
-    expect(report.checks).toHaveLength(21);
+    expect(report.checks).toHaveLength(22);
   });
 });
 
@@ -1206,6 +1206,7 @@ describe('doctor: report', () => {
       'inject-version',
       'directive-trust-mode',
       'mcp-lifecycle',
+      'mcp-registration-runtime',
       'mcp-runtime-identity',
       'unattended-initiator',
       'policy-overlay',
@@ -1259,7 +1260,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(21);
+    expect(parsed.checks).toHaveLength(22);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
@@ -2077,5 +2078,88 @@ describe('#925 squash inheritance asks whether the squash button is reachable', 
     expect(entry?.status).toBe('warn');
     expect(entry?.detail).toContain('could not be read');
     expect(entry?.evidence['squash_button']).toBe('unknown');
+  });
+});
+
+/**
+ * The registration a host launches is a pairing of a command and the PATH that
+ * host inherits, and nothing checked the pairing. A user reported CONNECTION_CLOSED
+ * for a project-scoped server while their CLI worked; the repository's own
+ * mcp-lifecycle.log carried `started` lines for older versions and none for the
+ * installed one, which is what a spawn that never ran leaves behind — nothing.
+ *
+ * The bare name in `.mcp.json` is not the defect and must not be 'fixed': the file
+ * is committed, and core/mcp-registration.ts says why an absolute path is refused
+ * there — it would break for the next clone. So this reports the exposure instead
+ * of rewriting a shared file to suit one machine, the same way capture-hook-runtime
+ * probes the installed hook under the PATH git really gives it.
+ */
+describe('the MCP registration is launchable from the environment a host gets', () => {
+  const register = (repo: string, command: string): void => {
+    writeScript(
+      join(repo, '.mcp.json'),
+      `${JSON.stringify({ mcpServers: { commitlore: { command, args: ['mcp'] } } }, null, 2)}\n`,
+    );
+  };
+
+  const row = (repo: string) =>
+    runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'mcp-registration-runtime');
+
+  it('is ok when no registration names commitlore', () => {
+    const entry = row(initRepo('mcp-reg-none'));
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.evidence['registered_command']).toBe('none');
+  });
+
+  it('warns only when nothing on the machine can find the command', () => {
+    const repo = initRepo('mcp-reg-unresolvable');
+    register(repo, 'commitlore-that-is-not-installed');
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('nothing on this machine can find it');
+    // The consequence, which is the part that was silent: the server never runs,
+    // so it writes no lifecycle entry and there is no trace to find afterwards.
+    expect(entry?.detail).toContain('writes no lifecycle entry');
+    expect(entry?.evidence['resolves_here']).toBe('false');
+  });
+
+  /*
+   * The ordinary shape of a correct install: `~/.local/bin` is on a login shell's
+   * PATH and never on `/usr/bin:/bin`. The first version of this check warned here,
+   * which would have fired on every healthy repository `init` ever touched --
+   * exactly the 'warning nobody can clear' that #925 removed from the squash row.
+   * The fact is still stated, because it is the first thing to check when a host
+   * reports a closed connection.
+   */
+  it('does not warn when only a shell PATH resolves it, but says so', () => {
+    const repo = initRepo('mcp-reg-shell-only');
+    register(repo, 'node');
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toContain('would not');
+    expect(entry?.detail).toContain('closed connection');
+  });
+
+  it('is ok for a bare name every environment can find', () => {
+    const repo = initRepo('mcp-reg-resolvable');
+    // `sh` is on /usr/bin or /bin everywhere this runs.
+    register(repo, 'sh');
+
+    expect(row(repo)?.status).toBe('ok');
+  });
+
+  it('warns when an absolute path does not exist here', () => {
+    const repo = initRepo('mcp-reg-missing-path');
+    register(repo, join(repo, 'no-such-binary'));
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.evidence['resolves']).toBe('false');
   });
 });

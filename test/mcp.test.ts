@@ -1630,7 +1630,11 @@ describe('#924 prepare_capture names the build that is about to write', () => {
       const stale = String(toolJson(prepared)['runtime_stale']);
 
       expect(stale).toContain('99.0.0');
-      expect(stale).toContain('Restart this host session');
+      // The cheaper remedy has to be the one it names: reconnecting the server
+      // keeps the session, and telling an operator to restart everything when a
+      // reconnect would do is the same failure #925 fixed in the squash row.
+      expect(stale).toContain('Reconnecting this MCP server');
+      expect(stale).toContain('keeps the session');
       // The nonce is still live: this reports, it does not refuse.
       expect(toolJson(prepared)['nonce']).toMatch(/^[0-9a-f]{32}$/);
     } finally {

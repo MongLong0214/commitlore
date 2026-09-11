@@ -148,7 +148,9 @@ const runtimeStaleness = (env: NodeJS.ProcessEnv): string | null => {
     `this MCP server is running ${running.version} from ${running.packageRoot}, but ${installedVersion} ` +
     `is installed at ${installed}. A host resolves its launcher once at session start, so the ` +
     `upgrade has not reached this session and every record it writes is written by the older ` +
-    `build. Restart this host session to pick up ${installedVersion}`
+    `build. Reconnecting this MCP server is enough and keeps the session: the host respawns it ` +
+    `through the wrapper, which the installer rewrote to ${installedVersion} (in Claude Code, /mcp). ` +
+    `Restarting the host session does the same thing more expensively`
   );
 };
 
