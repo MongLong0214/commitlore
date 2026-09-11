@@ -500,11 +500,16 @@ export const buildEnvelope = (count: number, withPrs: boolean): string =>
     ...(withPrs
       ? [
           '',
-          'Pass --with-prs on that command too. The verifier rebuilds these sources',
-          'from the repository, and rebuilding them without the pull request bodies',
-          'means your quotes from those bodies will not be found.',
+          'Pull request bodies are part of the text above, and the verifier rebuilds',
+          'these sources from the repository. They are collected by default, so the',
+          '--draft call needs no flag — but if you pass --no-with-prs to it, quotes',
+          'taken from those bodies will not be found and those records are discarded.',
         ]
-      : []),
+      : [
+          '',
+          'Pull request bodies were not collected for this prompt (--no-with-prs, or',
+          'gh is unavailable), so the text above is commit messages and diffs only.',
+        ]),
     '',
     'Reconstruction is checked, not trusted: every record is re-read against the',
     'same text you were given, and anything whose quote is not there is discarded',
