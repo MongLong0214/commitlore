@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh | sh -s v1.2.14
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.sh | sh -s v1.2.15
 ```
 
 <details>
 <summary>먼저 설치기를 읽어 보고 싶나요?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh
-sh install.sh v1.2.14
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.sh
+sh install.sh v1.2.15
 
 # 또는 스크립트를 건너뜁니다. 스크립트가 만드는 체크아웃은 직접 만들 수 있습니다.
-git clone --depth 1 --branch v1.2.14 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.15 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -107,13 +107,13 @@ CommitLore는 그 판단을 코드 곁에 보관합니다.
 macOS와 Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh | sh -s v1.2.14
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.sh | sh -s v1.2.15
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.ps1))) v1.2.14
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.ps1))) v1.2.15
 ```
 
 Node.js 22.23.2+와 Git이 필요합니다. 스크립트는 무엇이든 쓰기 전에 둘을 확인합니다.
@@ -293,11 +293,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MongLong0214/commitlore
-          ref: v1.2.14
+          ref: v1.2.15
           path: .commitlore-cli
           persist-credentials: false
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.2.14
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.15
         with:
           cli-path: .commitlore-cli/dist/cli.js
 ```

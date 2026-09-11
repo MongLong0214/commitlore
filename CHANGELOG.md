@@ -4,6 +4,77 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.15
+
+Six reports about `doctor`, and what they have in common is worse than any one of
+them: a diagnostic that reads a name rather than the requirement behind it reports
+`ok` and takes the warning away with it. Most of the release is that shape, found
+in rows shipped days and in one case hours earlier.
+
+**The published squash-merge recipe could not run, and the row it satisfied said
+nothing (#926).** The `## Squash-merge repositories` section added to every README
+in 1.2.13 ended at `uses: MongLong0214/commitlore/action/preserve@vX` with no
+`with:` block. The action declares `cli-path` as required and exits immediately on
+an empty value, so every job the recipe produced failed. Meanwhile
+`squash-inheritance` looked for a workflow *referencing* the action, so following
+those instructions flipped the row to satisfied while records went on being
+dropped at every squash merge — the exact loss the row exists to warn about, with
+the warning removed. The recipe now carries the checkout step and the input, taken
+from this repository's own working workflow, and the row reads the requirement: a
+workflow that references the action without supplying `cli-path` warns and says
+that the old recipe is how a reader got there.
+
+**The plugin's MCP server looked in the session's working directory (#870,
+reopened).** `.mcp.json` named `${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs`.
+A host that does not set that variable resolves the `:-.` default against the
+session, so node was asked for `<your repository>/dist/commitlore.mjs` and the
+server died in 75 ms with `MODULE_NOT_FOUND`, surfacing only as the host's own
+`CONNECTION_CLOSED`. That is #870 exactly, preserved by the default added while
+fixing it. There is no default now: an unset variable is refused by the host and
+the refusal names the variable, instead of resolving to a plausible path whose
+failure names a file nobody wrote. A source guard refuses the form in the files
+this repository ships, because the defect has now arrived twice — once as itself,
+once inside its own fix.
+
+**The registration row asked whether the command resolves, not whether the launch
+works (#924, follow-up).** The field failure had `command: "node"`, which always
+resolves, and a broken path in `args` — so a command-only check called it healthy.
+The row now resolves the entry point out of `args` and reports a missing one, and
+its placeholder branch reads the environment instead of matching `${VAR}` with a
+regex, which had been warning at sessions that *had* set the variable and could do
+nothing to clear it.
+
+**`doctor` could not report `ok` (ADR-0032 §2).** Status degraded on any skipped
+check, and `squash-conservation` skips as not-applicable wherever no branch looks
+like a squash source — most repositories. So a repository with nothing wrong
+reported `degraded` for life, under a headline saying some checks could not be
+verified when every one of them had been. Skip reasons now carry the class ADR-0032
+specified, the type system refuses a reason without one, and only the reasons that
+mean *unverified* degrade the report. A skip that declines to say why still
+degrades.
+
+**`notes-push` told a clone that is behind to push (#890, related).** The row
+compared the local mirror's sha to the remote's and called any difference local
+records nobody pushes — including a clone whose mirror is an ancestor of the
+remote's, which has nothing to send. Running the printed fix there is how a
+duplicate note gets written. Direction now comes from ancestry, and behind reports
+`ok`, saying a fetch settles it. The same detail also claimed no command pushes
+records for you, which stopped being true when the pre-push hook shipped; it now
+says whether that hook is installed.
+
+**`inject-runtime` prescribed a fix that would break the thing it checked.** On the
+branch where the plugin is already delivering context, the row skipped with
+`fix: commitlore inject install-claude-hook` — and the renderer prints `fix:` for a
+skipped row like any other, so the instruction reached the reader. Following it
+installs a second delivery of the same context, the double injection removed in
+#781. The row names no fix there and says why.
+
+**`doctor` was writing itself into the log it reads.** Every run that reached the
+MCP probe appended a session start and exit to `.git/commitlore/mcp-lifecycle.log`,
+whose only reader counts host sessions — and on the escalation path, where the
+probe's child is killed with a signal it cannot handle, it left a start with no
+exit for the row to warn about. A probe child records nothing now.
+
 ## 1.2.14
 
 **`backfill` collects pull request bodies by default (#902).** `--with-prs` was
