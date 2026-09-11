@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { runQuery } from '../src/core/query.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const scratch: string[] = [];
 afterAll(() => {
@@ -47,8 +48,12 @@ const cloneWithTwoRecords = (label: string): { work: string; base: string; tip: 
   scratch.push(root);
   const remote = join(root, 'remote.git');
   const work = join(root, 'work');
-  execFileSync('git', ['init', '--quiet', '--bare', remote]);
-  execFileSync('git', ['clone', '--quiet', remote, work]);
+  // `createTestRepo` rather than a raw `git init`/`clone`: it pins
+  // `--initial-branch=main`, and the first version of this fixture inherited the
+  // runner's `init.defaultBranch` instead. Every case passed locally and all
+  // four failed in CI with `fatal: branch 'main' does not exist`.
+  createTestRepo({ path: remote, bare: true });
+  createTestRepo({ path: work, source: remote });
 
   mkdirSync(join(work, 'src'), { recursive: true });
   writeFileSync(join(work, 'src/a.ts'), 'export const v = 1;\n');
