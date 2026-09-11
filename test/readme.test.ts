@@ -320,3 +320,44 @@ describe('the animated brand logo', () => {
     }
   });
 });
+
+/**
+ * #915: every README now documents the squash-inheritance Action, because the
+ * mechanism existed and no README mentioned it — the reporter's records were lost
+ * to a protection that was built, shipped, and undiscoverable.
+ *
+ * The `uses:` line carries a version pin, so it can drift from the release the
+ * rest of the page pins. A reader who copies a stale pin gets an old action
+ * against a new CLI, and nothing else in this file would notice: the assertions
+ * above match on `sh install.sh v`, `git clone --branch v` and the `fsSLO` URL,
+ * none of which is this line.
+ */
+describe('#915 the squash inheritance Action is documented and pinned', () => {
+  for (const file of README_FILES) {
+    describe(file, () => {
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      const lines = content.split('\n');
+
+      it('documents the Action', () => {
+        expect(content).toContain('action/preserve');
+      });
+
+      it('pins the Action to this package version', () => {
+        const usesLine = lines.find((l) => /uses:\s*\S*\/action\/preserve@/.test(l));
+        expect(usesLine).toBeDefined();
+        const match = usesLine!.match(/@v(\d+\.\d+\.\d+)/);
+        expect(match).not.toBeNull();
+        expect(match![1]).toBe(PACKAGE_VERSION);
+      });
+
+      it('keeps the two pull_request_target rules beside the workflow', () => {
+        // The event runs with a writable token against a fork's content. The
+        // workflow is safe only because it checks out the base branch and reads
+        // the fork's commits as data; a reader who drops either rule turns this
+        // into the vulnerability pull_request_target is known for.
+        expect(content).toContain('pull_request_target');
+        expect(content).toContain('refs/commitlore/pr-head');
+      });
+    });
+  }
+});

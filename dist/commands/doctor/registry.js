@@ -17,6 +17,7 @@ import { checkMcpLifecycle } from './checks/delivery-mcp-lifecycle.js';
 import { checkMcpRuntimeIdentity } from './checks/delivery-mcp-runtime-identity.js';
 import { checkHistoryDepth } from './checks/history-history-depth.js';
 import { checkSquashConservation } from './checks/history-squash-conservation.js';
+import { checkSquashInheritance } from './checks/history-squash-inheritance.js';
 import { checkIndex } from './checks/index-index-health.js';
 import { checkRuntime } from './checks/runtime-cli-runtime.js';
 import { checkRuntimeIdentity } from './checks/runtime-runtime-identity.js';
@@ -72,6 +73,7 @@ export const CHECK_REGISTRY = [
     { id: 'history-depth', title: 'history depth', category: 'history', dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx) },
     { id: 'index-health', title: 'index health', category: 'index', dependencies: [], optional: false, run: (ctx) => checkIndex(ctx) },
     { id: 'squash-conservation', title: 'squash conservation', category: 'history', dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx) },
+    { id: 'squash-inheritance', title: 'squash inheritance', category: 'history', dependencies: [], optional: false, run: (ctx) => checkSquashInheritance(ctx) },
 ];
 /** An invalid selection is a usage error, never an empty health report. */
 export class DoctorSelectionError extends Error {

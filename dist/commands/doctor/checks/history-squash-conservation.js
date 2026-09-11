@@ -281,10 +281,27 @@ export const checkSquashConservation = (ctx) => {
             .map((entry) => `${entry.recordId} (${entry.branch} — ${FATE_NOTE[entry.fate]})`)
             .join(', ');
         const more = lost.length > 5 ? `, and ${lost.length - 5} more` : '';
-        // Only branches whose work actually landed are worth preserving records
-        // for. `unknown` is grouped with them deliberately: prescribing a
-        // preservation that turns out to be unnecessary costs a discarded plan,
-        // while withholding it from a real squash loses the record for good.
+        /*
+         * #915: `unknown` used to be grouped with the squashed ones, on the argument
+         * that prescribing an unnecessary preservation costs only a discarded plan
+         * while withholding it from a real squash loses a record for good. That
+         * weighed the wrong cost. `squash-preserve --target` mirrors records onto
+         * whatever commit it is handed without checking the commit contains the work,
+         * so running it on a branch that was abandoned writes provenance for work
+         * nobody merged — fabricating history rather than preserving it, which is the
+         * failure this project exists to prevent.
+         *
+         * And `unknown` is not the rare case the grouping assumed. The fate is decided
+         * by comparing blobs, so an abandoned branch that edited a file HEAD still has
+         * satisfies neither arm — the path is present, the content differs — and lands
+         * here. That is the ordinary shape of an abandoned branch, not an edge.
+         *
+         * So a definite squash is prescribed for directly, and an undetermined one is
+         * told what to establish first. The command is still named, because it is
+         * still the right command once the squash commit is known.
+         */
+        const squashed = lost.filter((entry) => entry.fate === 'present-in-head');
+        const undetermined = lost.filter((entry) => entry.fate === 'unknown');
         const preservable = lost.filter((entry) => entry.fate !== 'absent-from-head');
         const abandonedOnly = preservable.length === 0;
         const fix = abandonedOnly
@@ -295,11 +312,23 @@ export const checkSquashConservation = (ctx) => {
                 // deliberately discarded.
                 'nothing to preserve — these branches were closed without merging, and their records ' +
                     'describe work HEAD does not contain; delete the branches, or leave them'
-            : `commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ` +
-                `then commit or attach the result` +
-                (preservable.length === lost.length
-                    ? ''
-                    : ` (only the ${preservable.length} on a branch whose changes reached HEAD)`);
+            : squashed.length === 0
+                ? // Nothing is known to have landed, so the only honest instruction is to
+                    // establish that first. Naming the command without that condition is
+                    // what let it be run on an abandoned branch (#915).
+                    `identify the squash commit for each branch first — \`git log --oneline\` on HEAD for the ` +
+                        `work, or the merged pull request — then commitlore squash-preserve <base>..<branch> ` +
+                        `--target <that commit>. \`--target\` does not check that the commit contains the work, ` +
+                        `so on a branch that was abandoned rather than squashed it writes provenance for changes ` +
+                        `HEAD never took; for those, there is nothing to preserve`
+                : `commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ` +
+                    `then commit or attach the result` +
+                    (squashed.length === lost.length
+                        ? ''
+                        : ` (the ${squashed.length} whose changes are in HEAD). For the ${undetermined.length} ` +
+                            `undetermined, identify the squash commit before running it — \`--target\` does not ` +
+                            `check that the commit contains the work, and on an abandoned branch it writes ` +
+                            `provenance for changes HEAD never took`);
         return check(id, category, title, 'warn', `${lost.length} record(s) declared on a branch not reachable from HEAD could not be found in ` +
             `HEAD's history: ${named}${more}${upstreamNote(upstreamKnown, onUpstreamOnly)}${scanLimitDetail(scan)}`, fix, false, undefined, {
             evidence: scanEvidence(scan, {

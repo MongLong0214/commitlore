@@ -1249,3 +1249,104 @@ describe('a stale record that matches an injection pattern', () => {
     rmSync(repo, { recursive: true, force: true });
   });
 });
+
+/**
+ * #914: `stale`'s default window is the most recent 1000 commits, and it reported
+ * a reference whose target sat below that window as `dangling-ref` — "want an
+ * existing Record-Id in history". That is an assertion about history made from a
+ * window the same report declares incomplete, and it is the inference this
+ * project refuses everywhere else: `coverage: "partial"` means absence of a
+ * record is not evidence the record does not exist.
+ *
+ * Driven through `buildReport` with a synthetic truncated scan rather than by
+ * building 1001 commits: the window is the input under test, and the resolution
+ * it now performs reads the repository by id, so a two-commit repository
+ * exercises both halves.
+ */
+describe('#914 a truncated window does not assert about history', () => {
+  const repos: string[] = [];
+  afterAll(() => {
+    for (const dir of repos) rmSync(dir, { recursive: true, force: true });
+  });
+
+  const repoDeclaring = (id: string | null): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'commitlore-stale-914-'));
+    repos.push(dir);
+    createTestRepo({ path: dir });
+    if (id !== null) {
+      spawnSync('git', ['commit', '--allow-empty', '--quiet', '-m', `declare\n\nLimit: a limit\nRecord-Id: ${id}\n`], {
+        cwd: dir,
+        env: { ...process.env, GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z', GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z' },
+      });
+    }
+    return dir;
+  };
+
+  /** A window that saw the reference and not the declaration, and says so. */
+  const truncatedScanReferencing = (id: string) => ({
+    records: [
+      {
+        sha: 'a'.repeat(40),
+        committedAt: '2026-02-01T00:00:00Z',
+        trailers: [
+          { key: 'Limit', value: 'a limit' },
+          { key: 'Record-Id', value: 'r-referrer00001' },
+          { key: 'Follows', value: id },
+        ],
+        source: 'commit' as const,
+      },
+    ],
+    commits: 1000,
+    truncated: true,
+    notes: 'available' as const,
+  });
+
+  it('clears a reference whose target history has, below the window', () => {
+    const repo = repoDeclaring('r-completioneffect');
+    const report = buildReport(
+      truncatedScanReferencing('r-completioneffect'),
+      new Date('2026-03-01T00:00:00Z'),
+      { cwd: repo },
+    );
+
+    expect(report.truncated).toBe(true);
+    expect(report.danglingRefs).toEqual([]);
+    expect(report.unresolvedRefs).toEqual([]);
+  });
+
+  it('still asserts a reference history really has no declaration for', () => {
+    const repo = repoDeclaring(null);
+    const report = buildReport(
+      truncatedScanReferencing('r-neverdeclared1'),
+      new Date('2026-03-01T00:00:00Z'),
+      { cwd: repo },
+    );
+
+    // Both places a declaration can live were searched over the whole history, so
+    // a default run stays useful to a CI job reading danglingRefs.
+    expect(report.danglingRefs).toHaveLength(1);
+    expect(report.danglingRefs[0]?.got).toBe('r-neverdeclared1');
+    expect(report.unresolvedRefs).toEqual([]);
+  });
+
+  it('reports undetermined rather than dangling when it cannot reach a repository', () => {
+    const report = buildReport(
+      truncatedScanReferencing('r-completioneffect'),
+      new Date('2026-03-01T00:00:00Z'),
+    );
+
+    expect(report.danglingRefs).toEqual([]);
+    expect(report.unresolvedRefs).toHaveLength(1);
+    expect(report.unresolvedRefs[0]?.want).toContain('undetermined');
+    expect(formatReport(report)).toContain('unresolved refs');
+  });
+
+  it('leaves a complete scan asserting exactly as before', () => {
+    const scan = { ...truncatedScanReferencing('r-neverdeclared1'), truncated: false };
+    const report = buildReport(scan, new Date('2026-03-01T00:00:00Z'), {});
+
+    expect(report.danglingRefs).toHaveLength(1);
+    expect(report.danglingRefs[0]?.want).toBe('an existing Record-Id in history');
+    expect(report.unresolvedRefs).toEqual([]);
+  });
+});

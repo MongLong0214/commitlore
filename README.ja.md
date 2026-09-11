@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh | sh -s v1.2.12
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
 ```
 
 <details>
 <summary>先にインストーラーを読みたいですか？</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh
-sh install.sh v1.2.12
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh
+sh install.sh v1.2.13
 
 # あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
-git clone --depth 1 --branch v1.2.12 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.13 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -107,13 +107,13 @@ CommitLore はその判断をコードのそばに残します。
 macOS と Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh | sh -s v1.2.12
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.ps1))) v1.2.12
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.ps1))) v1.2.13
 ```
 
 Node.js 22.23.2+ と Git が必要です。スクリプトは何かを書き込む前に両方を確認します。
@@ -229,6 +229,80 @@ superseded な決定は大いに関係があり得ても、現在の指針とし
 
 対応 skill host の利用者は、毎回「これを CommitLore に記録して」と言う必要はありません。
 残る制約は record ごとのユーザー命令ではなく、host が開始するかどうかです。
+
+## squash マージを使うリポジトリ
+
+squash マージはブランチのコミット群を 1 つの新しいコミットに置き換えますが、その
+コミットはブランチのトレーラーを持ちません。squash ボタンでマージするリポジトリでは、
+ブランチで作ったレコードは、それを squash したコミットへ運ぶ仕組みがない限り、マージ時に
+失われます。
+
+これを埋める経路は 2 つあり、片方は一度だけ設定が必要です。
+
+| squash の発生場所 | レコードを運ぶもの | 設定 |
+|---|---|---|
+| ローカルの `git merge --squash` | インストール済みの `prepare-commit-msg` フックが `SQUASH_MSG` から処理 | 不要 — `commitlore init` が済ませている |
+| GitHub の **Squash and merge** ボタン | `action/preserve` GitHub Action | 下のワークフロー |
+
+GitHub はそのマージを自社サーバー上で行い、そこではローカルの git フックは一切実行され
+ません。したがってローカルフックはこれを見られません。その瞬間に必要なもの — プル
+リクエスト、そのコミット、そしてそれらが squash された先のコミット — を持つのは Action
+だけです。
+
+`.github/workflows/commitlore-preserve.yml` を追加します。
+
+```yaml
+name: CommitLore squash inheritance
+
+# pull_request_target, not pull_request: a pull request from a fork gets a
+# read-only token on pull_request, so the job would build the record and then
+# fail to publish it.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write   # the one push to refs/notes/commitlore
+
+concurrency:
+  group: commitlore-notes
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # the merge commit is on the base branch, and a closed pull request
+          # has no merge ref left to check out
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      # the mirror this action writes; publishing from a checkout that never
+      # read it would fork the notes history
+      - run: git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+
+      # a squash merge usually deletes the branch, and then the pull request's
+      # own ref is the only one still reaching the commits that carry records
+      - run: git fetch --no-tags --force origin
+          '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
+
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.13
+```
+
+`pull_request_target` は書き込み可能なトークンで動くため、次にこれを編集する人への規則が
+2 つあります。ここでプルリクエストの head を**チェックアウトしないこと**、そして
+`refs/commitlore/pr-head` から到達できるものを**実行しないこと**。フォークのコミットは
+トレーラーを読むためのデータとして届くもので、実行するコードではありません。
+
+`commitlore doctor` はこれが有効かを `squash inheritance` の行で報告します。レコードを
+**失う前に**知らせます。`squash conservation` の行は、すでに失われたレコードを報告する側
+です。
+
+マージコミットやリベースでマージしているなら、レコードはそのまま残り、この設定は不要です。
+
 
 ## 現場報告であって測定ではない
 
