@@ -93,6 +93,13 @@ export const SERVER_NAME = 'commitlore';
 const FALLBACK_VERSION = '0.0.0';
 
 const JSON_MIME = 'application/json';
+/**
+ * SHA-256 of the empty string, which is what `staged_diff_hash` holds when
+ * nothing is staged (#911). Named rather than inlined: the literal is
+ * recognisable only to a reader who already knows what it is, which is the whole
+ * reason the condition needed a field of its own.
+ */
+const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
 
 /** The four consumer routes of SPEC §5, under the names the CLI uses. */
@@ -659,6 +666,25 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         // fallback PRD-F13 requirement 10 rules out.
         guard_advisory: result.guard_advisory,
         policy_error: result.policy_error,
+        /*
+         * #911: two facts a caller had no way to read.
+         *
+         * `staged_diff_empty` because nothing said so in a field. The prompt said
+         * `(no diff)` in prose and `staged_diff_hash` was the SHA-256 of the empty
+         * string, which is only legible to someone who already suspected it. The
+         * transaction is real and still binds — a record prepared here cannot
+         * attach to a commit with a different diff, the staged-diff binding
+         * refuses that — but half the citable surface is absent, and the caller
+         * should decide that rather than discover it at commit time.
+         *
+         * `repository` because the reporter reached this through a stale MCP
+         * server owned by another process, answering for a tree that was not
+         * theirs. Every other field was internally consistent; nothing named the
+         * repository the answer was about. A caller in a worktree can now compare
+         * it against the tree they meant in one glance.
+         */
+        staged_diff_empty: result.staged_diff_hash === EMPTY_SHA256,
+        repository: root,
       });
     },
     [VERIFY_CAPTURE_TOOL]: (args) => {
