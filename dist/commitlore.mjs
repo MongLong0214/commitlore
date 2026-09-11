@@ -15230,7 +15230,21 @@ var INJECTION_PATTERNS = [
   {
     id: "tool.shell-invocation",
     family: "tool-invocation",
-    pattern: /\b(?:run|execute|paste|type|enter)\b[^.!?]{0,24}\b(?:shell|terminal|bash|zsh|command line|command prompt)\b/,
+    // The shell noun has to sit where the verb's *destination* sits: as its
+    // object (`run the terminal`), behind a preposition (`paste this into your
+    // terminal`), or as an interpreter the verb names outright (`execute
+    // bash`). The earlier form — verb, up to 24 characters, shell noun — read
+    // every noun compound as an instruction. In the reporter's repository a
+    // *run* is one execution of the suite and its *terminal* is the end-state
+    // record that execution writes, so `stamping a run terminal is fine` had
+    // every record about that codebase's central object withheld (#931); the
+    // same shape hid three of this repository's own `Verified:` lines (`npm run
+    // build, bash spec/verify.sh`). The object form also stands down when the
+    // verb is itself a modified noun — `the run the terminal writes` — because
+    // an imperative never carries an article; the prepositional form does not,
+    // since `after the build, run this in your terminal` is the instruction
+    // with a decoy in front of it.
+    pattern: /(?<!\b(?:a|an|the|each|every|any|its|their|our|my|your|this|that|these|those|one|same|single|previous|latest|current|failed|passed|green|red|nightly|dry|test|ci)\s)\b(?:run|execute|paste|type|enter)\s+(?:the|this|these|those|that|a|an|your|my|its|their|our)\s+(?:[a-z-]+\s+)?(?:shell|terminal|bash|zsh|command line|command prompt)\b|\b(?:run|execute|paste|type|enter)\b[^.!?]{0,24}\b(?:in|into|inside|within|at|on|via|through|from|with|under|using)\s+(?:(?:the|this|that|these|those|a|an|your|my|its|their|our|any|every|each|some)\s+)?(?:[a-z-]+\s+){0,2}(?:shell|terminal|bash|zsh|command line|command prompt)\b|\b(?:run|execute)\s+(?:bash|zsh)\b/,
     negatable: true,
     intent: "asks for the value to be typed into a shell"
   },
@@ -15429,6 +15443,7 @@ var MENTIONS = /* @__PURE__ */ new Set([
   "literal",
   "string"
 ]);
+var IRREALIS = /* @__PURE__ */ new Set(["would"]);
 var NEGATION_LOOKBACK = 2;
 var INVISIBLE_RE = /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
 var ANSI_ESCAPE_RE = /\u001B\[[0-?]*[ -/]*[@-~]/g;
@@ -15572,7 +15587,8 @@ var isDisarmed = (haystack, index, matchedText) => {
   if (/[^\x00-\x7F]/u.test(matchedText)) return false;
   const words = prefix.split(/[^a-z0-9]+/).filter((word) => word !== "");
   const window = words.slice(-NEGATION_LOOKBACK);
-  return window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word));
+  if (window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word))) return true;
+  return IRREALIS.has(window.at(-1) ?? "");
 };
 var fires = (haystack, entry) => {
   const scanner = new RegExp(entry.pattern.source, "g");
@@ -15599,8 +15615,26 @@ var scanInjection = (text) => {
 };
 var trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
 var renderedTrailer = (trailer) => `${trailer.key}: ${trailer.value}`;
-var scanTrailer = (trailer) => scanInjection(renderedTrailer(trailer));
+var RULED_OUT_KEY = "Ruled-out";
+var PIPE_TO_SHELL = "tool.pipe-to-shell";
+var scanTrailer = (trailer) => {
+  const patterns = scanInjection(renderedTrailer(trailer));
+  if (trailer.key !== RULED_OUT_KEY || !patterns.includes(PIPE_TO_SHELL)) return patterns;
+  const separator = trailer.value.indexOf("|");
+  if (separator < 0) return patterns;
+  const unseparated = `${trailer.value.slice(0, separator)} ${trailer.value.slice(separator + 1)}`;
+  if (scanInjection(renderedTrailer({ ...trailer, value: unseparated })).includes(PIPE_TO_SHELL)) {
+    return patterns;
+  }
+  return patterns.filter((id2) => id2 !== PIPE_TO_SHELL);
+};
 var identityCarriesInjection = (recordId) => scanInjection(recordId).length > 0 || scanInjection(`Record-Id: ${recordId}`).length > 0;
+var explainWithholding = (key, patterns) => {
+  const named = INJECTION_PATTERNS.filter((entry) => patterns.includes(entry.id)).map(
+    (entry) => `${entry.id} (${entry.intent})`
+  );
+  return `${key}: reads as an instruction to an agent \u2014 it matches ${named.join(", ")} \u2014 so every reader would be served this record as [blocked] with all of its trailers withheld (SPEC \xA77). Reword the value so it describes rather than instructs, or drop the trailer`;
+};
 var scanRecord = (record2) => {
   const matchedPatterns = /* @__PURE__ */ new Set();
   const matchedKeys = /* @__PURE__ */ new Set();
@@ -15822,7 +15856,7 @@ var gradeDeclarations = (record2, declarations2, ctx) => {
 
 // src/core/query.ts
 var LIMIT_KEY = "Limit";
-var RULED_OUT_KEY = "Ruled-out";
+var RULED_OUT_KEY2 = "Ruled-out";
 var WARN_KEY = "Warn";
 var CONSUMER_SCAN_BUDGET_MS = 3e3;
 var RECORD_ID_KEY3 = "Record-Id";
@@ -16712,7 +16746,7 @@ var guard = (opts) => {
   const proposal = tokenize(opts.proposal);
   const ids = recordIdsIn(opts.proposal);
   const result = runQuery({
-    keys: [RULED_OUT_KEY],
+    keys: [RULED_OUT_KEY2],
     ...opts.paths === void 0 ? {} : { paths: opts.paths },
     ...opts.at === void 0 ? {} : { at: opts.at },
     ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
@@ -16732,7 +16766,7 @@ var guard = (opts) => {
   }
   const candidates = result.records.flatMap((record2) => {
     const idHit = record2.recordId !== void 0 && ids.has(record2.recordId);
-    return valuesOf(record2, RULED_OUT_KEY).map((value) => {
+    return valuesOf(record2, RULED_OUT_KEY2).map((value) => {
       const parsed = parseRuledOut(value);
       return {
         record: record2,
@@ -17433,6 +17467,18 @@ var runVerifyCaptureRecords = (opts) => {
           record: verified.record,
           reason: "canonical-duplicate",
           detail: "a record with the same normalized key/value/scope already exists"
+        });
+        continue;
+      }
+      const matched = verified.record.trailers.flatMap((trailer) => {
+        const patterns = scanTrailer(trailer);
+        return patterns.length === 0 ? [] : [{ key: trailer.key, patterns }];
+      });
+      if (matched.length > 0) {
+        rejected.push({
+          record: verified.record,
+          reason: "injection-pattern",
+          detail: matched.map((entry) => explainWithholding(entry.key, entry.patterns)).join("; ")
         });
         continue;
       }
@@ -26627,7 +26673,7 @@ var TEMPLATE_VERSION = "commitlore-inject/3";
 var TIERS = [
   { name: "warn", label: "Warn", key: WARN_KEY },
   { name: "limit", label: "Limit", key: LIMIT_KEY },
-  { name: "ruled-out", label: "Ruled-out", key: RULED_OUT_KEY },
+  { name: "ruled-out", label: "Ruled-out", key: RULED_OUT_KEY2 },
   { name: "other", label: "Other" }
 ];
 var OTHER_TIER = TIERS.length - 1;
@@ -36118,7 +36164,7 @@ var USAGE_EXIT_CODE3 = 2;
 var INCOMPLETE_EXIT_CODE2 = 3;
 var SECTIONS = [
   { label: "limits", key: LIMIT_KEY },
-  { label: "ruled-out", key: RULED_OUT_KEY },
+  { label: "ruled-out", key: RULED_OUT_KEY2 },
   { label: "warnings", key: WARN_KEY }
 ];
 var SECTION_KEYS = SECTIONS.map((section2) => section2.key);
@@ -36304,7 +36350,7 @@ var toJson2 = (command, result) => {
     counts: {
       records: presented.records.length,
       limits: countKey(presented.records, LIMIT_KEY),
-      ruledOut: countKey(presented.records, RULED_OUT_KEY),
+      ruledOut: countKey(presented.records, RULED_OUT_KEY2),
       warnings: countKey(presented.records, WARN_KEY),
       other: presented.records.reduce(
         (total, record2) => total + otherTrailers(record2).length,
@@ -36337,7 +36383,7 @@ var blockedMessage = (record2) => record2.identityCollision === true ? "Record c
 var idColumn = (record2, width) => (record2.recordId ?? "-").padEnd(width);
 var idWidth = (records) => records.reduce((width, record2) => Math.max(width, (record2.recordId ?? "-").length), 1);
 var separatorNote = (key, value) => {
-  if (key !== RULED_OUT_KEY) return "";
+  if (key !== RULED_OUT_KEY2) return "";
   const split = splitRuledOut(value);
   if (!split.ambiguous) return "";
   return `  (more than one "|" \u2014 alternative: ${JSON.stringify(split.alternative)})`;
@@ -36628,7 +36674,7 @@ var QUERY_KINDS = ["context", "limits", "ruled-out", "warnings"];
 var KEYS_BY_KIND = {
   context: void 0,
   limits: [LIMIT_KEY],
-  "ruled-out": [RULED_OUT_KEY],
+  "ruled-out": [RULED_OUT_KEY2],
   warnings: [WARN_KEY]
 };
 var QUERY_TOOL = "commitlore_query";
@@ -37840,7 +37886,7 @@ var identityCollisionViolations = (source) => {
   });
 };
 var ambiguousSeparatorWarnings = (source, trailers, lines) => trailers.flatMap((trailer, index) => {
-  if (trailer.key !== RULED_OUT_KEY) return [];
+  if (trailer.key !== RULED_OUT_KEY2) return [];
   const split = splitRuledOut(trailer.value);
   if (!split.ambiguous || split.unterminatedCodeSpan) return [];
   const at = lines[index];
@@ -37848,6 +37894,12 @@ var ambiguousSeparatorWarnings = (source, trailers, lines) => trailers.flatMap((
   return [
     `commitlore: ${where}: Ruled-out: has more than one "|" and there is no escape, so the first one separates: alternative ${JSON.stringify(split.alternative)}. If that is not the split you meant, rephrase so only the separator is a pipe (SPEC \xA73.1)`
   ];
+});
+var withheldTrailerWarnings = (source, trailers) => trailers.flatMap(({ trailer, at }) => {
+  const patterns = scanTrailer(trailer);
+  if (patterns.length === 0) return [];
+  const where = `${source.sha?.slice(0, 10) ?? "commit"}${at === void 0 ? "" : `:${at}`}`;
+  return [`commitlore: ${where}: ${explainWithholding(trailer.key, patterns)}`];
 });
 var inspectSource = (source) => {
   const trailers = parseCommitMessage(source.message);
@@ -37882,6 +37934,12 @@ var inspectSource = (source) => {
     );
   }
   warnings.push(...ambiguousSeparatorWarnings(source, trailers, lines));
+  warnings.push(
+    ...withheldTrailerWarnings(source, [
+      ...earlierBlocks.flat().map((trailer) => ({ trailer, at: void 0 })),
+      ...nonTrailerParagraph === void 0 ? trailers.map((trailer, index) => ({ trailer, at: lines[index] })) : []
+    ])
+  );
   return { violations, warnings };
 };
 var locateReferenceViolations = (source, trailers, violations) => {
