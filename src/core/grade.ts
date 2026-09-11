@@ -126,6 +126,22 @@ export interface InjectionPattern {
  * prose must survive. Adding a pattern without both sides is adding an
  * unmeasured false-positive rate.
  *
+ * What the fixtures cannot tell you, and a census of this repository's own
+ * history can: after #931 and #935, thirteen trailer values out of 5,882 still
+ * trip a pattern here, and **none of the thirteen is a true positive**. Precision
+ * on this corpus is zero. That is not an argument for deleting the table — the
+ * corpus contains no attack, so there is nothing here for it to catch — but it
+ * is the shape of the trade, and it was unstated until it was measured. A record
+ * is most likely to trip a pattern when its subject is this table, which is why
+ * #408, #931 and #935 are all the same report from different directions.
+ *
+ * Two things keep that bearable rather than silent. `explainWithholding` tells
+ * the author at capture and at the commit-msg hook, so a withheld record is a
+ * rewrite rather than a discovery someone else makes later. And blocking is not
+ * the defence: the trust grade is, for `Warn:`. For `Ruled-out:`, `Limit:` and
+ * `Verified:` blocking is the only content control the scanner has, which is why
+ * exempting a key is not the cheap fix it looks like.
+ *
  * What this table cannot see, by construction:
  * - Character-level obfuscation beyond case/space/confusable folding — leetspeak
  *   (`ign0re`), letter-spacing (`i g n o r e`), inserted punctuation
