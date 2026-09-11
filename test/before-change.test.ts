@@ -447,3 +447,66 @@ describe('#597 signature-required policy reaches before-change', () => {
     expect(control.active_decisions.some((decision) => decision.trust === 'directive')).toBe(true);
   });
 });
+
+/**
+ * The canonical order of `verification_gaps` is stated in
+ * `core/before-change.ts` and in Amendment 4, and nothing pinned it: reversing
+ * the two source gaps passed the whole file. A documented invariant with no
+ * test is a claim.
+ *
+ * The order matters because the set is closed and ordered by contract, so a
+ * consumer is entitled to compare two responses element-wise rather than as
+ * sets -- which is exactly what the byte-identical assertion above does.
+ */
+describe('verification_gaps: the canonical order is pinned, not just documented', () => {
+  const shallowRepoWithUnfetchedNotes = (): string => {
+    const remote = createTestRepo({ path: join(tmpBase, 'gap-remote'), bare: true });
+    const seed = createTestRepo({ path: join(tmpBase, 'gap-seed') });
+    const git = (cwd: string, ...args: string[]): void => {
+      execFileSync('git', ['-c', 'user.email=t@e.invalid', '-c', 'user.name=T', ...args], { cwd });
+    };
+    writeFileSync(join(seed, 'src.ts'), 'export const a = 1;\n');
+    git(seed, 'add', 'src.ts');
+    git(seed, 'commit', '--quiet', '-m', 'one\n\nLimit: first\nRecord-Id: r-gapone01');
+    writeFileSync(join(seed, 'src.ts'), 'export const a = 2;\n');
+    git(seed, 'add', 'src.ts');
+    git(seed, 'commit', '--quiet', '-m', 'two\n\nLimit: second\nRecord-Id: r-gaptwo01');
+    git(seed, 'push', '--quiet', remote, 'HEAD:refs/heads/main');
+
+    // `file://` on purpose: git ignores --depth for a local-path clone and says
+    // so, which produced a fixture with no `.git/shallow` and a case that pinned
+    // half of what it claimed to. The transport is what makes the clone shallow.
+    // A default clone's refspec does not cover refs/notes, which is what makes
+    // the notes answer `unfetched` rather than `absent` -- both conditions this
+    // case needs, from one fixture.
+    const clone = join(tmpBase, 'gap-clone');
+    execFileSync('git', ['clone', '--quiet', '--depth', '1', `file://${remote}`, clone]);
+    return clone;
+  };
+
+  it('reports shallow-history before notes-unfetched', async () => {
+    const cwd = shallowRepoWithUnfetchedNotes();
+    const result = await beforeChange({ path: 'src.ts', cwd });
+
+    // Both conditions must actually hold, or this case pins nothing.
+    expect(result.verification_gaps).toContain('shallow-history');
+    expect(result.verification_gaps).toContain('notes-unfetched');
+    expect(result.verification_gaps.indexOf('shallow-history')).toBeLessThan(
+      result.verification_gaps.indexOf('notes-unfetched'),
+    );
+  });
+
+  /*
+   * The source gaps are read from the query result on the path where a query
+   * runs, and measured directly on the path where one does not. Two routes to
+   * one answer is two places for it to drift, so the case that has no history
+   * must still report what the other route would.
+   */
+  it('reports the same source gaps when no history is available to query', async () => {
+    const cwd = mkdtempSync(join(tmpBase, 'gap-nohistory-'));
+    const result = await beforeChange({ path: 'src.ts', cwd });
+
+    expect(result.verification_gaps).toContain('history-unavailable');
+    expect(result.verification_gaps[0]).toBe('history-unavailable');
+  });
+});

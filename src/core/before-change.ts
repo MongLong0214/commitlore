@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 
 import { execGit, hasShallowHistory, historyAvailability } from './git.js';
 import { guard, renderGuardMatch, type RenderedGuardMatch } from './guard.js';
-import { notesAvailability } from './notes.js';
+import { notesAvailability, type NotesAvailability } from './notes.js';
 import { withholdBlocked } from '../commands/query.js';
 import {
   CONSUMER_SCAN_BUDGET_MS,
@@ -105,27 +105,31 @@ export interface BeforeChangeOptions {
  * already performs. The canonical order is fixed: `history-unavailable`,
  * `shallow-history`, `notes-unfetched`. `unread-commits` is appended after
  * the query, because only the query knows whether a budget left history unread.
+ *
+ * The two source gaps are taken from the query rather than re-measured, because
+ * `runQuery` computes and returns both. Measured on the injection path -- the
+ * one that runs on every file edit -- this route spawned 18 git processes, four
+ * of them byte-identical repeats issued by this function and by the query it
+ * then called. The same question asked twice in one invocation is the cost, and
+ * the answer was already in hand.
+ *
+ * `history` stays measured here because it is what decides whether the query
+ * runs at all; there is no result to read it from yet. When it says the history
+ * is unavailable the query is skipped, and `sourceGapsFromRepository` measures
+ * the other two directly -- the only branch that still pays for them.
  */
-const deriveVerificationGaps = (cwd: string): VerificationGap[] => {
-  const gaps: VerificationGap[] = [];
+const historyGap = (cwd: string): VerificationGap[] =>
+  historyAvailability(cwd) === 'unavailable' ? ['history-unavailable'] : [];
 
-  const history = historyAvailability(cwd);
-  if (history === 'unavailable') {
-    gaps.push('history-unavailable');
-  }
+/** The two source gaps, in canonical order, from values a query already reports. */
+const sourceGaps = (shallow: boolean, notes: NotesAvailability): VerificationGap[] => [
+  ...(shallow ? (['shallow-history'] as const) : []),
+  ...(notes === 'unfetched' ? (['notes-unfetched'] as const) : []),
+];
 
-  const shallow = hasShallowHistory(cwd);
-  if (shallow) {
-    gaps.push('shallow-history');
-  }
-
-  const notes = notesAvailability({ cwd });
-  if (notes === 'unfetched') {
-    gaps.push('notes-unfetched');
-  }
-
-  return gaps;
-};
+/** The same two, measured, for the branch where no query runs to report them. */
+const sourceGapsFromRepository = (cwd: string): VerificationGap[] =>
+  sourceGaps(hasShallowHistory(cwd), notesAvailability({ cwd }));
 
 /** Extracts the active decisions from the query result. */
 const extractActiveDecisions = (result: QueryResult): ActiveDecision[] =>
@@ -189,8 +193,10 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
     throw new Error('commitlore_before_change: opts.at is not a valid Date');
   }
 
-  // Derive verification gaps — this determines whether we can trust the context
-  const gaps = deriveVerificationGaps(cwd);
+  // Derive verification gaps — this determines whether we can trust the context.
+  // The source gaps are appended below, in canonical order, from whichever of
+  // the two routes ran.
+  const gaps = historyGap(cwd);
 
   // If history is unavailable entirely, we still report what we can but the
   // caller knows the context is not trustworthy via the gap
@@ -229,7 +235,10 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
       }),
     );
     activeDecisions = extractActiveDecisions(queryResult);
+    gaps.push(...sourceGaps(queryResult.shallow, queryResult.notes));
     if (queryResult.unreadCommits > 0) gaps.push('unread-commits');
+  } else {
+    gaps.push(...sourceGapsFromRepository(cwd));
   }
 
   // Run guard if a proposal was supplied
