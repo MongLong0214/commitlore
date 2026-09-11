@@ -2002,3 +2002,80 @@ describe('#915 an undetermined branch is not told to run --target blindly', () =
     expect(row?.fix).toContain('does not check that the commit contains the work');
   });
 });
+
+/**
+ * #925: the row this project shipped in 1.2.13 could not be cleared by fixing the
+ * problem. A reporter turned the squash button off — the cheaper remedy, and the
+ * one the README names — and the row went on prescribing a `pull_request_target`
+ * workflow, which runs with a writable token against a fork's pull request. That
+ * is recommending a risk in exchange for nothing.
+ *
+ * The Ruled-out on r-squashdiscovery915 said this check 'cannot read the remote's
+ * merge setting'. It can: `gh api repos/<slug>` answers in one call. The reason
+ * given for warning unconditionally was wrong, which is why the gh probe is now
+ * part of the check and its absence is reported rather than assumed away.
+ */
+describe('#925 squash inheritance asks whether the squash button is reachable', () => {
+  const ghShim = (script: string): string => {
+    const dir = tempDir('doctor-gh-squash');
+    const path = join(dir, 'gh');
+    writeScript(path, script);
+    chmodSync(path, 0o755);
+    return dir;
+  };
+
+  const withPath = <T>(dir: string, body: () => T): T => {
+    const original = process.env['PATH'] ?? '';
+    process.env['PATH'] = `${dir}:${original}`;
+    try {
+      return body();
+    } finally {
+      process.env['PATH'] = original;
+    }
+  };
+
+  const repoOnGithub = (label: string): string => {
+    const repo = initRepo(label);
+    git(repo, ['remote', 'add', 'origin', 'https://github.com/example/example.git']);
+    return repo;
+  };
+
+  const row = (repo: string) =>
+    runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'squash-inheritance');
+
+  it('clears when the squash button is disabled', () => {
+    const repo = repoOnGithub('squash-button-off');
+    const gh = ghShim('#!/bin/sh\ncase "$*" in *repos/*) echo false ;; *) exit 1 ;; esac\n');
+
+    const entry = withPath(gh, () => row(repo));
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toContain('squash button is disabled');
+    expect(entry?.fix).toBeNull();
+    expect(entry?.evidence['squash_button']).toBe('false');
+  });
+
+  it('warns and names the cheaper remedy first when the button is enabled', () => {
+    const repo = repoOnGithub('squash-button-on');
+    const gh = ghShim('#!/bin/sh\ncase "$*" in *repos/*) echo true ;; *) exit 1 ;; esac\n');
+
+    const entry = withPath(gh, () => row(repo));
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('reachable today');
+    // The workflow it used to prescribe alone is the riskier of the two.
+    expect(entry?.fix).toMatch(/^either disable the squash button/);
+    expect(entry?.evidence['squash_button']).toBe('true');
+  });
+
+  it('says the setting is unknown rather than asserting exposure it did not check', () => {
+    const repo = repoOnGithub('squash-button-unknown');
+    const gh = ghShim('#!/bin/sh\nexit 1\n');
+
+    const entry = withPath(gh, () => row(repo));
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('could not be read');
+    expect(entry?.evidence['squash_button']).toBe('unknown');
+  });
+});

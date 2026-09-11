@@ -29,6 +29,7 @@
  * rather than implying the check covered it.
  */
 
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -86,6 +87,46 @@ const githubRemote = (cwd: string): string | null => {
   return null;
 };
 
+/** `owner/repo` out of either URL form, or null if neither matches. */
+const githubSlug = (remote: string): string | null => {
+  const match =
+    /github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i.exec(remote) ?? null;
+  if (match === null) return null;
+  const [, owner, repo] = match;
+  return owner === undefined || repo === undefined ? null : `${owner}/${repo}`;
+};
+
+/**
+ * Whether the squash button is enabled on the remote: `true`, `false`, or `null`
+ * when it could not be asked (#925).
+ *
+ * Asked because the previous version of this row could not be cleared by fixing
+ * the problem. A reporter turned the button off — the cheaper remedy, and the one
+ * the README names — and the row went on prescribing a `pull_request_target`
+ * workflow, which runs with a writable token against a fork's pull request. That
+ * is recommending a risk in exchange for nothing, and it teaches an operator to
+ * ignore the row.
+ *
+ * The Ruled-out on r-squashdiscovery915 said this check "cannot read the remote's
+ * merge setting". That was wrong: `gh` reads it in one call. `doctor` talks to the
+ * remote already, though through `git ls-remote` rather than the API (ADR-0037),
+ * so this is a new and deliberately optional dependency — an absent or
+ * unauthenticated `gh` yields `null` and the row says the setting is unknown
+ * instead of asserting exposure it did not verify.
+ */
+const squashButtonEnabled = (cwd: string, slug: string): boolean | null => {
+  const probe = spawnSync(
+    'gh',
+    ['api', `repos/${slug}`, '--jq', '.allow_squash_merge'],
+    { shell: false, encoding: 'utf8', cwd },
+  );
+  if (probe.error !== undefined || probe.status !== 0) return null;
+  const answer = (probe.stdout ?? '').trim();
+  if (answer === 'true') return true;
+  if (answer === 'false') return false;
+  return null;
+};
+
 export const checkSquashInheritance = (ctx: DoctorContext): DoctorCheck => {
   const id = 'squash-inheritance';
   const title = 'squash inheritance';
@@ -123,6 +164,39 @@ export const checkSquashInheritance = (ctx: DoctorContext): DoctorCheck => {
     );
   }
 
+  const slug = githubSlug(remote);
+  const squash = slug === null ? null : squashButtonEnabled(cwd, slug);
+  const shared = {
+    github_remote: remote,
+    workflows_scanned: String(scanned),
+    references_action: 'false',
+    squash_button: squash === null ? 'unknown' : String(squash),
+  };
+
+  if (squash === false) {
+    return check(
+      id,
+      'history',
+      title,
+      'ok',
+      'no workflow runs the squash inheritance action, and none is needed: the squash button is ' +
+        'disabled on this repository, so the merge that drops a branch’s trailers cannot be ' +
+        'performed. Turning it back on brings this row back',
+      null,
+      false,
+      undefined,
+      { evidence: shared },
+    );
+  }
+
+  // The cheaper remedy is named first, and named at all, because the workflow one
+  // asks for `pull_request_target` with a writable token against a fork's pull
+  // request. Recommending that to a repository that does not squash is
+  // recommending a risk for nothing (#925).
+  const remedy =
+    `either disable the squash button on this repository (nothing to install, and records survive ` +
+    `a merge commit or a rebase on their own), or ${SETUP}`;
+
   return check(
     id,
     'history',
@@ -134,16 +208,14 @@ export const checkSquashInheritance = (ctx: DoctorContext): DoctorCheck => {
       'silently and the author sees a green merge. `squash-conservation` reports that afterwards, ' +
       'once the record is already gone. A local `git merge --squash` is unaffected: the installed ' +
       'prepare-commit-msg hook carries those records itself. Nothing is broken here — this is ' +
-      'protection that is not switched on',
-    SETUP,
+      'protection that is not switched on' +
+      (squash === true
+        ? '. The squash button is enabled, so the loss is reachable today'
+        : '. Whether the squash button is even enabled could not be read — `gh` is not available ' +
+          'or not authenticated — so this may already be moot'),
+    remedy,
     false,
     undefined,
-    {
-      evidence: {
-        github_remote: remote,
-        workflows_scanned: String(scanned),
-        references_action: 'false',
-      },
-    },
+    { evidence: shared },
   );
 };
