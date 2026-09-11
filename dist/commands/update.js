@@ -239,8 +239,23 @@ export const performUpgrade = (tag, deps) => {
     const lines = [];
     const step1 = join(root, 'current', script);
     invoked.push(step1);
-    deps.runInstaller(step1, tag);
+    const first = deps.runInstaller(step1, tag);
     if (pointsAtTarget(root, tag, deps.platform)) {
+        /*
+         * #922: the verdict comes from observed state, not from the installer's exit
+         * code, and that is deliberate -- #735 shipped an installer that reported
+         * success while leaving `current` behind, so this function trusts the link
+         * over the claim. What it did not do was say when the two disagree, and an
+         * upgrade that printed `error: ... The existing wrapper was left unchanged.`
+         * and `upgraded to v1.2.13` in the same run left a reader with no way to tell
+         * which to believe. Both were true of different things: the installer aborted
+         * one path and the activation had already happened.
+         */
+        if (first.status !== 0) {
+            lines.push(`the installer exited ${String(first.status ?? -1)} and printed an error above, but ${tag} ` +
+                `is the activated version on disk -- checked after the run, not inferred from it. The ` +
+                `error describes a step that was abandoned, not the upgrade`);
+        }
         lines.push(`upgraded to ${tag}`);
         return { code: 0, lines, invoked };
     }
