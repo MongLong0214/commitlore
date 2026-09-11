@@ -175,7 +175,22 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
   {
     id: 'tool.run-the-following',
     family: 'tool-invocation',
-    pattern: /\b(?:run|execute|invoke|perform|apply)\s+(?:the\s+)?(?:following|below)\b/,
+    /*
+     * #931's noun compound, in a second pattern. `the run below what the task
+     * set supports` is a noun with a comparison after it, and this read it as an
+     * instruction pointing at a payload -- one of the thirteen false positives
+     * the census found here, on a record about sizing an experiment.
+     *
+     * A determiner or possessive immediately before the word settles it: an
+     * English imperative cannot be preceded by one, so `the run below` is a noun
+     * and `please run the following` is not. Measured rather than reasoned,
+     * because the same shape of heuristic was refused in #931 for releasing real
+     * attacks: twelve attack phrasings still block, including the ones that put
+     * a word before the verb (`please`, `then`, `you should`, `reviewers must`),
+     * and four noun readings are released.
+     */
+    pattern:
+      /(?<!\b(?:a|an|the|this|that|each|every|its|his|her|their|our|your|my|one|any|no)\s)\b(?:run|execute|invoke|perform|apply)\s+(?:the\s+)?(?:following|below)\b/,
     negatable: true,
     intent: 'points the reader at a payload to execute',
   },
