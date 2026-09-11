@@ -12,7 +12,7 @@
  *    that a question about the phase alone; before it, a `verified` transaction
  *    with `expires_at: null` was never collected at all.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,6 +22,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { runPendingList, runPendingRemove, runPendingShow } from '../src/commands/pending.js';
 import { prepareCaptureContext } from '../src/core/capture-prepare.js';
 import { consumePending } from '../src/core/pending.js';
+import { PACKAGE_ROOT } from '../src/core/paths.js';
 
 const scratch: string[] = [];
 afterAll(() => {
@@ -43,6 +44,15 @@ const repoWithTransaction = (): { cwd: string; nonce: string } => {
   git('add', 'a.txt');
   const prepared = prepareCaptureContext({ cwd, transcript: 'we chose X because Y\n' });
   return { cwd, nonce: prepared.nonce };
+};
+
+/** The on-disk file for a nonce, without going through the store. */
+const pendingFile = (cwd: string, nonce: string): string => {
+  const relative = execFileSync('git', ['rev-parse', '--git-path', 'commitlore/pending'], {
+    cwd,
+    encoding: 'utf8',
+  }).trim();
+  return join(cwd, relative, `${nonce}.json`);
 };
 
 describe('#311 pending transactions are reviewable with the CLI', () => {
@@ -163,15 +173,6 @@ describe('#311 pending transactions are reviewable with the CLI', () => {
  * and nothing could remove it.
  */
 describe('#367 pending rm', () => {
-  /** The on-disk file for a nonce, without going through the store. */
-  const pendingFile = (cwd: string, nonce: string): string => {
-    const relative = execFileSync('git', ['rev-parse', '--git-path', 'commitlore/pending'], {
-      cwd,
-      encoding: 'utf8',
-    }).trim();
-    return join(cwd, relative, `${nonce}.json`);
-  };
-
   const setPhase = (cwd: string, nonce: string, phase: string): void => {
     const path = pendingFile(cwd, nonce);
     const record: Record<string, unknown> = JSON.parse(readFileSync(path, 'utf8'));
@@ -230,5 +231,71 @@ describe('#367 pending rm', () => {
     expect(result.removed).toBeNull();
     expect(result.error).toMatch(/ambiguous|matched 2/i);
     expect(runPendingList({ cwd }).transactions).toHaveLength(2);
+  });
+});
+
+/**
+ * #920 reported `pending show` emitting a trailing comma after
+ * `guard_advisory.gaps`, which no strict parser accepts. The reporter's situation
+ * is the one that makes it expensive: `pending show` is the only way to read a
+ * capture that never reached a commit, so a caller that checks `JSON.parse` and
+ * gives up concludes the transaction is corrupt while the records sit intact.
+ *
+ * The serializer is `JSON.stringify` at every exit, and no shape produced here
+ * reproduces it -- so these cases pin the property rather than a fix, across the
+ * phases the advisory block is populated for. They spawn the built CLI on purpose:
+ * `runPendingShow` returns an object, and the defect reported is in the bytes.
+ */
+describe('#920 pending show emits strictly parseable JSON', () => {
+  const CLI = join(PACKAGE_ROOT, 'dist', 'commitlore.mjs');
+
+  const show = (cwd: string, args: string[]): string => {
+    const result = spawnSync(process.execPath, [CLI, 'pending', 'show', ...args], {
+      cwd,
+      encoding: 'utf8',
+    });
+    // stderr carries the cold-path index notice; only stdout is the document.
+    return result.stdout;
+  };
+
+  it.each(['prepared', 'verified', 'staged', 'applied', 'consumed'])(
+    'parses in phase %s, in both output modes',
+    (phase) => {
+      const { cwd, nonce } = repoWithTransaction();
+      const file = pendingFile(cwd, nonce);
+      const record = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+      record['phase'] = phase;
+      writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
+
+      const human = show(cwd, [nonce]);
+      const structured = show(cwd, [nonce, '--json']);
+
+      expect(human).not.toBe('');
+      expect(() => JSON.parse(human)).not.toThrow();
+      expect(() => JSON.parse(structured)).not.toThrow();
+      // The block #920 names must be present, or this case pins nothing.
+      expect(JSON.parse(human)).toHaveProperty('guard_advisory.gaps');
+    },
+  );
+
+  it('parses when the transaction carries records and trailers', () => {
+    const { cwd, nonce } = repoWithTransaction();
+    const file = pendingFile(cwd, nonce);
+    const record = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    record['records'] = [
+      {
+        subject: 'fix: a thing',
+        trailers: [
+          { key: 'Record-Id', value: 'r-abc123' },
+          // A value carrying the punctuation a hand-rolled serializer would trip on.
+          { key: 'Ruled-out', value: 'the other way | it emits "gaps": [], and then a comma' },
+        ],
+      },
+    ];
+    writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
+
+    const out = show(cwd, [nonce]);
+    const parsed = JSON.parse(out) as { records: { trailers: unknown[] }[] };
+    expect(parsed.records[0]?.trailers).toHaveLength(2);
   });
 });
