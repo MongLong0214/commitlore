@@ -281,7 +281,19 @@ jobs:
       - run: git fetch --no-tags --force origin
           '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
 
+      # The action runs CommitLore from a checkout of this repository: the
+      # package is private, so there is no published npm name to fall back to.
+      # `dist/` is committed (ADR-0011), so nothing needs building.
+      - uses: actions/checkout@v4
+        with:
+          repository: MongLong0214/commitlore
+          ref: v1.2.14
+          path: .commitlore-cli
+          persist-credentials: false
+
       - uses: MongLong0214/commitlore/action/preserve@v1.2.14
+        with:
+          cli-path: .commitlore-cli/dist/cli.js
 ```
 
 由于 `pull_request_target` 以可写令牌运行，给下一位编辑此文件的人两条规则：不要在这里

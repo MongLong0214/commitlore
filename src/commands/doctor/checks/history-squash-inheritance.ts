@@ -54,15 +54,17 @@ const SETUP = 'see README "Squash-merge repositories" for the workflow to add';
  * than parsed as YAML: the question is whether the action is referenced at all,
  * and a `uses:` line is the same bytes however the surrounding job is shaped.
  */
-const workflowReferencesAction = (root: string): { found: boolean; scanned: number } => {
+const workflowReferencesAction = (
+  root: string,
+): { found: boolean; scanned: number; wired: boolean } => {
   const dir = join(root, WORKFLOW_DIR);
-  if (!existsSync(dir)) return { found: false, scanned: 0 };
+  if (!existsSync(dir)) return { found: false, scanned: 0, wired: false };
   let scanned = 0;
   let entries: string[];
   try {
     entries = readdirSync(dir);
   } catch {
-    return { found: false, scanned: 0 };
+    return { found: false, scanned: 0, wired: false };
   }
   for (const entry of entries) {
     if (!/\.ya?ml$/i.test(entry)) continue;
@@ -73,9 +75,22 @@ const workflowReferencesAction = (root: string): { found: boolean; scanned: numb
     } catch {
       continue;
     }
-    if (REFERENCES_ACTION.test(text)) return { found: true, scanned };
+    if (REFERENCES_ACTION.test(text)) {
+      /*
+       * #926: referencing the action is not running it. `action/preserve` declares
+       * `cli-path` as required -- this package is private, so there is no npm name
+       * to fall back to and an `npx` fallback would run whoever registers it -- and
+       * the action exits on an empty value. The README recipe shipped in 1.2.13
+       * omitted the input, so following it produced a job that always failed while
+       * flipping this row to satisfied: the warning disappeared and records kept
+       * being dropped at every squash, which is the failure this row exists to
+       * report. A check that reads the name and not the requirement is the
+       * enforcement site drifting from the named site.
+       */
+      return { found: true, scanned, wired: /(?:^|\n)\s*cli-path\s*:/.test(text) };
+    }
   }
-  return { found: false, scanned };
+  return { found: false, scanned, wired: false };
 };
 
 const githubRemote = (cwd: string): string | null => {
@@ -148,19 +163,44 @@ export const checkSquashInheritance = (ctx: DoctorContext): DoctorCheck => {
     );
   }
 
-  const { found, scanned } = workflowReferencesAction(cwd);
-  if (found) {
+  const { found, scanned, wired } = workflowReferencesAction(cwd);
+  const wiredEvidence = {
+    github_remote: remote,
+    workflows_scanned: String(scanned),
+    references_action: String(found),
+    cli_path_supplied: String(wired),
+  };
+  if (found && wired) {
     return check(
       id,
       'history',
       title,
       'ok',
-      'a workflow runs the squash inheritance action, so a record squashed by the GitHub merge ' +
-        'button is carried onto the commit that squashed it',
+      'a workflow runs the squash inheritance action and supplies the cli-path it requires, so a ' +
+        'record squashed by the GitHub merge button is carried onto the commit that squashed it',
       null,
       false,
       undefined,
-      { evidence: { github_remote: remote, workflows_scanned: String(scanned), references_action: 'true' } },
+      { evidence: wiredEvidence },
+    );
+  }
+  if (found) {
+    return check(
+      id,
+      'history',
+      title,
+      'warn',
+      'a workflow references the squash inheritance action but supplies no `cli-path`, which the ' +
+        'action declares required — it exits immediately on an empty value, so the job fails at ' +
+        'every squash merge and the records are dropped exactly as if no workflow existed. The ' +
+        'recipe published in 1.2.13 omitted this input, and a workflow that merely names the ' +
+        'action was enough to satisfy this row, so following that recipe removed the warning ' +
+        'without adding the protection',
+      'add `with: cli-path: <path to a checked-out dist/cli.js>` to the step — see README ' +
+        '"Squash-merge repositories" for the checkout step that provides it',
+      false,
+      undefined,
+      { evidence: wiredEvidence },
     );
   }
 

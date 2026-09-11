@@ -287,7 +287,19 @@ jobs:
       - run: git fetch --no-tags --force origin
           '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
 
+      # The action runs CommitLore from a checkout of this repository: the
+      # package is private, so there is no published npm name to fall back to.
+      # `dist/` is committed (ADR-0011), so nothing needs building.
+      - uses: actions/checkout@v4
+        with:
+          repository: MongLong0214/commitlore
+          ref: v1.2.14
+          path: .commitlore-cli
+          persist-credentials: false
+
       - uses: MongLong0214/commitlore/action/preserve@v1.2.14
+        with:
+          cli-path: .commitlore-cli/dist/cli.js
 ```
 
 `pull_request_target` 은 쓰기 가능한 토큰으로 실행되므로, 다음에 이 파일을 고치는 사람을

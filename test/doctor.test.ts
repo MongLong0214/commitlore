@@ -1636,7 +1636,7 @@ describe('#527 unattended capture initiator', () => {
 
   /**
    * #870: this repository's own registration names its entry point as
-   * `${CLAUDE_PLUGIN_ROOT:-.}/dist/commitlore.mjs`, because the hosts that read
+   * `${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs`, because the hosts that read
    * `.mcp.json` expand placeholders before they spawn anything. The reader
    * returned the raw text, so the probe launched a literal `${...}` as a path
    * and reported a working registration unhealthy — a report that sends an
@@ -1911,7 +1911,8 @@ describe('#915 squash inheritance is reported before a record is lost', () => {
     writeScript(
       join(repo, '.github', 'workflows', 'preserve.yml'),
       'name: p\non:\n  pull_request_target:\n    types: [closed]\njobs:\n  p:\n    steps:\n' +
-        '      - uses: MongLong0214/commitlore/action/preserve@v1.0.0\n',
+        '      - uses: MongLong0214/commitlore/action/preserve@v1.0.0\n' +
+        '        with:\n          cli-path: .commitlore-cli/dist/cli.js\n',
     );
 
     expect(inheritanceRow(repo)?.status).toBe('ok');
@@ -1929,7 +1930,8 @@ describe('#915 squash inheritance is reported before a record is lost', () => {
     git(repo, ['remote', 'add', 'origin', 'https://github.com/example/example.git']);
     writeScript(
       join(repo, '.github', 'workflows', 'preserve.yml'),
-      'name: p\non: pull_request_target\njobs:\n  p:\n    steps:\n      - uses: ./action/preserve\n',
+      'name: p\non: pull_request_target\njobs:\n  p:\n    steps:\n      - uses: ./action/preserve\n' +
+        '        with:\n          cli-path: dist/cli.js\n',
     );
 
     expect(inheritanceRow(repo)?.status).toBe('ok');
@@ -2153,6 +2155,58 @@ describe('the MCP registration is launchable from the environment a host gets', 
     expect(row(repo)?.status).toBe('ok');
   });
 
+  /*
+   * The failure this check was written for, with the reporter's own evidence.
+   * `.mcp.json` named `${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs`; the host did
+   * not set that variable, the `:-.` default resolved to the session's working
+   * directory, and node exited in 75ms with MODULE_NOT_FOUND. That is #870 exactly,
+   * preserved by the default added while fixing it.
+   *
+   * A check that asked only whether `command` resolves would have called this
+   * healthy: `node` always resolves. The entry point is the half that failed.
+   */
+  it('warns when the entry point in args does not exist, though the command resolves', () => {
+    const repo = initRepo('mcp-reg-entry-missing');
+    writeScript(
+      join(repo, '.mcp.json'),
+      `${JSON.stringify({
+        mcpServers: {
+          commitlore: { command: 'node', args: [join(repo, 'dist', 'commitlore.mjs'), 'mcp'] },
+        },
+      }, null, 2)}\n`,
+    );
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('does not exist');
+    // The consequence that made it invisible: our code never runs, so nothing is logged.
+    expect(entry?.detail).toContain('writes no');
+    expect(entry?.evidence['entry_resolves']).toBe('false');
+  });
+
+  it('warns when the entry point still carries an unexpanded placeholder', () => {
+    const repo = initRepo('mcp-reg-unexpanded');
+    writeScript(
+      join(repo, '.mcp.json'),
+      `${JSON.stringify({
+        mcpServers: {
+          commitlore: {
+            command: 'node',
+            args: ['${COMMITLORE_TEST_UNSET_ROOT}/dist/commitlore.mjs', 'mcp'],
+          },
+        },
+      }, null, 2)}\n`,
+    );
+
+    const entry = row(repo);
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.detail).toContain('is unset here');
+    // The expansion is real, not a regex: a variable that IS set clears the row.
+    expect(entry?.detail).toContain('refused the registration outright');
+    expect(entry?.evidence['entry_resolves']).toBe('unexpanded');
+  });
   it('warns when an absolute path does not exist here', () => {
     const repo = initRepo('mcp-reg-missing-path');
     register(repo, join(repo, 'no-such-binary'));
