@@ -24,7 +24,7 @@ import { resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
-import { collectRecords } from './stale.js';
+import { collectRecords, newCollectCache, type CollectCache } from './stale.js';
 import { execGit, hasShallowHistory } from '../core/git.js';
 import { closeIndex, ensureIndex, indexUnread, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
@@ -641,13 +641,31 @@ const recordsFor = (
   source: MessageSource,
   cwd: string,
   input: Pick<ValidateInput, 'scanBudgetMs' | 'scanNow'> = {},
+  /**
+   * One map for the whole range, because this function is the N+1.
+   *
+   * A range validation collects the full reachable history once per commit in
+   * the range, and parsed every message on every walk: this repository's own CI
+   * step spent 2833s and 3578s there per matrix leg, on every release. The
+   * walks stay -- each one's *reachable set* is what the check is about -- but
+   * a message is parsed once.
+   */
+  cache?: CollectCache,
 ): {
   records: StaleRecord[];
   notes: ReturnType<typeof notesAvailability>;
   unreadCommits: number;
 } => {
   if (source.sha !== undefined) {
-    return { ...collectRecords({ cwd, allHistory: true, revision: source.sha }), unreadCommits: 0 };
+    return {
+      ...collectRecords({
+        cwd,
+        allHistory: true,
+        revision: source.sha,
+        ...(cache === undefined ? {} : { cache }),
+      }),
+      unreadCommits: 0,
+    };
   }
   try {
     const indexed = indexedHeadRecords(cwd, input);
@@ -729,8 +747,10 @@ const checkReferences = (
         : undefined;
     let tipAllRecords: StaleRecord[] | undefined;
     let unreadCommits = 0;
+    // Shared by the tip scan and by every per-source scan below.
+    const cache = newCollectCache();
     if (tipSha !== undefined) {
-      const tipScan = recordsFor({ sha: tipSha, message: '' }, cwd, input);
+      const tipScan = recordsFor({ sha: tipSha, message: '' }, cwd, input, cache);
       if (tipScan.notes === 'unfetched') {
         return {
           check: {
@@ -763,7 +783,7 @@ const checkReferences = (
       // for the commit's own record and wrong for the block beside it
       // (bug-issue-352).
       const blocks = parseRecordBlocks(source.message);
-      const scan = recordsFor(source, cwd, input);
+      const scan = recordsFor(source, cwd, input, cache);
       if (scan.unreadCommits > unreadCommits) unreadCommits = scan.unreadCommits;
       if (scan.notes === 'unfetched') {
         return {
