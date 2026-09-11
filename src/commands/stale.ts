@@ -67,6 +67,16 @@ const EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambigu
  * is impossible.
  */
 const CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
+const RECORD_ID_KEY = 'Record-Id';
+/**
+ * #914: what an unresolved reference is owed instead of `dangling-ref`'s "an
+ * existing Record-Id in history". The window did not carry the declaration and
+ * the message search did not find one; neither of those is history denying it.
+ */
+const UNRESOLVED_WANT =
+  'undetermined — the scanned window does not carry this Record-Id and no commit message ' +
+  'declares it; a declaration in the notes mirror outside the window would not be found ' +
+  'here, so run with --all-history to decide';
 
 export interface CollectOptions {
   cwd?: string;
@@ -196,6 +206,13 @@ export interface StaleReport {
   /** The stale ones: superseded, expired, or flagged for review. */
   records: StaleReportRecord[];
   danglingRefs: Violation[];
+  /**
+   * #914: references whose target was not in the scanned window and could not be
+   * shown absent from history either. Separate from `danglingRefs` because that
+   * field is what a CI job fails on, and a truncated window cannot support the
+   * assertion `dangling-ref` makes. Always empty for `--all-history`.
+   */
+  unresolvedRefs: Violation[];
   idCollisions: Violation[];
 }
 
@@ -266,7 +283,64 @@ const withheldIfInjection = (record: StaleReportRecord): StaleReportRecord => {
   };
 };
 
-export const buildReport = (scan: Scan, at: Date): StaleReport => {
+/**
+ * Ids this repository declares anywhere reachable from HEAD, for a handful of
+ * ids the scanned window did not cover (#914).
+ *
+ * `stale`'s default window is the most recent 1000 commits, and a `Follows:`
+ * inside it may point at a `Record-Id` declared below it — in the reporter's
+ * repository, a reference at the surface pointing at a definition at commit 1397
+ * of 1554. The window is the caller's, and `findDanglingRefs` says so in as many
+ * words: it answers about the stream it is handed. Presenting that answer as
+ * `dangling-ref` — "want an existing Record-Id in history" — turned a fact about
+ * a window into an assertion about history, which is the inference this project
+ * refuses everywhere else and tells its own callers not to make.
+ *
+ * Targeted rather than a second full scan: only ids already suspected are looked
+ * up, so a clean repository pays nothing and a suspicious one pays one `git log`
+ * per id instead of re-reading every commit the window skipped.
+ */
+const declaredAnywhere = (
+  cwd: string | undefined,
+  ids: readonly string[],
+): ReadonlySet<string> => {
+  /*
+   * Resolved by re-collecting the whole history through the same reader, rather
+   * than by asking git to search commit text for the id.
+   *
+   * Message-pattern search is banned under `src/` and `test/source-guards.test.ts`
+   * enforces the ban by scanning for the option's name: such a search matches
+   * commit *text*, so a `Record-Id:` line written inside a prose paragraph would
+   * answer "declared" for something that is not a trailer at all. Trailer
+   * boundaries are git's to decide (SPEC §2.1 B3), and the first draft of this
+   * function got that wrong — the guard caught it. Going through `collectRecords`
+   * means the answer comes from the same parser, over the same two sources
+   * (commit messages and the notes mirror) as the windowed scan it corrects, so
+   * the two cannot disagree about what counts as a declaration.
+   */
+  const full = collectRecords({
+    ...(cwd === undefined ? {} : { cwd }),
+    allHistory: true,
+  });
+  const declared = new Set<string>();
+  for (const record of full.records) {
+    for (const trailer of record.trailers) {
+      if (trailer.key === RECORD_ID_KEY) declared.add(trailer.value);
+    }
+  }
+  return new Set(ids.filter((id) => declared.has(id)));
+};
+
+export const buildReport = (
+  scan: Scan,
+  at: Date,
+  /**
+   * Where to resolve a reference the window did not cover. Omitted by callers
+   * that hold no repository — they get `unresolvedRefs` rather than an assertion
+   * neither of us can support.
+   */
+  resolveIn?: { cwd?: string },
+): StaleReport => {
   const ordered = oldestFirst(scan.records);
   const states = foldLifecycle(ordered, { at });
   const stale = states.filter(isStale).map((state): StaleReportRecord => {
@@ -290,8 +364,46 @@ export const buildReport = (scan: Scan, at: Date): StaleReport => {
     // Both read the stream in order too — `findIdCollisions` asks whether a
     // *later* commit declared the succession, which is the same question the
     // fold asks and must get the same order to answer it with.
-    danglingRefs: findDanglingRefs(ordered),
+    ...partitionRefs(findDanglingRefs(ordered), scan, resolveIn),
     idCollisions: findIdCollisions(ordered),
+  };
+};
+
+/**
+ * Splits the window's candidates into what history denies and what it cannot
+ * answer (#914).
+ *
+ * A complete scan asserts freely: nothing was skipped, so absence is absence.
+ * A truncated one resolves each candidate against history by id and keeps only
+ * those history really has no declaration for; anything still unaccounted for
+ * moves to `unresolvedRefs`, because a declaration living only in a note outside
+ * the window would not be found by a message search and must not be reported as
+ * proven missing.
+ */
+const partitionRefs = (
+  candidates: Violation[],
+  scan: Scan,
+  resolveIn?: { cwd?: string },
+): { danglingRefs: Violation[]; unresolvedRefs: Violation[] } => {
+  if (!scan.truncated || candidates.length === 0) {
+    return { danglingRefs: candidates, unresolvedRefs: [] };
+  }
+  if (resolveIn === undefined) {
+    return {
+      danglingRefs: [],
+      unresolvedRefs: candidates.map((violation) => ({ ...violation, want: UNRESOLVED_WANT })),
+    };
+  }
+  const ids = [...new Set(candidates.map((violation) => violation.got))];
+  const declared = declaredAnywhere(resolveIn.cwd, ids);
+  // Both places a declaration can live have now been searched over the whole
+  // history — commit messages by id, and the notes mirror — so an id still
+  // missing is missing, and the assertion `dangling-ref` makes is supported. A
+  // default run therefore stays useful to a CI job instead of deferring every
+  // answer to `--all-history`.
+  return {
+    danglingRefs: candidates.filter((violation) => !declared.has(violation.got)),
+    unresolvedRefs: [],
   };
 };
 
@@ -328,6 +440,10 @@ export const formatReport = (report: StaleReport): string => {
     ...section(
       'dangling refs',
       report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`),
+    ),
+    ...section(
+      'unresolved refs',
+      report.unresolvedRefs.map((violation) => `${violation.key}: ${violation.got}  ${violation.want}`),
     ),
     ...section(
       'id collisions',
@@ -395,7 +511,9 @@ export const register = (program: Command): void => {
         const scan = collectRecords(
           options.allHistory === true ? { allHistory: true } : { allHistory: false },
         );
-        const report = buildReport(scan, at);
+        // #914: resolve in this repository, so a truncated window reports what
+        // history denies rather than what the window happened not to reach.
+        const report = buildReport(scan, at, {});
         process.stdout.write(
           options.json === true ? `${JSON.stringify(report, null, 2)}\n` : formatReport(report),
         );

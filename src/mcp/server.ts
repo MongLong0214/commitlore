@@ -94,6 +94,7 @@ const FALLBACK_VERSION = '0.0.0';
 
 const JSON_MIME = 'application/json';
 
+
 /** The four consumer routes of SPEC §5, under the names the CLI uses. */
 export const QUERY_KINDS = ['context', 'limits', 'ruled-out', 'warnings'] as const;
 
@@ -576,7 +577,10 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
       const kind = kindArg(args);
       return asText(contextJson(root, kind, pathArg(root, args)));
     },
-    [STALE_TOOL]: () => asText(buildReport(collectRecords({ cwd: root }), new Date())),
+    // #914: the third argument resolves a reference the window did not cover, so
+    // an agent is never handed "no such Record-Id in history" about a record the
+    // scan simply stopped short of.
+    [STALE_TOOL]: () => asText(buildReport(collectRecords({ cwd: root }), new Date(), { cwd: root })),
     [GUARD_TOOL]: (args) => {
       const proposal = requiredString(args, 'proposal');
       const path = pathArg(root, args);
