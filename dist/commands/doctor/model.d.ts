@@ -42,6 +42,24 @@ export type Severity = 'error' | 'warning' | 'info';
  * as sites are mapped.
  */
 export type SkipReason = 'command_unrecognized' | 'hook_not_installed' | 'probe_path_unavailable' | 'version_unreadable' | 'unborn_head' | 'nothing_applicable';
+/**
+ * Whether a skip degrades the report (ADR-0032 §2).
+ *
+ * `not_applicable` is the check looking and observing a true empty: the world
+ * contains nothing for it to inspect. `unverified` is something existing that the
+ * check could not read, which is precisely what `degraded` exists to say.
+ *
+ * The ADR wrote 'a reason cannot be declared without a class -- the type system
+ * enforces both' and the map was never built, so `deriveStatus` degraded on every
+ * skip. `squash-conservation` skips `nothing_applicable` on any repository with no
+ * squash-shaped branch, which is most of them, so a healthy repository could never
+ * report `ok` and the headline said some checks could not be verified when all of
+ * them had been.
+ *
+ * `Record<SkipReason, ...>` is the enforcement: a new reason does not compile
+ * until it is classified here.
+ */
+export declare const SKIP_CLASS: Readonly<Record<SkipReason, 'not_applicable' | 'unverified'>>;
 export interface DoctorCheck {
     id: string;
     title: string;

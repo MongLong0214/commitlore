@@ -303,6 +303,22 @@ export const probeMcp = async (command: string, args: string[]): Promise<McpProb
     try {
       const childEnv = { ...process.env };
       delete childEnv['COMMITLORE_MCP_PROBE'];
+      /*
+       * The child is a probe, and must not be counted as a host session.
+       *
+       * It was: every doctor run that reached a spawn appended a `started`/
+       * `exited` pair to the lifecycle log, so the count `mcp-lifecycle` reports
+       * as host sessions included doctor's own children. Measured on this
+       * repository, one run moved the log by two lines and the fix moves it by
+       * none. The pair is also not guaranteed -- `terminate` escalates to SIGKILL
+       * when SIGTERM has not finished within the grace window, and r-mcpexit506
+       * already records that a SIGKILLed server writes nothing, leaving a start
+       * with no exit for the row to warn about.
+       *
+       * A separate variable from the recursion guard above: that one stops a
+       * probed server probing in turn, this one stops it claiming a session.
+       */
+      childEnv['COMMITLORE_MCP_PROBE_CHILD'] = '1';
       child = spawn(resolved, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: needsWindowsCommandShell(resolved),

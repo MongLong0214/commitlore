@@ -67,7 +67,7 @@ import { createHash } from 'node:crypto';
 import { execGit } from './git.js';
 import { authorsOf, gradeDeclarations, noteAuthorsOf, signerFingerprintsOf, } from './grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, } from './query.js';
-import { INJECT_OMITTED_KEYS, RECORD_ID_RE } from './types.js';
+import { EXTENSION_KEY_RE, INJECT_OMITTED_KEYS, RECORD_ID_RE, } from './types.js';
 const NO_ABLATION = { noScope: false, noGrade: false, noLifecycle: false };
 const resolveAblation = (flags) => flags === undefined
     ? NO_ABLATION
@@ -107,6 +107,24 @@ const TIERS = [
     { name: 'other', label: 'Other' },
 ];
 const OTHER_TIER = TIERS.length - 1;
+/**
+ * Extension keys this repository wants in the pre-edit payload anyway (#921).
+ *
+ * `X-` means "my own metadata" and is dropped from injection by default, but a
+ * repository may genuinely record a decision under its own key. Naming it here
+ * buys it back: `git config --add commitlore.injectExtensionKeys X-Threat-Model`.
+ * Read per projection rather than cached, because a projection is a pure function
+ * of its inputs and a cached config would make two identical calls differ.
+ */
+const configuredInjectExtensionKeys = (cwd) => {
+    const result = execGit(['config', '--get-all', 'commitlore.injectExtensionKeys'], cwd === undefined ? {} : { cwd });
+    if (result.code !== 0)
+        return new Set();
+    return new Set(result.stdout
+        .split(/[\n,]/)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== ''));
+};
 const tierOf = (key) => {
     const found = TIERS.findIndex((tier) => tier.key === key);
     return found === -1 ? OTHER_TIER : found;
@@ -236,10 +254,13 @@ const byRecency = (a, b) => {
  * declaration order) without a second pass — the order the module header
  * promises.
  */
-const project = (records, grades) => {
+const project = (records, grades, 
+/** Extension keys this repository asked to keep in the payload (#921). */
+included) => {
     const buckets = TIERS.map(() => []);
     const withheld = [];
     let withheldValues = 0;
+    let metadataOmitted = 0;
     for (const record of [...records].sort(byRecency)) {
         const identity = record.recordId ?? `${record.sha}:${record.source}`;
         const grade = grades.get(identity);
@@ -263,16 +284,69 @@ const project = (records, grades) => {
             continue;
         }
         for (const trailer of payload) {
+            /*
+             * #921: an `X-` key is metadata by its own declaration. `unknown-key` sends
+             * a non-SPEC key to that prefix with the words "if this is your own
+             * metadata", and injection then rendered every one of them into the agent's
+             * pre-edit context at the same weight as a decision. Measured on the
+             * reporter's repository: twenty-one `Other` lines against six decision
+             * lines, fourteen of them the same repeated key, 38% of the whole payload
+             * carrying no decision at all.
+             *
+             * So the prefix is honoured here, which is the one place that reads it as a
+             * claim about worth. The values stay in history and `commitlore context`
+             * still shows them; what stops is spending an agent's window on them before
+             * an edit. A repository that does have a decision-bearing extension key
+             * names it in `commitlore.injectExtensionKeys` and gets it back.
+             */
+            if (EXTENSION_KEY_RE.test(trailer.key) && !included.has(trailer.key)) {
+                metadataOmitted += 1;
+                continue;
+            }
             const tier = tierOf(trailer.key);
             buckets[tier]?.push({
                 tier,
                 key: trailer.key,
                 line: entryLine(record, trailer, grade.trust, tier),
                 identity,
+                collapseKey: `${grade.trust}\u0000${trailer.key}\u0000${trailer.value}`,
             });
         }
     }
-    return { entries: buckets.flat(), withheld, withheldValues };
+    return { entries: collapseRepeats(buckets.flat()), withheld, withheldValues, metadataOmitted };
+};
+/**
+ * Folds entries that render to the same line into one, with a count (#921).
+ *
+ * Fourteen identical `X-Claude-Session` values arrived as fourteen lines and
+ * carried what one line carries. This runs after tier bucketing so the survivor
+ * keeps its tier and its position, and it compares the rendered line rather than
+ * the value: two records whose trust or sha differ are genuinely different
+ * evidence and stay apart.
+ */
+const collapseRepeats = (entries) => {
+    const seen = new Map();
+    const order = [];
+    for (const entry of entries) {
+        const existing = seen.get(entry.collapseKey);
+        if (existing === undefined) {
+            seen.set(entry.collapseKey, { entry, count: 1 });
+            order.push(entry.collapseKey);
+        }
+        else {
+            existing.count += 1;
+        }
+    }
+    return order.map((key) => {
+        const held = seen.get(key);
+        if (held === undefined)
+            throw new Error('collapseRepeats lost an entry');
+        if (held.count === 1)
+            return held.entry;
+        // Entries arrive newest first, so the survivor is the most recent statement
+        // of the value and its sha is the one worth printing.
+        return { ...held.entry, line: `${held.entry.line}  (and ${String(held.count - 1)} earlier)` };
+    });
 };
 // ---------------------------------------------------------------------------
 // The template
@@ -331,6 +405,20 @@ const withheldLine = (withheld) => {
  * could cost an entry. The number is reported in `Injection.budgetTokens`,
  * where it changes nothing.
  */
+/**
+ * Says that extension-key values were left out before the budget was consulted
+ * (#921). Never silent: the whole complaint was that metadata reached the agent
+ * without anyone deciding it should, and the mirror of that mistake would be
+ * removing it without anyone being told.
+ */
+const metadataLine = (count) => count === 0
+    ? []
+    : [
+        `metadata: ${String(count)} X- value(s) are stored on these records and not shown here; ` +
+            `an X- key declares itself metadata rather than a decision. ` +
+            `commitlore context shows them, and ` +
+            `git config --add commitlore.injectExtensionKeys <X-Key> puts one back.`,
+    ];
 const omittedLine = (cut, total, tier) => {
     if (cut === 0 || tier === undefined)
         return [];
@@ -370,6 +458,7 @@ const render = (input) => {
     const notices = [
         ...withheldLine(input.withheld),
         ...omittedLine(input.cut, input.totalEntries, input.cutTier),
+        ...metadataLine(input.metadataOmitted),
         ...unreadLine(input.unreadCommits),
     ];
     const footer = [...legend, ...notices];
@@ -574,6 +663,8 @@ export const buildInjection = (opts) => {
                 cut: 0,
                 cutTier: undefined,
                 totalEntries: 0,
+                // Nothing was projected, so nothing was withheld from the projection.
+                metadataOmitted: 0,
                 unreadCommits: result.unreadCommits,
                 ablation,
             }),
@@ -607,12 +698,19 @@ export const buildInjection = (opts) => {
                 ? ungraded(record)
                 : gradeMerged(record, authors, signerFingerprints, noteAuthors, at, opts.trustedAuthors, opts.requireSignedDirective === true, opts.trustedSignerFingerprints),
     ]));
-    const { entries, withheld, withheldValues } = project(active, grades);
+    const { entries, withheld, withheldValues, metadataOmitted } = project(active, grades, configuredInjectExtensionKeys(opts.cwd));
     if (entries.length === 0 && withheld.length === 0)
         return silentOrIncomplete();
     const totalEntries = entries.length + withheldValues;
     const budgetChars = budgetTokens * CHARS_PER_TOKEN;
-    const base = { path, withheld, totalEntries, ablation, unreadCommits: result.unreadCommits };
+    const base = {
+        path,
+        withheld,
+        totalEntries,
+        ablation,
+        unreadCommits: result.unreadCommits,
+        metadataOmitted,
+    };
     const keep = fit(base, entries, budgetChars);
     const cut = entries.length - keep;
     const cutTier = cut === 0 ? undefined : TIERS[entries[keep]?.tier ?? OTHER_TIER]?.name;

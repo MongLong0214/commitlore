@@ -5,6 +5,9 @@
  * human action; no other check may perform or depend on that write.
  */
 
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { NOTES_REF, listRemotes } from '../../../core/notes.js';
 import { check, gitOptions, streamEvidence, type DoctorCheck, type DoctorContext } from '../model.js';
 
@@ -71,11 +74,49 @@ export const checkPush = (ctx: DoctorContext): DoctorCheck => {
     );
   }
 
+  /*
+   * Which way the two refs differ, not merely that they do.
+   *
+   * The row compared shas and called any difference 'local records nobody pushes'.
+   * A clone that is *behind* -- its mirror an ancestor of the remote's -- has
+   * nothing to push and was told to push anyway; following that is how #890's
+   * duplicate note gets written. And `no command pushes them for you` stopped
+   * being true when the pre-push hook shipped: it mirrors the ref on every push
+   * of the branch.
+   */
+  const behind =
+    remoteSha !== '' &&
+    git(['merge-base', '--is-ancestor', local.stdout.trim(), remoteSha], gitOptions(opts)).code === 0;
+  if (behind) {
+    return check(
+      'notes-push',
+      'transport',
+      title,
+      'ok',
+      `${remote} carries everything this clone has in ${NOTES_REF}, and more — this checkout is ` +
+        `behind, which a fetch settles. Nothing here is waiting to be pushed`,
+      null,
+      false,
+      undefined,
+      { evidence: { ...localEvidence, remote_sha: remoteSha, direction: 'behind' } },
+    );
+  }
+
+  const prePush = existsSync(
+    resolve(
+      opts.cwd ?? process.cwd(),
+      git(['rev-parse', '--git-path', 'hooks/pre-push'], gitOptions(opts)).stdout.trim(),
+    ),
+  );
   return check(
     'notes-push', 'transport',
     title,
     'warn',
-    `this clone has local records in ${NOTES_REF}; no command pushes them for you`,
+    `this clone has records in ${NOTES_REF} that ${remote} does not` +
+      (prePush
+        ? `. The installed pre-push hook mirrors them the next time you push this branch, so this ` +
+          `usually settles itself; the command below does it now`
+        : `, and with no pre-push hook installed nothing sends them for you`),
     command,
     false,
     undefined,

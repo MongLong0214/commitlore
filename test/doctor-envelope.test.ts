@@ -37,7 +37,17 @@ describe('#469 doctor JSON envelope', () => {
   it('derives status from non-optional final rows only', () => {
     expect(deriveStatus([row('ok', 'ok')])).toBe('ok');
     expect(deriveStatus([row('warn', 'warn')])).toBe('degraded');
-    expect(deriveStatus([row('skipped', 'skipped')])).toBe('degraded');
+    /*
+     * ADR-0032 §2 gives every skip reason a class, and only `unverified` degrades:
+     * `not_applicable` is the check looking and observing a true empty. This line
+     * used to pin every skip as degrading, which made `ok` unreachable on a healthy
+     * repository -- `squash-conservation` skips `nothing_applicable` wherever no
+     * branch looks like a squash source, which is most repositories.
+     */
+    expect(deriveStatus([row('skipped', 'skipped')])).toBe('ok');
+    expect(
+      deriveStatus([row('unreadable', 'skipped', { skipReason: 'version_unreadable' })]),
+    ).toBe('degraded');
     expect(deriveStatus([row('fail', 'fail')])).toBe('failed');
     expect(deriveStatus([row('optional-fail', 'fail', { optional: true })])).toBe('ok');
   });
@@ -77,8 +87,12 @@ describe('#469 doctor JSON envelope', () => {
     }
   });
 
-  it('marks a non-optional skipped check degraded without failing the command', () => {
-    const report = buildReport([row('unverified', 'skipped')]);
+  it('marks an unverified skip degraded without failing the command', () => {
+    // `unverified` is something existing that the check could not read, which is
+    // what `degraded` exists to say. A `not_applicable` skip is covered above.
+    const report = buildReport([
+      row('unverified', 'skipped', { skipReason: 'version_unreadable' }),
+    ]);
 
     expect(report.status).toBe('degraded');
     expect(report.exitCode).toBe(0);

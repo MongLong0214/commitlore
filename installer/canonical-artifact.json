@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "a1fbad02b1c7bebaf22170c36190a37470cfd0c9914e299d720beec7bb421796"
+    "sha256": "c6af97898d9b7368abc2bf7d7f1bbc8ca98247c541017fba77c2f2c7904698f0"
   },
   "artifact": {
-    "sha256": "3440cdeda84c68534b399a97740734d91405161442faa4a52408cfc1896db610",
+    "sha256": "1295404789182ab7f2d5a55adad246f4198793ec5b97cc26f3b8a0b075df233e",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -118,15 +118,15 @@
       },
       {
         "path": "dist/commands/doctor/checks/capture-pending-backlog.d.ts",
-        "sha256": "f5b15ea6f09c49e3506d9afd8259fa269354a1712387d578b58969a5c2cb5106"
+        "sha256": "915c586791d80d3eb80ad178e9216b4da41330daed65306a2cb6478bc20680fc"
       },
       {
         "path": "dist/commands/doctor/checks/capture-pending-backlog.js",
-        "sha256": "1eb40b598dbcf451c2eca979d4ed3cb9518cbb3c3bbe931753c219ab58b26ee4"
+        "sha256": "f161e4c9bec2eaca696c101c58afce5c41344e01b8cd3d402f7f568ad21e5aef"
       },
       {
         "path": "dist/commands/doctor/checks/capture-pending-backlog.js.map",
-        "sha256": "bbc0b9a41f73b0f4a4008b2a7127283ad31f1db20d93b79eff005307b9a7bc42"
+        "sha256": "c3ca8538d1c2117dcda3aa90b45a5d64882f92a375ca3807819f5c896dfa763c"
       },
       {
         "path": "dist/commands/doctor/checks/capture-policy-overlay.d.ts",
@@ -170,11 +170,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/delivery-inject-runtime.js",
-        "sha256": "0f58afb5a11ca379fac8713505c5078750961d986dde1c5a7a4ba0dfb66d20b2"
+        "sha256": "016d8f6654dfca5be964ba41ed444b39bbca8b8288c11bd5f0c9f5bd6960a2bc"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-inject-runtime.js.map",
-        "sha256": "5a9f127544d22e9a431a902acbd96e870d9cd1767395057423d2795d5608a61c"
+        "sha256": "aa687b0bf68a06ec1b2d8fbe4a1ee9704c521707257c0d62089e86a794ed3887"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-inject-version.d.ts",
@@ -201,16 +201,28 @@
         "sha256": "93fd5c465cc606506f6a0a68206ef341c1ae58d1e87512660510ceb1ea6a8e03"
       },
       {
+        "path": "dist/commands/doctor/checks/delivery-mcp-registration-runtime.d.ts",
+        "sha256": "fac46c6d4388af637902aa6bf9aa99e4f230525da03c13ca905b10b09f83cea5"
+      },
+      {
+        "path": "dist/commands/doctor/checks/delivery-mcp-registration-runtime.js",
+        "sha256": "0d187ea47a60dc65af6e4e9b86f0e2b8933e8f049f93f5aa0f259bd16c460099"
+      },
+      {
+        "path": "dist/commands/doctor/checks/delivery-mcp-registration-runtime.js.map",
+        "sha256": "25810c6781b62bd02aa39dcfb2e67f9a05800fbf51d600bd1fc4155ef9cb1e5e"
+      },
+      {
         "path": "dist/commands/doctor/checks/delivery-mcp-runtime-identity.d.ts",
         "sha256": "945894eb621304fc41e7e2c39e9d862910354e1db326bf3f10d1ed7293bab0e0"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-mcp-runtime-identity.js",
-        "sha256": "4333840dcd848966df31297dbfdc93afb0237b7d2797cec814e54ca667a3b23f"
+        "sha256": "a72835435ad4773bc286b31cba54ff33ba770b583a6317d247af1de54ec3add3"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-mcp-runtime-identity.js.map",
-        "sha256": "64c663124806428166cd109054021ec9cc58eff885b273fe6fb51cd89ab5f434"
+        "sha256": "382b3f9de9b3d756f89b953ed808cd7200c01085ebb3144d3a085c9df0c48aba"
       },
       {
         "path": "dist/commands/doctor/checks/history-history-depth.d.ts",
@@ -242,11 +254,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/history-squash-inheritance.js",
-        "sha256": "cde50e9ab1834b27a0a4a194e8a1571b15b094b27c795b847ba37ead46976aca"
+        "sha256": "08705f543e6e2604485be5b0bb98670a16196a6ab676fc4dc5e99a1ed0108144"
       },
       {
         "path": "dist/commands/doctor/checks/history-squash-inheritance.js.map",
-        "sha256": "d221e23d0538d510fa96fd45fba309c211a1a05a1f0fa2c56307de139280ee20"
+        "sha256": "60b67bb99693bc811c453a6693395dc9dcfb6d8aa7476c54cce68cf83ff536e3"
       },
       {
         "path": "dist/commands/doctor/checks/index-index-health.d.ts",
@@ -326,11 +338,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/transport-notes-push.js",
-        "sha256": "6fe2fa7695b86eae3905ad54ef385e55ad676e640d78b501cef2b2de782eddf6"
+        "sha256": "6526241030d2dd7a97fcdc426fad0c409bdad7663ec2f0af87f39af72fa432e9"
       },
       {
         "path": "dist/commands/doctor/checks/transport-notes-push.js.map",
-        "sha256": "ecc322196494be020e443305c6f0435f288250b4130b7b5395974b1fce9b0851"
+        "sha256": "d3784f4bbe3761bfb67e6807a402fb25b26f521777dbb316f49e37cfa4ad7b19"
       },
       {
         "path": "dist/commands/doctor/checks/transport-notes-refspec.d.ts",
@@ -346,15 +358,15 @@
       },
       {
         "path": "dist/commands/doctor/model.d.ts",
-        "sha256": "7745b35a4fe177b56581d1f1f7bf2b8f92fb6237ee2280a75e52379ca1cf56f8"
+        "sha256": "7766b098ab7766d895db74f1c184a2f81a2cf766e4ff395a7c44dc9383373f80"
       },
       {
         "path": "dist/commands/doctor/model.js",
-        "sha256": "6fc325426f3cbefd47de4abf43ea11e9fa3ad9692f44efd380dee786da77112b"
+        "sha256": "dae3f52e6b9ad5b1eb81baa4eff0e64433eb6304ecd6de31789b3817869fc552"
       },
       {
         "path": "dist/commands/doctor/model.js.map",
-        "sha256": "10605793106b61f2458201741db0ba7351eb8f70fb573dcbbc0a34538f6ce6b7"
+        "sha256": "14b0d80e838c4b60595fcb0e8ad80a9769db8bbc923d95ec82f7beae3f2aa6f3"
       },
       {
         "path": "dist/commands/doctor/registry.d.ts",
@@ -362,11 +374,11 @@
       },
       {
         "path": "dist/commands/doctor/registry.js",
-        "sha256": "c7611233b104e253a03243ad19844f6931e4c803e4ab2454ed68b029ae46d487"
+        "sha256": "52923e2f4579108f1723b17a4026860dabc225992b87010c2bf24301e3813fec"
       },
       {
         "path": "dist/commands/doctor/registry.js.map",
-        "sha256": "73d9d637a0327d6a9be91b50d620baeafca8efd02337443b68617464c245fd9b"
+        "sha256": "cf951801eb114a0c0f8e0c7546ca37630746ec8758ca190a4306217afc3be737"
       },
       {
         "path": "dist/commands/doctor/render.d.ts",
@@ -386,11 +398,11 @@
       },
       {
         "path": "dist/commands/doctor/report.js",
-        "sha256": "38419f0e8b12b9e836a2a98408a57bafed988118bb195d6c5a8982b9b3cd419f"
+        "sha256": "d349d3cb3714c51500d669ce6e9e56c0e5afc357750d11ee5b3a7121a154707c"
       },
       {
         "path": "dist/commands/doctor/report.js.map",
-        "sha256": "365aa70a6a334886edc475e5abe99cacf75ff5e033ee6433e9691a6f27c8647d"
+        "sha256": "7903e925d790d65e779989eb51556d21840c4dc21326f03a67b1e89f8adfbdb2"
       },
       {
         "path": "dist/commands/doctor/runner.d.ts",
@@ -614,11 +626,11 @@
       },
       {
         "path": "dist/commands/update.js",
-        "sha256": "0a958bb758def8810ab95b957aed69005c203563aa5d1fcc87c1a19ebdc72052"
+        "sha256": "37efbc2b1a1452c342eabc12372fa898036eec3b555d6686881a25d12a562902"
       },
       {
         "path": "dist/commands/update.js.map",
-        "sha256": "9599a3b13f5ad0b1341eaf6f691d4a98c924c87d1a0979075b296f810530e46d"
+        "sha256": "699aadd61aaf2603a617e1bbbd5f3e459b4091176cfa25fa286eedcb176a1c9d"
       },
       {
         "path": "dist/commands/validate.d.ts",
@@ -634,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "c273b07be00d4b97268135cbf98cf8f751901ea2cc771fff1d29121a0618fab4"
+        "sha256": "be6472cb9e90be79f3e04e16e6a476e3d0497ae40606a9209ab303ebd3c78ff3"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -870,11 +882,11 @@
       },
       {
         "path": "dist/core/inject.js",
-        "sha256": "7109e08e0f9e61e90afe2d8056f8f9b68609d4ee56987d25d51227e9a81abf2a"
+        "sha256": "19aba4cae7704acae322d0e8d73dfa0a983b5d9864bd9828811e3ba59c4cc929"
       },
       {
         "path": "dist/core/inject.js.map",
-        "sha256": "2aabf309abdd79771746c80e03950750a68dd27cd03c520ea5c3ebf9c91b027c"
+        "sha256": "83d770193827f1bf480caada3ec7a466e36b8b7e4f2b2966b2be02c34a16b201"
       },
       {
         "path": "dist/core/latest-release.d.ts",
@@ -894,23 +906,23 @@
       },
       {
         "path": "dist/core/mcp-probe.js",
-        "sha256": "f4192dc4b77afb293fc576e6b9f108915475748d999d60acc835e9dff69c35ae"
+        "sha256": "57b754aade95a1cf911da98877c7fa6e0fe27ac5da45b06493c0703e6ce5de96"
       },
       {
         "path": "dist/core/mcp-probe.js.map",
-        "sha256": "ff0915be48b42ddffb02807b0383c61fd7ccd8bc5815a035f3637d444141e28b"
+        "sha256": "01d4e73d814aed744e661a75c70740d26a97c7ec4b24a6acc6bda35c1b4d8a20"
       },
       {
         "path": "dist/core/mcp-registration.d.ts",
-        "sha256": "3c0a60a283d20c95ec903cf574bf3b67953ed3707ad655f5509260241017421d"
+        "sha256": "4ce0ccecf6b7933ea74222e17c01f155e6adb106582532d463d8e5177f544aaf"
       },
       {
         "path": "dist/core/mcp-registration.js",
-        "sha256": "e0ea86d46326ccbdb6c275c474822d833778a39f1606652e0194568dec3f2e1c"
+        "sha256": "f466c0b53efa7e22021aa709ec270ae00df4e1d1e5114189a616c67afd49acf1"
       },
       {
         "path": "dist/core/mcp-registration.js.map",
-        "sha256": "75a77d424951193402de59f61a5b1d07f025096982d5fc061bbba3bec1477b72"
+        "sha256": "57e59ed00a722c7573cad3e24d6ee07d76a266a8ecf71e15df7a94a512fabf22"
       },
       {
         "path": "dist/core/notes.d.ts",
@@ -1230,11 +1242,11 @@
       },
       {
         "path": "dist/mcp/lifecycle.js",
-        "sha256": "ced7be169ac602a79721357b42fc3b13cc75be3025e61ebcc65a33affa96bcc0"
+        "sha256": "aef004948f631e811c1144c1f03b899b5dc1624fa9ad150f784f97dccea61add"
       },
       {
         "path": "dist/mcp/lifecycle.js.map",
-        "sha256": "b78e6846f7ab5f65a2bbe7010605efc306f0b016c0a7a1967f7dfb3aab2215cb"
+        "sha256": "ee2c27368da7dc4a9d0c24f9dafc600101dd0f77970b0a72365af2cea2bc2928"
       },
       {
         "path": "dist/mcp/main.d.ts",
@@ -1254,11 +1266,11 @@
       },
       {
         "path": "dist/mcp/server.js",
-        "sha256": "86875f569ca187f2a713871cb76063c0ebf8e9f4a2d7b54e8a3cec3b16f95deb"
+        "sha256": "add4ca324855e8f66930b4d5a4b3edbcb9c70b16108a7ba53ef2cf65036f7e5a"
       },
       {
         "path": "dist/mcp/server.js.map",
-        "sha256": "7e9f24ddda76269b6d6cbd63f0085210d8da31a15f7d3a1359f899dee1f70de7"
+        "sha256": "a05048375eecd4be1028b0118ce524d465502fb8392a166e9299c1745c53502c"
       },
       {
         "path": "dist/mcp/validate-args.d.ts",

@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs commitlore from source, for any agent that is not Claude Code.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.14/install.sh | sh -s v1.2.14
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.15/install.sh | sh -s v1.2.15
 #
 # **Claude Code users do not need this script.** The repository is itself a
 # plugin marketplace (ADR-0011), so two `/plugin` commands register the MCP
@@ -589,9 +589,36 @@ if [ "$verification_smoke_ok" != "true" ]; then
 fi
 
 if [ "$candidate" = "$checkout_tmp" ]; then
+  # #922: this path existed at the start of the run or it did not, and the answer
+  # can change underneath a concurrent install of the same version. Dying here
+  # reported a fatal error for a race whose outcome is what the run wanted: the
+  # tag materialized, by the other process. A reporter saw that error and
+  # `upgraded to v1.2.13` in the same output, with nothing saying which was true.
+  #
+  # So the occupant is verified the same way a pre-existing checkout is at the top
+  # of this transaction, and adopted when it is the requested tag. Only an occupant
+  # that fails that verification is fatal, and it keeps the deliberate-repair
+  # instructions, because then the path really is unusable.
   if [ -e "$checkout" ]; then
-    die "could not materialize verified incoming checkout at $checkout because that path became occupied. The existing wrapper at $dest was left unchanged." 4
+    if [ ! -d "$checkout" ]; then
+      verification_state="failed"
+      verification_path="$checkout"
+      verification_detail="the path that appeared during this run is not a directory"
+      die_unusable_checkout
+    elif verify_runtime_manifest "$checkout" && verify_requested_tag "$checkout" "$version"; then
+      log "another install materialized $version at $checkout during this run; adopting it (runtime manifest and requested tag verified)"
+      rm -rf "$checkout_tmp"
+      checkout_tmp=""
+      candidate="$checkout"
+    else
+      verification_path="$checkout"
+      verification_detail="a path appeared during this run and does not verify as $version"
+      die_unusable_checkout
+    fi
   fi
+fi
+
+if [ "$candidate" = "$checkout_tmp" ]; then
   if ! mv "$checkout_tmp" "$checkout"; then
     die "could not materialize verified incoming checkout at $checkout. The existing wrapper at $dest was left unchanged." 3
   fi

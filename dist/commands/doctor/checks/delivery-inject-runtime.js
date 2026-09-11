@@ -142,8 +142,17 @@ export const checkInjectRuntime = (ctx) => {
                 ...streamEvidence('stderr', ''),
             };
             const fix = 'commitlore inject install-claude-hook';
+            /*
+             * No fix on this branch. The plugin is already delivering, so `inject
+             * install-claude-hook` would add a second delivery of the same context --
+             * the double-injection #781 removed -- and the renderer prints `fix:` for a
+             * skipped row like any other, so the instruction reached the reader.
+             * Nothing here needs doing, which is what a null fix means.
+             */
             return plugin.willFire
-                ? check(id, category, title, 'skipped', `not checked: no hook in ${settings.settingsPath}, and ${plugin.reason}`, fix, false, false, { evidence: shared, skipReason: 'hook_not_installed' })
+                ? check(id, category, title, 'skipped', `not checked: no hook in ${settings.settingsPath}, and ${plugin.reason}. The plugin ` +
+                    `delivers this context already, so installing the settings hook as well would deliver ` +
+                    `it twice`, null, false, false, { evidence: shared, skipReason: 'hook_not_installed' })
                 : check(id, category, title, 'warn', `not installed in ${settings.settingsPath}, and ${plugin.reason}`, fix, false, undefined, { evidence: shared });
         }
         const detail = `${settings.state} in ${settings.settingsPath}${settings.problem === undefined ? '' : `: ${settings.problem}`}`;

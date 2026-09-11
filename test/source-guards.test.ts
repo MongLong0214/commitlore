@@ -144,3 +144,32 @@ describe('#395 nothing this repository ships installs from a public registry', (
     expect(existsSync(join(REPO_ROOT, 'scripts/commitlore-bootstrap.sh'))).toBe(false);
   });
 });
+
+/**
+ * #870 fixed `./dist/commitlore.mjs` + `cwd: "."` -- both resolved against the
+ * session's working directory, so the plugin's MCP server died with
+ * MODULE_NOT_FOUND everywhere but a commitlore checkout. The fix introduced
+ * `${CLAUDE_PLUGIN_ROOT:-.}`, and the `:-.` default preserved the defect exactly:
+ * when the host does not set the variable the path is `.` again. It cost a second
+ * report (#926's sibling) and two days of a user's records.
+ *
+ * A default that resolves to the session directory can never be right for a file
+ * that lives in the plugin's install directory. An unset placeholder with no
+ * default is refused by the host outright, which names the variable instead of
+ * inventing a path -- `core/mcp-registration.ts` says so where it declines to
+ * expand one.
+ */
+describe('the plugin entry point never falls back to the session directory', () => {
+  const SHIPPED = ['.mcp.json', 'hooks/hooks.json', 'docs/COMPATIBILITY.md'];
+
+  for (const file of SHIPPED) {
+    it(`${file} declares no cwd-relative default for CLAUDE_PLUGIN_ROOT`, () => {
+      const path = join(REPO_ROOT, file);
+      if (!existsSync(path)) return;
+      const text = readFileSync(path, 'utf8');
+
+      expect(text).not.toContain('${CLAUDE_PLUGIN_ROOT:-.}');
+      expect(text).not.toContain('${CLAUDE_PLUGIN_ROOT:-}');
+    });
+  }
+});

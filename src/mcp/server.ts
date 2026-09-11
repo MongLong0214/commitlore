@@ -52,6 +52,8 @@ import {
   type CaptureAssetPreflight,
 } from '../core/paths.js';
 import { formatRuntimeIdentity, runtimeIdentity } from '../core/runtime-identity.js';
+import { dataRoot, resolvedCurrent } from '../commands/update.js';
+import { isNewerRelease } from '../core/release-version.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -100,6 +102,57 @@ const JSON_MIME = 'application/json';
  * reason the condition needed a field of its own.
  */
 const EMPTY_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+/**
+ * #924: which build is about to write this record, and whether it is the one the
+ * machine has installed.
+ *
+ * A host resolves its MCP launcher once at session start and holds it until the
+ * session ends, so an upgrade never reaches a running session. The reporter
+ * upgraded three times in a day and every capture still went to a **v1.2.0**
+ * server, thirteen releases behind, because their session had already resolved.
+ * Nothing in the capture path said so: the older build accepts the same calls,
+ * returns the same shapes, and produces records that look correct, so whatever
+ * changed in thirteen releases silently did not apply to them.
+ *
+ * `commitlore_runtime_identity` answers this honestly for a caller who thinks to
+ * ask, and `doctor` reports it in an unrelated command. Neither is where the
+ * record gets written. This puts it in the response of the call that begins a
+ * write, which is the only place a caller can act on it without having been
+ * warned in advance to look.
+ *
+ * **Reported, not refused, and the asymmetry with #911 is the reason.** There, a
+ * capture over an empty staged diff could not reach a commit with a diff — the
+ * staged-diff binding refuses it — so a nonce cost the caller a round of work and
+ * nothing worse. Here nothing downstream catches a stale writer at all. That
+ * argues for refusing, and refusing is still wrong: it would strand every
+ * currently-running host mid-session, including sessions belonging to other
+ * projects that this operator cannot restart. A field a caller must read is the
+ * proportionate answer, and `runtime_stale` is non-null exactly when there is
+ * something to act on.
+ *
+ * Deliberately not `policy_error`. That field names why a policy file could not be
+ * used, and widening it to mean "something else is unusual" would leave a caller
+ * checking it unable to tell which happened (r-emptystageddiff911 ruled that out
+ * for the same reason).
+ */
+const runtimeStaleness = (env: NodeJS.ProcessEnv): string | null => {
+  const running = runtimeIdentity();
+  const installed = resolvedCurrent(dataRoot(env));
+  if (installed === null) return null;
+  const match = /v(\d+\.\d+\.\d+)/.exec(installed);
+  const installedVersion = match?.[1];
+  if (installedVersion === undefined) return null;
+  if (!isNewerRelease(installedVersion, running.version)) return null;
+  return (
+    `this MCP server is running ${running.version} from ${running.packageRoot}, but ${installedVersion} ` +
+    `is installed at ${installed}. A host resolves its launcher once at session start, so the ` +
+    `upgrade has not reached this session and every record it writes is written by the older ` +
+    `build. Reconnecting this MCP server is enough and keeps the session: the host respawns it ` +
+    `through the wrapper, which the installer rewrote to ${installedVersion} (in Claude Code, /mcp). ` +
+    `Restarting the host session does the same thing more expensively`
+  );
+};
 
 
 /** The four consumer routes of SPEC §5, under the names the CLI uses. */
@@ -685,6 +738,10 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
          */
         staged_diff_empty: result.staged_diff_hash === EMPTY_SHA256,
         repository: root,
+        // #924: the build that is about to write, and whether the machine has a
+        // newer one that this session never picked up.
+        runtime: formatRuntimeIdentity(runtimeIdentity()),
+        runtime_stale: runtimeStaleness(process.env),
       });
     },
     [VERIFY_CAPTURE_TOOL]: (args) => {

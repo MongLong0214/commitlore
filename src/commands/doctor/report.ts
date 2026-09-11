@@ -35,6 +35,7 @@ import { join, resolve, sep } from 'node:path';
 import type { Command } from 'commander';
 
 import { PACKAGE_ROOT, installedPath, packageVersion } from '../../core/paths.js';
+import { SKIP_CLASS } from './model.js';
 import type { DoctorCheck, DoctorOptions, DoctorReport, DoctorStatus, InstallSource } from './model.js';
 import { formatReport } from './render.js';
 import { runDoctor } from './runner.js';
@@ -80,7 +81,17 @@ export const deriveHeadline = (args: {
 export const deriveStatus = (checks: readonly DoctorCheck[]): DoctorStatus => {
   const required = checks.filter((check) => !check.optional);
   if (required.some((check) => check.status === 'fail')) return 'failed';
-  if (required.some((check) => check.status === 'warn' || check.status === 'skipped')) {
+  /*
+   * A skip degrades only when it is `unverified` (ADR-0032 §2 and §6). Degrading
+   * on every skip made `ok` unreachable: `squash-conservation` skips
+   * `nothing_applicable` on any repository with no squash-shaped branch, so a
+   * healthy one reported `degraded` for life and the headline claimed some checks
+   * could not be verified when every one of them had been.
+   */
+  const degradingSkip = (check: DoctorCheck): boolean =>
+    check.status === 'skipped' &&
+    (check.skipReason === undefined || SKIP_CLASS[check.skipReason] === 'unverified');
+  if (required.some((check) => check.status === 'warn' || degradingSkip(check))) {
     return 'degraded';
   }
   return 'ok';
