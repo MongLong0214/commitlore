@@ -43,7 +43,7 @@
  * `Supersedes:` them (correct — they have no identity to name) while a
  * date-form `Expires:` still retires them through the same fold.
  */
-import { type HistoryAvailability } from './git.js';
+import { type HistoryAvailability, type Vantage } from './git.js';
 import { type RecordSource } from './index-db.js';
 import { type NotesAvailability } from './notes.js';
 import { type Lifecycle, type Record } from './types.js';
@@ -219,6 +219,20 @@ export interface QueryResult {
      * the whole of what a path is subject to.
      */
     unreadCommits: number;
+    /**
+     * Where this answer was read from (#930).
+     *
+     * Every field above describes a *source* or the *scan*, and all of them stay
+     * healthy while the walk starts from the wrong commit: the commit source only
+     * ever reads `rev-list HEAD`. So a checkout behind its own already-fetched
+     * upstream answers with zero records, `coverage: "complete"`, `history:
+     * "ready"` and `notes: "present"` — byte-identical to a repository where
+     * nobody ever wrote one, which is the sentence `notes` exists to prevent.
+     *
+     * `vantage.behind` is the signal; the rest is the vantage stated so a caller
+     * can see what the answer is scoped to rather than infer it.
+     */
+    vantage: Vantage;
     /** Anything the caller should be told about how the answer was produced. */
     diagnostics: string[];
 }

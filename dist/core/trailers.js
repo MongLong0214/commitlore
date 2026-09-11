@@ -7,7 +7,7 @@
  * unreproducible by line matching, and getting it wrong manufactures false
  * context for agents.
  */
-import { execGitOrThrow } from './git.js';
+import { execGit, execGitOrThrow } from './git.js';
 import { KNOWN_KEYS } from './types.js';
 const RECORD_ID_KEY = 'Record-Id';
 /**
@@ -21,13 +21,74 @@ const RECORD_ID_KEY = 'Record-Id';
  * protocol's separator is `:` (SPEC §2.2 EBNF), so it is fixed here rather
  * than inherited from whatever repo the CLI happens to run in.
  */
-const PARSE_ARGS = [
-    '-c',
-    'trailer.separators=:',
-    'interpret-trailers',
-    '--parse',
-    '--no-divider',
-];
+export const SEPARATOR_PIN = ['-c', 'trailer.separators=:'];
+const PARSE_ARGS = [...SEPARATOR_PIN, 'interpret-trailers', '--parse', '--no-divider'];
+/**
+ * The same parser, reached through `git log` instead of one process per
+ * message: `%(trailers)` is `trailer_info_get` over the commit's message with
+ * `no_divider` set, which is what `--parse --no-divider` asks of
+ * `interpret-trailers`. `only` drops non-trailer lines and `unfold` joins
+ * continuations (B4), so a message's own block (B1) comes back byte-equal to
+ * `parseCommitMessage` — `test/trailer-atom.test.ts` holds the two to that over
+ * this repository's whole history and over the hazard cases the equivalence
+ * was doubted on. `core/index-db.ts` has read every record through this atom
+ * since the index existed.
+ *
+ * The separators are bytes a trailer value has no business containing, but git
+ * does not escape, so a value that does contain one would split wrong. That is
+ * why {@link atomIsAmbiguous} exists: a reader consults it first and pays the
+ * process for exactly those messages.
+ */
+export const TRAILERS_ATOM = '%(trailers:only=true,unfold=true,key_value_separator=%x1f,separator=%x1e)';
+const ATOM_TRAILER_SEP = '';
+const ATOM_KV_SEP = '';
+/** Whether `message` carries a byte the atom uses as a separator, so its atom output cannot be framed. */
+export const atomIsAmbiguous = (message) => message.includes(ATOM_TRAILER_SEP) || message.includes(ATOM_KV_SEP);
+/** `Key\x1fvalue\x1eKey\x1fvalue` -> trailers, in message order (B5). Empty field, no trailers. */
+export const parseTrailersAtom = (field) => {
+    if (field === '')
+        return [];
+    return field.split(ATOM_TRAILER_SEP).map((entry) => {
+        const separator = entry.indexOf(ATOM_KV_SEP);
+        if (separator === -1)
+            return { key: entry, value: '' };
+        return { key: entry.slice(0, separator), value: entry.slice(separator + 1) };
+    });
+};
+/**
+ * The atom for every commit a `git log` walk visits, in one process: sha ->
+ * raw field. `selection` is what follows `log` to choose and order the walk —
+ * the same arguments the caller gave the walk that fetched the messages, so
+ * the two visit the same shas.
+ *
+ * A walk that fails answers an empty map. Every message then goes through the
+ * process, which is the oracle, so a failure here costs the processes it
+ * would have saved and never an answer.
+ */
+export const readTrailersAtom = (selection, opts = {}) => {
+    const result = execGit([...SEPARATOR_PIN, 'log', '-z', `--format=%H${ATOM_KV_SEP}${TRAILERS_ATOM}`, ...selection], opts);
+    const atoms = new Map();
+    if (result.code !== 0)
+        return atoms;
+    for (const chunk of result.stdout.split('\0')) {
+        // The sha is hex, so the first separator byte ends it; any later one is
+        // the atom's own.
+        const at = chunk.indexOf(ATOM_KV_SEP);
+        if (at === -1)
+            continue;
+        atoms.set(chunk.slice(0, at), chunk.slice(at + 1));
+    }
+    return atoms;
+};
+/**
+ * `parseRecordBlocks` with the message's own block taken from the atom when
+ * the caller holds one and the message cannot confuse its framing; otherwise
+ * exactly `parseRecordBlocks(message)`. The one entry point for a reader that
+ * ran {@link readTrailersAtom}, so no reader composes the grammar itself.
+ */
+export const parseRecordBlocksWithAtom = (message, atom) => atom === undefined || atomIsAmbiguous(message)
+    ? parseRecordBlocks(message)
+    : parseRecordBlocks(message, { last: parseTrailersAtom(atom) });
 /** Loose on purpose: see `parseRecordBlocks`. */
 const MENTIONS_RECORD_ID = /record-id/i;
 /** Continuation lines in a canonical block are indented by two spaces (SPEC §2.3). */
@@ -181,9 +242,16 @@ const asIsolatedBlock = (paragraph) => parseCommitMessage(`x\n\n${paragraph}`);
  * would stop at the first one and miss everything earlier.
  *
  * Returned in the order the blocks appear in the message.
+ *
+ * `opts.last` is the message's own block when the caller already holds it —
+ * read from {@link TRAILERS_ATOM} in the `git log` that fetched the message,
+ * one process for the walk instead of one per commit. It replaces only where
+ * the last block's bytes come from; which paragraphs are tested, and whether
+ * the result is accepted, is decided here for every caller alike, so a reader
+ * with the atom and a reader without it compose the grammar in one place.
  */
-export const parseRecordBlocks = (message) => {
-    const last = parseCommitMessage(message);
+export const parseRecordBlocks = (message, opts = {}) => {
+    const last = opts.last ?? parseCommitMessage(message);
     const paragraphs = splitParagraphs(message);
     const earlier = paragraphs.slice(0, -1);
     const extra = [];

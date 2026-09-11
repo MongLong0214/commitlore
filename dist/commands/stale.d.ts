@@ -11,7 +11,7 @@
 import type { Command } from 'commander';
 import { type NotesAvailability } from '../core/notes.js';
 import { type RecordState, type StaleRecord } from '../core/stale.js';
-import type { Violation } from '../core/types.js';
+import type { Trailer, Violation } from '../core/types.js';
 /**
  * How many commits a scan reads when `--all-history` is not given. A bounded
  * default keeps `stale` fast on a deep repository; the cost is that anything
@@ -24,7 +24,44 @@ export interface CollectOptions {
     /** Read the whole reachable history instead of the most recent commits. */
     allHistory?: boolean;
     revision?: string;
+    /**
+     * What one invocation has already read, reused across its own walks.
+     *
+     * `validate --range` collects the whole reachable history once per commit in
+     * the range (`commands/validate.ts` `recordsFor`), so this repository's own
+     * CI step walked ~1500 commits 1486 times and re-read everything on every
+     * walk. Measured on run 34576438460: 2833s and 3578s for that one step, on
+     * each matrix leg, of every release.
+     *
+     * Both halves are cached because both were repeated. Commit messages are
+     * keyed by sha; the notes mirror is keyed by nothing at all, because its
+     * content is a function of the repository rather than of the revision being
+     * walked -- listing it and reading each note once per walk was 1980 of the
+     * 7887 spawns a 164-commit range still cost after only the commit half was
+     * cached.
+     *
+     * Safe because every cached value is a pure function of bytes that cannot
+     * change underneath one invocation: a sha's message, and a ref read once.
+     * The caller owns the cache and it dies with the invocation -- module-level
+     * state would outlive a `git replace` or a fetch in a long-lived MCP server,
+     * which is the one way these answers do change.
+     *
+     * Absent means no reuse, which is the right default for a single walk.
+     */
+    cache?: CollectCache;
 }
+/** Per-invocation scratch for `collectRecords`. Never share one across calls. */
+export interface CollectCache {
+    readonly commits: Map<string, CollectedRecord[]>;
+    /** Every record block of the note on a sha, as `readRecordBlocks` returns them. */
+    readonly notes: Map<string, Trailer[][]>;
+    /** The mirror, read once: its shas and whether it could be read at all. */
+    repository?: {
+        shas: string[];
+        availability: NotesAvailability;
+    };
+}
+export declare const newCollectCache: () => CollectCache;
 type RecordSource = NonNullable<StaleRecord['source']>;
 type CollectedRecord = StaleRecord & {
     sha: string;
