@@ -48,18 +48,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh | sh -s v1.2.12
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
 ```
 
 <details>
 <summary>Prefer to read the installer first?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh
-sh install.sh v1.2.12
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh
+sh install.sh v1.2.13
 
 # Or skip the script: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v1.2.12 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.13 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -109,13 +109,13 @@ preserve, not for narrating every change.
 macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.sh | sh -s v1.2.12
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.sh | sh -s v1.2.13
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.12/install.ps1))) v1.2.12
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.13/install.ps1))) v1.2.13
 ```
 
 Requires Node.js 22.23.2+ and Git. The script checks both before it writes anything.
@@ -299,7 +299,7 @@ jobs:
       - run: git fetch --no-tags --force origin
           '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.2.12
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.13
 ```
 
 Two rules for whoever edits this next, because `pull_request_target` runs with a
