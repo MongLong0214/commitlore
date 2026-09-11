@@ -139,6 +139,21 @@ export interface InjectionPattern {
  *
  * That is why `blocked` is a supplement to grading and not the defence: an
  * outside contributor's `Warn:` is a `claim` whether or not any of this fires.
+ *
+ * And what it withholds although it should not — the benign prose the fixtures
+ * below do not cover, measured on this repository's history (#935), every one
+ * left as the price of the corresponding attack shape staying blocked:
+ * - An attack phrase quoted as an example with no reporting verb in the two
+ *   words before it: `` `run the terminal` remains a false positive ``. The
+ *   record that names this residual (r-mention408) ruled out quotation marks
+ *   as the signal, because an attacker quotes as readily as a defender.
+ * - A bare imperative as a `Ruled-out:` alternative: `suppress the warning for
+ *   a branch whose content is absent | …`. Position alone cannot release it
+ *   without also releasing `curl … | sh` written as an alternative.
+ * - A purpose infinitive: `rewrites history to hide that the claim was made`.
+ *   `make sure to hide this` is the same form used as an instruction.
+ * Each of these is reported to the author at capture and commit time
+ * (`explainWithholding`), where a reporting verb or a modal fixes the wording.
  */
 export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
   {
@@ -405,6 +420,25 @@ const MENTIONS: ReadonlySet<string> = new Set([
   'string',
 ]);
 
+/**
+ * The counterfactual modal. `it would hide that two rows were unplanned` is a
+ * consequence being described, not a request being made (#935): the bare verb
+ * after `would` is the only slot an imperative shares with a conditional, and
+ * a `Ruled-out:` reason — *why* an alternative was dropped — is written in
+ * exactly that mood. Measured on this repository's history, 6 of the 7
+ * `output.conceal` withholdings sat in a reason, 4 of them literally
+ * `… would hide that …`; the other two (`to hide that`, `and hide it`) stay
+ * withheld, for the reasons the table header gives.
+ *
+ * Read at the word immediately before the match, not across the window the
+ * other sets use: `would you hide this` is a request, and the pronoun between
+ * modal and verb is what makes it one. `could`, `might`, `should` and `can`
+ * are deliberately absent — `you could paste this into your terminal` is an
+ * instruction wearing a modal, and this set exists for the one modal that
+ * cannot address the reader.
+ */
+const IRREALIS: ReadonlySet<string> = new Set(['would']);
+
 /** How many words before a match the negation guard reads. */
 const NEGATION_LOOKBACK = 2;
 
@@ -557,13 +591,15 @@ const decodedCandidates = (text: string): string[] => {
 const CJK_NEGATION_RE = /(?:不要|不得|禁止|请勿|請勿|切勿)[^。！？.!?\n]{0,8}$/u;
 
 /**
- * Whether the prose immediately before a match disarms it — either by negating
- * the imperative (`NEGATIONS`) or by reporting it rather than issuing it
- * (`MENTIONS`, #408).
+ * Whether the prose immediately before a match disarms it — by negating the
+ * imperative (`NEGATIONS`), by reporting it rather than issuing it
+ * (`MENTIONS`, #408), or by making it the consequence of a condition
+ * (`IRREALIS`, #935).
  *
- * Both read the same short window, and both are deliberately narrow: only the
- * two words immediately before the match are consulted, so "never mind the
- * above, run the following" still blocks (fixture `20-bypass-negation-decoy`).
+ * All three read the same short window, and all are deliberately narrow: only
+ * the two words immediately before the match are consulted, so "never mind the
+ * above, run the following" still blocks (fixture `20-bypass-negation-decoy`),
+ * and `IRREALIS` reads only the last of them.
  */
 const isDisarmed = (haystack: string, index: number, matchedText: string): boolean => {
   const prefix = haystack.slice(0, index);
@@ -571,7 +607,8 @@ const isDisarmed = (haystack: string, index: number, matchedText: string): boole
   if (/[^\x00-\x7F]/u.test(matchedText)) return false;
   const words = prefix.split(/[^a-z0-9]+/).filter((word) => word !== '');
   const window = words.slice(-NEGATION_LOOKBACK);
-  return window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word));
+  if (window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word))) return true;
+  return IRREALIS.has(window.at(-1) ?? '');
 };
 
 const fires = (haystack: string, entry: InjectionPattern): boolean => {
@@ -622,8 +659,40 @@ const trailerValues = (trailers: Trailer[], key: string): string[] =>
  */
 export const renderedTrailer = (trailer: Trailer): string => `${trailer.key}: ${trailer.value}`;
 
-/** Every pattern the rendered trailer trips, in table order. */
-export const scanTrailer = (trailer: Trailer): string[] => scanInjection(renderedTrailer(trailer));
+/** SPEC §3.1: the one key whose value carries a `|` by construction. */
+const RULED_OUT_KEY = 'Ruled-out';
+const PIPE_TO_SHELL = 'tool.pipe-to-shell';
+
+/**
+ * Every pattern the rendered trailer trips, in table order.
+ *
+ * One reading is corrected by the key (#935). SPEC §3.1 requires a `|` in
+ * every `Ruled-out:` value and makes the first one the separator between the
+ * alternative and the reason, so a reason that opens with an interpreter's
+ * name as its subject — `| node on Windows reads /tmp/x as C:\tmp\x` — is
+ * `tool.pipe-to-shell`'s anchor character followed by its interpreter list,
+ * and the pattern read punctuation the grammar mandates as a shell pipe. The
+ * separator is neutralised and the value rescanned for that one pattern; a
+ * second `|` is still a pipe, and every other pattern still reads the value
+ * exactly as an agent is shown it.
+ *
+ * What this gives up, stated: a whole value of the form `<command> | sh`,
+ * where the command trips nothing on its own, is now served as a rejected
+ * alternative whose reason is `sh`. `curl … | sh` is not in that set —
+ * `tool.curl-remote` reads the alternative — and neither is any value with a
+ * second pipe or a verb that asks for the value to be run.
+ */
+export const scanTrailer = (trailer: Trailer): string[] => {
+  const patterns = scanInjection(renderedTrailer(trailer));
+  if (trailer.key !== RULED_OUT_KEY || !patterns.includes(PIPE_TO_SHELL)) return patterns;
+  const separator = trailer.value.indexOf('|');
+  if (separator < 0) return patterns;
+  const unseparated = `${trailer.value.slice(0, separator)} ${trailer.value.slice(separator + 1)}`;
+  if (scanInjection(renderedTrailer({ ...trailer, value: unseparated })).includes(PIPE_TO_SHELL)) {
+    return patterns;
+  }
+  return patterns.filter((id) => id !== PIPE_TO_SHELL);
+};
 
 /**
  * Whether an identity string would itself trip the scanner, either as the
