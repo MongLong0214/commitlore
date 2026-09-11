@@ -1,0 +1,7 @@
+{
+  "description": "Family 1 (#931): an article two words before the verb is a decoy, not a noun reading. The prepositional form (`run this in your terminal`) must fire regardless of what precedes the verb.",
+  "blocked": true,
+  "patterns": [
+    "tool.shell-invocation"
+  ]
+}

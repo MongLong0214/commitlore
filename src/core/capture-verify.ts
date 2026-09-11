@@ -32,6 +32,7 @@ import {
   type PendingRecord,
 } from './pending.js';
 import { hasShallowHistory } from './git.js';
+import { explainWithholding, scanTrailer } from './grade.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
 import { findDanglingRefs, type StaleRecord } from './stale.js';
@@ -480,6 +481,30 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
           record: verified.record,
           reason: 'canonical-duplicate',
           detail: 'a record with the same normalized key/value/scope already exists',
+        });
+        continue;
+      }
+
+      // #931. A trailer the injection scanner matches is served as `[blocked]`
+      // to every reader, and a blocked record is withheld whole — siblings
+      // included. Committing it produces a record nobody can read, and the
+      // author learned nothing: capture said staged, the hook said `shape ok`.
+      // This is the moment the wording can still change, so the record is
+      // refused here with the trailer and the pattern named, the same way an
+      // ungrounded `Ruled-out:` is. The same scanner grades at read time, so
+      // what passes here is what will be served; a defensive record that
+      // *mentions* a payload passes both.
+      const matched = verified.record.trailers.flatMap((trailer) => {
+        const patterns = scanTrailer(trailer);
+        return patterns.length === 0 ? [] : [{ key: trailer.key, patterns }];
+      });
+      if (matched.length > 0) {
+        rejected.push({
+          record: verified.record,
+          reason: 'injection-pattern',
+          detail: matched
+            .map((entry) => explainWithholding(entry.key, entry.patterns))
+            .join('; '),
         });
         continue;
       }

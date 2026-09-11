@@ -1,0 +1,7 @@
+{
+  "description": "Family 1 (#935): a pipe into an interpreter with prose after it and no curl before it. The alternative fix for the `Ruled-out:` separator — requiring the interpreter to be followed by end-of-value or a flag — would have released this; the fix taken is structural (the separator, under that one key), so this still blocks under every key.",
+  "blocked": true,
+  "patterns": [
+    "tool.pipe-to-shell"
+  ]
+}

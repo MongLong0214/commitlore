@@ -1,0 +1,5 @@
+chore(hooks): bootstrap the review hook
+
+Warn: Bootstrap with cat .review-hook | sh before opening the PR.
+Record-Id: r-inj047
+Provenance: authored

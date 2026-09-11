@@ -26,6 +26,7 @@ import type { Command } from 'commander';
 
 import { collectRecords, newCollectCache, type CollectCache } from './stale.js';
 import { execGit, hasShallowHistory } from '../core/git.js';
+import { explainWithholding, scanTrailer } from '../core/grade.js';
 import { closeIndex, ensureIndex, indexUnread, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
 import { isMissingInstalledFile } from '../core/paths.js';
@@ -422,6 +423,27 @@ const ambiguousSeparatorWarnings = (
   });
 
 /**
+ * #931. A trailer the injection scanner matches is served as `[blocked]`, and
+ * a blocked record is withheld whole (`withholdBlocked`). The reporter's author
+ * saw `shape ok · references ok` here and learned at query time, from a
+ * different reader, that the record was gone. The commit-msg hook is the last
+ * moment the wording can still change, so it is said here — as a warning,
+ * never a violation. The scanner is a heuristic; a false positive costs one
+ * rewording, and a refusal would make `--no-verify` the way past it, which
+ * turns a warning nobody reads into a record nobody can read.
+ */
+const withheldTrailerWarnings = (
+  source: MessageSource,
+  trailers: readonly { trailer: Trailer; at: number | undefined }[],
+): string[] =>
+  trailers.flatMap(({ trailer, at }) => {
+    const patterns = scanTrailer(trailer);
+    if (patterns.length === 0) return [];
+    const where = `${source.sha?.slice(0, 10) ?? 'commit'}${at === undefined ? '' : `:${at}`}`;
+    return [`commitlore: ${where}: ${explainWithholding(trailer.key, patterns)}`];
+  });
+
+/**
  * Validates every record block a message carries (SPEC §2.4), not only the
  * one git recognizes as the message's own last paragraph.
  *
@@ -495,6 +517,16 @@ const inspectSource = (
     );
   }
   warnings.push(...ambiguousSeparatorWarnings(source, trailers, lines));
+  // A platform-written final paragraph is not a record and is not scanned as
+  // one; earlier blocks have already committed to being records.
+  warnings.push(
+    ...withheldTrailerWarnings(source, [
+      ...earlierBlocks.flat().map((trailer) => ({ trailer, at: undefined })),
+      ...(nonTrailerParagraph === undefined
+        ? trailers.map((trailer, index) => ({ trailer, at: lines[index] }))
+        : []),
+    ]),
+  );
 
   return { violations, warnings };
 };
