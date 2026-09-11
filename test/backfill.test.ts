@@ -908,3 +908,89 @@ describe('#403 backfill fails closed on a mirror it could not read', () => {
     expect(runBackfill({ cwd, draft, dryRun: true }).exitCode).toBe(0);
   });
 });
+
+/**
+ * #902: pull request collection is on by default now.
+ *
+ * Across three real rounds in one repository every surviving trailer rested on
+ * pull request body text, so with it off the command mostly reconstructs nothing.
+ * And it had to be passed to the `--draft` call as well as the prompt call:
+ * `collectSources` rebuilds the same text for verification, so a run that
+ * collected bodies for the prompt and not for the draft discarded exactly the
+ * quotes the session took from them. The default removes that asymmetry.
+ *
+ * Driven through `runBackfill`, because the CLI layer owns the default — the core
+ * is called programmatically by callers that state their own intent, and its own
+ * default stays opt-in.
+ */
+describe('#902 pull request bodies are collected by default', () => {
+  const ghShim = (script: string): string => {
+    const dir = tempDir('backfill-gh-default');
+    const path = join(dir, 'gh');
+    writeFileSync(path, script);
+    chmodSync(path, 0o755);
+    return dir;
+  };
+
+  const withPath = <T>(dir: string, body: () => T): T => {
+    const original = process.env['PATH'] ?? '';
+    process.env['PATH'] = `${dir}:${original}`;
+    try {
+      return body();
+    } finally {
+      process.env['PATH'] = original;
+    }
+  };
+
+  /** Authenticated, and answers the per-commit lookup with an empty list. */
+  const WORKING_GH = ['#!/bin/sh', 'case "$1" in', '  auth) exit 0 ;;', '  *) echo "[]" ;;', 'esac', ''].join('\n');
+  const BROKEN_GH = ['#!/bin/sh', 'echo "not logged in" >&2', 'exit 1', ''].join('\n');
+
+  /** `runBackfill` returns rendered streams, so the report comes out of --json. */
+  const pullRequestsFrom = (stdout: string): Record<string, unknown> =>
+    (JSON.parse(stdout) as { report: { pullRequests: Record<string, unknown> } }).report
+      .pullRequests;
+
+  it('requests them with no flag at all', () => {
+    const fixture = buildFixture('backfill-prs-default-on');
+    const dir = ghShim(WORKING_GH);
+
+    const outcome = withPath(dir, () =>
+      runBackfill({ cwd: fixture.dir, promptOnly: true, json: true }),
+    );
+    const prs = pullRequestsFrom(outcome.stdout);
+
+    expect(outcome.exitCode).toBe(0);
+    expect(prs['requested']).toBe(true);
+    expect(prs['available']).toBe(true);
+  });
+
+  it('stops requesting them under --no-with-prs', () => {
+    const fixture = buildFixture('backfill-prs-opt-out');
+    const dir = ghShim(WORKING_GH);
+
+    const outcome = withPath(dir, () =>
+      runBackfill({ cwd: fixture.dir, promptOnly: true, json: true, withPrs: false }),
+    );
+    const prs = pullRequestsFrom(outcome.stdout);
+
+    expect(prs['requested']).toBe(false);
+    expect(prs['available']).toBe(false);
+  });
+
+  it('still degrades to commit messages when gh cannot be used', () => {
+    const fixture = buildFixture('backfill-prs-default-no-gh');
+    const dir = ghShim(BROKEN_GH);
+
+    const outcome = withPath(dir, () =>
+      runBackfill({ cwd: fixture.dir, promptOnly: true, json: true }),
+    );
+    const prs = pullRequestsFrom(outcome.stdout);
+
+    // The default must not turn a missing gh into a failure: requiring a GitHub
+    // login to backfill a local repository would be a strange thing to demand.
+    expect(outcome.exitCode).toBe(0);
+    expect(prs['available']).toBe(false);
+    expect(String(prs['reason'])).toContain('not authenticated');
+  });
+});
