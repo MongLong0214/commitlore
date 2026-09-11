@@ -1483,3 +1483,129 @@ describe('ablation: the flags are independent', () => {
     }
   });
 });
+
+/**
+ * #921: an `X-` key is metadata by its own declaration, and injection rendered it
+ * at the same weight as a decision.
+ *
+ * The chain matters for why this is a fix and not a preference. CommitLore's own
+ * `unknown-key` violation tells an author to move a non-SPEC key to `X-<Name>`
+ * "if this is your own metadata" — guidance added in 1.2.5 — and agent hosts then
+ * emit one per commit. Measured on the reporting repository: twenty-one `Other`
+ * lines against six decision lines, fourteen of them the same repeated key, 38% of
+ * the whole payload carrying no decision at all.
+ *
+ * What was *not* wrong is the budget order. The report's headline fix was "budget
+ * decisions first", and that is what already happened: the tiers are a priority
+ * order, the cut takes a prefix, and a payload whose cut reached `limit` contained
+ * no `Other` at all — measured on this repository before anything changed. The last
+ * case here pins that, because the alternative fix would have been a reordering
+ * that changed nothing while appearing to answer the report.
+ */
+describe('#921 X- metadata does not spend the injection budget', () => {
+  const DECISION = 'Limit: the vendor caps uploads at 5 MB';
+  const METADATA = 'X-Claude-Session: https://claude.ai/code/session_abc123';
+
+  const repoWith = (label: string, trailers: string[]): string => {
+    const dir = makeRepo(label);
+    commitAt(dir, {
+      stamp: '2026-09-01T00:00:00Z',
+      files: { 'a.ts': 'export const a = 1;' },
+      message: message('work', [...trailers, 'Record-Id: r-metadata92100']),
+    });
+    return dir;
+  };
+
+  const inject = (dir: string, budget?: number) =>
+    buildInjection({
+      path: 'a.ts',
+      cwd: dir,
+      at: new Date('2026-09-11T00:00:00Z'),
+      trustedAuthors: [TRUSTED],
+      ...(budget === undefined ? {} : { budget }),
+    });
+
+  it('leaves an X- value out of the payload and says how many', () => {
+    const dir = repoWith('inject-921-default-', [DECISION, METADATA]);
+
+    const injection = inject(dir);
+
+    expect(injection.text).toContain('the vendor caps uploads at 5 MB');
+    expect(injection.text).not.toContain('X-Claude-Session');
+    // Never silent: removing metadata without saying so is the mirror of the
+    // mistake being fixed.
+    expect(injection.text).toMatch(/^metadata: 1 X- value\(s\)/m);
+    expect(injection.text).toContain('commitlore.injectExtensionKeys');
+  });
+
+  it('puts a named X- key back', () => {
+    const dir = repoWith('inject-921-optin-', [DECISION, METADATA]);
+    execGitOrThrow(
+      ['config', '--add', 'commitlore.injectExtensionKeys', 'X-Claude-Session'],
+      { cwd: dir },
+    );
+
+    const injection = inject(dir);
+
+    expect(injection.text).toContain('X-Claude-Session');
+    expect(injection.text).not.toMatch(/^metadata: /m);
+  });
+
+  it('folds a value repeated across commits into one line', () => {
+    const dir = repoWith('inject-921-collapse-', [DECISION, METADATA]);
+    execGitOrThrow(
+      ['config', '--add', 'commitlore.injectExtensionKeys', 'X-Claude-Session'],
+      { cwd: dir },
+    );
+    commitAt(dir, {
+      stamp: '2026-09-02T00:00:00Z',
+      files: { 'a.ts': 'export const a = 2;' },
+      message: message('more work', [
+        'Limit: a second and different limit',
+        METADATA,
+        'Record-Id: r-metadata92101',
+      ]),
+    });
+
+    const lines = inject(dir)
+      .text.split('\n')
+      .filter((line) => line.includes('X-Claude-Session'));
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('and 1 earlier');
+    // Two genuinely different Limit values are different evidence and stay apart.
+    const text = inject(dir).text;
+    expect(text).toContain('the vendor caps uploads at 5 MB');
+    expect(text).toContain('a second and different limit');
+  });
+
+  it('cuts inside the decisions before it spends anything on metadata', () => {
+    // The reporter's second measurement: a payload whose cut reached `limit`.
+    // Their reading was that session URLs got in while real limits did not. Under
+    // the tier prefix that cannot happen, and this is the case that says so.
+    const dir = makeRepo('inject-921-order-');
+    execGitOrThrow(
+      ['config', '--add', 'commitlore.injectExtensionKeys', 'X-Claude-Session'],
+      { cwd: dir },
+    );
+    for (let n = 0; n < 12; n += 1) {
+      commitAt(dir, {
+        stamp: `2026-09-0${String((n % 9) + 1)}T00:00:00Z`,
+        files: { 'a.ts': `export const a = ${String(n)};` },
+        message: message(`work ${String(n)}`, [
+          `Limit: constraint number ${String(n)} on this path`,
+          METADATA,
+          `Record-Id: r-order9210${String(n)}`,
+        ]),
+      });
+    }
+
+    const injection = inject(dir, 200);
+
+    expect(injection.truncatedAt).toBe('limit');
+    expect(injection.text).toMatch(/constraint number \d+ on this path/);
+    // Metadata sits below every decision tier, so a cut that reached `limit`
+    // spent nothing on it.
+    expect(injection.text).not.toContain('X-Claude-Session');
+  });
+});
