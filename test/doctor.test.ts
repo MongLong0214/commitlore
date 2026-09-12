@@ -1716,6 +1716,56 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     expect(entry?.evidence['squashed_count']).toBe('0');
   });
 
+  /**
+   * An executable bit is a change HEAD can decline, and the blob does not move
+   * when it does. Comparing object ids alone called that "HEAD already has
+   * this", so an abandoned `chmod +x` was classified `present-in-head` and
+   * prescribed `squash-preserve --target` — writing its records onto a commit
+   * that never took the change, which the header above calls the failure this
+   * check exists to prevent.
+   *
+   * It predates the tree-diff rewrite rather than arriving with it: the
+   * `rev-parse <rev>:<path>` form compared ids alone too, so 1.2.16 and 1.2.18
+   * both answer `squashed_count: 1` here. Found by an audit, reproduced before
+   * changing anything.
+   */
+  it('does not call a mode-only change present in HEAD', () => {
+    const repo = initRepo('squash-conservation-mode-only');
+    const script = join(repo, 'tool.sh');
+    writeFileSync(script, '#!/bin/sh\necho hi\n');
+    chmodSync(script, 0o644);
+    git(repo, ['add', '--', 'tool.sh']);
+    git(repo, ['commit', '--quiet', '-m', 'seed']);
+
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    chmodSync(script, 0o755);
+    git(repo, ['add', '--', 'tool.sh']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'make it executable\n\nLimit: the bit is the whole change\nRecord-Id: r-modeonly01\n',
+    ]);
+    git(repo, ['checkout', '--quiet', 'main']);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    // The answer that must not appear: it prescribes --target for work HEAD
+    // declined, which is the whole hazard.
+    expect(entry?.evidence['squashed_count']).toBe('0');
+    expect(entry?.evidence['undetermined_count']).toBe('1');
+    // The undetermined branch does mention `--target`, in the sentence warning
+    // what it does on an abandoned branch. What must not happen is the squashed
+    // branch's fix, which prescribes it as the next step.
+    expect(entry?.fix ?? '').toContain('identify the squash commit');
+    // The detail says the fate could not be determined, which is the honest
+    // answer for a bit HEAD declined. Asserting on the absence of the phrase
+    // "reached HEAD" caught that sentence too -- the words are in it, saying
+    // the opposite of what the assertion meant.
+    expect(entry?.detail ?? '').toContain('could not be determined');
+  });
+
   it('discloses the 200-branch limit instead of reporting an unqualified subset', () => {
     const repo = initRepo('squash-conservation-capped');
     preservedSquash(repo, 'r-capped01');
