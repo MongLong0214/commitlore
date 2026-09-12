@@ -1766,6 +1766,60 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     expect(entry?.detail ?? '').toContain('could not be determined');
   });
 
+  /**
+   * A paragraph of prose that contains the line is not a declaration, and
+   * counting it excuses the loss this check exists to find. The first form
+   * matched `^Record-Id:` in the upstream's message text, so an upstream commit
+   * whose body read "a record line looks like this in prose: Record-Id: r-x"
+   * made an unmerged branch that really declares `r-x` report `ok` with
+   * `on_upstream_count: 1`.
+   *
+   * Git's own parser reads no trailer in that message, and neither does this
+   * project's — `interpret-trailers --parse` returns nothing for it. #914 moved
+   * `commands/stale.ts` off a text scan for exactly this reason; this was the
+   * second site.
+   */
+  it('does not let a prose mention upstream excuse a real loss', () => {
+    const remote = initBare('squash-conservation-prose-remote');
+    const repo = initRepo('squash-conservation-prose');
+    git(repo, ['remote', 'add', 'origin', remote]);
+    writeFileSync(join(repo, 'f.txt'), 'a\n');
+    git(repo, ['add', '--', 'f.txt']);
+    git(repo, ['commit', '--quiet', '-m', 'seed']);
+    git(repo, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+    git(repo, ['branch', '--quiet', '--set-upstream-to=origin/main', 'main']);
+
+    // Upstream mentions the id in prose, in a paragraph git reads as prose.
+    writeFileSync(join(repo, 'f.txt'), 'a\nb\n');
+    git(repo, ['add', '--', 'f.txt']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'docs: explain the convention\n\nA record line looks like this in prose:\nRecord-Id: r-proseonly01\nand that is only an example, not a declaration.\n',
+    ]);
+    git(repo, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+
+    // A lost branch really declares it, and was never merged.
+    git(repo, ['checkout', '--quiet', '-b', 'feature', 'HEAD~1']);
+    writeFileSync(join(repo, 'g.txt'), 'c\n');
+    git(repo, ['add', '--', 'g.txt']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'feat: the work\n\nLimit: a real boundary\nRecord-Id: r-proseonly01\n',
+    ]);
+    git(repo, ['checkout', '--quiet', 'main']);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.evidence['lost_count']).toBe('1');
+    // The answer that must not appear: the prose line counted as a declaration.
+    expect(entry?.evidence['on_upstream_count']).toBe('0');
+  });
+
   it('discloses the 200-branch limit instead of reporting an unqualified subset', () => {
     const repo = initRepo('squash-conservation-capped');
     preservedSquash(repo, 'r-capped01');
