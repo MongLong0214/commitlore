@@ -1,0 +1,5 @@
+ci(windows): capture stderr without error records
+
+Warn: Any step capturing a native command's stderr has to avoid 2>&1 or run under a shell without error records; pwsh runs with $ErrorActionPreference = Stop.
+Record-Id: r-inj053
+Provenance: authored
