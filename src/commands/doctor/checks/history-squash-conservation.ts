@@ -34,21 +34,30 @@ interface SquashCandidateScan {
  */
 const squashCandidates = (ctx: DoctorContext, head: string): SquashCandidateScan => {
   const { opts, git } = ctx;
+  // The object name comes from the enumeration rather than from a `rev-parse`
+  // per branch. `for-each-ref` already resolved every ref to answer at all, and
+  // asking it again once per name cost one process per branch -- 200 of them on
+  // a repository at the cap, for facts the first call had in hand. A tab
+  // separates the two fields because a ref name cannot contain one.
   const listed = git(
-    ['for-each-ref', '--format=%(refname:short)', 'refs/heads'],
+    ['for-each-ref', '--format=%(refname:short)%09%(objectname)', 'refs/heads'],
     gitOptions(opts),
   );
   if (listed.code !== 0) return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
 
   const allBranches = listed.stdout
     .split('\n')
-    .filter((line) => line !== '');
+    .filter((line) => line !== '')
+    .map((line) => {
+      const tab = line.indexOf('\t');
+      return tab === -1
+        ? { branch: line, sha: '' }
+        : { branch: line.slice(0, tab), sha: line.slice(tab + 1).trim() };
+    });
   const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
 
   const candidates: SquashCandidate[] = [];
-  for (const branch of branches) {
-    const resolved = git(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
-    const sha = resolved.code === 0 ? resolved.stdout.trim() : '';
+  for (const { branch, sha } of branches) {
     if (sha === '' || sha === head) continue;
 
     // Already an ancestor of HEAD (or identical to it): reached by an
