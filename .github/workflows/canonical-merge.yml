@@ -323,7 +323,21 @@ jobs:
             exit 1
           fi
 
-          pusher="$(gh api "repos/${GITHUB_REPOSITORY}/commits/$expected" --jq '.committer.login // "unknown"')"
+          # The ref above is already visible while this commit endpoint can still
+          # 404 -- a read-after-write race, seen on run 34659967269 when the
+          # branch had just been deleted and re-pushed. This value is only
+          # echoed, and it already has an "unknown" fallback for a commit with
+          # no linked account, so a lookup that cannot answer must not end the
+          # job: `set -e` made an informational read load-bearing on failure.
+          pusher=unknown
+          for attempt in 1 2 3 4 5; do
+            if answer="$(gh api "repos/${GITHUB_REPOSITORY}/commits/$expected" --jq '.committer.login // "unknown"' 2>/dev/null)"; then
+              pusher="$answer"
+              break
+            fi
+            echo "--- commit $expected not readable yet (attempt $attempt); waiting"
+            sleep 3
+          done
           echo "--- pushed $branch at $expected; committer on the server: $pusher"
 
           existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // ""')"
