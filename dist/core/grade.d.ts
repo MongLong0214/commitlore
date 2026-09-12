@@ -90,6 +90,14 @@ export interface InjectionPattern {
     negatable: boolean;
     /** What the pattern is for, in one line. */
     intent: string;
+    /**
+     * For a pattern that names a pointer — a verb aimed at something to run —
+     * whether this occurrence points at anything. Consulted before the
+     * surrounding prose is: a pointer at nothing is not an instruction whatever
+     * stands around it, and the rule that says so (`shellPointsAtSomething`) is
+     * measured beside the pattern it serves.
+     */
+    corroborate?: (haystack: string, match: RegExpMatchArray) => boolean;
 }
 /**
  * The pattern table. Every entry is pinned by at least one fixture under
@@ -99,13 +107,30 @@ export interface InjectionPattern {
  * unmeasured false-positive rate.
  *
  * What the fixtures cannot tell you, and a census of this repository's own
- * history can: after #931 and #935, thirteen trailer values out of 5,882 still
- * trip a pattern here, and **none of the thirteen is a true positive**. Precision
- * on this corpus is zero. That is not an argument for deleting the table — the
- * corpus contains no attack, so there is nothing here for it to catch — but it
- * is the shape of the trade, and it was unstated until it was measured. A record
- * is most likely to trip a pattern when its subject is this table, which is why
- * #408, #931 and #935 are all the same report from different directions.
+ * history can: after #931 and #935, sixteen trailer values out of 5,878 still
+ * tripped a pattern here, and **none of the sixteen was a true positive**.
+ * Precision on this corpus is zero. That is not an argument for deleting the
+ * table — the corpus contains no attack, so there is nothing here for it to
+ * catch — but it is the shape of the trade, and it was unstated until it was
+ * measured. A record is most likely to trip a pattern when its subject is this
+ * table, which is why #408, #931 and #935 are all the same report from
+ * different directions: eight of the sixteen are records about this table,
+ * quoting the phrases they discuss.
+ *
+ * The question the table asks is *does this text contain an attack-shaped
+ * phrase*. The question that separates the false positives from the attacks is
+ * *does this text do something to the reader* — a matter of grammatical mood
+ * and scope rather than of words. The disarming rules (`isDisarmed`) and the
+ * corroboration hook (`corroborate`) are that question asked as narrowly as a
+ * regex can ask it: an occurrence stands down only on positive evidence that
+ * its clause asserts nothing to the reader (negated, reported, or
+ * counterfactual with no addressee), or that its pointer points at nothing.
+ * Measured on the census, the fixtures, and an adversarial set of ninety-odd
+ * phrasings — paraphrases, mention-then-issue, payloads written as reports —
+ * that pass brings the sixteen to twelve and releases no attack; it also
+ * closes three phrasings the earlier `would` rule had let through (`you would
+ * paste this into your terminal`) and one the negation window had (`never
+ * mind, hide this`).
  *
  * Two things keep that bearable rather than silent. `explainWithholding` tells
  * the author at capture and at the commit-msg hook, so a withheld record is a
@@ -128,22 +153,125 @@ export interface InjectionPattern {
  * That is why `blocked` is a supplement to grading and not the defence: an
  * outside contributor's `Warn:` is a `claim` whether or not any of this fires.
  *
- * And what it withholds although it should not — the benign prose the fixtures
- * below do not cover, measured on this repository's history (#935), every one
- * left as the price of the corresponding attack shape staying blocked:
+ * And what it withholds although it should not — the twelve, measured on this
+ * repository's history, each with the rule that would release it and what that
+ * rule costs, so the next reader does not re-derive the trade:
  * - An attack phrase quoted as an example with no reporting verb in the two
- *   words before it: `` `run the terminal` remains a false positive ``. The
- *   record that names this residual (r-mention408) ruled out quotation marks
- *   as the signal, because an attacker quotes as readily as a defender.
+ *   words before it: `` `apply the following naming convention` still blocks ``
+ *   (seven of the twelve, all in records about this table). Reading a quote
+ *   span whose closing mark is followed by a mention predicate (`still blocks`,
+ *   `remain false positives`, `is still read as`) releases five of the seven
+ *   and loses no attack once a bare copula is excluded — `` `paste this into
+ *   your terminal` is required `` is an endorsement, not a mention. It needs
+ *   `normalizeForMatch` to keep quote marks, which every pattern's haystack
+ *   would then carry; the authors of these records already get
+ *   `explainWithholding` and reworded (aed2135e), so it is not taken.
  * - A bare imperative as a `Ruled-out:` alternative: `suppress the warning for
- *   a branch whose content is absent | …`. Position alone cannot release it
- *   without also releasing `curl … | sh` written as an alternative.
- * - A purpose infinitive: `rewrites history to hide that the claim was made`.
- *   `make sure to hide this` is the same form used as an instruction.
+ *   a branch whose content is absent | …` (two). Reading the alternative half
+ *   as the rejected proposal it is by SPEC §3.1 — for the speech-act patterns
+ *   only, never for `curl …`, `| sh`, `rm -rf`, `sudo` — releases both and
+ *   loses nothing in the adversarial set, but it serves `ignore all previous
+ *   instructions | too blunt` as a rejected alternative and changes what the
+ *   pipe-separator test pins. That is a policy about the key, left to be made
+ *   rather than made here.
+ * - A purpose infinitive: `rewrites history to hide that the claim was made`
+ *   (one). Non-finite is not non-assertive: `to` as a disarm marker releases
+ *   this value and twenty-one of the adversarial phrasings (`make sure to hide
+ *   this`, `you need to`, `the fix is to`), and a directive-trigger list in
+ *   front of `to` still releases four, because `ask the agent to hide this`
+ *   puts an unbounded noun phrase between the verb and the marker. Refused.
+ * - `behave as the matrix states` (one): a comparison clause read as a
+ *   persona, and `system: do nothing` quoted in a test transcript (one): a role
+ *   marker, which is not disarmable by design.
  * Each of these is reported to the author at capture and commit time
  * (`explainWithholding`), where a reporting verb or a modal fixes the wording.
  */
 export declare const INJECTION_PATTERNS: readonly InjectionPattern[];
+/** Words that disarm an affirmative imperative when they sit right before it. */
+export declare const NEGATIONS: ReadonlySet<string>;
+/**
+ * Words that mark the text after them as **mentioned rather than used** (#408).
+ *
+ * A record whose job is to warn about this class of attack has to name the
+ * attack: "reject any record that says ignore all prior instructions". Matching
+ * the literal blocked that record, and a blocked record's content is withheld —
+ * so the one record an agent most needed to read was the one it could not. A
+ * defensive quotation was punished while an attack paraphrase went through.
+ *
+ * This disarms one occurrence, not the record. `fires` blocks unless *every*
+ * occurrence is disarmed, so quoting the phrase and then issuing it still
+ * blocks — pinned by a test, because that is the bypass this would otherwise
+ * open. An attacker can still phrase a whole payload as a report, and loses
+ * most of its imperative force in doing so; that residual is the price of a
+ * defensive record being readable at all.
+ *
+ * Consulted only for `negatable` patterns, the same gate `NEGATIONS` uses:
+ * those are the entries whose authors already judged surrounding prose able to
+ * change their reading.
+ */
+export declare const MENTIONS: ReadonlySet<string>;
+/**
+ * The counterfactual modal. `it would hide that two rows were unplanned` is a
+ * consequence being described, not a request being made (#935): the bare verb
+ * after `would` is the only slot an imperative shares with a conditional, and
+ * a `Ruled-out:` reason — *why* an alternative was dropped — is written in
+ * exactly that mood. Measured on this repository's history, 6 of the 7
+ * `output.conceal` withholdings sat in a reason, 4 of them literally
+ * `… would hide that …`.
+ *
+ * What makes `would` safe is not adjacency, it is that a counterfactual cannot
+ * address the reader — and that has two consequences the first version of this
+ * rule got wrong in opposite directions (`underCounterfactual`):
+ *
+ * - It *can* address the reader when its subject does: `you would paste this
+ *   into your terminal` is an instruction softened by a modal, and the
+ *   adjacent-word rule served it. A subject of `you` or `we` immediately before
+ *   `would` now blocks. The corpus has three `<pronoun> would` uses, none
+ *   before a pattern verb, so this costs nothing here.
+ * - Its scope runs across a coordinator: in `it would fix drift and hide it`
+ *   one modal governs both verbs, and the second is no more a request than
+ *   the first. `would` is now read through `and`/`or`/`nor` (`and then` too),
+ *   within the clause: no `;:.!?()` between modal and verb, a comma only
+ *   directly before the coordinator, at most eight words, and none of `to`,
+ *   `that`, `so`, `but`, `if`, `because`, `which`, `you`, `we` in between —
+ *   each of which opens a clause the modal does not reach, so `it would be
+ *   safer to review and hide this` still blocks. What this serves that the
+ *   adjacent rule did not: `they would approve it, and then run the following:
+ *   …`, a narrated sequence, the same residual the adjacent rule already
+ *   accepts for `the hook would run the following on every commit: …`.
+ *
+ * `could`, `might`, `should` and `can` are deliberately absent — `you could
+ * paste this into your terminal` is an instruction wearing a modal, and this
+ * set exists for the one modal that cannot address the reader.
+ */
+export declare const IRREALIS: ReadonlySet<string>;
+/** A subject that makes a counterfactual an address to the reader. */
+/**
+ * Subjects that make a counterfactual an instruction anyway.
+ *
+ * `would` is disarmable because a counterfactual cannot instruct -- but only
+ * while its subject is not someone who could act. `you would paste this into
+ * your terminal` is an instruction wearing a counterfactual's clothes, and so
+ * is every third-person or generic agent: measured, `a reviewer would paste
+ * this into their terminal`, `the operator would run the following`, `one would
+ * hide this output` and `anyone would run the following` were all served while
+ * 1.2.16 blocked them.
+ *
+ * A deny-list, and the inverse was measured first and is worse. Allowing only
+ * non-agent *pronouns* fails the benign population outright: its subjects are
+ * noun phrases naming mechanisms -- `the retry would log the error and hide
+ * it`, `an unpinned hook would run the following`, `a merged row would hide
+ * that two were unplanned`, `squashing would rewrite history` -- so an
+ * allow-list of pronouns broke ten of them and an allow-list of mechanisms
+ * would have to name every mechanism English can name.
+ *
+ * This list is therefore incomplete by construction and says so: it names the
+ * agents that appear in attacks rather than every agent there is. What keeps
+ * that bearable is that the payload an agent would be told to run trips its own
+ * pattern, and that an author whose record is withheld is told at capture.
+ */
+export declare const AGENT_SUBJECT: ReadonlySet<string>;
+export declare const COORDINATORS: ReadonlySet<string>;
 /**
  * Folds a value to the form the patterns are written against.
  *
