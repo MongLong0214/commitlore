@@ -1,0 +1,7 @@
+{
+  "description": "Family 5, the negation decoy with its boundary written in: `never` is two words back and governs nothing past the comma, and the two-word window without a clause boundary served this. Fixture 21 is the same decoy with three words between; this is the shape that fit inside the window.",
+  "blocked": true,
+  "patterns": [
+    "output.conceal"
+  ]
+}

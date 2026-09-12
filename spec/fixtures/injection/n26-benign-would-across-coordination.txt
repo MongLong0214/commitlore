@@ -1,0 +1,5 @@
+fix(retry): keep the first error visible
+
+Warn: The retry would log the error and hide it from the dashboard, so read the first attempt's log rather than the summary.
+Record-Id: r-inj052
+Provenance: authored

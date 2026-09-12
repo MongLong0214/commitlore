@@ -1,0 +1,5 @@
+{
+  "description": "Benign (#935's census): `anyone with admin rights` states who holds a privilege. `privilege.as-root` asks for work done with elevation, so the privilege phrase needs a doing verb beside it, and a possessor is not one.",
+  "blocked": false,
+  "patterns": []
+}

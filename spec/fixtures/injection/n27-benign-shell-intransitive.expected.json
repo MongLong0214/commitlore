@@ -1,0 +1,5 @@
+{
+  "description": "Benign (#935's census): `run under a shell` with no object points at nothing to run. The prepositional form of `tool.shell-invocation` now asks whether anything is pointed at — a pointer object, a command-shaped object, or a payload after the shell noun — and an intransitive `run` has none.",
+  "blocked": false,
+  "patterns": []
+}

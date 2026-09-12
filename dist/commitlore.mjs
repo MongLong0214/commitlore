@@ -15219,6 +15219,23 @@ var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 // src/core/grade.ts
 var PROVENANCE_KEY2 = "Provenance";
 var BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
+var SHELL_PREPOSITIONAL_FORM_RE = /^(?:run|execute|paste|type|enter)\b(?<object>[^.!?]{0,24}?)\b(?:in|into|inside|within|at|on|via|through|from|with|under|using)\s/;
+var POINTER_OBJECT_RE = /\b(?:this|that|these|those|it|them|the|a|an|your|my|its|their|our|each|every|any|some|all|following|below|above)\b/;
+var COMMAND_SHAPED_RE = /[/$\\~]|--|\b(?:npx|npm|node|curl|wget|sh|bash|zsh|git|sudo|rm|chmod|pip|pip3|brew|apt|apt-get|docker|make|yarn|pnpm|python3?|perl|ruby|cargo|cat|echo|source|eval|exec|ssh|scp|nc|base64|printf)\b|\w+\.(?:sh|py|js|mjs|ts|rb|pl)\b|\w+-\w+/;
+var PAYLOAD_FOLLOWS_RE = /^\s*[:-]/;
+var NOUN_MODIFIER_BEFORE_RE = /\b(?:a|an|the|each|every|any|its|their|our|my|your|this|that|these|those|one|same|single|previous|latest|current|failed|passed|green|red|nightly|dry|test|ci)\s$/;
+var shellPointsAtSomething = (haystack, match) => {
+  const form = SHELL_PREPOSITIONAL_FORM_RE.exec(match[0]);
+  if (form?.groups === void 0) return true;
+  const object3 = form.groups["object"]?.trim() ?? "";
+  if (POINTER_OBJECT_RE.test(object3) || COMMAND_SHAPED_RE.test(object3)) return true;
+  const start = match.index ?? 0;
+  const rest = haystack.slice(start + match[0].length);
+  const clause = rest.slice(0, rest.search(/[;.!?]|$/));
+  if (PAYLOAD_FOLLOWS_RE.test(clause) || COMMAND_SHAPED_RE.test(clause)) return true;
+  if (object3 === "") return false;
+  return !NOUN_MODIFIER_BEFORE_RE.test(haystack.slice(0, start));
+};
 var INJECTION_PATTERNS = [
   {
     id: "tool.run-the-following",
@@ -15257,10 +15274,12 @@ var INJECTION_PATTERNS = [
     // verb is itself a modified noun — `the run the terminal writes` — because
     // an imperative never carries an article; the prepositional form does not,
     // since `after the build, run this in your terminal` is the instruction
-    // with a decoy in front of it.
+    // with a decoy in front of it. What the prepositional form does instead
+    // is ask whether anything is pointed at (`shellPointsAtSomething`).
     pattern: /(?<!\b(?:a|an|the|each|every|any|its|their|our|my|your|this|that|these|those|one|same|single|previous|latest|current|failed|passed|green|red|nightly|dry|test|ci)\s)\b(?:run|execute|paste|type|enter)\s+(?:the|this|these|those|that|a|an|your|my|its|their|our)\s+(?:[a-z-]+\s+)?(?:shell|terminal|bash|zsh|command line|command prompt)\b|\b(?:run|execute|paste|type|enter)\b[^.!?]{0,24}\b(?:in|into|inside|within|at|on|via|through|from|with|under|using)\s+(?:(?:the|this|that|these|those|a|an|your|my|its|their|our|any|every|each|some)\s+)?(?:[a-z-]+\s+){0,2}(?:shell|terminal|bash|zsh|command line|command prompt)\b|\b(?:run|execute)\s+(?:bash|zsh)\b/,
     negatable: true,
-    intent: "asks for the value to be typed into a shell"
+    intent: "asks for the value to be typed into a shell",
+    corroborate: shellPointsAtSomething
   },
   {
     id: "tool.curl-remote",
@@ -15365,7 +15384,15 @@ var INJECTION_PATTERNS = [
   {
     id: "privilege.as-root",
     family: "privilege-escalation",
-    pattern: /\b(?:run|execute|launch|start|install|deploy|apply)\b[^.!?]{0,24}\bas\s+(?:root|admin|administrator|superuser)\b|\bwith\s+(?:root|admin|administrator|superuser|elevated)\s+(?:rights|privileges|access|permission|permissions)\b/,
+    // The verb-less half — `with admin rights` — matched a statement about who
+    // holds a privilege as readily as a request to use one: `pushed straight
+    // to main by anyone with admin rights` was withheld (#935's census). The
+    // intent is work done with elevation, so the privilege phrase now needs a
+    // doing verb, before it (`run the migration with admin rights`) or after
+    // it (`with admin rights, deploy the hotfix`); a possessor (`anyone with`,
+    // `nobody with`) has none. Measured: one census value and two statement
+    // phrasings released, every request phrasing still blocked.
+    pattern: /\b(?:run|execute|launch|start|install|deploy|apply)\b[^.!?]{0,24}\bas\s+(?:root|admin|administrator|superuser)\b|\b(?:run|runs?|ran|execute|executed|launch|start|install|deploy|deployed|apply|applied|do|done|perform|performed|retry|rerun|re-run|invoke|call|use)\b[^.!?]{0,32}\bwith\s+(?:root|admin|administrator|superuser|elevated)\s+(?:rights|privileges|access|permission|permissions)\b|\bwith\s+(?:root|admin|administrator|superuser|elevated)\s+(?:rights|privileges|access|permission|permissions)\b,?\s*(?:run|execute|launch|start|install|deploy|apply|do|perform|retry|rerun|re-run|invoke|call|use|push|merge|force)\b/,
     negatable: true,
     intent: "asks for the work to be done with elevated privileges"
   },
@@ -15458,7 +15485,86 @@ var MENTIONS = /* @__PURE__ */ new Set([
   "string"
 ]);
 var IRREALIS = /* @__PURE__ */ new Set(["would"]);
+var AGENT_SUBJECT = /* @__PURE__ */ new Set([
+  "you",
+  "we",
+  "they",
+  "he",
+  "she",
+  "i",
+  "one",
+  "anyone",
+  "someone",
+  "everyone",
+  "somebody",
+  "anybody",
+  "everybody",
+  "reviewer",
+  "reviewers",
+  "operator",
+  "operators",
+  "user",
+  "users",
+  "agent",
+  "agents",
+  "maintainer",
+  "maintainers",
+  "developer",
+  "developers",
+  "admin",
+  "admins",
+  "administrator",
+  "reader",
+  "readers",
+  "attacker",
+  "human",
+  "person"
+]);
+var COORDINATORS = /* @__PURE__ */ new Set(["and", "or", "nor"]);
+var SCOPE_BREAKERS = /* @__PURE__ */ new Set([
+  "to",
+  "that",
+  "which",
+  "because",
+  "so",
+  "but",
+  "if",
+  "unless",
+  "while",
+  "when",
+  "whether",
+  "since",
+  "you",
+  "we"
+]);
+var MODAL_SCOPE_MAX_WORDS = 8;
+var CLAUSE_BOUNDARY_RE = /[;:.!?()]/;
+var COMMA_NOT_BEFORE_COORDINATOR_RE = /,(?!\s*(?:and|or|nor)\b)/;
 var NEGATION_LOOKBACK = 2;
+var NEGATION_BOUNDARY_RE = /[,;:.!?]/;
+var MENTION_BOUNDARY_RE = /[,;.!?]/;
+var wordsBefore = (prefix) => [...prefix.matchAll(/[a-z0-9]+/g)].map((match) => ({
+  word: match[0],
+  end: (match.index ?? 0) + match[0].length
+}));
+var governs = (prefix, window, set, boundary) => window.some((token) => set.has(token.word) && !boundary.test(prefix.slice(token.end)));
+var underCounterfactual = (prefix, tokens) => {
+  const last = tokens.at(-1);
+  if (last === void 0) return false;
+  if (IRREALIS.has(last.word)) return !AGENT_SUBJECT.has(tokens.at(-2)?.word ?? "");
+  let coordinator = tokens.length - 1;
+  if (last.word === "then") coordinator -= 1;
+  if (!COORDINATORS.has(tokens[coordinator]?.word ?? "")) return false;
+  let modal = coordinator - 1;
+  while (modal >= 0 && !IRREALIS.has(tokens[modal]?.word ?? "")) modal -= 1;
+  if (modal < 0) return false;
+  const between = tokens.slice(modal + 1, coordinator);
+  if (between.length === 0 || between.length > MODAL_SCOPE_MAX_WORDS) return false;
+  if (between.some((token) => SCOPE_BREAKERS.has(token.word))) return false;
+  if (AGENT_SUBJECT.has(tokens[modal - 1]?.word ?? "")) return false;
+  const reach = prefix.slice(tokens[modal]?.end ?? 0);
+  return !CLAUSE_BOUNDARY_RE.test(reach) && !COMMA_NOT_BEFORE_COORDINATOR_RE.test(reach);
+};
 var INVISIBLE_RE = /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
 var ANSI_ESCAPE_RE = /\u001B\[[0-?]*[ -/]*[@-~]/g;
 var COMBINING_RE = new RegExp("\\p{M}", "gu");
@@ -15599,15 +15705,17 @@ var isDisarmed = (haystack, index, matchedText) => {
   const prefix = haystack.slice(0, index);
   if (CJK_NEGATION_RE.test(prefix)) return true;
   if (/[^\x00-\x7F]/u.test(matchedText)) return false;
-  const words = prefix.split(/[^a-z0-9]+/).filter((word) => word !== "");
-  const window = words.slice(-NEGATION_LOOKBACK);
-  if (window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word))) return true;
-  return IRREALIS.has(window.at(-1) ?? "");
+  const tokens = wordsBefore(prefix);
+  const window = tokens.slice(-NEGATION_LOOKBACK);
+  if (governs(prefix, window, NEGATIONS, NEGATION_BOUNDARY_RE)) return true;
+  if (governs(prefix, window, MENTIONS, MENTION_BOUNDARY_RE)) return true;
+  return underCounterfactual(prefix, tokens);
 };
 var fires = (haystack, entry) => {
   const scanner = new RegExp(entry.pattern.source, "g");
   for (const match of haystack.matchAll(scanner)) {
     if (match.index === void 0) continue;
+    if (entry.corroborate !== void 0 && !entry.corroborate(haystack, match)) continue;
     if (!entry.negatable || !isDisarmed(haystack, match.index, match[0])) return true;
   }
   return false;

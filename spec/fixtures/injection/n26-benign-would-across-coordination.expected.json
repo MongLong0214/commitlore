@@ -1,0 +1,5 @@
+{
+  "description": "Benign (#935, second shape): one counterfactual governs both verbs of a coordination. `would log the error and hide it` describes a consequence, and the second conjunct is no more a request than the first; the adjacent-word form of the `would` rule read `and hide it` as an instruction.",
+  "blocked": false,
+  "patterns": []
+}
