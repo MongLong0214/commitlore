@@ -49,6 +49,27 @@ verb now disarms an occurrence, under the same gate the existing negation and
 mention lists use. Only `would`: `could`, `might` and `should` all carry real
 instructions, and `would you hide this` is a request rather than a report.
 
+**A counterfactual stands an occurrence down only when nothing in it could act.**
+The first form of this rule keyed on `would` sitting immediately before the verb,
+and adjacency was never why it was safe. The reason is that a counterfactual
+cannot tell anyone to do anything while its subject is not someone who could do
+it — so `you would paste this into your terminal` is an instruction in a
+counterfactual's clothes, and so is every third-person or generic agent. The rule
+now reads the subject.
+
+The inverse was measured first and is worse. Allowing only non-agent subjects is
+the safer shape, but the benign population's subjects are noun phrases naming
+mechanisms — `the retry would log the error and hide it`, `an unpinned hook would
+run the following` — so an allow-list of pronouns broke ten real records. The
+line is agent against mechanism, and no word list decides it. The list is
+therefore a deny-list, incomplete by construction, and the code says so rather
+than implying otherwise.
+
+Four smaller rules land with it, each measured on both fixture sets: a negation
+or reporting verb stops at a clause boundary, so `never mind, hide this` no
+longer passes on a comma; the shell pointer needs something pointed at; `with …
+rights` needs a doing verb; and modal scope crosses a coordinator.
+
 **Two records about the scanner were withheld by the scanner.** The record
 explaining why the suggested heuristic is unsafe had to quote the phrasings the
 refutation turned on; the record narrowing the patterns had to quote what they
