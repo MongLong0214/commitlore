@@ -16921,9 +16921,14 @@ var validateNonce = (nonce) => {
     throw new Error(`Invalid nonce: must be exactly 32 lowercase hex characters, got "${nonce}"`);
   }
 };
+var pendingDirCache = /* @__PURE__ */ new Map();
 var pendingDir = (cwd) => {
+  const memo = pendingDirCache.get(cwd);
+  if (memo !== void 0) return memo;
   const reported = execGitOrThrow(["rev-parse", "--git-path", "commitlore/pending"], { cwd }).trim();
-  return resolve3(cwd, reported);
+  const resolved = resolve3(cwd, reported);
+  pendingDirCache.set(cwd, resolved);
+  return resolved;
 };
 var pendingFilePath = (nonce, cwd) => {
   validateNonce(nonce);
@@ -22212,7 +22217,7 @@ var checkHistoryDepth = (ctx) => {
 };
 
 // src/core/squash.ts
-var newRangeCache = () => ({ messages: /* @__PURE__ */ new Map() });
+var newRangeCache = () => ({ messages: /* @__PURE__ */ new Map(), notes: /* @__PURE__ */ new Map() });
 var RECORD_ID_KEY5 = "Record-Id";
 var PROVENANCE_KEY5 = "Provenance";
 var EXPIRES_KEY2 = "Expires";
@@ -22289,7 +22294,9 @@ var collectRange = (range, opts = {}) => {
     const cachedBlocks = opts.cache?.messages.get(sha);
     const messageBlocks = cachedBlocks ?? (CANDIDATE_LINE_RE2.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha)) : []);
     if (cachedBlocks === void 0) opts.cache?.messages.set(sha, messageBlocks);
-    const noteBlocks = mirrored.has(sha) ? readRecordBlocks(sha, opts) : [];
+    const cachedNote = opts.cache?.notes.get(sha);
+    const noteBlocks = cachedNote ?? (mirrored.has(sha) ? readRecordBlocks(sha, opts) : []);
+    if (cachedNote === void 0) opts.cache?.notes.set(sha, noteBlocks);
     const blocks = mergeCommitBlocks(messageBlocks, noteBlocks);
     for (const trailers of blocks) {
       if (trailers.length === 0) continue;
@@ -22481,16 +22488,17 @@ var MAX_SQUASH_CANDIDATE_BRANCHES = 200;
 var squashCandidates = (ctx, head) => {
   const { opts, git: git2 } = ctx;
   const listed = git2(
-    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    ["for-each-ref", "--format=%(refname:short)%09%(objectname)", "refs/heads"],
     gitOptions2(opts)
   );
   if (listed.code !== 0) return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
-  const allBranches = listed.stdout.split("\n").filter((line2) => line2 !== "");
+  const allBranches = listed.stdout.split("\n").filter((line2) => line2 !== "").map((line2) => {
+    const tab = line2.indexOf("	");
+    return tab === -1 ? { branch: line2, sha: "" } : { branch: line2.slice(0, tab), sha: line2.slice(tab + 1).trim() };
+  });
   const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
   const candidates = [];
-  for (const branch of branches) {
-    const resolved = git2(["rev-parse", "--verify", "--quiet", branch], gitOptions2(opts));
-    const sha = resolved.code === 0 ? resolved.stdout.trim() : "";
+  for (const { branch, sha } of branches) {
     if (sha === "" || sha === head) continue;
     if (git2(["merge-base", "--is-ancestor", sha, head], gitOptions2(opts)).code === 0) {
       continue;
@@ -22516,12 +22524,20 @@ var upstreamRecordIds = (ctx) => {
   if (upstream.code !== 0) return null;
   const ref = upstream.stdout.trim();
   if (ref === "") return null;
-  const log = git2(["log", ref, "--format=%B"], gitOptions2(opts));
-  if (log.code !== 0) return null;
   const ids = /* @__PURE__ */ new Set();
-  for (const match of log.stdout.matchAll(/^Record-Id:[ \t]*(\S+)[ \t]*$/gm)) {
-    const id2 = match[1];
-    if (id2 !== void 0) ids.add(id2);
+  try {
+    const scan2 = collectRecords({
+      ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
+      allHistory: true,
+      revision: ref
+    });
+    for (const record2 of scan2.records) {
+      for (const trailer of record2.trailers) {
+        if (trailer.key === "Record-Id") ids.add(trailer.value);
+      }
+    }
+  } catch {
+    return null;
   }
   return { ref, ids };
 };
@@ -22553,12 +22569,12 @@ var branchContentFate = (ctx, candidate, head) => {
   const differs = /* @__PURE__ */ new Map();
   const raw = diff.stdout.split("\0");
   for (let i = 0; i + 1 < raw.length; i += 2) {
-    const [, dstMode, srcOid, dstOid] = (raw[i] ?? "").split(" ");
+    const [srcMode, dstMode, srcOid, dstOid] = (raw[i] ?? "").split(" ");
     const path2 = raw[i + 1];
-    if (dstMode === void 0 || srcOid === void 0 || dstOid === void 0 || path2 === void 0) {
+    if (srcMode === void 0 || dstMode === void 0 || srcOid === void 0 || dstOid === void 0 || path2 === void 0) {
       return "unknown";
     }
-    differs.set(path2, { srcOid, dstOid, dstMode });
+    differs.set(path2, { srcMode, srcOid, dstOid, dstMode });
   }
   let matching = 0;
   let missingFromHead = 0;
@@ -22573,7 +22589,7 @@ var branchContentFate = (ctx, candidate, head) => {
       if (!headHasTreeHere) missingFromHead += 1;
       continue;
     }
-    if (entry.srcOid === entry.dstOid) matching += 1;
+    if (entry.srcOid === entry.dstOid && entry.srcMode === entry.dstMode) matching += 1;
   }
   if (matching === paths.length) return "present-in-head";
   if (missingFromHead === paths.length) return "absent-from-head";

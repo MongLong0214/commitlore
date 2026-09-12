@@ -6,6 +6,7 @@
  */
 import { runQuery } from '../../../core/query.js';
 import { collectRange, newRangeCache } from '../../../core/squash.js';
+import { collectRecords } from '../../stale.js';
 import { check, gitOptions } from '../model.js';
 /** Local branches this check will look at, past which a repository is skipped rather than walked exhaustively. */
 const MAX_SQUASH_CANDIDATE_BRANCHES = 200;
@@ -19,17 +20,26 @@ const MAX_SQUASH_CANDIDATE_BRANCHES = 200;
  */
 const squashCandidates = (ctx, head) => {
     const { opts, git } = ctx;
-    const listed = git(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], gitOptions(opts));
+    // The object name comes from the enumeration rather than from a `rev-parse`
+    // per branch. `for-each-ref` already resolved every ref to answer at all, and
+    // asking it again once per name cost one process per branch -- 200 of them on
+    // a repository at the cap, for facts the first call had in hand. A tab
+    // separates the two fields because a ref name cannot contain one.
+    const listed = git(['for-each-ref', '--format=%(refname:short)%09%(objectname)', 'refs/heads'], gitOptions(opts));
     if (listed.code !== 0)
         return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
     const allBranches = listed.stdout
         .split('\n')
-        .filter((line) => line !== '');
+        .filter((line) => line !== '')
+        .map((line) => {
+        const tab = line.indexOf('\t');
+        return tab === -1
+            ? { branch: line, sha: '' }
+            : { branch: line.slice(0, tab), sha: line.slice(tab + 1).trim() };
+    });
     const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
     const candidates = [];
-    for (const branch of branches) {
-        const resolved = git(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
-        const sha = resolved.code === 0 ? resolved.stdout.trim() : '';
+    for (const { branch, sha } of branches) {
         if (sha === '' || sha === head)
             continue;
         // Already an ancestor of HEAD (or identical to it): reached by an
@@ -66,10 +76,25 @@ const squashCandidates = (ctx, head) => {
  * feature branch pushed to `origin` but never merged carries its ids too, and
  * counting those would excuse exactly the loss this check exists to find.
  *
- * A literal `^Record-Id:` scan rather than the parser, because the question is
- * only whether the identity appears at all, and the reporter proposed the same:
- * an id is a literal string. Anchoring to the declaration form matters —
- * `Supersedes: r-x` names an id without declaring it, and must not count.
+ * Through the parser, not a scan of the message text.
+ *
+ * A literal `^Record-Id:` match was the first form, on the ground that the
+ * question is only whether the identity appears at all. It is not: a paragraph
+ * of prose that happens to contain the line is not a declaration, and counting
+ * it excuses the loss this check exists to find. Reproduced — an upstream commit
+ * whose body reads "a record line looks like this in prose: Record-Id: r-x" made
+ * an unmerged branch that really declares `r-x` report `on_upstream_count: 1`
+ * and `lost_count: 0`, with the row `ok`. Git's own parser reads no trailer
+ * there, and neither does this project's.
+ *
+ * That is #914's finding at a second site. `commands/stale.ts` was moved off a
+ * text scan for exactly this reason and says so; this one was left. SPEC §2.1
+ * B3 makes trailer boundaries git's to decide, and r-5a8c04 bans the option that
+ * searches commit text under `src/` on the same grounds.
+ *
+ * Anchoring to the declaration form still matters and the parser preserves it:
+ * `Supersedes: r-x` names an id without declaring it, and only a `Record-Id`
+ * key counts.
  */
 const upstreamRecordIds = (ctx) => {
     const { opts, git } = ctx;
@@ -79,14 +104,23 @@ const upstreamRecordIds = (ctx) => {
     const ref = upstream.stdout.trim();
     if (ref === '')
         return null;
-    const log = git(['log', ref, '--format=%B'], gitOptions(opts));
-    if (log.code !== 0)
-        return null;
     const ids = new Set();
-    for (const match of log.stdout.matchAll(/^Record-Id:[ \t]*(\S+)[ \t]*$/gm)) {
-        const id = match[1];
-        if (id !== undefined)
-            ids.add(id);
+    try {
+        const scan = collectRecords({
+            ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
+            allHistory: true,
+            revision: ref,
+        });
+        for (const record of scan.records) {
+            for (const trailer of record.trailers) {
+                if (trailer.key === 'Record-Id')
+                    ids.add(trailer.value);
+            }
+        }
+    }
+    catch {
+        // An upstream that cannot be walked is not an upstream that excuses a loss.
+        return null;
     }
     return { ref, ids };
 };
@@ -150,12 +184,16 @@ const branchContentFate = (ctx, candidate, head) => {
     const differs = new Map();
     const raw = diff.stdout.split('\0');
     for (let i = 0; i + 1 < raw.length; i += 2) {
-        const [, dstMode, srcOid, dstOid] = (raw[i] ?? '').split(' ');
+        const [srcMode, dstMode, srcOid, dstOid] = (raw[i] ?? '').split(' ');
         const path = raw[i + 1];
-        if (dstMode === undefined || srcOid === undefined || dstOid === undefined || path === undefined) {
+        if (srcMode === undefined ||
+            dstMode === undefined ||
+            srcOid === undefined ||
+            dstOid === undefined ||
+            path === undefined) {
             return 'unknown';
         }
-        differs.set(path, { srcOid, dstOid, dstMode });
+        differs.set(path, { srcMode, srcOid, dstOid, dstMode });
     }
     let matching = 0;
     let missingFromHead = 0;
@@ -175,7 +213,16 @@ const branchContentFate = (ctx, candidate, head) => {
                 missingFromHead += 1;
             continue;
         }
-        if (entry.srcOid === entry.dstOid)
+        // The mode counts, not only the blob. A branch whose whole change is an
+        // executable bit has the same object id on both sides, and comparing ids
+        // alone called that "HEAD already has this" -- so an abandoned `chmod +x`
+        // was classified `present-in-head` and prescribed `squash-preserve
+        // --target`, writing its records onto a commit that never took the change.
+        // That is the manufactured provenance the header above names as the failure
+        // this check exists to prevent, and it predates the tree-diff rewrite: the
+        // `rev-parse <rev>:<path>` form it replaced compared ids alone too, and the
+        // rewrite preserved the behaviour faithfully rather than introducing it.
+        if (entry.srcOid === entry.dstOid && entry.srcMode === entry.dstMode)
             matching += 1;
     }
     if (matching === paths.length)

@@ -58,7 +58,7 @@ import { execGit } from './git.js';
 import { listRecordShas, readRecordBlocks, writeRecordBlocks } from './notes.js';
 import { parseCommitMessage, parseRecordBlocksWithAtom, readTrailersAtom, serializeTrailers, } from './trailers.js';
 import { BLAST_VALUES, CERTAINTY_VALUES, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
-export const newRangeCache = () => ({ messages: new Map() });
+export const newRangeCache = () => ({ messages: new Map(), notes: new Map() });
 const RECORD_ID_KEY = 'Record-Id';
 const PROVENANCE_KEY = 'Provenance';
 const EXPIRES_KEY = 'Expires';
@@ -218,7 +218,10 @@ export const collectRange = (range, opts = {}) => {
             (CANDIDATE_LINE_RE.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha)) : []);
         if (cachedBlocks === undefined)
             opts.cache?.messages.set(sha, messageBlocks);
-        const noteBlocks = mirrored.has(sha) ? readRecordBlocks(sha, opts) : [];
+        const cachedNote = opts.cache?.notes.get(sha);
+        const noteBlocks = cachedNote ?? (mirrored.has(sha) ? readRecordBlocks(sha, opts) : []);
+        if (cachedNote === undefined)
+            opts.cache?.notes.set(sha, noteBlocks);
         const blocks = mergeCommitBlocks(messageBlocks, noteBlocks);
         for (const trailers of blocks) {
             if (trailers.length === 0)

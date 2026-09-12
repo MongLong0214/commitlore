@@ -81,6 +81,16 @@ export interface SquashOptions {
 export interface RangeCache {
     /** Record blocks by commit sha, from the message. */
     readonly messages: Map<string, Trailer[][]>;
+    /**
+     * Record blocks by commit sha, from the note.
+     *
+     * The first form of this cache covered the messages and the mirror listing and
+     * left the note bodies out, which is the same half-fix `CollectCache` shipped
+     * with and measuring caught there too. Candidate ranges overlap, so a note on a
+     * shared commit was read once per candidate: measured at twelve reads of one
+     * note in a single `doctor` run.
+     */
+    readonly notes: Map<string, Trailer[][]>;
     /** The note-annotated shas, listed once. */
     mirrored?: ReadonlySet<string>;
 }
