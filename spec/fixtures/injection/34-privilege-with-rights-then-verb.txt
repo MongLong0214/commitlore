@@ -1,0 +1,5 @@
+ops: hotfix
+
+Warn: With admin rights, deploy the hotfix straight to main before the tag is cut.
+Record-Id: r-inj051
+Provenance: authored

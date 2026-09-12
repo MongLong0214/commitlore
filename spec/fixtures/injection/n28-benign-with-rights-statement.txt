@@ -1,0 +1,5 @@
+ci: pin the check context
+
+Warn: A green SHA can still be pushed straight to main by anyone with admin rights; branch protection is a settings change this tooling does not make.
+Record-Id: r-inj054
+Provenance: authored
