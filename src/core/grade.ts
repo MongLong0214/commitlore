@@ -486,7 +486,7 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
 ];
 
 /** Words that disarm an affirmative imperative when they sit right before it. */
-const NEGATIONS: ReadonlySet<string> = new Set([
+export const NEGATIONS: ReadonlySet<string> = new Set([
   'no',
   'not',
   'never',
@@ -528,7 +528,7 @@ const NEGATIONS: ReadonlySet<string> = new Set([
  * those are the entries whose authors already judged surrounding prose able to
  * change their reading.
  */
-const MENTIONS: ReadonlySet<string> = new Set([
+export const MENTIONS: ReadonlySet<string> = new Set([
   'says',
   'say',
   'saying',
@@ -585,7 +585,7 @@ const MENTIONS: ReadonlySet<string> = new Set([
  * paste this into your terminal` is an instruction wearing a modal, and this
  * set exists for the one modal that cannot address the reader.
  */
-const IRREALIS: ReadonlySet<string> = new Set(['would']);
+export const IRREALIS: ReadonlySet<string> = new Set(['would']);
 
 /** A subject that makes a counterfactual an address to the reader. */
 /**
@@ -612,7 +612,7 @@ const IRREALIS: ReadonlySet<string> = new Set(['would']);
  * that bearable is that the payload an agent would be told to run trips its own
  * pattern, and that an author whose record is withheld is told at capture.
  */
-const AGENT_SUBJECT: ReadonlySet<string> = new Set([
+export const AGENT_SUBJECT: ReadonlySet<string> = new Set([
   'you',
   'we',
   'they',
@@ -646,9 +646,8 @@ const AGENT_SUBJECT: ReadonlySet<string> = new Set([
   'attacker',
   'human',
   'person',
-  'anyone-else',
 ]);
-const COORDINATORS: ReadonlySet<string> = new Set(['and', 'or', 'nor']);
+export const COORDINATORS: ReadonlySet<string> = new Set(['and', 'or', 'nor']);
 /** Words that open a clause or complement the modal's scope does not reach. */
 const SCOPE_BREAKERS: ReadonlySet<string> = new Set([
   'to',
