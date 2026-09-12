@@ -1716,6 +1716,110 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     expect(entry?.evidence['squashed_count']).toBe('0');
   });
 
+  /**
+   * An executable bit is a change HEAD can decline, and the blob does not move
+   * when it does. Comparing object ids alone called that "HEAD already has
+   * this", so an abandoned `chmod +x` was classified `present-in-head` and
+   * prescribed `squash-preserve --target` — writing its records onto a commit
+   * that never took the change, which the header above calls the failure this
+   * check exists to prevent.
+   *
+   * It predates the tree-diff rewrite rather than arriving with it: the
+   * `rev-parse <rev>:<path>` form compared ids alone too, so 1.2.16 and 1.2.18
+   * both answer `squashed_count: 1` here. Found by an audit, reproduced before
+   * changing anything.
+   */
+  it('does not call a mode-only change present in HEAD', () => {
+    const repo = initRepo('squash-conservation-mode-only');
+    const script = join(repo, 'tool.sh');
+    writeFileSync(script, '#!/bin/sh\necho hi\n');
+    chmodSync(script, 0o644);
+    git(repo, ['add', '--', 'tool.sh']);
+    git(repo, ['commit', '--quiet', '-m', 'seed']);
+
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    chmodSync(script, 0o755);
+    git(repo, ['add', '--', 'tool.sh']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'make it executable\n\nLimit: the bit is the whole change\nRecord-Id: r-modeonly01\n',
+    ]);
+    git(repo, ['checkout', '--quiet', 'main']);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    // The answer that must not appear: it prescribes --target for work HEAD
+    // declined, which is the whole hazard.
+    expect(entry?.evidence['squashed_count']).toBe('0');
+    expect(entry?.evidence['undetermined_count']).toBe('1');
+    // The undetermined branch does mention `--target`, in the sentence warning
+    // what it does on an abandoned branch. What must not happen is the squashed
+    // branch's fix, which prescribes it as the next step.
+    expect(entry?.fix ?? '').toContain('identify the squash commit');
+    // The detail says the fate could not be determined, which is the honest
+    // answer for a bit HEAD declined. Asserting on the absence of the phrase
+    // "reached HEAD" caught that sentence too -- the words are in it, saying
+    // the opposite of what the assertion meant.
+    expect(entry?.detail ?? '').toContain('could not be determined');
+  });
+
+  /**
+   * A paragraph of prose that contains the line is not a declaration, and
+   * counting it excuses the loss this check exists to find. The first form
+   * matched `^Record-Id:` in the upstream's message text, so an upstream commit
+   * whose body read "a record line looks like this in prose: Record-Id: r-x"
+   * made an unmerged branch that really declares `r-x` report `ok` with
+   * `on_upstream_count: 1`.
+   *
+   * Git's own parser reads no trailer in that message, and neither does this
+   * project's — `interpret-trailers --parse` returns nothing for it. #914 moved
+   * `commands/stale.ts` off a text scan for exactly this reason; this was the
+   * second site.
+   */
+  it('does not let a prose mention upstream excuse a real loss', () => {
+    const remote = initBare('squash-conservation-prose-remote');
+    const repo = initRepo('squash-conservation-prose');
+    git(repo, ['remote', 'add', 'origin', remote]);
+    writeFileSync(join(repo, 'f.txt'), 'a\n');
+    git(repo, ['add', '--', 'f.txt']);
+    git(repo, ['commit', '--quiet', '-m', 'seed']);
+    git(repo, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+    git(repo, ['branch', '--quiet', '--set-upstream-to=origin/main', 'main']);
+
+    // Upstream mentions the id in prose, in a paragraph git reads as prose.
+    writeFileSync(join(repo, 'f.txt'), 'a\nb\n');
+    git(repo, ['add', '--', 'f.txt']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'docs: explain the convention\n\nA record line looks like this in prose:\nRecord-Id: r-proseonly01\nand that is only an example, not a declaration.\n',
+    ]);
+    git(repo, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+
+    // A lost branch really declares it, and was never merged.
+    git(repo, ['checkout', '--quiet', '-b', 'feature', 'HEAD~1']);
+    writeFileSync(join(repo, 'g.txt'), 'c\n');
+    git(repo, ['add', '--', 'g.txt']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'feat: the work\n\nLimit: a real boundary\nRecord-Id: r-proseonly01\n',
+    ]);
+    git(repo, ['checkout', '--quiet', 'main']);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('warn');
+    expect(entry?.evidence['lost_count']).toBe('1');
+    // The answer that must not appear: the prose line counted as a declaration.
+    expect(entry?.evidence['on_upstream_count']).toBe('0');
+  });
+
   it('discloses the 200-branch limit instead of reporting an unqualified subset', () => {
     const repo = initRepo('squash-conservation-capped');
     preservedSquash(repo, 'r-capped01');
