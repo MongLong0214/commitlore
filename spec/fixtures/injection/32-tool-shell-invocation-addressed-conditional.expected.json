@@ -1,0 +1,7 @@
+{
+  "description": "Family 1, the counterfactual addressed to the reader: `you would paste this into your terminal` is an instruction softened by a modal. The `would` rule (#935) disarms a counterfactual because it cannot address the reader; a subject of `you` or `we` right before it is the reader being addressed, and the adjacent-word form of the rule served this.",
+  "blocked": true,
+  "patterns": [
+    "tool.shell-invocation"
+  ]
+}

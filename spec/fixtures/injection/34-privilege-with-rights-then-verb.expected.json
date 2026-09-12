@@ -1,0 +1,7 @@
+{
+  "description": "Family 3, the privilege phrase in front of its verb. `privilege.as-root` now needs a doing verb beside `with … rights` so that a statement about who holds a privilege (`anyone with admin rights`) is not read as a request to use one; the verb can come after the phrase, and this pins that it still blocks.",
+  "blocked": true,
+  "patterns": [
+    "privilege.as-root"
+  ]
+}
