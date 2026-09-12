@@ -4,6 +4,47 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.18
+
+One question, asked for the first time: **did this release weaken the scanner?**
+
+1.2.17 narrowed three injection patterns and, in doing so, served three phrasings
+that 1.2.16 blocked — `you would paste this into your terminal` among them. Every
+required context was green at its merge commit. It was caught by hand, before
+tagging, by running the previous release's binary against the same phrasings, and
+the fix shipped in that same release. Nothing in the pipeline would have found it.
+
+**Why nothing found it.** Three answers were tried and each failed the same way:
+the corpus came from a person, so it held only what a person had thought of.
+Fixtures pin phrasings someone wrote, and a narrowing releases the ones nobody
+wrote — otherwise its author would have seen it. This repository's history is
+entirely benign, so a narrowing that releases an attack shows up there as no
+change at all. A cross product generated from the scanner's own vocabularies
+shrinks with the list it reads: reinstating 1.2.17's two-word agent list produced
+505 cases instead of 733, and every one passed.
+
+**The corpus does not have to come from a person.** A pattern is a specification
+of what it catches, and its alternations enumerate that specification — so the
+table generates its own adversarial set. Each alternative of each group appears
+at least once rather than every combination, because the full cross product
+reaches 21,600 strings for a single pattern and covers nothing the smaller set
+misses. Each phrase is then framed in every shape a disarm rule reads: an agent
+subject before a counterfactual, a negation, a reporting verb.
+
+Coverage of every pattern comes from an invariant that already existed — a
+pattern with no fixture is reported as an orphan — so the fixtures seed the seven
+patterns whose nested groups the expander cannot flatten.
+
+**The artifact is one direction.** `test/injection-blocked.json` records the 1,380
+phrasings that block today. A phrasing in it that no longer blocks fails the run
+and is named. Releasing a false positive is the point of a narrowing, so that
+direction is not a fault; releasing something *without noticing* is. Regenerating
+the file is deliberate, and its diff is exactly the list of phrasings a change let
+go — the review 1.2.17 did not get.
+
+Measured against the defect it was built for: reinstating 1.2.17's rule fails with
+368 named phrasings. Three had been found by hand.
+
 ## 1.2.17
 
 Two reports about the injection scanner, and a finding neither of them asked for:

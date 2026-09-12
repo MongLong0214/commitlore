@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.17/install.sh | sh -s v1.2.17
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.18/install.sh | sh -s v1.2.18
 ```
 
 <details>
 <summary>先にインストーラーを読みたいですか？</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.17/install.sh
-sh install.sh v1.2.17
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.18/install.sh
+sh install.sh v1.2.18
 
 # あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
-git clone --depth 1 --branch v1.2.17 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.18 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -107,13 +107,13 @@ CommitLore はその判断をコードのそばに残します。
 macOS と Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.17/install.sh | sh -s v1.2.17
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.18/install.sh | sh -s v1.2.18
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.17/install.ps1))) v1.2.17
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.18/install.ps1))) v1.2.18
 ```
 
 Node.js 22.23.2+ と Git が必要です。スクリプトは何かを書き込む前に両方を確認します。
@@ -295,11 +295,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MongLong0214/commitlore
-          ref: v1.2.17
+          ref: v1.2.18
           path: .commitlore-cli
           persist-credentials: false
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.2.17
+      - uses: MongLong0214/commitlore/action/preserve@v1.2.18
         with:
           cli-path: .commitlore-cli/dist/cli.js
 ```
