@@ -20,6 +20,16 @@ names as the failure it exists to prevent. It predates the tree-diff rewrite in
 ids alone too, and both 1.2.16 and 1.2.18 answer the same way on the
 reproduction. The raw diff already carried both modes; only one was being read.
 
+**A prose mention upstream is not a declaration.** `upstreamRecordIds` matched
+`^Record-Id:` in the upstream's message text, so an upstream commit whose body
+read "a record line looks like this in prose: Record-Id: r-x" made an unmerged
+branch that really declares `r-x` report `ok` — the loss excused by a sentence
+about losses. Git's own parser reads no trailer in that message, and neither does
+this project's. It is #914's finding at a second site: `stale` was moved off a
+text scan for exactly this reason, and this one was left. Reading the upstream
+through the parser costs 176 more git processes on this repository, which is what
+the answer being about trailers rather than about text costs.
+
 **`pending ls` asked where the pending directory is, once per pending file.** A
 repository with 24 of them paid 25 `git rev-parse --git-path`, of which 24 were
 the same question with the same answer. 26 spawns to 2.
