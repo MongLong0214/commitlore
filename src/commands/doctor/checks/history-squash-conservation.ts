@@ -34,21 +34,30 @@ interface SquashCandidateScan {
  */
 const squashCandidates = (ctx: DoctorContext, head: string): SquashCandidateScan => {
   const { opts, git } = ctx;
+  // The object name comes from the enumeration rather than from a `rev-parse`
+  // per branch. `for-each-ref` already resolved every ref to answer at all, and
+  // asking it again once per name cost one process per branch -- 200 of them on
+  // a repository at the cap, for facts the first call had in hand. A tab
+  // separates the two fields because a ref name cannot contain one.
   const listed = git(
-    ['for-each-ref', '--format=%(refname:short)', 'refs/heads'],
+    ['for-each-ref', '--format=%(refname:short)%09%(objectname)', 'refs/heads'],
     gitOptions(opts),
   );
   if (listed.code !== 0) return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
 
   const allBranches = listed.stdout
     .split('\n')
-    .filter((line) => line !== '');
+    .filter((line) => line !== '')
+    .map((line) => {
+      const tab = line.indexOf('\t');
+      return tab === -1
+        ? { branch: line, sha: '' }
+        : { branch: line.slice(0, tab), sha: line.slice(tab + 1).trim() };
+    });
   const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
 
   const candidates: SquashCandidate[] = [];
-  for (const branch of branches) {
-    const resolved = git(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
-    const sha = resolved.code === 0 ? resolved.stdout.trim() : '';
+  for (const { branch, sha } of branches) {
     if (sha === '' || sha === head) continue;
 
     // Already an ancestor of HEAD (or identical to it): reached by an
@@ -202,15 +211,24 @@ const branchContentFate = (
   );
   if (diff.code !== 0) return 'unknown';
 
-  const differs = new Map<string, { srcOid: string; dstOid: string; dstMode: string }>();
+  const differs = new Map<
+    string,
+    { srcMode: string; srcOid: string; dstOid: string; dstMode: string }
+  >();
   const raw = diff.stdout.split('\0');
   for (let i = 0; i + 1 < raw.length; i += 2) {
-    const [, dstMode, srcOid, dstOid] = (raw[i] ?? '').split(' ');
+    const [srcMode, dstMode, srcOid, dstOid] = (raw[i] ?? '').split(' ');
     const path = raw[i + 1];
-    if (dstMode === undefined || srcOid === undefined || dstOid === undefined || path === undefined) {
+    if (
+      srcMode === undefined ||
+      dstMode === undefined ||
+      srcOid === undefined ||
+      dstOid === undefined ||
+      path === undefined
+    ) {
       return 'unknown';
     }
-    differs.set(path, { srcOid, dstOid, dstMode });
+    differs.set(path, { srcMode, srcOid, dstOid, dstMode });
   }
 
   let matching = 0;
@@ -230,7 +248,16 @@ const branchContentFate = (
       if (!headHasTreeHere) missingFromHead += 1;
       continue;
     }
-    if (entry.srcOid === entry.dstOid) matching += 1;
+    // The mode counts, not only the blob. A branch whose whole change is an
+    // executable bit has the same object id on both sides, and comparing ids
+    // alone called that "HEAD already has this" -- so an abandoned `chmod +x`
+    // was classified `present-in-head` and prescribed `squash-preserve
+    // --target`, writing its records onto a commit that never took the change.
+    // That is the manufactured provenance the header above names as the failure
+    // this check exists to prevent, and it predates the tree-diff rewrite: the
+    // `rev-parse <rev>:<path>` form it replaced compared ids alone too, and the
+    // rewrite preserved the behaviour faithfully rather than introducing it.
+    if (entry.srcOid === entry.dstOid && entry.srcMode === entry.dstMode) matching += 1;
   }
 
   if (matching === paths.length) return 'present-in-head';

@@ -4,6 +4,44 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.19
+
+Four findings, and three of them came from running the monitor against the
+released build rather than from reading the code. The fourth came from an audit
+that contradicted a conclusion this project had already written down.
+
+**A mode-only change is not already in HEAD.** An executable bit is a change HEAD
+can decline, and the blob does not move when it does — so comparing object ids
+alone called an abandoned `chmod +x` "already squashed", and prescribed
+`squash-preserve --target`, which writes the branch's records onto a commit that
+never took the change. That is the manufactured provenance the check's own header
+names as the failure it exists to prevent. It predates the tree-diff rewrite in
+1.2.17 rather than arriving with it: the `rev-parse <rev>:<path>` form compared
+ids alone too, and both 1.2.16 and 1.2.18 answer the same way on the
+reproduction. The raw diff already carried both modes; only one was being read.
+
+**`pending ls` asked where the pending directory is, once per pending file.** A
+repository with 24 of them paid 25 `git rev-parse --git-path`, of which 24 were
+the same question with the same answer. 26 spawns to 2.
+
+**`collectRange`'s cache covered the messages and not the note bodies.** Candidate
+ranges overlap, so a note on a shared commit was read once per candidate —
+twelve reads of one note in a single `doctor` run. That is the same half-fix
+`CollectCache` shipped with two releases ago, and measuring caught it the same
+way both times: a cache added to the loop that was profiled, while the sibling
+read in the same loop keeps its own cost.
+
+**`doctor` resolved every branch twice.** `for-each-ref` had already resolved
+each ref to answer at all, and the check then ran a `git rev-parse` per name.
+Taking `%(objectname)` from the enumeration removes exactly one process per
+branch: 945 spawns to 745 here, 731 to 531 elsewhere, 200 each, which is the
+branch cap rather than a fraction of it.
+
+That last one contradicts what was written in 1.2.18: that doctor's remaining
+cost could not be reduced without changing how the check decides a branch's fate.
+Enumeration and decision are separate, and this was enumeration. The per-candidate
+range walks are untouched and are what the remaining cost is.
+
 ## 1.2.18
 
 One question, asked for the first time: **did this release weaken the scanner?**
