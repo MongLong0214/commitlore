@@ -1,0 +1,6 @@
+fix(ci): write the witness files where the checker looks
+
+Warn: Keep the witness paths native on Windows; the checker does not translate /tmp.
+Ruled-out: Reusing bash-side /tmp paths for the witness files | node on Windows reads /tmp/x as C:\tmp\x, so the check would look somewhere the witness was never written and pass for the wrong reason
+Record-Id: r-inj045
+Provenance: authored

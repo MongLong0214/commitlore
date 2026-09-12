@@ -57,8 +57,11 @@ where `draft` is that JSON as a string and `diff` is the same `git diff
 --cached` bytes prepare hashed. Returns `validation_result` (`pass` | `partial`
 | `empty`), `accepted`, and `rejected` with a reason each: `evidence-not-found`
 (the quote is not in the source), `ruled-out-no-rejection` (the quoted passage
-proposes the alternative rather than turning it down), `canonical-duplicate`. A
-refused record is discarded and logged, never silently corrected.
+proposes the alternative rather than turning it down), `canonical-duplicate`,
+`injection-pattern` (a trailer reads as an instruction to an agent, so every
+reader would be served the record as `[blocked]` with all of it withheld —
+reword that trailer so it describes rather than instructs). A refused record is
+discarded and logged, never silently corrected.
 
 **4. Ask — only in `suggest` mode.** The capture policy's `mode` decides
 (ADR-0030). The default is `auto`: stage what came back `accepted` without

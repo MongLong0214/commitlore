@@ -1,0 +1,5 @@
+{
+  "description": "Benign (#931): `run terminal` as a noun compound — a run is one execution of a suite, its terminal the end-state record it writes. No object, preposition or interpreter puts the shell noun where an instruction would.",
+  "blocked": false,
+  "patterns": []
+}

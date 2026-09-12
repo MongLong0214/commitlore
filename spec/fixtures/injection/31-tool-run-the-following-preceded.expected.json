@@ -1,0 +1,5 @@
+{
+  "description": "A word before the verb does not make it a noun. `reviewers must execute the following` and `then run the following` are imperatives, and the determiner guard added in #931's second pattern must not release them.",
+  "blocked": true,
+  "patterns": ["tool.run-the-following", "tool.shell-invocation", "tool.pipe-to-shell", "tool.curl-remote"]
+}

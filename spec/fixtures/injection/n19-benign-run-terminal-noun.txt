@@ -1,0 +1,5 @@
+feat(cycle): stamp the run terminal
+
+Warn: Stamping a run terminal is fine; the run records a terminal, and each run terminal carries every exact digest.
+Record-Id: r-inj040
+Provenance: authored
