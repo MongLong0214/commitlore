@@ -47,7 +47,13 @@ import {
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const FIXTURES = join(ROOT, 'spec/fixtures/injection');
-const SNAPSHOT = join(ROOT, 'spec/injection-blocked.json');
+/*
+ * Under `test/`, not `spec/`. `package.json` ships `spec` to every install, and
+ * this is a regression baseline for one implementation rather than part of the
+ * protocol: the conformance fixtures beside it are the spec, this is not. 80 KB
+ * in every published package for an artifact no consumer reads.
+ */
+const SNAPSHOT = join(ROOT, 'test/injection-blocked.json');
 
 /** Every alternative of every group at least once, rather than every combination. */
 const eachChoice = (pattern: RegExp): string[] => {
