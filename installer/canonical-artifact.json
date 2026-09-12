@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "1f60371ad29f0add9df05d77f66089ef8289c2174c172c2ba2cc6b06a9a28f6e"
+    "sha256": "b89c39fd1277aafb4e62e35173b645405b54144e818b65171fcb09cdc1d164b3"
   },
   "artifact": {
-    "sha256": "884eca95564ec56f7c0fa54b52c0a42a6ca508f4dce053ef4cf61bfbb2dfd166",
+    "sha256": "7d53373ad34ef41fa01f9b44110083900b79ea2d187da8000a33d6fb7322b120",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "fe9c19563c2efbd92902589b9e7f4437d698d90220b4e1cc7213523de4ac866e"
+        "sha256": "442adbdd66378762c50c96c9011c8f330b2ab23a65541bb473d5cf420ffd4101"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -794,15 +794,15 @@
       },
       {
         "path": "dist/core/grade.d.ts",
-        "sha256": "4de544040c6088b5663c70a64f707682ccf0c05650cc5ebf2397b52d663e1934"
+        "sha256": "59d2241560f83c0922dd17445297f95e34eaee3c3d1ee98639ac1d2ff38def78"
       },
       {
         "path": "dist/core/grade.js",
-        "sha256": "737b78171940b189947b6c2fea448f1722d4ec2a31e4eb19b0b25c269d127dfe"
+        "sha256": "c4273a748e692b72ceb365109ecfeb7beb62090dfcc4e51c9c5a5f1badee25d2"
       },
       {
         "path": "dist/core/grade.js.map",
-        "sha256": "e129dad42b7d2c50bed51abf6e7a82dba92678c412e5be91d02d0aaf681d2629"
+        "sha256": "85b3c82a11282a5cbc6ccd228528c2ca9aac55e410ce553ed0623bbee4e96d40"
       },
       {
         "path": "dist/core/guard.d.ts",
