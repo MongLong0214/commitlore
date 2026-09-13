@@ -162,6 +162,104 @@ export const isolateBlocks = (messages) => {
     }
     return { get: (paragraph) => answers.get(paragraph) };
 };
+/**
+ * `parseCommitMessage` for many whole messages, in one process.
+ *
+ * The sibling of {@link isolateBlocks}, and the distinction between them is the
+ * one that decides whether this is safe. `isolateBlocks` probes a *paragraph*
+ * lifted out of its message, which is a different question from the one the
+ * whole message answers -- isolating a message's **last** paragraph is exactly
+ * the shape that fabricated a record once, so it does not do that. This batches
+ * the whole message, byte for byte, and asks git the same question
+ * `parseCommitMessage` asks. Only the plumbing changes: a file per message
+ * instead of stdin.
+ *
+ * That is what a note body needs. `%(trailers)` parses the annotated *commit's*
+ * message, so a note has no atom and its own block cost one process each --
+ * measured at 22 of a `doctor` run's 30 remaining `interpret-trailers`.
+ *
+ * The marker rule is `probeChunk`'s and is not negotiable: it goes in a file of
+ * its own, interleaved between the messages, never appended to one. Appending
+ * crossed git's trailer-block threshold and invented a record, and a scissors
+ * line inside a message swallowed an appended marker and moved output between
+ * messages. Both are why attribution is checked rather than assumed.
+ *
+ * Returns `null` when the batch cannot be attributed, and every caller must then
+ * fall back to asking one at a time. A partial answer here is not an answer.
+ */
+export const parseMessagesBatched = (messages) => {
+    const wanted = [...new Set(messages)];
+    if (wanted.length === 0)
+        return new Map();
+    let scratch;
+    try {
+        scratch = mkdtempSync(join(tmpdir(), 'commitlore-msgs-'));
+        const answers = new Map();
+        for (let at = 0; at < wanted.length; at += PROBE_BATCH) {
+            const chunk = wanted.slice(at, at + PROBE_BATCH);
+            const resolved = parseChunkOfMessages(scratch, chunk, at);
+            if (resolved === null)
+                return null;
+            for (const [message, trailers] of resolved)
+                answers.set(message, trailers);
+        }
+        return answers;
+    }
+    catch {
+        return null;
+    }
+    finally {
+        if (scratch !== undefined) {
+            try {
+                rmSync(scratch, { recursive: true, force: true });
+            }
+            catch {
+                /* a leftover temp directory is the operating system's to reclaim */
+            }
+        }
+    }
+};
+/** One invocation over whole messages, or `null` when attribution fails. */
+const parseChunkOfMessages = (scratch, messages, offset) => {
+    const nonce = `X-Clmsg-${randomBytes(8).toString('hex')}`;
+    const files = [];
+    messages.forEach((message, index) => {
+        const at = offset + index;
+        const body = join(scratch, `w-${String(at)}.txt`);
+        // The message unchanged. `parseCommitMessage` pipes exactly these bytes,
+        // and anything added here would be asking git a different question.
+        writeFileSync(body, message);
+        const marker = join(scratch, `k-${String(at)}.txt`);
+        writeFileSync(marker, `x\n\n${nonce}: ${String(index)}\n`);
+        files.push(body, marker);
+    });
+    const result = execGit([...PARSE_ARGS, ...files]);
+    if (result.code !== 0)
+        return null;
+    const answers = new Map();
+    let current = [];
+    let expected = 0;
+    for (const line of result.stdout.split('\n')) {
+        if (line.length === 0)
+            continue;
+        if (line.startsWith(`${nonce}:`)) {
+            // In order, one per message, none missing and none extra. A marker out of
+            // sequence means output has moved between messages, which is the failure
+            // this scheme exists to make impossible to miss.
+            if (Number(line.slice(nonce.length + 1).trim()) !== expected)
+                return null;
+            const message = messages[expected];
+            if (message === undefined)
+                return null;
+            answers.set(message, current);
+            current = [];
+            expected += 1;
+            continue;
+        }
+        current.push(parseOutputLine(line));
+    }
+    return expected === messages.length ? answers : null;
+};
 /** One invocation, or `null` when its output could not be attributed. */
 const probeChunk = (scratch, paragraphs) => {
     const nonce = `X-Clprobe-${randomBytes(8).toString('hex')}`;

@@ -122,6 +122,32 @@ export interface IsolatedBlocks {
  */
 export declare const isolateBlocks: (messages: readonly string[]) => IsolatedBlocks;
 /**
+ * `parseCommitMessage` for many whole messages, in one process.
+ *
+ * The sibling of {@link isolateBlocks}, and the distinction between them is the
+ * one that decides whether this is safe. `isolateBlocks` probes a *paragraph*
+ * lifted out of its message, which is a different question from the one the
+ * whole message answers -- isolating a message's **last** paragraph is exactly
+ * the shape that fabricated a record once, so it does not do that. This batches
+ * the whole message, byte for byte, and asks git the same question
+ * `parseCommitMessage` asks. Only the plumbing changes: a file per message
+ * instead of stdin.
+ *
+ * That is what a note body needs. `%(trailers)` parses the annotated *commit's*
+ * message, so a note has no atom and its own block cost one process each --
+ * measured at 22 of a `doctor` run's 30 remaining `interpret-trailers`.
+ *
+ * The marker rule is `probeChunk`'s and is not negotiable: it goes in a file of
+ * its own, interleaved between the messages, never appended to one. Appending
+ * crossed git's trailer-block threshold and invented a record, and a scissors
+ * line inside a message swallowed an appended marker and moved output between
+ * messages. Both are why attribution is checked rather than assumed.
+ *
+ * Returns `null` when the batch cannot be attributed, and every caller must then
+ * fall back to asking one at a time. A partial answer here is not an answer.
+ */
+export declare const parseMessagesBatched: (messages: readonly string[]) => Map<string, Trailer[]> | null;
+/**
  * Parses a commit message into its trailers, in the order they appear (B5).
  *
  * A message with no trailer paragraph yields `[]` — that is a commit which

@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "875fbf5433302bed16a53688c6fe1c69230cd5de866f0748daad08c2ee7b0869"
+    "sha256": "cccfa30deae809438e31eada7b7fcda8e9391a688564d10c67d686c434633220"
   },
   "artifact": {
-    "sha256": "24f623cd36fe3a8493b8edd6052aa4db7588da35656fefaf7f7198836f478872",
+    "sha256": "735a1d218504bb90ac681d318963fb8149015675068a52d6cc2005cf6b09213d",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "b38fce80c754593226b26dc2df3c8b8a3a343b7b028794daac180a4f3890845a"
+        "sha256": "c092a24f5cd6cc2cc052d4fea60c4e6bdff10240ad27fcde1bc43100dd4a6b93"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -870,11 +870,11 @@
       },
       {
         "path": "dist/core/index-db.js",
-        "sha256": "2c7bdcfc4670ffad8235d41e9dc35a942788f52a69a9c0110e5ccd3a416d8cac"
+        "sha256": "2824919c5756c85c46a832642d274c8d0d95087715aa5a3f68bd264da0246b01"
       },
       {
         "path": "dist/core/index-db.js.map",
-        "sha256": "91c2ff31b1fe283c39fe9f9846a41ced3aa39173fef630ca03f7647cd2c0db21"
+        "sha256": "00c1dd9653bb449ab525408360ccd1dd2cb5ddf26f1601c10c92f54941914931"
       },
       {
         "path": "dist/core/inject.d.ts",
@@ -1082,15 +1082,15 @@
       },
       {
         "path": "dist/core/trailers.d.ts",
-        "sha256": "88dcbcbf5c39c1ef0efb3d77a7be7af8be720b87a5a84cfb6652698fd0b73430"
+        "sha256": "eb6a951d414f455d68c44e26cbd617ee36898bb745cc0b372cbacbce78111597"
       },
       {
         "path": "dist/core/trailers.js",
-        "sha256": "da424f5fe480713c64398ebbccd4cdd6b229755823978de17821f3e90ca09dc9"
+        "sha256": "a7bf0fc50f8b57b13b9317db992c55e84461b3db76f95be85d30d7a194561ca0"
       },
       {
         "path": "dist/core/trailers.js.map",
-        "sha256": "dfa6da12fac29141f376425afa5c21066f8f56324e022a0d0ea537211942237a"
+        "sha256": "9490a3b8b6725af915a814ffb6bc7e8b1c2b35dbb2858c8c125bab38a3fbc9bf"
       },
       {
         "path": "dist/core/trusted-authors.d.ts",
