@@ -884,7 +884,7 @@ describe('commitlore_guard', () => {
     //
     // The failure this must catch is the identity not finding a manifest at all,
     // which surfaces as the `0.0.0-unknown` fallback rather than as a mismatch.
-    expect(identity).toMatchObject({ indexSchemaVersion: 4 });
+    expect(identity).toMatchObject({ indexSchemaVersion: 5 });
     expect((identity as { version: string }).version, 'a runtime that found no manifest reports this').not.toBe(
       '0.0.0-unknown',
     );

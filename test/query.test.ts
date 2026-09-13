@@ -1213,12 +1213,15 @@ describe('#522 cold path queries', () => {
       expect(cold.unreadCommits).toBeLessThan(total);
 
       // A later consumer call still carries a budget, the way `context` does.
-      // It must read the partial index rather than walk the corpus, and it
-      // must not look complete. An unbudgeted `index` is what finishes it.
+      // It must read the partial index rather than walk the corpus, and it must
+      // carry the scan on from where the first one stopped (#951). Before that
+      // landed this asserted the opposite -- that the answer stayed partial --
+      // which pinned the defect: nothing advanced, so only an unbudgeted
+      // `index` could ever finish it.
       const again = runQuery({ cwd: dir, path: 'src', scanBudgetMs: 3_000 });
       expect(again.fromIndex).toBe(true);
       expect(again.corpusPasses).toBe(0);
-      expect(again.unreadCommits).toBeGreaterThan(0);
+      expect(again.unreadCommits).toBeLessThan(cold.unreadCommits);
     }, 120_000);
 
     it('stops a --no-index scan at the budget and does not create the file', () => {
