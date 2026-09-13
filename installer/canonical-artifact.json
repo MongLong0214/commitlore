@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "8497fe42a6d511d6481f2f7146e7bf7a789451e234c7b9eb64dfd92f5e83f704"
+    "sha256": "a287842deff49958045fcd528f0f38ef91788526cf47be76c2d51f320408a324"
   },
   "artifact": {
-    "sha256": "cbe41e2f80fdf372a032352a5f6363b0ec88cb7744ad2b93eb4fc27392eb14e0",
+    "sha256": "8cefd308858d0bc0212ade0669c0a7fd223d89c11f1b21694b0259cad84347ee",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -62,11 +62,11 @@
       },
       {
         "path": "dist/commands/capture.js",
-        "sha256": "9b805998ca20832432d46c9cdbcee41253ccb044da37e139e3f1d32263b5d6a0"
+        "sha256": "c5a4c00e1a4acad6414d6fa9d82402d363ae3dba7d07188869c1f561c19bac3c"
       },
       {
         "path": "dist/commands/capture.js.map",
-        "sha256": "06abe0bb9cba4f1f8cd0d2278295d0cb0cada9132360dee0724d86ee1c95011e"
+        "sha256": "621c61a70f65a601af9c9ba81789c076c0b9b8f13d1dbc1b9ad09a668fd8bd8b"
       },
       {
         "path": "dist/commands/demo.d.ts",
