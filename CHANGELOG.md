@@ -25,9 +25,16 @@ is unchanged — a result nobody stored is still never reported as accepted.
 `openIndex` when several writers arrived together, which is a crash on the path
 the edit hook takes per edit. And the write transaction opened with a deferred
 `BEGIN`, which SQLite will not apply `busy_timeout` to: the timeout was set and
-had no effect on the case it was set for. Both fixed, and a contended pass now
-reports that it did nothing rather than throwing at its caller — the queue is
-durable, so the next pass resumes.
+had no effect on the case it was set for. Both fixed, and the journal-mode guard
+tests SQLite's own result code rather than the wording of a message — it
+re-raises the two codes that mean the file needs rebuilding and absorbs the rest.
+
+Contention itself still reaches the caller, and deliberately so. A version of
+this release absorbed it and reported a pass that had done nothing; review found
+that a notes refresh which lost its write lock then returned normally with the
+old rows in place, and a query served that stale index as complete where it had
+previously fallen back to a full scan. A derived cache must not answer "I am
+authoritative" when it means "I am behind".
 
 **`doctor` and `validate --range` stopped re-reading the same messages.**
 `doctor` parsed each candidate branch separately, and `validate --range` parsed
