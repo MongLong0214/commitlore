@@ -4,6 +4,28 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.8
+
+Two places where concurrent work could be mixed into one answer, or lost.
+
+**A query now reads one version of the index.** `runQuery` reads twice — once to
+fold lifecycle states, once to gather the rows it displays — and its own
+contract requires the two to agree, because a stream where they disagreed would
+report records whose supersessions had not been read. They were separate reads
+on a live database, so a rebuild landing between them produced an answer neither
+version supports. One pinned read snapshot now covers every read a query makes,
+the coverage counts included: a coverage number taken from a different version
+than the rows is the same defect wearing a smaller hat.
+
+**Advancing a capture's phase now holds the nonce.** Verification took the lock
+for its read-check-write; staging and marking-applied did the same shape of
+update to the same file and took nothing. Two callers could both read a verified
+transaction and both write it staged — and a delayed one could write `staged`
+over a record another process had already advanced to `applied`, losing the
+marker that says the trailer reached a commit. The atomic rename these use keeps
+a file from being half-written; it does nothing about two whole files written
+from the same stale read.
+
 ## 1.3.7
 
 Two ways a query could answer wrongly and say it was complete. Both were found

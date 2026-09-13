@@ -853,7 +853,7 @@ describe('verifyCaptureRecords', () => {
    * stored and stageable. Every exit now goes through one function; this is the
    * case that would have caught the gap.
    */
-  it('does not leave an earlier record stageable when an early exit cannot store', () => {
+  it('reports why an early-exit replay stored nothing, and keeps the first result', () => {
     const transcript =
       'We decided: Do not use shared mutable state for config because it causes race conditions.';
     const diff = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n';
@@ -888,10 +888,16 @@ describe('verifyCaptureRecords', () => {
     // And the first call's transaction survives. It deleted here until #981:
     // once the first caller has released its lock, a deliberate replay and a
     // concurrent caller that arrived late are the same thing from inside, and
-    // deleting discards a verification whose caller was told it passed. The
-    // hazard this used to cover — a commit silently carrying A — is held by
-    // the prepare-commit-msg hook, which attaches `staged` and `applied`
-    // transactions and never a `verified` one.
+    // deleting discards a verification whose caller was told it passed.
+    //
+    // The test was called "does not leave an earlier record stageable", which
+    // its own assertions contradict — the record is left `verified`, and
+    // `verified` is exactly what `stage` accepts. What the hook covers is the
+    // *automatic* path: it attaches `staged` and `applied` transactions and
+    // never a merely `verified` one, so a refusal followed by an ordinary
+    // commit attaches nothing. A deliberate `stage_capture` on this nonce still
+    // reaches the first caller's record, and that residual is #989, not
+    // something this file closes.
     const stored = readPending(nonce, { cwd });
     expect(stored).not.toBeNull();
     expect(stored?.phase).toBe('verified');
