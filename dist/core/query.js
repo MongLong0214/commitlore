@@ -44,7 +44,7 @@
  * date-form `Expires:` still retires them through the same fold.
  */
 import { execGit, hasShallowHistory, historyAvailability, readVantage, SHALLOW_HISTORY_CAVEAT, vantageCaveat, } from './git.js';
-import { closeIndex, ensureIndex, filterTrailers, indexUnread, queryTrailers, scanTrailers, } from './index-db.js';
+import { closeIndex, ensureIndex, filterTrailers, indexUnread, pinReadSnapshot, queryTrailers, releaseReadSnapshot, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeDeclarations, noteAuthorsOf, signerFingerprintsOf, } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
 import { foldLifecycle, hasAmbiguousIdCollision, } from './stale.js';
@@ -156,6 +156,12 @@ const openSource = (cwd, noIndex, budgetMs, now) => {
         // Corruption is not an outage here (ADR-0003); it is a reason to stop
         // trusting the derived cache. So the first bad read falls back to the
         // scan for the rest of this query, and says so.
+        // One pinned view for every read this query makes. `ensureIndex` has
+        // finished writing by now, so the snapshot opens on a settled database and
+        // holds until `close`. Without it `foldStates` and `collectRows` were two
+        // separate reads, and a rebuild landing between them produced an answer
+        // neither version supports -- which `runQuery`'s own doc comment forbids.
+        pinReadSnapshot(handle);
         const diagnostics = [];
         let fallback = null;
         const scanInstead = (error) => {
@@ -196,6 +202,7 @@ const openSource = (cwd, noIndex, budgetMs, now) => {
             close: () => {
                 if (fallback !== null)
                     fallback.close();
+                releaseReadSnapshot(handle);
                 closeIndex(handle);
             },
             diagnostics,

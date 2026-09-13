@@ -13496,6 +13496,23 @@ var runInTransaction = (db, fn) => {
     transactionDepth.set(db, depth);
   }
 };
+var beginReadSnapshot = (db) => {
+  if ((transactionDepth.get(db) ?? 0) !== 0) {
+    throw new Error("a read snapshot cannot be opened inside an open transaction");
+  }
+  db.exec("BEGIN");
+  transactionDepth.set(db, 1);
+};
+var endReadSnapshot = (db) => {
+  if ((transactionDepth.get(db) ?? 0) === 0) return;
+  try {
+    db.exec("ROLLBACK");
+  } catch {
+  }
+  transactionDepth.set(db, 0);
+};
+var pinReadSnapshot = (handle) => beginReadSnapshot(handle.db);
+var releaseReadSnapshot = (handle) => endReadSnapshot(handle.db);
 var syncFts = (db, requested, writable) => {
   if (!writable) return requested && detectFts(db) && readMeta(db, "fts") === "1";
   if (!requested || !enableFts(db)) {
@@ -16386,6 +16403,7 @@ var openSource = (cwd, noIndex, budgetMs, now) => {
       cwd,
       ...budgetMs === void 0 ? {} : { budget: { deadline: clock() + budgetMs, now: clock }, cost }
     });
+    pinReadSnapshot(handle);
     const diagnostics = [];
     let fallback = null;
     const scanInstead = (error2) => {
@@ -16413,6 +16431,7 @@ var openSource = (cwd, noIndex, budgetMs, now) => {
       unreadCommits: () => fallback === null ? Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes) : fallback.unreadCommits(),
       close: () => {
         if (fallback !== null) fallback.close();
+        releaseReadSnapshot(handle);
         closeIndex(handle);
       },
       diagnostics
@@ -17517,6 +17536,15 @@ var storeVerification = (nonce, opts) => {
 };
 var stagePending = (nonce, opts) => {
   validateNonce(nonce);
+  const lock = tryLockPending(nonce, opts.cwd);
+  if (!lock.held) return false;
+  try {
+    return stageUnderLock(nonce, opts);
+  } finally {
+    if (lock.created) unlockPending(nonce, opts.cwd);
+  }
+};
+var stageUnderLock = (nonce, opts) => {
   const record2 = readPending(nonce, { cwd: opts.cwd });
   if (!record2) return false;
   if (record2.phase !== "verified") return false;
@@ -17535,6 +17563,15 @@ var stagePending = (nonce, opts) => {
 };
 var markApplied = (nonce, recordHash, opts) => {
   validateNonce(nonce);
+  const lock = tryLockPending(nonce, opts.cwd);
+  if (!lock.held) return false;
+  try {
+    return applyUnderLock(nonce, recordHash, opts);
+  } finally {
+    if (lock.created) unlockPending(nonce, opts.cwd);
+  }
+};
+var applyUnderLock = (nonce, recordHash, opts) => {
   const record2 = readPending(nonce, { cwd: opts.cwd });
   if (!record2) return false;
   if (record2.phase !== "staged") return false;

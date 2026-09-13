@@ -298,6 +298,20 @@ export declare const indexUnreadBySource: (handle: IndexHandle) => {
     notes: number;
 };
 /**
+ * Runs `fn` against one pinned view of the index.
+ *
+ * The snapshot covers every read the callback makes — rows, lifecycle inputs
+ * and the coverage counts alike — because a coverage number taken from a
+ * different version than the rows is the same defect wearing a smaller hat.
+ */
+export declare const withReadSnapshot: <T>(handle: IndexHandle, fn: () => T) => T;
+/**
+ * The pair, for a caller whose reads are spread across a lifetime rather than a
+ * callback — `openSource` pins at open and releases at close.
+ */
+export declare const pinReadSnapshot: (handle: IndexHandle) => void;
+export declare const releaseReadSnapshot: (handle: IndexHandle) => void;
+/**
  * The b-tree walk, kept off the read path (#782).
  *
  * `PRAGMA quick_check(1)` bounds the errors it *reports*, not the work it

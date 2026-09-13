@@ -1128,6 +1128,71 @@ const runInTransaction = (db, fn) => {
     }
 };
 /**
+ * One consistent read for the whole of a query.
+ *
+ * `runQuery` reads the index twice — once to fold lifecycle states and once to
+ * collect the rows it will display — and its own doc comment requires the two
+ * to agree: *"a stream where the two disagreed would report records whose
+ * supersessions had not been read"*. They were separate reads on a live
+ * database, so a rebuild landing between them mixed two snapshots into an
+ * answer neither one supports.
+ *
+ * Reproduced on one open handle: two `queryTrailers` calls with an unbudgeted
+ * rebuild between them returned different record sets. No unusual scheduling is
+ * needed — a rebuild publishes by replacing every table in one transaction, and
+ * the second read simply sees the new one.
+ *
+ * A deferred `BEGIN` is what is wanted here and `BEGIN IMMEDIATE` is not: it
+ * takes no write lock, and in WAL mode it pins a read snapshot at the first
+ * read and holds it until the transaction ends. Writers keep writing; this
+ * reader keeps seeing the version it started with.
+ *
+ * Nested use is refused rather than ignored. A read snapshot inside a write
+ * transaction would end that transaction on release, and quietly returning
+ * without one would leave a caller believing it had isolation it does not have.
+ */
+const beginReadSnapshot = (db) => {
+    if ((transactionDepth.get(db) ?? 0) !== 0) {
+        throw new Error('a read snapshot cannot be opened inside an open transaction');
+    }
+    db.exec('BEGIN');
+    transactionDepth.set(db, 1);
+};
+/** Releases the snapshot. Read-only, so there is nothing to commit. */
+const endReadSnapshot = (db) => {
+    if ((transactionDepth.get(db) ?? 0) === 0)
+        return;
+    try {
+        db.exec('ROLLBACK');
+    }
+    catch {
+        /* a snapshot that is already gone needs no release */
+    }
+    transactionDepth.set(db, 0);
+};
+/**
+ * Runs `fn` against one pinned view of the index.
+ *
+ * The snapshot covers every read the callback makes — rows, lifecycle inputs
+ * and the coverage counts alike — because a coverage number taken from a
+ * different version than the rows is the same defect wearing a smaller hat.
+ */
+export const withReadSnapshot = (handle, fn) => {
+    beginReadSnapshot(handle.db);
+    try {
+        return fn();
+    }
+    finally {
+        endReadSnapshot(handle.db);
+    }
+};
+/**
+ * The pair, for a caller whose reads are spread across a lifetime rather than a
+ * callback — `openSource` pins at open and releases at close.
+ */
+export const pinReadSnapshot = (handle) => beginReadSnapshot(handle.db);
+export const releaseReadSnapshot = (handle) => endReadSnapshot(handle.db);
+/**
  * Decides whether the FTS5 prefilter may be used, and keeps it truthful.
  *
  * `meta.fts` records whether the rows currently in `trailers` were mirrored

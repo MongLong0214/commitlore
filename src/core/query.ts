@@ -59,7 +59,9 @@ import {
   ensureIndex,
   filterTrailers,
   indexUnread,
+  pinReadSnapshot,
   queryTrailers,
+  releaseReadSnapshot,
   scanTrailers,
   type ScanCost,
   type IndexedTrailer,
@@ -415,6 +417,13 @@ const openSource = (
     // Corruption is not an outage here (ADR-0003); it is a reason to stop
     // trusting the derived cache. So the first bad read falls back to the
     // scan for the rest of this query, and says so.
+    // One pinned view for every read this query makes. `ensureIndex` has
+    // finished writing by now, so the snapshot opens on a settled database and
+    // holds until `close`. Without it `foldStates` and `collectRows` were two
+    // separate reads, and a rebuild landing between them produced an answer
+    // neither version supports -- which `runQuery`'s own doc comment forbids.
+    pinReadSnapshot(handle);
+
     const diagnostics: string[] = [];
     let fallback: RowSource | null = null;
     const scanInstead = (error: unknown): RowSource => {
@@ -455,6 +464,7 @@ const openSource = (
           : fallback.unreadCommits(),
       close: () => {
         if (fallback !== null) fallback.close();
+        releaseReadSnapshot(handle);
         closeIndex(handle);
       },
       diagnostics,
