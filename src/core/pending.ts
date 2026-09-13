@@ -534,6 +534,28 @@ export interface StagePendingOptions {
  */
 export const stagePending = (nonce: string, opts: StagePendingOptions): boolean => {
   validateNonce(nonce);
+  // Under the nonce lock, like `storeVerification` above.
+  //
+  // This was a read, a phase check and a write with nothing holding the nonce
+  // between them, so two callers could both read `verified` and both write
+  // `staged` -- and a delayed one could write `staged` over a record another
+  // process had already advanced to `applied`, losing the marker that says the
+  // trailer reached a commit. The atomic rename keeps the file whole; it does
+  // nothing about two whole files written from the same stale read.
+  //
+  // Verification held the lock and staging did not, which is the asymmetry
+  // rather than the design: the two do the same shape of update to the same
+  // file.
+  const lock = tryLockPending(nonce, opts.cwd);
+  if (!lock.held) return false;
+  try {
+    return stageUnderLock(nonce, opts);
+  } finally {
+    if (lock.created) unlockPending(nonce, opts.cwd);
+  }
+};
+
+const stageUnderLock = (nonce: string, opts: StagePendingOptions): boolean => {
   const record = readPending(nonce, { cwd: opts.cwd });
   if (!record) return false;
   if (record.phase !== 'verified') return false;
@@ -564,6 +586,18 @@ export interface MarkAppliedOptions {
  */
 export const markApplied = (nonce: string, recordHash: string, opts: MarkAppliedOptions): boolean => {
   validateNonce(nonce);
+  // The same read-modify-write, so the same lock. A `markApplied` racing a late
+  // `stagePending` is how the applied marker was losable.
+  const lock = tryLockPending(nonce, opts.cwd);
+  if (!lock.held) return false;
+  try {
+    return applyUnderLock(nonce, recordHash, opts);
+  } finally {
+    if (lock.created) unlockPending(nonce, opts.cwd);
+  }
+};
+
+const applyUnderLock = (nonce: string, recordHash: string, opts: MarkAppliedOptions): boolean => {
   const record = readPending(nonce, { cwd: opts.cwd });
   if (!record) return false;
   if (record.phase !== 'staged') return false;
