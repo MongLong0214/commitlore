@@ -170,6 +170,50 @@ describe('#963 validate --range reads a message once', () => {
     expect((report as { examined?: number }).examined).toBe(COMMITS + 2);
   }, 300_000);
 
+  /**
+   * The revisions go to git on stdin, never on argv.
+   *
+   * A range is unbounded, and 780 object names is 32 KB of command line --
+   * exactly where Windows refuses. Neither matrix leg runs Windows, so nothing
+   * in CI would have caught it; what this asserts instead is the property that
+   * makes the platform irrelevant, read from the invocation itself.
+   *
+   * Counted as object names rather than as argv length, which is the second
+   * version of this test. The first asserted "no long git command line" and
+   * failed on `isolateBlocks`, whose probe passes temp file paths on argv --
+   * bounded by its own batch size and not by the range, so it is the legitimate
+   * case the blunt assertion could not tell from the defect.
+   */
+  it('passes the range to git on stdin rather than on the command line', () => {
+    const { dir, range } = fixtureRepo();
+    const log = join(scratch('log'), 'calls.txt');
+    writeFileSync(log, '');
+    spawnSync(process.execPath, [CLI, 'validate', '--range', range, '--json'], {
+      cwd: dir,
+      encoding: 'utf8',
+      maxBuffer: 1 << 26,
+      env: {
+        ...process.env,
+        PATH: `${shim()}:${process.env['PATH'] ?? ''}`,
+        COMMITLORE_TEST_CALL_LOG: log,
+      },
+    });
+
+    const calls = readFileSync(log, 'utf8').split('\n').filter((line) => line !== '');
+    const objectNames = (line: string): number => (line.match(/\b[0-9a-f]{40}\b/g) ?? []).length;
+    const worst = calls.reduce(
+      (found, line) => (objectNames(line) > objectNames(found) ? line : found),
+      '',
+    );
+
+    // A range endpoint or two on a command line is ordinary. A list of them is
+    // the shape that grows without bound.
+    expect(
+      objectNames(worst),
+      `most object names on one git command line: ${worst.slice(0, 200)}`,
+    ).toBeLessThanOrEqual(4);
+  }, 300_000);
+
   it('spends no more parses than the budget recorded beside it', () => {
     const { dir, range } = fixtureRepo();
     const { shapes } = validateRange(dir, range);

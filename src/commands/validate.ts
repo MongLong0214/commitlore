@@ -518,9 +518,15 @@ const warmSources = (sources: readonly MessageSource[], cwd: string, cache: Coll
   const shas = uncached
     .map((source) => source.sha)
     .filter((sha): sha is string => sha !== undefined);
+  // The shas go on stdin, not argv. A range is unbounded -- this repository's
+  // own release validation walks hundreds -- and 780 object names is 32 KB of
+  // command line, which is exactly where Windows refuses. `warmRangeCache`
+  // takes its revisions the same way for the same reason; doing it differently
+  // here would have left one of the two broken on a platform neither the
+  // ubuntu nor the macos matrix leg runs.
   const atoms =
     shas.length > 1
-      ? readTrailersAtom(['--no-walk', '--end-of-options', ...shas, '--'], { cwd })
+      ? readTrailersAtom(['--no-walk', '--stdin'], { cwd, stdin: `${shas.join('\n')}\n` })
       : new Map<string, string>();
 
   const isolated =

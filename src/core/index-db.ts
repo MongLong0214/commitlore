@@ -1668,6 +1668,25 @@ export const integrityProblem = (db: IndexDatabase): string | null => {
  */
 const BUSY_TIMEOUT_MS = 500;
 
+/** The file cannot be read as a database: a rebuild reason, never absorbed. */
+const SQLITE_NOTADB = 26;
+const SQLITE_CORRUPT = 11;
+
+/**
+ * SQLite's own result code for an error, or `null` if it did not come from SQLite.
+ *
+ * `node:sqlite` stamps `code: 'ERR_SQLITE_ERROR'` and a numeric `errcode`,
+ * which nothing outside it can forge. The low byte, because SQLite extends a
+ * primary code with detail in the high bits -- `SQLITE_IOERR_READ` is 266 and
+ * is still an I/O error.
+ */
+const sqliteResultCode = (error: unknown): number | null => {
+  if (typeof error !== 'object' || error === null) return null;
+  const holder = error as { code?: unknown; errcode?: unknown };
+  if (holder.code !== 'ERR_SQLITE_ERROR' || typeof holder.errcode !== 'number') return null;
+  return holder.errcode & 0xff;
+};
+
 const openDatabaseFile = (path: string, readonly: boolean): IndexDatabase => {
   const Ctor = loadDatabaseCtor();
   const db = new Ctor(path, { readOnly: readonly });
@@ -1693,13 +1712,28 @@ const openDatabaseFile = (path: string, readonly: boolean): IndexDatabase => {
       db.exec('PRAGMA journal_mode = WAL');
       db.exec('PRAGMA synchronous = NORMAL');
     } catch (error) {
-      // Only contention. `openDatabaseFile` is where a file that is not a
-      // database first announces itself -- SQLite opens lazily, so this pragma
-      // is the first statement to read the header -- and the caller above
-      // turns that throw into "discard and rebuild". Swallowing everything
-      // here left a corrupt file in place and let the schema creation below be
-      // the one to fail, past the point that repairs it.
-      if (!isContention(error)) throw error;
+      // Tolerated by SQLite result code, never by message text.
+      //
+      // `openDatabaseFile` is where a file that is not a database first
+      // announces itself: SQLite opens lazily, so this pragma is the first
+      // statement to read the header, and the caller above turns that throw
+      // into "discard and rebuild". Swallowing everything here left the corrupt
+      // file in place for the schema creation below to fail on, past the point
+      // that repairs it -- caught by the test that already covered it.
+      //
+      // So the two codes that mean "this file is not usable" are re-raised and
+      // everything else is absorbed. `SQLITE_IOERR` is what four writers
+      // opening a cold index together actually produced, and `SQLITE_BUSY` is
+      // what a fifth would; neither says anything about the file.
+      //
+      // Matched on identity rather than on message text, which was the first
+      // form and is unsound in both directions: with
+      // `GIT_CONFIG_KEY_0=sqlite_busy`, git's rejection of the key carries that
+      // string into an exception message, and a substring test reads a broken
+      // git configuration as another process holding the index. Reproduced in
+      // review.
+      const code = sqliteResultCode(error);
+      if (code === null || code === SQLITE_NOTADB || code === SQLITE_CORRUPT) throw error;
       /* rollback journal it is; the index is derived and every query still answers */
     }
   }
@@ -2303,42 +2337,6 @@ const incrementalProblem = (handle: IndexHandle, head: string, last: string | nu
  * reason is reported in `IndexStats.rebuildReason` so the caller can say so.
  */
 export const updateIndex = (
-  handle: IndexHandle,
-  opts: { force?: boolean; allowRebuild?: boolean; budget?: ScanBudget; cost?: ScanCost } = {},
-): IndexStats => {
-  try {
-    return runUpdateIndex(handle, opts);
-  } catch (error) {
-    // A contended write is a scheduling outcome, not a data problem (#958).
-    //
-    // Everything this call would have done is durable and resumable: the queue
-    // names what is owed and the next call reads it. Throwing turns "somebody
-    // else is writing" into a dead process, and a drain whose passes can die is
-    // one whose convergence depends on luck -- four processes starting together
-    // produced "database is locked" out of here and out of `openIndex`.
-    //
-    // Narrow on purpose. Only SQLite's busy family is absorbed; corruption, a
-    // schema this build cannot read, and a git failure all still raise, because
-    // for those doing nothing is the wrong answer.
-    if (!isContention(error)) throw error;
-    const stats = emptyStats(handle, Date.now());
-    stats.rebuilt = false;
-    stats.rebuildReason = 'another process held the index; nothing was read this pass';
-    return stats;
-  }
-};
-
-/** SQLite's "wait your turn", by either name it arrives under. */
-const isContention = (error: unknown): boolean => {
-  const message = errorMessage(error).toLowerCase();
-  return (
-    message.includes('database is locked') ||
-    message.includes('database table is locked') ||
-    message.includes('sqlite_busy')
-  );
-};
-
-const runUpdateIndex = (
   handle: IndexHandle,
   opts: { force?: boolean; allowRebuild?: boolean; budget?: ScanBudget; cost?: ScanCost } = {},
 ): IndexStats => {

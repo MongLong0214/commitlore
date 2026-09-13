@@ -25,22 +25,30 @@
  * only ever deleted in the transaction that inserts the records read from it,
  * which is a property of the code and holds under every schedule.
  *
- * Flakiness, measured on this machine (12 cpus, macOS, load ~6.8): 10
+ * Flakiness, measured on this machine (12 cpus, macOS, load ~12): 12
  * consecutive runs, 0 failures.
  *
  * It found three defects the moment it was first run, none of which any
- * single-process test could have reached:
+ * single-process test could have reached — and the third of them turned out to
+ * be a defect of the fix rather than of the code:
  *
  *   - `PRAGMA journal_mode = WAL` threw `SQLITE_IOERR` -- "disk I/O error" --
  *     out of `openIndex` when several writers opened a cold index together.
- *     Without the guard that absorbs it: 2 failures in 6 runs.
+ *     Without the guard that absorbs it: 3 failures in 8 runs. The guard tests
+ *     SQLite's own result code, never the message text: a review reproduced the
+ *     false positive, where `GIT_CONFIG_KEY_0=sqlite_busy` puts that string into
+ *     a git failure's message and a substring test reads it as contention.
  *   - `runInTransaction` used a deferred `BEGIN`, which SQLite will not apply
- *     `busy_timeout` to. Not caught by this test once the tolerance below
- *     exists; measured instead, at 8 contended passes out of 45 against 0.
- *   - `updateIndex` threw `SQLITE_BUSY` at a caller rather than reporting a
- *     pass that did nothing. The held-lock case below is what pins that, and it
- *     is deterministic: this test does not reach it once the other two are in,
- *     which is exactly why it is not left to this one.
+ *     `busy_timeout` to. Not caught by this test; measured instead, at 8
+ *     contended passes out of 45 against 0.
+ *   - `updateIndex` throws contention at its caller, and **must**. The first fix
+ *     absorbed it and reported a pass that did nothing. Review found two
+ *     blockers in that and reproduced both: a notes refresh that lost its write
+ *     lock then returned normally with the old rows in place, so `openSource`
+ *     served a stale index as `coverage: "complete"` where it had previously
+ *     fallen back to a scan -- 1,073 records became one obsolete note, with no
+ *     diagnostic. Withdrawn. A loop that drains is a loop that retries, which is
+ *     what the worker below does and what this whole file is evidence about.
  */
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -170,17 +178,28 @@ const dir = process.env.COMMITLORE_DRAIN_DIR;
 if (dir === undefined) throw new Error('COMMITLORE_DRAIN_DIR is not set');
 const handle = openIndex({ cwd: dir });
 let passes = 0;
+let contended = 0;
 try {
   for (; passes < 400; passes += 1) {
     // A deadline already in the past: every pass does its guaranteed first
     // batch and stops, which is the smallest slice the drain will take and
     // therefore the most interleaving per unit of work.
-    updateIndex(handle, { budget: { deadline: 0, now: () => 1 } });
+    try {
+      updateIndex(handle, { budget: { deadline: 0, now: () => 1 } });
+    } catch (error) {
+      // Contention reaches the caller, by design: \`updateIndex\` must keep
+      // throwing so \`openSource\` can fall back to a scan rather than serve a
+      // stale index as complete. A loop that drains is therefore a loop that
+      // retries -- the queue is durable, so the pass simply did not happen.
+      if (!/database is locked/.test(String(error))) throw error;
+      contended += 1;
+      continue;
+    }
     if (indexUnread(handle) === 0) break;
   }
-  process.stdout.write(JSON.stringify({ passes, unread: indexUnread(handle) }));
+  process.stdout.write(JSON.stringify({ passes, contended, unread: indexUnread(handle) }));
 } catch (error) {
-  process.stdout.write(JSON.stringify({ passes, error: String(error) }));
+  process.stdout.write(JSON.stringify({ passes, contended, error: String(error) }));
 } finally {
   closeIndex(handle);
 }
@@ -188,6 +207,8 @@ try {
 
 interface DrainResult {
   passes: number;
+  /** Passes that met another writer and retried. Reported, not hidden. */
+  contended: number;
   unread?: number;
   error?: string;
 }
@@ -252,17 +273,22 @@ describe('#958 concurrent drainers in separate processes', () => {
   }, 600_000);
 
   /**
-   * A held write lock makes a pass a no-op, not a dead process.
+   * A held write lock is still an exception, and that is the contract.
    *
-   * Deterministic where the four-process test is not: a second connection takes
-   * the write lock with its own `BEGIN IMMEDIATE` and keeps it, so the drain
-   * meets `SQLITE_BUSY` every time rather than when the schedule happens to
-   * produce it. Without this the tolerance is unexercised — with `BEGIN
-   * IMMEDIATE` and the journal-mode guard in place, the racing test never
-   * reaches it, and an untested absorb is the shape that quietly starts
-   * swallowing real failures.
+   * An earlier version of this change absorbed SQLite contention inside
+   * `updateIndex` and reported a pass that did nothing. Review reproduced two
+   * defects in it and both were release blockers: a notes refresh that lost its
+   * write lock returned normally with the old rows in place, so `openSource`
+   * served a stale index as `coverage: "complete"` where it had previously
+   * fallen back to a full scan — 1,073 records became one obsolete note, with
+   * no diagnostic. It was withdrawn.
+   *
+   * What is pinned here instead is the behaviour that was always the contract:
+   * the throw reaches the caller, and the query path turns it into a scan
+   * rather than into a wrong answer. `openSource` is where that happens, and
+   * `r-busy420` is the record that says the fallback is not dead code.
    */
-  it('treats a held write lock as a pass that did nothing', () => {
+  it('raises contention at its caller rather than reporting a pass that did nothing', () => {
     const dir = syntheticRepo(60);
     cold(dir);
 
@@ -270,20 +296,13 @@ describe('#958 concurrent drainers in separate processes', () => {
     const blocker = openIndex({ cwd: dir });
     try {
       blocker.db.exec('BEGIN IMMEDIATE');
-
-      // Never throws, and says why it did nothing.
-      const stats = updateIndex(handle, { budget: { deadline: 0, now: () => 1 } });
-      expect(stats.rebuildReason).toBe('another process held the index; nothing was read this pass');
-      expect(stats.trailersIndexed).toBe(0);
-
+      expect(() => updateIndex(handle, { budget: { deadline: 0, now: () => 1 } })).toThrow(
+        /database is locked/,
+      );
       blocker.db.exec('ROLLBACK');
 
-      // And the passes that follow do the work, so absorbing lost nothing:
-      // the queue still names everything the blocked pass did not read.
-      // At least once, then until nothing is owed. A blocked pass queues
-      // nothing, so `indexUnread` is 0 before the drain starts as well as
-      // after it finishes -- a loop that tested it first would run zero times
-      // and assert against an index nobody had touched.
+      // And the work is still owed, not silently skipped: the passes that
+      // follow finish it.
       for (let at = 0; at < 40; at += 1) {
         updateIndex(handle, { budget: { deadline: 0, now: () => 1 } });
         if (indexUnread(handle) === 0) break;
