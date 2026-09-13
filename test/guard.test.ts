@@ -32,7 +32,26 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Command } from 'commander';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+/**
+ * These cases scan this repository's real history, on purpose, and the 20s
+ * default was never chosen for them (#960).
+ *
+ * Measured on a 12-cpu machine at load 5.1, running this file with one other:
+ * the slowest case here is 6.9s (`answers the same with the index as without`),
+ * and the `does not flag:` cases are 3.4-4.6s each. Under the whole suite in
+ * parallel the same cases were observed at 23s and 29s -- past the default, and
+ * reported as failures that were nothing of the kind.
+ *
+ * 120s is the worst observed (39s, in `inject.test.ts`) with room for a machine
+ * three times as contended. It is not a performance budget: a timeout here
+ * exists to stop a hung child from hanging the run, and 120s still does that.
+ * If these get slower, the number to change is this one, with the measurement
+ * that justified it.
+ */
+vi.setConfig({ testTimeout: 120_000 });
+
 
 import {
   FLAGGED_EXIT_CODE,
