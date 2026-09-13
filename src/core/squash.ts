@@ -98,11 +98,21 @@ export interface SquashOptions {
 export interface RangeCache {
   /** Record blocks by commit sha, from the message. */
   readonly messages: Map<string, Trailer[][]>;
+  /**
+   * Record blocks by commit sha, from the note.
+   *
+   * The first form of this cache covered the messages and the mirror listing and
+   * left the note bodies out, which is the same half-fix `CollectCache` shipped
+   * with and measuring caught there too. Candidate ranges overlap, so a note on a
+   * shared commit was read once per candidate: measured at twelve reads of one
+   * note in a single `doctor` run.
+   */
+  readonly notes: Map<string, Trailer[][]>;
   /** The note-annotated shas, listed once. */
   mirrored?: ReadonlySet<string>;
 }
 
-export const newRangeCache = (): RangeCache => ({ messages: new Map() });
+export const newRangeCache = (): RangeCache => ({ messages: new Map(), notes: new Map() });
 
 export interface AttachOptions extends SquashOptions {
   /** Replace an existing note on the target. Without it, one is an error. */
@@ -333,7 +343,10 @@ export const collectRange = (range: string, opts: SquashOptions = {}): Collected
       cachedBlocks ??
       (CANDIDATE_LINE_RE.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha)) : []);
     if (cachedBlocks === undefined) opts.cache?.messages.set(sha, messageBlocks);
-    const noteBlocks = mirrored.has(sha) ? readRecordBlocks(sha, opts) : [];
+    const cachedNote = opts.cache?.notes.get(sha);
+    const noteBlocks =
+      cachedNote ?? (mirrored.has(sha) ? readRecordBlocks(sha, opts) : []);
+    if (cachedNote === undefined) opts.cache?.notes.set(sha, noteBlocks);
     const blocks = mergeCommitBlocks(messageBlocks, noteBlocks);
 
     for (const trailers of blocks) {

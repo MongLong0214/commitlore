@@ -94,9 +94,29 @@ const validateNonce = (nonce: string): void => {
 // Path resolution — via git rev-parse --git-path (ADR-0021, per-worktree)
 // ---------------------------------------------------------------------------
 
+/**
+ * Memoised per directory, because the answer cannot change under a process.
+ *
+ * `pendingFilePath` asks for the directory once per nonce, so a listing paid one
+ * `git rev-parse` per pending file: measured at 25 spawns for a repository with
+ * 24 of them, of which 24 were the same question with the same answer. The
+ * layout is fixed by ADR-0021 and resolved per worktree, and a worktree does not
+ * move while a command runs.
+ *
+ * Keyed on the directory asked about rather than shared globally, so a long-lived
+ * server answering for several repositories keeps them apart. What it cannot see
+ * is a repository whose git-dir moves mid-process, which is not a thing a
+ * worktree does while something is reading it.
+ */
+const pendingDirCache = new Map<string, string>();
+
 const pendingDir = (cwd: string): string => {
+  const memo = pendingDirCache.get(cwd);
+  if (memo !== undefined) return memo;
   const reported = execGitOrThrow(['rev-parse', '--git-path', 'commitlore/pending'], { cwd }).trim();
-  return resolve(cwd, reported);
+  const resolved = resolve(cwd, reported);
+  pendingDirCache.set(cwd, resolved);
+  return resolved;
 };
 
 const pendingFilePath = (nonce: string, cwd: string): string => {
