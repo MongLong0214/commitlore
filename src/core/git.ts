@@ -81,6 +81,42 @@ export const execGit = (args: string[], opts: ExecGitOptions = {}): GitResult =>
 };
 
 /**
+ * The same spawn, with stdout kept as bytes.
+ *
+ * `git cat-file --batch` frames each object with a byte length, and a decoded
+ * string cannot be indexed by it: one multi-byte character makes every
+ * subsequent offset wrong, and the framing fails silently rather than loudly.
+ * Only a reader that must honour a length git wrote should use this; everything
+ * else wants {@link execGit} and its UTF-8 string.
+ */
+export const execGitBytes = (
+  args: string[],
+  opts: ExecGitOptions = {},
+): { stdout: Buffer; stderr: string; code: number } => {
+  const result = spawnSync('git', args, {
+    shell: false,
+    cwd: opts.cwd ?? process.cwd(),
+    input: opts.stdin ?? '',
+    env: opts.env,
+    maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
+    timeout: opts.timeout,
+  });
+
+  const stderr = result.stderr === null ? '' : String(result.stderr);
+  if (result.status !== null) {
+    return { stdout: result.stdout ?? Buffer.alloc(0), stderr, code: result.status };
+  }
+  if (result.error !== undefined) {
+    return { stdout: Buffer.alloc(0), stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
+  }
+  return {
+    stdout: Buffer.alloc(0),
+    stderr: `${stderr}git terminated by signal ${result.signal ?? 'unknown'}`,
+    code: GIT_SPAWN_FAILED,
+  };
+};
+
+/**
  * Marks a thrown `Error` as "git could not answer", so a caller can tell a
  * host failure from a usage error without matching on message text. A flag
  * rather than an Error subclass, same shape as `commitloreMissingInstalledFile`.
