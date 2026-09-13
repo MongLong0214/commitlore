@@ -56,6 +56,21 @@ vi.mock('../src/core/git.js', async (importOriginal) => {
       }
       return actual.execGit(args, opts);
     },
+    // The notes reader reads bodies as bytes, because `cat-file --batch` frames
+    // each object with a byte length (#957). It is a separate entry point, so a
+    // mock that wrapped only the string ones would let every injected failure
+    // through it silently — which is exactly what happened, and the tests below
+    // passed by never reaching the failure they meant to inject.
+    execGitBytes: (
+      args: Parameters<typeof actual.execGitBytes>[0],
+      opts?: Parameters<typeof actual.execGitBytes>[1],
+    ): ReturnType<typeof actual.execGitBytes> => {
+      const failure = gitInjection.failure;
+      if (failure?.matches(args)) {
+        return { stdout: Buffer.alloc(0), stderr: failure.stderr, code: failure.code };
+      }
+      return actual.execGitBytes(args, opts);
+    },
     execGitOrThrow: (
       args: Parameters<typeof actual.execGitOrThrow>[0],
       opts?: Parameters<typeof actual.execGitOrThrow>[1],
@@ -954,8 +969,11 @@ describe('index-db: notes as a second source', () => {
         indexedRef,
       );
       gitInjection.failure = {
-        matches: (args) =>
-          args.includes('log') && args.includes('--notes=refs/notes/commitlore'),
+        // The bodies come from `cat-file --batch` over the blob ids the
+        // listing named, not from `git log --notes=<ref>`: the note text is no
+        // longer fetched through the mutable ref (#957). The failure this
+        // injects is the same one — git cannot read the note bodies.
+        matches: (args) => args.includes('cat-file') && args.includes('--batch'),
         code: 70,
         stderr: 'injected note read failure',
       };
@@ -992,8 +1010,11 @@ describe('index-db: notes as a second source', () => {
         { cwd: dir, stdin: 'Warn: recovered replacement\nRecord-Id: r-note07\n' },
       );
       gitInjection.failure = {
-        matches: (args) =>
-          args.includes('log') && args.includes('--notes=refs/notes/commitlore'),
+        // The bodies come from `cat-file --batch` over the blob ids the
+        // listing named, not from `git log --notes=<ref>`: the note text is no
+        // longer fetched through the mutable ref (#957). The failure this
+        // injects is the same one — git cannot read the note bodies.
+        matches: (args) => args.includes('cat-file') && args.includes('--batch'),
         code: 70,
         stderr: 'injected note read failure',
       };
@@ -1019,7 +1040,10 @@ describe('index-db: notes as a second source', () => {
       { cwd: dir, stdin: 'Warn: force ensureIndex to fail\nRecord-Id: r-note08\n' },
     );
     gitInjection.failure = {
-      matches: (args) => args.includes('notes') && args.includes('list'),
+      // The listing is `ls-tree` against the resolved notes tree rather than
+      // `git notes list`, so that one pass reads one mirror (#957). Same
+      // failure: git cannot enumerate the notes.
+      matches: (args) => args.includes('ls-tree'),
       code: 70,
       stderr: 'injected notes list failure',
     };
@@ -1050,7 +1074,10 @@ describe('index-db: notes as a second source', () => {
       { cwd: dir, stdin: 'Warn: listing must be checked\nRecord-Id: r-note09\n' },
     );
     gitInjection.failure = {
-      matches: (args) => args.includes('notes') && args.includes('list'),
+      // The listing is `ls-tree` against the resolved notes tree rather than
+      // `git notes list`, so that one pass reads one mirror (#957). Same
+      // failure: git cannot enumerate the notes.
+      matches: (args) => args.includes('ls-tree'),
       code: 70,
       stderr: 'injected notes list failure',
     };

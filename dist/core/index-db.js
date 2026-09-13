@@ -53,7 +53,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
-import { canonicalCommittedAt, execGit, execGitOrThrow, historyAvailability } from './git.js';
+import { canonicalCommittedAt, execGit, execGitBytes, execGitOrThrow, historyAvailability, } from './git.js';
 import { isolateBlocks, parseRecordBlocks, parseRecordBlocksWithAtom } from './trailers.js';
 import { signatureVerifierGeneration } from './trusted-authors.js';
 import { canonicalConventionalTrailerKey, isConventionalTrailerKey, isCommitLoreKey, } from './types.js';
@@ -369,11 +369,24 @@ const gitLogByShas = (cwd, shas, format, extra) => execGit([
     `--format=${format}`,
 ], { cwd, stdin: `${shas.join('\n')}\n`, maxBuffer: LOG_MAX_BUFFER });
 /** sha -> sorted paths, for the commits that carry a record. */
-const readPaths = (cwd, shas) => {
+const readPaths = (cwd, shas) => new Map([...readPathsAndMeta(cwd, shas, false)].map(([sha, entry]) => [sha, entry.paths]));
+/**
+ * The paths a commit touched, and optionally the fields a note row needs about
+ * the commit it annotates.
+ *
+ * The notes reader used to take those fields from the same `git log` that
+ * carried `%N`, which is what tied a note's body to a ref read three times.
+ * Reading bodies by blob id frees the body from the ref -- and would have cost
+ * a process per batch to fetch the fields separately, except that this pass
+ * already visits exactly the right commits. Adding four atoms to a format costs
+ * nothing.
+ */
+const readPathsAndMeta = (cwd, shas, withMeta) => {
     const byCommit = new Map();
     if (shas.length === 0)
         return byCommit;
-    const result = gitLogByShas(cwd, shas, `%x01%H%x00`, ['-z', '--name-only', DIFF_MERGES]);
+    const format = withMeta ? `%x01%H%x00%ct%x00%cI%x00%G?%x00` : `%x01%H%x00`;
+    const result = gitLogByShas(cwd, shas, format, ['-z', '--name-only', DIFF_MERGES]);
     if (result.code !== 0) {
         throw Object.assign(new Error(`git log --name-only failed: ${result.stderr.trim()}`), {
             code: result.code,
@@ -385,7 +398,13 @@ const readPaths = (cwd, shas) => {
         const sha = fields[0];
         if (sha === undefined)
             continue;
-        byCommit.set(sha, parsePathFields(fields.slice(1)).sort());
+        const skip = withMeta ? 4 : 1;
+        byCommit.set(sha, {
+            paths: parsePathFields(fields.slice(skip)).sort(),
+            committedTs: withMeta ? Number.parseInt(fields[1] ?? '0', 10) : 0,
+            committedAt: withMeta ? canonicalCommittedAt(fields[2] ?? '') : '',
+            signatureStatus: withMeta ? (fields[3]?.trim() ?? '') : '',
+        });
     }
     return byCommit;
 };
@@ -644,57 +663,38 @@ guaranteeFirstBatch = false) => {
     return records;
 };
 /**
- * Reads `refs/notes/commitlore` as a second record source (ADR-0003: notes are
- * truth, not cache).
+ * The notes a given mirror holds, read from that mirror and not from the ref
+ * that happened to point at it.
  *
- * This is the T-301 wiring point. It deliberately does not import
- * `src/core/notes.ts`: that module is being written in parallel and owns
- * *writing* notes and the fetch refspec, while indexing only needs to read the
- * ref, so the two are coupled through git rather than through each other. When
- * T-301 lands a reader, the body of this function is the only thing that
- * changes — `indexNotes` and the `source = 'notes'` rows it produces stay.
+ * `git notes list` resolves `refs/notes/commitlore` itself, so a listing taken
+ * that way belongs to whatever the ref meant at that instant — and the bodies
+ * were then read through the ref a second time, and the result stamped with a
+ * third reading. Three resolutions of a mutable ref, in one pass that reports a
+ * single answer.
  *
- * Note text goes through `parseRecordBlocks` (T-201, SPEC §2.4) under the
- * synthetic subject of `NOTE_SUBJECT`, which costs one process per note (or a
- * handful more, for each earlier block a note happens to carry). Notes are
- * sparse by construction, and correctness here is worth more than the
- * batching: a note is a message, and only git decides where its trailer block
- * starts.
- *
- * Every block also goes through `stripConventional` (bug-issue-150) before
- * the empty check below, the same as the commit-message path. CommitLore
- * itself never writes a reserved trailer into a note, but a note is still
- * text an external tool or a hand edit can put anything into, and a mirror
- * that trusted its own source more than it trusts a commit message would be
- * the one place this bug could survive its own fix.
- *
- * `reachable` is the HEAD walk the caller already made, and every note outside
- * it is dropped (bug-issue-351). A note is keyed by object name and knows
- * nothing about refs, so it outlives the commit it annotates: `reset --hard`,
- * an abandoned branch and a rebase all leave the object addressable and the
- * note readable. Serving those is not a stale extra row — the abandoned
- * record's `Supersedes:` retires the record that is still live, so one
- * unreachable note silences a reachable one. The commit source has never had
- * this problem because it only ever reads `rev-list HEAD`, and
- * `commands/stale.ts` filters its notes the same way; without this the two
- * answered differently on the same repository.
+ * `ls-tree` against a resolved tree is one process for one process and cannot
+ * drift: every note this returns, and every blob id, comes from the snapshot
+ * the caller names. A note's path in that tree is the annotated object's id,
+ * split by git's fanout, so the separators come back out.
  */
-/**
- * The annotated commits the notes pass would read, in the order it reads them.
- *
- * Separate from the reading because a resumed pass already holds its list and
- * must not re-derive it: re-deriving would silently re-scope the work to
- * whatever HEAD and the mirror say now, and the rows already written came from
- * the earlier scope.
- */
-const annotatedCommits = (cwd, reachable) => {
-    const listed = execGitOrThrow(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
-    const annotated = listed
-        .split('\n')
-        .filter((line) => line !== '')
-        .map((line) => line.split(' ')[1] ?? '')
-        .filter((sha) => sha !== '' && reachable.has(sha));
-    if (annotated.length === 0)
+const annotatedNotes = (cwd, refSha, reachable) => {
+    const listed = execGitOrThrow(['ls-tree', '-r', '-z', '--full-tree', refSha], { cwd });
+    const notes = [];
+    for (const entry of listed.split('\0')) {
+        if (entry === '')
+            continue;
+        const tab = entry.indexOf('\t');
+        if (tab === -1)
+            continue;
+        const [, type, blob] = entry.slice(0, tab).split(/\s+/);
+        if (type !== 'blob' || blob === undefined)
+            continue;
+        const commit = entry.slice(tab + 1).replaceAll('/', '');
+        if (commit === '' || !reachable.has(commit))
+            continue;
+        notes.push({ commit, blob });
+    }
+    if (notes.length === 0)
         return [];
     /* Notes may annotate any object. `git log` refuses a blob, so one bad note
        would otherwise take the whole index down. A pruned object is the same
@@ -704,13 +704,55 @@ const annotatedCommits = (cwd, reachable) => {
        them apart before it. */
     const typed = execGitOrThrow(['cat-file', '--batch-check'], {
         cwd,
-        stdin: `${annotated.join('\n')}\n`,
+        stdin: `${notes.map((note) => note.commit).join('\n')}\n`,
     });
-    return typed
+    const commits = new Set(typed
         .split('\n')
         .filter((line) => line.endsWith(' commit') || line.includes(' commit '))
         .map((line) => line.split(' ')[0] ?? '')
-        .filter((sha) => sha !== '');
+        .filter((sha) => sha !== ''));
+    return notes.filter((note) => commits.has(note.commit));
+};
+/**
+ * Note bodies, by the blob ids a listing named.
+ *
+ * `--batch` frames each object with a byte length, so the output is walked as
+ * bytes and decoded per object: indexing a decoded string by git's length is
+ * wrong the moment a note contains a multi-byte character, and wrong silently.
+ */
+const readNoteBodies = (cwd, blobs) => {
+    const bodies = new Map();
+    if (blobs.length === 0)
+        return bodies;
+    const result = execGitBytes(['cat-file', '--batch'], {
+        cwd,
+        stdin: `${blobs.join('\n')}\n`,
+        maxBuffer: LOG_MAX_BUFFER,
+    });
+    if (result.code !== 0) {
+        throw Object.assign(new Error(`git cat-file --batch failed: ${result.stderr.trim()}`), {
+            code: result.code,
+            stderr: result.stderr,
+        });
+    }
+    let at = 0;
+    const out = result.stdout;
+    while (at < out.length) {
+        const newline = out.indexOf(0x0a, at);
+        if (newline === -1)
+            break;
+        const header = out.subarray(at, newline).toString('utf8');
+        at = newline + 1;
+        const [oid, type, size] = header.split(' ');
+        if (oid === undefined || type !== 'blob' || size === undefined) {
+            // `<oid> missing` carries no body and no trailing newline of its own.
+            continue;
+        }
+        const length = Number.parseInt(size, 10);
+        bodies.set(oid, out.subarray(at, at + length).toString('utf8'));
+        at += length + 1;
+    }
+    return bodies;
 };
 const readNotesFor = (cwd, commits, excluded, budget, cost, 
 /** See `readCommitRecords`: the drain must not be able to spin. */
@@ -732,40 +774,30 @@ guaranteeFirstBatch = false) => {
             (budget.now ?? Date.now)() > budget.deadline) {
             if (cost !== undefined) {
                 cost.unreadNotes = commits.length - read;
-                cost.pendingNotes = commits.slice(read);
+                cost.pendingNotes = commits.slice(read).map((note) => note.commit);
             }
             return records;
         }
         read += batch.length;
-        const result = gitLogByShas(cwd, batch, '%x01%H%x00%ct%x00%cI%x00%G?%x00%N%x00', [
-            `--notes=${NOTES_REF}`,
-        ]);
-        if (result.code !== 0) {
-            throw Object.assign(new Error(`git log --notes failed: ${result.stderr.trim()}`), {
-                code: result.code,
-                stderr: result.stderr,
-            });
-        }
-        const batchRecords = [];
-        const parsed = splitRecords(result.stdout)
-            .map((record) => record.split(FIELD_SEP))
-            .filter(([sha, rawTs, committedAt, , noteText]) => sha !== undefined &&
-            rawTs !== undefined &&
-            committedAt !== undefined &&
-            noteText !== undefined &&
-            noteText.trim() !== '');
+        // The bodies come from the blob ids the listing named, so this batch reads
+        // the mirror the caller pinned and not whatever the ref means now. That is
+        // the whole point: `--notes=<ref>` resolved it again, one pass could
+        // therefore span two mirrors, and the stamp named a third reading.
+        const bodies = readNoteBodies(cwd, batch.map((note) => note.blob));
+        const withText = batch
+            .map((note) => ({ note, text: bodies.get(note.blob) }))
+            .filter((entry) => entry.text !== undefined && entry.text.trim() !== '');
         // One probe pass for every note in this batch, the same way
         // `explodeRecordBlocks` does it for commit messages. A note's own block is
-        // still a process each -- `%N` carries the note text and `%(trailers)`
-        // parses the annotated *commit*, so there is no note atom to hand over --
-        // but its earlier blocks no longer cost one apiece. This path spent 46 of
-        // a cold rebuild's 48 `interpret-trailers` processes for eleven notes.
-        const isolatedNotes = isolateBlocks(parsed.map((fields) => `${NOTE_SUBJECT}\n\n${String(fields[4])}`));
-        for (const fields of parsed) {
-            const [sha, rawTs, committedAt, signatureStatus, noteText] = fields;
+        // still a process each -- there is no trailer atom for a note body, since
+        // `%(trailers)` parses the annotated *commit* -- but its earlier blocks no
+        // longer cost one apiece.
+        const isolatedNotes = isolateBlocks(withText.map((entry) => `${NOTE_SUBJECT}\n\n${entry.text}`));
+        const batchRecords = [];
+        for (const { note, text } of withText) {
             // A note may itself carry several record blocks (SPEC §2.4): squash
             // inheritance writes one per source record (`core/squash.ts`).
-            const blocks = parseRecordBlocks(`${NOTE_SUBJECT}\n\n${noteText}`, {
+            const blocks = parseRecordBlocks(`${NOTE_SUBJECT}\n\n${text}`, {
                 isolated: isolatedNotes,
             });
             blocks.forEach((rawTrailers, block) => {
@@ -773,25 +805,41 @@ guaranteeFirstBatch = false) => {
                 if (trailers.length === 0)
                     return;
                 batchRecords.push({
-                    sha,
+                    sha: note.commit,
                     block,
-                    committedAt: canonicalCommittedAt(committedAt),
-                    committedTs: Number.parseInt(rawTs, 10),
-                    signatureStatus: signatureStatus?.trim() ?? '',
+                    committedAt: '',
+                    committedTs: 0,
+                    signatureStatus: '',
                     source: 'notes',
                     trailers,
                     paths: [],
                 });
             });
         }
-        const paths = readPaths(cwd, batchRecords.map((record) => record.sha));
-        for (const record of batchRecords)
-            record.paths = paths.get(record.sha) ?? [];
+        // The commit fields a note row carries -- `%ct`, `%cI`, `%G?` -- used to
+        // arrive on the same `git log` that carried `%N`. They come from this pass
+        // now, which already visits exactly these commits to read their paths, so
+        // freeing the body from the ref costs no process at all.
+        const meta = readPathsAndMeta(cwd, batchRecords.map((record) => record.sha), true);
+        for (const record of batchRecords) {
+            const entry = meta.get(record.sha);
+            record.paths = entry?.paths ?? [];
+            record.committedAt = entry?.committedAt ?? '';
+            record.committedTs = entry?.committedTs ?? 0;
+            record.signatureStatus = entry?.signatureStatus ?? '';
+        }
         records.push(...batchRecords);
     }
     return records;
 };
-const readNoteRecords = (cwd, reachable, excluded, budget, cost) => readNotesFor(cwd, annotatedCommits(cwd, reachable), excluded, budget, cost);
+const readNoteRecords = (cwd, reachable, excluded, budget, cost, 
+/** The mirror to read. Resolved by the caller so one pass reads one mirror. */
+refSha) => {
+    const pinned = refSha ?? revParseRef(cwd, NOTES_REF);
+    return pinned === null
+        ? []
+        : readNotesFor(cwd, annotatedNotes(cwd, pinned, reachable), excluded, budget, cost);
+};
 const revParse = (cwd, rev) => {
     const result = execGit(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { cwd });
     if (result.code === GIT_NO_SUCH_REF && result.stderr.trim() === '')
@@ -1337,7 +1385,9 @@ export const indexNotes = (handle, opts = {}, excluded, cost) => {
         return 0;
     }
     const local = { unreadCommits: 0, unreadNotes: 0 };
-    const annotated = refSha === null ? [] : annotatedCommits(handle.cwd, new Set(reachableFromHead(handle.cwd)));
+    const annotated = refSha === null
+        ? []
+        : annotatedNotes(handle.cwd, refSha, new Set(reachableFromHead(handle.cwd)));
     const records = annotated.length === 0
         ? []
         : readNotesFor(handle.cwd, annotated, excluded, opts.budget, local);
@@ -1430,7 +1480,9 @@ export const rebuildIndex = (handle, opts = {}) => {
     const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
     const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
     const notesRef = revParseRef(handle.cwd, NOTES_REF);
-    const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost);
+    const noteRecords = notesRef === null
+        ? []
+        : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost, notesRef);
     const stats = {
         ...emptyStats(handle, started),
         rebuilt: true,
@@ -1592,7 +1644,13 @@ const drainPending = (handle, outer, excluded, stats) => {
     }
     const cost = { unreadCommits: 0, unreadNotes: 0 };
     const shas = notes.map((entry) => entry.sha);
-    const records = readNotesFor(handle.cwd, shas, excluded, budget, cost, !floorSpent);
+    // The queue stores annotated commits, so their blob ids are recovered from
+    // the mirror the queue was listed from -- `listedFrom`, checked equal to the
+    // live ref above and used here rather than the ref, so a queue drained across
+    // a mirror change reads the version it was listed against or nothing.
+    const owed = new Set(shas);
+    const pinnedNotes = annotatedNotes(handle.cwd, listedFrom, owed).filter((note) => owed.has(note.commit));
+    const records = readNotesFor(handle.cwd, pinnedNotes, excluded, budget, cost, !floorSpent);
     const read = shas.length - cost.unreadNotes;
     if (read === 0)
         return;
