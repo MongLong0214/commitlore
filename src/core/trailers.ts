@@ -117,6 +117,21 @@ export const parseRecordBlocksWithAtom = (
         ...(isolated === undefined ? {} : { isolated }),
       });
 
+/**
+ * `parseCommitMessage` answered from an atom the caller already holds.
+ *
+ * The same guard as {@link parseRecordBlocksWithAtom}, for callers that want
+ * the message's own block on its own rather than every block: a reader that has
+ * run {@link readTrailersAtom} should never pay a process to re-derive what the
+ * walk already returned. Falls back to the process where there is no atom, or
+ * where the message's framing is one an atom cannot be trusted for.
+ */
+export const parseCommitMessageWithAtom = (
+  message: string,
+  atom: string | undefined,
+): Trailer[] =>
+  atom === undefined || atomIsAmbiguous(message) ? parseCommitMessage(message) : parseTrailersAtom(atom);
+
 /** Loose on purpose: see `parseRecordBlocks`. */
 const MENTIONS_RECORD_ID = /record-id/i;
 

@@ -293,10 +293,11 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
   const { nonce, cwd } = opts;
 
   // Hold the nonce for the whole call so a concurrent loser is refused before
-  // it computes a result it cannot store — and so its settle path cannot
-  // delete the winner's transaction. Sequential replay still acquires after
-  // the first call has released, sees `verified`, and settle deletes as
-  // before. A read-only check writes nothing and takes no lock.
+  // it computes a result it cannot store. A caller that arrives after the
+  // first has released acquires cleanly and is refused by the phase check in
+  // `runVerifyCaptureRecords` instead — the two are indistinguishable from
+  // here, which is the whole of #981. A read-only check writes nothing and
+  // takes no lock.
   let createdLock = false;
   if (opts.readOnly !== true) {
     const lock = tryLockPending(nonce, cwd);
@@ -317,6 +318,30 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
   } finally {
     if (createdLock) unlockPending(nonce, cwd);
   }
+};
+
+/**
+ * What a caller can do about a transaction that already holds a verification.
+ *
+ * Worded per phase because the answer differs and a wrong one wastes the
+ * caller's next move: `pending rm` refuses `staged` and `applied`
+ * (`PROTECTED_PHASES` in `src/commands/pending.ts`), since the post-commit hook
+ * may still be owed them.
+ */
+const recoveryFor = (phase: PendingRecord['phase'], nonce: string): string => {
+  if (phase === 'verified') {
+    return (
+      `Run \`commitlore pending rm ${nonce}\` and prepare again if you meant to replace it; ` +
+      'the stored verification is otherwise still the one that will stage.'
+    );
+  }
+  if (phase === 'staged') {
+    return 'It is already attached to the next commit; prepare a new transaction to record anything else.';
+  }
+  if (phase === 'applied' || phase === 'consumed') {
+    return 'It has already reached a commit; prepare a new transaction to record anything else.';
+  }
+  return 'Prepare a new transaction to record anything else.';
 };
 
 const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResult => {
@@ -349,9 +374,13 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
     // would have carried the first record. The stored transaction has to stop
     // being usable, not just stop being reported.
     //
-    // Discarded rather than downgraded. Two verifications of one nonce have now
-    // disagreed, and there is no reading of that where either result should
-    // reach a commit. `prepare` is one call away.
+    // Reachable only as an anomaly now. A transaction that already held a
+    // result is refused above, before anything is recomputed, so the store can
+    // fail here only if the transaction vanished or changed phase *while this
+    // call held its lock* — which no ordinary caller can produce. Discarding is
+    // the right answer to that, and the wrong answer to a second verification
+    // arriving late (#981): the earlier caller was told it passed.
+    // `prepare` is one call away.
     if (opts.readOnly !== true) {
       try {
         deletePending(nonce, { cwd });
@@ -378,6 +407,44 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
       return {
         accepted: [],
         rejected: [],
+        validation_result: 'empty',
+        incomplete: true,
+        overlap_check: 'canonical_exact_only',
+      };
+    }
+
+    // A transaction that is no longer `prepared` already carries a result, and
+    // this call cannot replace it: `storeVerification` refuses every phase but
+    // `prepared` (`pending.ts`). Refuse here, before anything is recomputed,
+    // and say which phase refused.
+    //
+    // This used to fall through, fail the store, and reach `settle`, which
+    // deleted the transaction. That reading — "two verifications of one nonce
+    // disagreed" — is not available from inside: once the first caller has
+    // released its lock and exited, a deliberate replay and a concurrent loser
+    // that arrived late are byte-identical. `settle` was therefore discarding a
+    // verification whose caller had been told it passed, which is what #981
+    // observed on CI and what `pending-concurrency` asserts must not happen.
+    // Two real processes, run one after the other, reproduce it with no race
+    // at all (#981).
+    //
+    // The refusal is reported rather than swallowed. Every drafted record comes
+    // back rejected, naming the phase and how to get a transaction that can
+    // accept one, so a caller replaying on purpose is told why instead of
+    // finding its transaction gone.
+    if (pending.phase !== 'prepared' && opts.readOnly !== true) {
+      for (const record of draft) {
+        rejected.push({
+          record,
+          reason: 'not-prepared',
+          detail:
+            `this transaction is already ${pending.phase}: it holds a verification that this ` +
+            `call cannot replace. ${recoveryFor(pending.phase, nonce)}`,
+        });
+      }
+      return {
+        accepted: [],
+        rejected,
         validation_result: 'empty',
         incomplete: true,
         overlap_check: 'canonical_exact_only',
