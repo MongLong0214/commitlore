@@ -57,7 +57,7 @@ import { dirname, resolve } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { canonicalCommittedAt, execGit, execGitOrThrow, historyAvailability } from './git.js';
-import { parseRecordBlocks } from './trailers.js';
+import { parseRecordBlocks, parseRecordBlocksWithAtom } from './trailers.js';
 import { signatureVerifierGeneration } from './trusted-authors.js';
 import {
   canonicalConventionalTrailerKey,
@@ -421,6 +421,16 @@ interface RawRecord {
   source: RecordSource;
   trailers: Trailer[];
   paths: string[];
+  /**
+   * The raw `TRAILERS_ATOM` field this record's own block came from, when the
+   * pass that produced it read one.
+   *
+   * Carried so `explodeRecordBlocks` can hand it to
+   * `parseRecordBlocksWithAtom` instead of paying a `git interpret-trailers`
+   * process to re-derive the block the walk already returned. Not stored: the
+   * rows come from `trailers`, and this only decides how they were obtained.
+   */
+  atom?: string;
 }
 
 const errorMessage = (error: unknown): string =>
@@ -731,7 +741,15 @@ const explodeRecordBlocks = (
     // did.
     if (atomPassHasEverything(message)) return [record];
 
-    const blocks = parseRecordBlocks(message);
+    // The walk already read this commit's own block as an atom, so re-deriving
+    // it here cost one `git interpret-trailers` process per message that
+    // reached this pass -- 94 of them on this repository's history, for an
+    // answer already in hand. `stale` and `squash-preserve` were moved onto
+    // `parseRecordBlocksWithAtom` for exactly this reason and the index was
+    // left; it decides nothing about which paragraphs are tested, only where
+    // the last block's bytes come from, and it falls back to the process
+    // whenever the atom cannot frame the message (`atomIsAmbiguous`).
+    const blocks = parseRecordBlocksWithAtom(message, record.atom);
     if (blocks.length <= 1) return [record];
 
     const earlierBlocks = blocks
@@ -869,6 +887,7 @@ const readCommitRecords = (
         source: 'commit',
         trailers: stripConventional(rawTrailers, excluded),
         paths: [],
+        atom: trailerField ?? '',
       });
     }
 

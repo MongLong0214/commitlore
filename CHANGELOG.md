@@ -4,6 +4,33 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.1
+
+The index paid a process to work out something it had already been told.
+
+**The recovery pass re-derived the block the walk had handed it.**
+`readCommitRecords` reads `TRAILERS_ATOM` in the same `git log` that fetches
+each commit, so a message's own trailer block arrives with it. The pass that
+recovers *earlier* blocks (SPEC §2.4) then called the grammar with no block in
+hand, and the grammar spawned `git interpret-trailers --parse` to work out the
+one already in hand. `stale` and `squash-preserve` were both moved onto
+`parseRecordBlocksWithAtom` for exactly this reason; the index was left behind.
+
+A cold rebuild of this repository went from **261 git processes to 172**, of
+which `interpret-trailers` went from 244 to 155 — and the index it produces is
+identical, row for row, on both trailers and paths. Nothing about which
+paragraphs are tested changed: the atom decides only where the last block's
+bytes come from, and the process still answers whenever the message's framing
+makes the atom ambiguous.
+
+This is the first half of #951's ranked item 1, and it is the half that needed
+no new measurement. The measurement the issue asked for said the rest: commit
+count is not the cold-path driver — 20,000 generated commits index cold in three
+seconds while 1,544 real ones do not, because the generated history carries no
+multi-block messages. What is left is the 155, which are one process per
+candidate paragraph, of which 88 of 114 on this history are paragraphs that
+could never have become a block.
+
 ## 1.3.0
 
 A scan that ran out of budget stopped, and then never started again. Everything
