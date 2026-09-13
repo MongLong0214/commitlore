@@ -4,6 +4,39 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.7
+
+Two ways a query could answer wrongly and say it was complete. Both were found
+by review rather than by a test, and both now have one.
+
+**A fast-forward could lose a note, permanently.** A note row is not a property
+of the notes mirror: the pass filters the mirror by what HEAD reaches, so one
+mirror yields different rows at different HEADs — and the check that decided
+whether to re-read compared the mirror and nothing else. Index at an ancestor
+whose mirror already carries a note on a descendant, then `git pull --ff-only`:
+the commit scan advances, the notes scan returns at once, and the note is
+missing with nothing queued. Every later call repeats it. On the reproduction
+the indexed answer was `coverage: "complete"` with no records while
+`--no-index` returned the note — the two paths disagreeing, which is the one
+thing they may never do. A missing `Supersedes:` arriving the same way would
+leave a withdrawn constraint active.
+
+A pass now records the HEAD it was scoped to alongside the mirror it read. The
+correctness alone would cost a whole notes pass per commit — 40
+`interpret-trailers` on a repository with 40 notes, paid by the post-commit
+hook every time — so a fast-forward is answered narrowly: it can only add
+reachable commits, so only the commits it added can be carrying a missing note.
+56 git processes to 14, and 40 parses to 0.
+
+**A query that fell back to the scan kept describing the index.** When a read
+fails, the answer is produced by a full scan for the rest of that query — that
+part always worked. What did not was everything the query then said about
+itself: `fromIndex`, the scan-pass count, and the unread count were all fixed at
+the index's values. The last one decides `coverage`, so a fallback scan that ran
+out of budget while the index's queue happened to be empty reported a complete
+answer that was missing records. The explanation was lost too, appended to a
+diagnostics array that had already been copied.
+
 ## 1.3.6
 
 Concurrency, measured instead of argued — and three defects that only showed up
