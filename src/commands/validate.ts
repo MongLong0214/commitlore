@@ -462,11 +462,32 @@ const withheldTrailerWarnings = (
  * function has already committed to being a record. A malformed one is
  * reported as such rather than silently excused.
  */
+/**
+ * A message's blocks, read through the grammar once per invocation.
+ *
+ * The cache belongs to the caller and never outlives it (`r-staleonepass`):
+ * hoisting one to module scope would serve a rewritten message from memory,
+ * which is the staleness these caches exist to avoid.
+ */
+const blocksOf = (message: string, cache?: CollectCache): Trailer[][] => {
+  const cached = cache?.blocks.get(message);
+  if (cached !== undefined) return cached;
+  const blocks = parseRecordBlocks(message);
+  cache?.blocks.set(message, blocks);
+  return blocks;
+};
+
 const inspectSource = (
   source: MessageSource,
 ): { violations: LocatedViolation[]; warnings: string[] } => {
   const trailers = parseCommitMessage(source.message);
-  const blocks = parseRecordBlocks(source.message);
+  // The message's own block is already in hand, so `parseRecordBlocks` must not
+  // derive it again: without `last` it calls `parseCommitMessage` itself, and
+  // this function then paid two `git interpret-trailers` processes for one
+  // answer. `opts.last` replaces only where those bytes come from -- which
+  // paragraphs are tested, and whether they are accepted, is decided inside the
+  // grammar for every caller alike.
+  const blocks = parseRecordBlocks(source.message, { last: trailers });
   const earlierBlocks = trailers.length === 0 ? blocks : blocks.slice(0, -1);
 
   const lines = locateTrailerLines(source.message, trailers);
@@ -814,7 +835,7 @@ const checkReferences = (
       // `prior` alone excludes every record on `source.sha`, which is correct
       // for the commit's own record and wrong for the block beside it
       // (bug-issue-352).
-      const blocks = parseRecordBlocks(source.message);
+      const blocks = blocksOf(source.message, cache);
       const scan = recordsFor(source, cwd, input, cache);
       if (scan.unreadCommits > unreadCommits) unreadCommits = scan.unreadCommits;
       if (scan.notes === 'unfetched') {

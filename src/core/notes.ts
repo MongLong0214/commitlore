@@ -12,7 +12,7 @@
  */
 
 import { type ExecGitOptions, execGit, execGitOrThrow } from './git.js';
-import { parseCommitMessage, parseRecordBlocks, serializeTrailers } from './trailers.js';
+import { parseCommitMessage, parseRecordBlocks, type IsolatedBlocks, serializeTrailers } from './trailers.js';
 import type { Trailer } from './types.js';
 
 /** The mirror's ref. Not configurable: it is part of the protocol (SPEC §1). */
@@ -194,9 +194,39 @@ export const readRecord = (sha: string, opts: NotesOptions = {}): Trailer[] => {
  * with `writeRecordBlocks` comes back as one array per block rather than
  * folded flat.
  */
-export const readRecordBlocks = (sha: string, opts: NotesOptions = {}): Trailer[][] => {
+export const readRecordBlocks = (
+  sha: string,
+  opts: NotesOptions = {},
+  isolated?: IsolatedBlocks,
+): Trailer[][] => {
   const note = showNote(sha, opts);
-  return note === null ? [] : parseRecordBlocks(`${SYNTHETIC_SUBJECT}\n\n${note}`);
+  if (note === null) return [];
+  const message = `${SYNTHETIC_SUBJECT}\n\n${note}`;
+  return parseRecordBlocks(message, isolated === undefined ? {} : { isolated });
+};
+
+/**
+ * The message each sha's note is read through, for a caller that wants to hand
+ * them all to {@link isolateBlocks} before parsing any of them.
+ *
+ * It returns the composed message rather than the note, because that is what
+ * the grammar sees and therefore what decides which paragraphs it would probe.
+ * A sha with no note is absent from the map.
+ *
+ * The note is read once here and the caller parses from the map, so this costs
+ * no more `git notes show` than `readRecordBlocks` would have — pairing it with
+ * `readRecordBlocks` afterwards would read every note twice.
+ */
+export const noteMessages = (
+  shas: readonly string[],
+  opts: NotesOptions = {},
+): Map<string, string> => {
+  const messages = new Map<string, string>();
+  for (const sha of shas) {
+    const note = showNote(sha, opts);
+    if (note !== null) messages.set(sha, `${SYNTHETIC_SUBJECT}\n\n${note}`);
+  }
+  return messages;
 };
 
 /**
