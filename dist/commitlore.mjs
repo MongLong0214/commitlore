@@ -11834,11 +11834,23 @@ var showNote = (sha, opts) => {
   }
   return result.stdout;
 };
-var readRecordBlocks = (sha, opts = {}) => {
+var readRecordBlocks = (sha, opts = {}, isolated) => {
   const note = showNote(sha, opts);
-  return note === null ? [] : parseRecordBlocks(`${SYNTHETIC_SUBJECT}
+  if (note === null) return [];
+  const message = `${SYNTHETIC_SUBJECT}
+
+${note}`;
+  return parseRecordBlocks(message, isolated === void 0 ? {} : { isolated });
+};
+var noteMessages = (shas, opts = {}) => {
+  const messages = /* @__PURE__ */ new Map();
+  for (const sha of shas) {
+    const note = showNote(sha, opts);
+    if (note !== null) messages.set(sha, `${SYNTHETIC_SUBJECT}
 
 ${note}`);
+  }
+  return messages;
 };
 var listRecordShas = (opts = {}) => {
   const stdout = execGitOrThrow(["notes", REF_ARG, "list"], gitOptions(opts));
@@ -20603,8 +20615,12 @@ var EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguou
 var CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
 var RECORD_ID_KEY4 = "Record-Id";
 var UNRESOLVED_WANT = "undetermined \u2014 the scanned window does not carry this Record-Id and no commit message declares it; a declaration in the notes mirror outside the window would not be found here, so run with --all-history to decide";
-var newCollectCache = () => ({ commits: /* @__PURE__ */ new Map(), notes: /* @__PURE__ */ new Map() });
-var parseChunk = (chunk, cache, atoms) => {
+var newCollectCache = () => ({
+  commits: /* @__PURE__ */ new Map(),
+  notes: /* @__PURE__ */ new Map(),
+  blocks: /* @__PURE__ */ new Map()
+});
+var parseChunk = (chunk, cache, atoms, isolated) => {
   const firstSep = chunk.indexOf(UNIT);
   if (firstSep === -1) return [];
   const secondSep = chunk.indexOf(UNIT, firstSep + 1);
@@ -20614,7 +20630,7 @@ var parseChunk = (chunk, cache, atoms) => {
   if (cached2 !== void 0) return cached2;
   const committedAt = canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep));
   const message = chunk.slice(secondSep + 1);
-  const blocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha)) : [];
+  const blocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha), isolated) : [];
   const records = blocks.length === 0 ? [{ sha, committedAt, trailers: [], source: "commit" }] : blocks.map((trailers) => ({ sha, committedAt, trailers, source: "commit" }));
   cache?.set(sha, records);
   return records;
@@ -20643,7 +20659,14 @@ var collectRecords = (opts = {}) => {
     return second !== -1 && CANDIDATE_LINE_RE.test(chunk.slice(second + 1));
   }).length;
   const atoms = wouldUseAtom >= 2 ? readTrailersAtom(selection, { cwd }) : void 0;
-  const commitRecords = chunks.flatMap((chunk) => parseChunk(chunk, commitCache, atoms));
+  const uncachedMessages = chunks.map((chunk) => {
+    const at = chunk.indexOf(UNIT);
+    if (at === -1 || commitCache?.has(chunk.slice(0, at)) === true) return null;
+    const second = chunk.indexOf(UNIT, at + 1);
+    return second === -1 ? null : chunk.slice(second + 1);
+  }).filter((message) => message !== null && CANDIDATE_LINE_RE.test(message));
+  const isolated = uncachedMessages.length > 0 ? isolateBlocks(uncachedMessages) : void 0;
+  const commitRecords = chunks.flatMap((chunk) => parseChunk(chunk, commitCache, atoms, isolated));
   const shas = new Set(commitRecords.map((record2) => record2.sha));
   const trailersBySha = /* @__PURE__ */ new Map();
   for (const record2 of commitRecords) {
@@ -20654,12 +20677,19 @@ var collectRecords = (opts = {}) => {
       existing.trailers.push(...record2.trailers);
     }
   }
+  const noteCache = opts.cache?.notes;
+  const noteShas = mirror.shas.filter(
+    (sha) => trailersBySha.has(sha) && noteCache?.has(sha) !== true
+  );
+  const noteText = noteShas.length > 0 ? noteMessages(noteShas, { cwd }) : /* @__PURE__ */ new Map();
+  const isolatedNotes = noteText.size > 0 ? isolateBlocks([...noteText.values()]) : void 0;
   const noteRecords = mirror.shas.flatMap((sha) => {
     const commit = trailersBySha.get(sha);
     if (commit === void 0) return [];
-    const cachedNote = opts.cache?.notes.get(sha);
-    const blocks = cachedNote ?? readRecordBlocks(sha, { cwd });
-    if (cachedNote === void 0) opts.cache?.notes.set(sha, blocks);
+    const cachedNote = noteCache?.get(sha);
+    const message = noteText.get(sha);
+    const blocks = cachedNote ?? (message === void 0 ? [] : parseRecordBlocks(message, isolatedNotes === void 0 ? {} : { isolated: isolatedNotes }));
+    if (cachedNote === void 0) noteCache?.set(sha, blocks);
     return blocks.flatMap((trailers) => {
       const mirrored = trailers.every(
         (note) => commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value)
@@ -22495,6 +22525,11 @@ var collectRange = (range, opts = {}) => {
     return CANDIDATE_LINE_RE2.test(chunk.slice(at + 1));
   }).length;
   const atoms = wouldUseAtom >= 2 ? readTrailersAtom(selection, gitOptions3(opts)) : void 0;
+  const uncached = chunks.map((chunk) => {
+    const at = chunk.indexOf(UNIT2);
+    return at === -1 ? null : { sha: chunk.slice(0, at), message: chunk.slice(at + 1) };
+  }).filter((entry) => entry !== null).filter((entry) => messageCache?.has(entry.sha) !== true && CANDIDATE_LINE_RE2.test(entry.message));
+  const isolated = uncached.length > 0 ? isolateBlocks(uncached.map((entry) => entry.message)) : void 0;
   const collected = [];
   for (const chunk of chunks) {
     const separator = chunk.indexOf(UNIT2);
@@ -22502,7 +22537,7 @@ var collectRange = (range, opts = {}) => {
     const sha = chunk.slice(0, separator);
     const message = chunk.slice(separator + 1);
     const cachedBlocks = opts.cache?.messages.get(sha);
-    const messageBlocks = cachedBlocks ?? (CANDIDATE_LINE_RE2.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha)) : []);
+    const messageBlocks = cachedBlocks ?? (CANDIDATE_LINE_RE2.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha), isolated) : []);
     if (cachedBlocks === void 0) opts.cache?.messages.set(sha, messageBlocks);
     const cachedNote = opts.cache?.notes.get(sha);
     const noteBlocks = cachedNote ?? (mirrored.has(sha) ? readRecordBlocks(sha, opts) : []);
@@ -38268,9 +38303,16 @@ var withheldTrailerWarnings = (source, trailers) => trailers.flatMap(({ trailer,
   const where = `${source.sha?.slice(0, 10) ?? "commit"}${at === void 0 ? "" : `:${at}`}`;
   return [`commitlore: ${where}: ${explainWithholding(trailer.key, patterns)}`];
 });
+var blocksOf = (message, cache) => {
+  const cached2 = cache?.blocks.get(message);
+  if (cached2 !== void 0) return cached2;
+  const blocks = parseRecordBlocks(message);
+  cache?.blocks.set(message, blocks);
+  return blocks;
+};
 var inspectSource = (source) => {
   const trailers = parseCommitMessage(source.message);
-  const blocks = parseRecordBlocks(source.message);
+  const blocks = parseRecordBlocks(source.message, { last: trailers });
   const earlierBlocks = trailers.length === 0 ? blocks : blocks.slice(0, -1);
   const lines = locateTrailerLines(source.message, trailers);
   const rawViolations = validateRecord(trailers);
@@ -38478,7 +38520,7 @@ var checkReferences = (input, sources, cwd) => {
       ).reverse();
     }
     for (const source of sources) {
-      const blocks = parseRecordBlocks(source.message);
+      const blocks = blocksOf(source.message, cache);
       const scan2 = recordsFor(source, cwd, input, cache);
       if (scan2.unreadCommits > unreadCommits) unreadCommits = scan2.unreadCommits;
       if (scan2.notes === "unfetched") {

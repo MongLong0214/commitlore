@@ -4,6 +4,52 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.4
+
+Two consumer routes were reading every message through git one paragraph at a
+time, and four numbers this project acted on were taken without saying what they
+were taken against.
+
+**`validate` read the same message three times per source.** Once for its own
+trailers, once more inside `parseRecordBlocks` because no block was handed over,
+and a third time in the reference pass — each a `git interpret-trailers`
+process. The blocks are read once per invocation now and shared.
+
+**The paragraph probes of `collectRecords` go in one process.** The atom already
+removed the process for each message's own block; every earlier paragraph was
+still one apiece. Attributed by stack rather than guessed: of 245 processes in a
+39-commit `validate --range`, 156 were those probes and 111 arrived through this
+one reader.
+
+**And the notes beside them.** A note is read once and parsed from what was
+read, where pairing the batch with `readRecordBlocks` would have read every note
+twice.
+
+Measured through `scripts/measure.mjs`, against a rebuilt index, on this
+repository:
+
+| | before | after |
+|---|---|---|
+| `validate --range` over 39 commits | 430 processes, 284 `interpret-trailers` | **247, 101** |
+| `stale` | 331, 279 | **78, 26** |
+
+`validate --json` is byte-identical before and after; `stale` and `doctor`
+differ only in their timestamps and `durationMs`.
+
+**`doctor` is unchanged, and the number that said otherwise was wrong.** It was
+quoted at 228 `interpret-trailers`, taken against whatever index state the
+previous run had left. Against a rebuilt index it is 71, before this change and
+after it. The "improvement" that number implied was the index state moving, not
+the code.
+
+**So numbers now carry their provenance.** `scripts/measure.mjs` pins the index
+state, counts processes rather than timing anything, and prints the repository,
+HEAD, commit and note counts and the machine load beside the result. Four
+numbers were wrong the same way — a batch read as 3.7s while three other jobs
+ran and 206ms quiet; "zero disagreements" from a corpus holding neither shape
+that broke the design; 29% duplicate branches measured over refs the code does
+not read. A bare number is now visibly unsourced.
+
 ## 1.3.3
 
 A complete index could be replaced by a shorter one, and the only thing that had

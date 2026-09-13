@@ -12,6 +12,33 @@ Thanks for looking. This project is MIT, free forever, and has no commercial tie
 
 A PR that says "should fix it" gets sent back. A PR that says "reproduced the failure with this script, here's the output before and after" gets merged.
 
+### Quoting a number: take it with `scripts/measure.mjs`
+
+Four numbers this project acted on were wrong the same way. Not reasoning
+errors — each was taken without saying what it was taken *against*, and then
+read as a property of the code:
+
+| quoted | what was not pinned | the real figure |
+|---|---|---|
+| a batch costing 3.7s | three other jobs were running | 206ms on a quiet machine |
+| "zero disagreements over 131 paragraphs" | the corpus held neither shape that broke the design | the design fabricated a record |
+| 29% duplicate branches | measured `refs/remotes`, uncapped; the code reads `refs/heads` capped at 200 | 1.5% |
+| `doctor` at 228 processes | whatever index state the previous run left | 71 against a rebuilt index |
+
+The last one is the shape to remember: an "improvement" was attributed to a code
+change when the index state had changed underneath it.
+
+So `scripts/measure.mjs` refuses to produce a bare number. It pins the index
+state (`--index cold|complete`), counts git processes rather than timing
+anything, and prints the repository, HEAD, commit and note counts, and the
+machine load beside the result. **A number quoted without that header is
+unsourced** — including in a commit record, where `Verified:` is the place it
+belongs.
+
+Counts, not durations: the same drain has measured 145ms and 3.7s on one machine
+depending on what else was running. The harness records the elapsed time so a
+reader can see whether the run was quiet, and never so two of them are compared.
+
 ### Fixing a defect: run the negative control
 
 A test that passes proves the code passes that test. It does not prove the test

@@ -56,7 +56,7 @@
  */
 import { execGit } from './git.js';
 import { listRecordShas, readRecordBlocks, writeRecordBlocks } from './notes.js';
-import { parseCommitMessage, parseRecordBlocksWithAtom, readTrailersAtom, serializeTrailers, } from './trailers.js';
+import { parseCommitMessage, isolateBlocks, parseRecordBlocksWithAtom, readTrailersAtom, serializeTrailers, } from './trailers.js';
 import { BLAST_VALUES, CERTAINTY_VALUES, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
 export const newRangeCache = () => ({ messages: new Map(), notes: new Map() });
 const RECORD_ID_KEY = 'Record-Id';
@@ -206,6 +206,23 @@ export const collectRange = (range, opts = {}) => {
         return CANDIDATE_LINE_RE.test(chunk.slice(at + 1));
     }).length;
     const atoms = wouldUseAtom >= 2 ? readTrailersAtom(selection, gitOptions(opts)) : undefined;
+    // The earlier-block probes of every uncached message in one process, the same
+    // way `explodeRecordBlocks` and `readNotesFor` take them. The atom above only
+    // removes the process for a message's OWN block; every earlier paragraph was
+    // still one apiece, which is what made a 39-commit `validate --range` spend
+    // 278 `interpret-trailers` and a `doctor` run 228 -- the reader class the
+    // index path cut from 244 to 14.
+    //
+    // Only the messages this walk has not already answered from the cache are
+    // offered, so a range that is entirely cached probes nothing.
+    const uncached = chunks
+        .map((chunk) => {
+        const at = chunk.indexOf(UNIT);
+        return at === -1 ? null : { sha: chunk.slice(0, at), message: chunk.slice(at + 1) };
+    })
+        .filter((entry) => entry !== null)
+        .filter((entry) => messageCache?.has(entry.sha) !== true && CANDIDATE_LINE_RE.test(entry.message));
+    const isolated = uncached.length > 0 ? isolateBlocks(uncached.map((entry) => entry.message)) : undefined;
     const collected = [];
     for (const chunk of chunks) {
         const separator = chunk.indexOf(UNIT);
@@ -215,7 +232,9 @@ export const collectRange = (range, opts = {}) => {
         const message = chunk.slice(separator + 1);
         const cachedBlocks = opts.cache?.messages.get(sha);
         const messageBlocks = cachedBlocks ??
-            (CANDIDATE_LINE_RE.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha)) : []);
+            (CANDIDATE_LINE_RE.test(message)
+                ? parseRecordBlocksWithAtom(message, atoms?.get(sha), isolated)
+                : []);
         if (cachedBlocks === undefined)
             opts.cache?.messages.set(sha, messageBlocks);
         const cachedNote = opts.cache?.notes.get(sha);
