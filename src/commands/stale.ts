@@ -137,12 +137,22 @@ export interface CollectCache {
    * the case the hook takes.
    */
   readonly blocks: Map<string, Trailer[][]>;
+  /**
+   * A message's own last block, keyed by the message itself.
+   *
+   * The companion to `blocks`, and for the same reason. `validate` computed
+   * this once in the shape pass and again in the reference pass, because the
+   * two held separate caches -- measured at 79 and 77 `interpret-trailers` for
+   * a 79-commit range, two per commit for one answer (#963).
+   */
+  readonly last: Map<string, Trailer[]>;
 }
 
 export const newCollectCache = (): CollectCache => ({
   commits: new Map(),
   notes: new Map(),
   blocks: new Map(),
+  last: new Map(),
 });
 
 type RecordSource = NonNullable<StaleRecord['source']>;
