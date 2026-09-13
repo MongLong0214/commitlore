@@ -4,6 +4,59 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.2
+
+The probes that decide whether a paragraph is an earlier record block now share
+a process. Two attempts at that were wrong in ways this repository's own history
+could not show.
+
+**One process for many probes, not one each.** `parseRecordBlocks` asks git
+whether a paragraph is a record block (SPEC §2.4) by parsing it on its own, and
+1.3.1 left 155 of those per cold rebuild. git accepts several files per
+invocation, so they can share one — but it emits nothing between them, and the
+marker that attributes the output is the whole difficulty.
+
+**Putting the marker in the paragraph fabricated a record.** git does not
+require every line of a block to be a trailer, which is what the first design
+assumed: a group holding a recognised trailer is accepted once a quarter of its
+lines are trailers. `Record-Id:` and `Signed-off-by:` above seven prose lines
+parse to nothing; appending one marker line — 2/9 to 3/10 — made git emit a
+record block that does not exist. **A second shape moved records between
+commits**: a scissors line makes git discard everything after it, an appended
+marker included, while still emitting the trailers above it, so that paragraph's
+records landed in the next paragraph's answer.
+
+Neither shape occurs in this repository's history, so the corpus that had 131
+paragraphs and zero disagreements said nothing about either. Both came from
+review, and both are now fixtures.
+
+**The marker goes in a file of its own.** Each paragraph file is byte-equal to
+what the single-process path pipes, so git's verdict on it is the verdict it
+would give alone, and each marker file is one trailer line that git accepts
+unconditionally. Every paragraph must return its own marker, in order, or the
+batch is discarded and the caller falls back to one process per paragraph.
+
+**The notes path was the last of it.** It spent 46 of the remaining 48 processes
+for eleven notes, because it had both gaps the commit path had: no atom and no
+batch. The batch it can have; the atom it cannot, since `%N` carries the note
+text while `%(trailers)` parses the annotated commit.
+
+A cold rebuild of this repository:
+
+| | git processes | `interpret-trailers` |
+|---|---|---|
+| 1.3.0 | 261 | 244 |
+| 1.3.1 | 172 | 155 |
+| 1.3.2 | **31** | **14** |
+
+The index is identical throughout, row for row on trailers and on paths.
+
+**And the boundary the resumable scan rests on is now a test.** A queue entry is
+retired only in the transaction that inserts the records read from it; that was
+argued and never asserted. A trigger that refuses every retirement now proves
+the inserts roll back with it — and moving the retirement outside that
+transaction fails it.
+
 ## 1.3.1
 
 The index paid a process to work out something it had already been told.
