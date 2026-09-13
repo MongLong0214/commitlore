@@ -59,6 +59,64 @@ import { listRecordShas, readRecordBlocks, writeRecordBlocks } from './notes.js'
 import { parseCommitMessage, isolateBlocks, parseRecordBlocksWithAtom, readTrailersAtom, serializeTrailers, } from './trailers.js';
 import { BLAST_VALUES, CERTAINTY_VALUES, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
 export const newRangeCache = () => ({ messages: new Map(), notes: new Map() });
+/**
+ * Parse every message in a set of ranges at once, into a cache the per-range
+ * walks then read (#975).
+ *
+ * `collectRange` already batches — one atom process and one `isolateBlocks` for
+ * the whole range — but it batches *within* one range, and `doctor`'s squash
+ * row walks one short range per candidate branch. Each of those paid its own
+ * pair, and a range with a single uncached message skips the atom entirely
+ * (`wouldUseAtom >= 2`), because for one message the walk costs exactly the
+ * process it saves. Summed over the candidates that is the 71 `interpret-trailers`
+ * a `doctor` run still spent after the per-range batching landed.
+ *
+ * Batching across the ranges makes the whole row two processes instead of two
+ * per range. Nothing about the parse changes: `readTrailersAtom` returns the
+ * same atom for a sha whatever else was selected, and `isolateBlocks` probes
+ * each paragraph in its own interleaved file, so a message's blocks do not
+ * depend on what it was batched with. That equivalence is the thing the row
+ * comparison has to keep proving -- it is what `isolateBlocks` was built for
+ * and what `test/isolate-blocks.test.ts` pins.
+ *
+ * The revisions go on stdin rather than argv. 200 candidate branches is the
+ * cap, two object names per range is about 16 KiB of command line, and Windows
+ * refuses at 32 KiB -- close enough that the failure would be a rare
+ * environment rather than a test.
+ */
+export const warmRangeCache = (ranges, opts = {}) => {
+    const cache = opts.cache;
+    if (cache === undefined || ranges.length === 0)
+        return;
+    // `--stdin` takes one revision per line, so a range with a newline in it
+    // could inject another. Ranges here are built from object names, but the
+    // guard costs nothing and the injection would be silent.
+    const selection = ranges.filter((range) => range.includes('..') && !/[\r\n]/.test(range));
+    if (selection.length === 0)
+        return;
+    const stdin = `${selection.join('\n')}\n`;
+    const walked = execGit(['log', '-z', '--stdin', `--format=${LOG_FORMAT}`], { ...gitOptions(opts), stdin });
+    // A failure here is not an error: every range is walked again below by
+    // `collectRange`, which reports its own. The cache simply stays cold.
+    if (walked.code !== 0)
+        return;
+    const entries = walked.stdout
+        .split(NUL)
+        .filter((chunk) => chunk.length > 0)
+        .map((chunk) => {
+        const at = chunk.indexOf(UNIT);
+        return at === -1 ? null : { sha: chunk.slice(0, at), message: chunk.slice(at + 1) };
+    })
+        .filter((entry) => entry !== null)
+        .filter((entry) => !cache.messages.has(entry.sha) && CANDIDATE_LINE_RE.test(entry.message));
+    if (entries.length === 0)
+        return;
+    const atoms = readTrailersAtom(['--stdin'], { ...gitOptions(opts), stdin });
+    const isolated = isolateBlocks(entries.map((entry) => entry.message));
+    for (const entry of entries) {
+        cache.messages.set(entry.sha, parseRecordBlocksWithAtom(entry.message, atoms.get(entry.sha), isolated));
+    }
+};
 const RECORD_ID_KEY = 'Record-Id';
 const PROVENANCE_KEY = 'Provenance';
 const EXPIRES_KEY = 'Expires';

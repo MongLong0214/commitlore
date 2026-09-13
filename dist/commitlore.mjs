@@ -11641,6 +11641,7 @@ var parseRecordBlocksWithAtom = (message, atom, isolated) => atom === void 0 || 
   last: parseTrailersAtom(atom),
   ...isolated === void 0 ? {} : { isolated }
 });
+var parseCommitMessageWithAtom = (message, atom) => atom === void 0 || atomIsAmbiguous(message) ? parseCommitMessage(message) : parseTrailersAtom(atom);
 var MENTIONS_RECORD_ID = /record-id/i;
 var PROBE_BATCH = 128;
 var EMPTY_ISOLATED = { get: () => void 0 };
@@ -13461,14 +13462,24 @@ var initMeta = (db, key, value) => {
   db.prepare("INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)").run(key, value);
 };
 var createSchema = (db) => {
-  db.exec(SCHEMA_SQL);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec(SCHEMA_SQL);
+    db.exec("COMMIT");
+  } catch (error2) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+    }
+    throw error2;
+  }
   initMeta(db, "schema_version", String(SCHEMA_VERSION));
 };
 var transactionDepth = /* @__PURE__ */ new WeakMap();
 var runInTransaction = (db, fn) => {
   const depth = transactionDepth.get(db) ?? 0;
   const savepoint = `commitlore_sp_${depth}`;
-  db.exec(depth === 0 ? "BEGIN" : `SAVEPOINT ${savepoint}`);
+  db.exec(depth === 0 ? "BEGIN IMMEDIATE" : `SAVEPOINT ${savepoint}`);
   transactionDepth.set(db, depth + 1);
   try {
     const result = fn();
@@ -13536,8 +13547,12 @@ var openDatabaseFile = (path2, readonly2) => {
   const db = new Ctor(path2, { readOnly: readonly2 });
   db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
   if (!readonly2) {
-    db.exec("PRAGMA journal_mode = WAL");
-    db.exec("PRAGMA synchronous = NORMAL");
+    try {
+      db.exec("PRAGMA journal_mode = WAL");
+      db.exec("PRAGMA synchronous = NORMAL");
+    } catch (error2) {
+      if (!isContention(error2)) throw error2;
+    }
   }
   return db;
 };
@@ -13838,6 +13853,21 @@ var incrementalProblem = (handle, head, last) => {
   return null;
 };
 var updateIndex = (handle, opts = {}) => {
+  try {
+    return runUpdateIndex(handle, opts);
+  } catch (error2) {
+    if (!isContention(error2)) throw error2;
+    const stats = emptyStats(handle, Date.now());
+    stats.rebuilt = false;
+    stats.rebuildReason = "another process held the index; nothing was read this pass";
+    return stats;
+  }
+};
+var isContention = (error2) => {
+  const message = errorMessage(error2).toLowerCase();
+  return message.includes("database is locked") || message.includes("database table is locked") || message.includes("sqlite_busy");
+};
+var runUpdateIndex = (handle, opts = {}) => {
   requireWritable(handle);
   const started = Date.now();
   const allowRebuild = opts.allowRebuild ?? true;
@@ -17789,6 +17819,18 @@ var verifyCaptureRecords = (opts) => {
     if (createdLock) unlockPending(nonce, cwd);
   }
 };
+var recoveryFor = (phase, nonce) => {
+  if (phase === "verified") {
+    return `Run \`commitlore pending rm ${nonce}\` and prepare again if you meant to replace it; the stored verification is otherwise still the one that will stage.`;
+  }
+  if (phase === "staged") {
+    return "It is already attached to the next commit; prepare a new transaction to record anything else.";
+  }
+  if (phase === "applied" || phase === "consumed") {
+    return "It has already reached a commit; prepare a new transaction to record anything else.";
+  }
+  return "Prepare a new transaction to record anything else.";
+};
 var runVerifyCaptureRecords = (opts) => {
   const { nonce, draft, transcript, diff, cwd } = opts;
   const accepted = [];
@@ -17816,6 +17858,22 @@ var runVerifyCaptureRecords = (opts) => {
       return {
         accepted: [],
         rejected: [],
+        validation_result: "empty",
+        incomplete: true,
+        overlap_check: "canonical_exact_only"
+      };
+    }
+    if (pending2.phase !== "prepared" && opts.readOnly !== true) {
+      for (const record2 of draft) {
+        rejected.push({
+          record: record2,
+          reason: "not-prepared",
+          detail: `this transaction is already ${pending2.phase}: it holds a verification that this call cannot replace. ${recoveryFor(pending2.phase, nonce)}`
+        });
+      }
+      return {
+        accepted: [],
+        rejected,
         validation_result: "empty",
         incomplete: true,
         overlap_check: "canonical_exact_only"
@@ -20700,7 +20758,8 @@ var UNRESOLVED_WANT = "undetermined \u2014 the scanned window does not carry thi
 var newCollectCache = () => ({
   commits: /* @__PURE__ */ new Map(),
   notes: /* @__PURE__ */ new Map(),
-  blocks: /* @__PURE__ */ new Map()
+  blocks: /* @__PURE__ */ new Map(),
+  last: /* @__PURE__ */ new Map()
 });
 var parseChunk = (chunk, cache, atoms, isolated) => {
   const firstSep = chunk.indexOf(UNIT);
@@ -22540,6 +22599,32 @@ var checkHistoryDepth = (ctx) => {
 
 // src/core/squash.ts
 var newRangeCache = () => ({ messages: /* @__PURE__ */ new Map(), notes: /* @__PURE__ */ new Map() });
+var warmRangeCache = (ranges, opts = {}) => {
+  const cache = opts.cache;
+  if (cache === void 0 || ranges.length === 0) return;
+  const selection = ranges.filter((range) => range.includes("..") && !/[\r\n]/.test(range));
+  if (selection.length === 0) return;
+  const stdin = `${selection.join("\n")}
+`;
+  const walked = execGit(
+    ["log", "-z", "--stdin", `--format=${LOG_FORMAT3}`],
+    { ...gitOptions3(opts), stdin }
+  );
+  if (walked.code !== 0) return;
+  const entries = walked.stdout.split(NUL).filter((chunk) => chunk.length > 0).map((chunk) => {
+    const at = chunk.indexOf(UNIT2);
+    return at === -1 ? null : { sha: chunk.slice(0, at), message: chunk.slice(at + 1) };
+  }).filter((entry) => entry !== null).filter((entry) => !cache.messages.has(entry.sha) && CANDIDATE_LINE_RE2.test(entry.message));
+  if (entries.length === 0) return;
+  const atoms = readTrailersAtom(["--stdin"], { ...gitOptions3(opts), stdin });
+  const isolated = isolateBlocks(entries.map((entry) => entry.message));
+  for (const entry of entries) {
+    cache.messages.set(
+      entry.sha,
+      parseRecordBlocksWithAtom(entry.message, atoms.get(entry.sha), isolated)
+    );
+  }
+};
 var RECORD_ID_KEY5 = "Record-Id";
 var PROVENANCE_KEY5 = "Provenance";
 var EXPIRES_KEY2 = "Expires";
@@ -22983,6 +23068,10 @@ var checkSquashConservation = (ctx) => {
   let uncheckable = 0;
   let checked = 0;
   const headSha2 = head.stdout.trim();
+  warmRangeCache(
+    candidates.map((candidate) => `${candidate.base}..${candidate.sha}`),
+    { cwd, cache }
+  );
   for (const candidate of candidates) {
     let records;
     try {
@@ -38385,16 +38474,30 @@ var withheldTrailerWarnings = (source, trailers) => trailers.flatMap(({ trailer,
   const where = `${source.sha?.slice(0, 10) ?? "commit"}${at === void 0 ? "" : `:${at}`}`;
   return [`commitlore: ${where}: ${explainWithholding(trailer.key, patterns)}`];
 });
-var blocksOf = (message, cache) => {
+var blocksOf = (message, cache, hint) => {
   const cached2 = cache?.blocks.get(message);
   if (cached2 !== void 0) return cached2;
-  const blocks = parseRecordBlocks(message);
+  const last = hint ?? cache?.last.get(message);
+  const blocks = last === void 0 ? parseRecordBlocks(message) : parseRecordBlocks(message, { last });
   cache?.blocks.set(message, blocks);
   return blocks;
 };
-var inspectSource = (source) => {
-  const trailers = parseCommitMessage(source.message);
-  const blocks = parseRecordBlocks(source.message, { last: trailers });
+var warmSources = (sources, cwd, cache) => {
+  const uncached = sources.filter((source) => !cache.last.has(source.message));
+  if (uncached.length === 0) return;
+  const shas = uncached.map((source) => source.sha).filter((sha) => sha !== void 0);
+  const atoms = shas.length > 1 ? readTrailersAtom(["--no-walk", "--end-of-options", ...shas, "--"], { cwd }) : /* @__PURE__ */ new Map();
+  const isolated = uncached.length > 1 ? isolateBlocks(uncached.map((source) => source.message)) : void 0;
+  for (const source of uncached) {
+    const atom = source.sha === void 0 ? void 0 : atoms.get(source.sha);
+    const blocks = parseRecordBlocksWithAtom(source.message, atom, isolated);
+    cache.blocks.set(source.message, blocks);
+    cache.last.set(source.message, parseCommitMessageWithAtom(source.message, atom));
+  }
+};
+var inspectSource = (source, cache) => {
+  const trailers = cache?.last.get(source.message) ?? parseCommitMessage(source.message);
+  const blocks = blocksOf(source.message, cache, trailers);
   const earlierBlocks = trailers.length === 0 ? blocks : blocks.slice(0, -1);
   const lines = locateTrailerLines(source.message, trailers);
   const rawViolations = validateRecord(trailers);
@@ -38565,7 +38668,7 @@ var reachableShas = (revision, cwd) => {
   }
   return new Set(result.stdout.trim().split("\n").filter(Boolean));
 };
-var checkReferences = (input, sources, cwd) => {
+var checkReferences = (input, sources, cwd, warmed) => {
   if (input.messageFile === void 0 && input.commit === void 0 && input.range === void 0) {
     return {
       check: { class: "reference", status: "not-checked", reason: "no repository" },
@@ -38583,7 +38686,7 @@ var checkReferences = (input, sources, cwd) => {
     const tipSha = input.range !== void 0 && sources.length > 0 ? sources[sources.length - 1].sha : void 0;
     let tipAllRecords;
     let unreadCommits = 0;
-    const cache = newCollectCache();
+    const cache = warmed ?? newCollectCache();
     if (tipSha !== void 0) {
       const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd, input, cache);
       if (tipScan.notes === "unfetched") {
@@ -38715,9 +38818,11 @@ var runValidate = (input = {}) => {
   let warnings;
   let secrets;
   let sources;
+  const grammar = newCollectCache();
   try {
     sources = collectSources2(input, cwd);
-    const inspections = sources.map(inspectSource);
+    warmSources(sources, cwd, grammar);
+    const inspections = sources.map((source) => inspectSource(source, grammar));
     shapeViolations = inspections.flatMap((inspection) => inspection.violations);
     warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
@@ -38725,7 +38830,7 @@ var runValidate = (input = {}) => {
     if (isMissingInstalledFile(error2)) return installationError(messageOf9(error2));
     return usageError2(messageOf9(error2));
   }
-  const references = checkReferences(input, sources, cwd);
+  const references = checkReferences(input, sources, cwd, grammar);
   const alreadyReported = new Set(shapeViolations.map(violationIdentity));
   const violations = [
     ...shapeViolations,

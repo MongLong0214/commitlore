@@ -1014,8 +1014,31 @@ export const indexUnreadBySource = (handle) => ({
 const initMeta = (db, key, value) => {
     db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run(key, value);
 };
+/**
+ * One lock acquisition for the whole schema, not one per statement (#958).
+ *
+ * `SCHEMA_SQL` is a dozen-odd `CREATE`s, and `exec` runs each in its own
+ * implicit transaction. Every one of those is a separate chance to lose a race,
+ * and losing any of them throws out of `openIndex` — observed as "database is
+ * locked" from `createSchema` with four processes opening a cold index
+ * together. `BEGIN IMMEDIATE` asks once, waits out `busy_timeout` once, and
+ * either gets the whole schema or none of it.
+ */
 const createSchema = (db) => {
-    db.exec(SCHEMA_SQL);
+    db.exec('BEGIN IMMEDIATE');
+    try {
+        db.exec(SCHEMA_SQL);
+        db.exec('COMMIT');
+    }
+    catch (error) {
+        try {
+            db.exec('ROLLBACK');
+        }
+        catch {
+            /* the failure below is what the caller needs; a rollback that cannot run adds nothing */
+        }
+        throw error;
+    }
     initMeta(db, 'schema_version', String(SCHEMA_VERSION));
 };
 /**
@@ -1037,10 +1060,29 @@ const createSchema = (db) => {
  * it, although this implementation does not need that newer primitive).
  */
 const transactionDepth = new WeakMap();
+/**
+ * `BEGIN IMMEDIATE`, not `BEGIN` (#958).
+ *
+ * Every caller below writes. A plain `BEGIN` is deferred: it takes no lock, and
+ * the write lock is acquired on the first statement that needs it. SQLite will
+ * not apply `busy_timeout` to *that* acquisition — a deferred transaction that
+ * has already read cannot wait for a writer without breaking its own snapshot,
+ * so it returns `SQLITE_BUSY` at once. `busy_timeout` was set and had no effect
+ * on the case it was set for.
+ *
+ * Found by running it rather than reading it: four real processes draining one
+ * index, and a drainer died with "database is locked" on its first trial.
+ * `BEGIN IMMEDIATE` asks for the write lock up front, which is the acquisition
+ * `busy_timeout` does govern, so a contending drainer waits its turn instead of
+ * throwing.
+ *
+ * A nested call is a savepoint inside a transaction that already holds the
+ * lock, so it needs nothing here.
+ */
 const runInTransaction = (db, fn) => {
     const depth = transactionDepth.get(db) ?? 0;
     const savepoint = `commitlore_sp_${depth}`;
-    db.exec(depth === 0 ? 'BEGIN' : `SAVEPOINT ${savepoint}`);
+    db.exec(depth === 0 ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${savepoint}`);
     transactionDepth.set(db, depth + 1);
     try {
         const result = fn();
@@ -1190,8 +1232,33 @@ const openDatabaseFile = (path, readonly) => {
     // reader still meets `SQLITE_BUSY` while the writer checkpoints.
     db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     if (!readonly) {
-        db.exec('PRAGMA journal_mode = WAL');
-        db.exec('PRAGMA synchronous = NORMAL');
+        // Both are optimisations, and neither may take the process down (#958).
+        //
+        // Switching journal mode needs a moment with the database to itself, and
+        // several writers opening at once do not get one: observed as
+        // `SQLITE_IOERR` -- "disk I/O error", not "database is locked" -- thrown
+        // out of `openIndex` while four drainers started together. That is a crash
+        // on an ordinary invocation, on the path the PreToolUse hook takes per
+        // edit, for a pragma whose only job is to make the next query faster.
+        //
+        // A failure here leaves the database in rollback-journal mode, where a
+        // reader and a writer serialise instead of running together. Slower, and
+        // an answer.
+        try {
+            db.exec('PRAGMA journal_mode = WAL');
+            db.exec('PRAGMA synchronous = NORMAL');
+        }
+        catch (error) {
+            // Only contention. `openDatabaseFile` is where a file that is not a
+            // database first announces itself -- SQLite opens lazily, so this pragma
+            // is the first statement to read the header -- and the caller above
+            // turns that throw into "discard and rebuild". Swallowing everything
+            // here left a corrupt file in place and let the schema creation below be
+            // the one to fail, past the point that repairs it.
+            if (!isContention(error))
+                throw error;
+            /* rollback journal it is; the index is derived and every query still answers */
+        }
     }
     return db;
 };
@@ -1708,6 +1775,37 @@ const incrementalProblem = (handle, head, last) => {
  * reason is reported in `IndexStats.rebuildReason` so the caller can say so.
  */
 export const updateIndex = (handle, opts = {}) => {
+    try {
+        return runUpdateIndex(handle, opts);
+    }
+    catch (error) {
+        // A contended write is a scheduling outcome, not a data problem (#958).
+        //
+        // Everything this call would have done is durable and resumable: the queue
+        // names what is owed and the next call reads it. Throwing turns "somebody
+        // else is writing" into a dead process, and a drain whose passes can die is
+        // one whose convergence depends on luck -- four processes starting together
+        // produced "database is locked" out of here and out of `openIndex`.
+        //
+        // Narrow on purpose. Only SQLite's busy family is absorbed; corruption, a
+        // schema this build cannot read, and a git failure all still raise, because
+        // for those doing nothing is the wrong answer.
+        if (!isContention(error))
+            throw error;
+        const stats = emptyStats(handle, Date.now());
+        stats.rebuilt = false;
+        stats.rebuildReason = 'another process held the index; nothing was read this pass';
+        return stats;
+    }
+};
+/** SQLite's "wait your turn", by either name it arrives under. */
+const isContention = (error) => {
+    const message = errorMessage(error).toLowerCase();
+    return (message.includes('database is locked') ||
+        message.includes('database table is locked') ||
+        message.includes('sqlite_busy'));
+};
+const runUpdateIndex = (handle, opts = {}) => {
     requireWritable(handle);
     const started = Date.now();
     // A consumer may rebuild when it has a budget: the wait is then bounded and
