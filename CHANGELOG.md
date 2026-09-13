@@ -4,6 +4,31 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.9
+
+A note's own trailer block is read in a batch now, the way a commit message's
+already was.
+
+It cost one `git interpret-trailers` process each, because there is no atom for
+it — `%(trailers)` parses the annotated *commit's* message, and a note body is
+not that. The earlier paragraphs of every note in a batch were already answered
+in one pass; the block that matters was not.
+
+This had been recorded as unfixable, and half of that was right: probing a
+note's *last* paragraph in isolation is a different question from the one the
+whole message answers, and it is the shape that fabricated a record once. What
+does not follow is that each note needs its own process. Whole messages batch
+safely, because that asks git exactly what asking one at a time asks.
+
+Equivalence is checked against this repository's whole history — 1,603 distinct
+messages and its notes, disagreeing nowhere — and against fifteen shapes built
+to break it, including both that broke earlier designs. A corpus that happens
+not to contain the hazard is how a previous "zero disagreements" was read as
+soundness.
+
+`doctor` goes from 29 `interpret-trailers` to 19 and from 488 git processes to
+478, with the index identical row for row.
+
 ## 1.3.8
 
 Two places where concurrent work could be mixed into one answer, or lost.
