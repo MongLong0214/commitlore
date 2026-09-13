@@ -13067,7 +13067,7 @@ var explodeRecordBlocks = (cwd, records, excluded) => {
     const message = messages.get(record2.sha);
     if (message === void 0) return [record2];
     if (atomPassHasEverything(message)) return [record2];
-    const blocks = parseRecordBlocks(message);
+    const blocks = parseRecordBlocksWithAtom(message, record2.atom);
     if (blocks.length <= 1) return [record2];
     const earlierBlocks = blocks.slice(0, -1).map((block) => stripConventional(block, excluded)).filter((trailers) => trailers.length > 0);
     return [
@@ -13116,7 +13116,8 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost, guaranteeFirstBatch 
         signatureStatus: signatureStatus?.trim() ?? "",
         source: "commit",
         trailers: stripConventional(rawTrailers, excluded),
-        paths: []
+        paths: [],
+        atom: trailerField ?? ""
       });
     }
     if (budget !== void 0 && !(guaranteeFirstBatch && read === batch.length) && (budget.now ?? Date.now)() > budget.deadline) {
