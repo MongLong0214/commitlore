@@ -4,6 +4,42 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.5
+
+One pass over the notes mirror now reads one mirror.
+
+**The note reader touched a mutable ref three times.** `revParseRef` recorded
+it, `git notes list` enumerated it, `git log --notes=<ref>` read the bodies —
+and the result was stamped with the first of those readings. A mirror that moved
+between them produced rows from one version under a stamp naming another. It
+self-corrected on the next call, because the stamp no longer matched the live
+ref, except where the ref returned to the stamped value first; in between, a
+query answered from a mirror state that never existed as a whole.
+
+The listing is `git ls-tree` against a resolved tree, and the bodies come from
+the blob ids that listing named. The snapshot is chosen once by the caller and
+everything downstream reads it — including a resumed drain, which recovers its
+queued notes from the mirror the queue was listed from rather than from the ref.
+
+**It costs nothing.** One listing process for one listing process, and the
+commit fields a note row carries — `%ct`, `%cI`, `%G?` — now come from the path
+pass that already visits exactly those commits. A cold rebuild of this
+repository stays at 31 git processes and 14 `interpret-trailers`, with the index
+identical row for row on trailers and on paths.
+
+**A note body is framed by byte length.** `cat-file --batch` says how many bytes
+each object is, and indexing a decoded string by that count is wrong the moment
+a note holds a multi-byte character — wrong silently, because every object after
+it is then framed from the wrong offset. The bodies are walked as bytes and
+decoded per object.
+
+**Two tests that could not fail were fixed on the way.** The first version of the
+mirror-moving test moved the mirror before the pass began, where the listing and
+the bodies see the same thing and a defective reader passes; it now moves it
+inside the pass and asserts the rows match the tree the stamp names. And the
+`index-db` mock wrapped only the string git helpers, so four tests that inject a
+failed note read were never reaching the failure they injected.
+
 ## 1.3.4
 
 Two consumer routes were reading every message through git one paragraph at a
