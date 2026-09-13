@@ -42,6 +42,20 @@ export declare const gitResultFromSpawn: (result: SpawnSyncReturns<string>) => G
  * grades records precisely because anyone who can push can write one).
  */
 export declare const execGit: (args: string[], opts?: ExecGitOptions) => GitResult;
+/**
+ * The same spawn, with stdout kept as bytes.
+ *
+ * `git cat-file --batch` frames each object with a byte length, and a decoded
+ * string cannot be indexed by it: one multi-byte character makes every
+ * subsequent offset wrong, and the framing fails silently rather than loudly.
+ * Only a reader that must honour a length git wrote should use this; everything
+ * else wants {@link execGit} and its UTF-8 string.
+ */
+export declare const execGitBytes: (args: string[], opts?: ExecGitOptions) => {
+    stdout: Buffer;
+    stderr: string;
+    code: number;
+};
 export declare const isGitFailure: (error: unknown) => boolean;
 /**
  * Runs `git` and returns stdout, throwing on any failure. The thrown `Error`

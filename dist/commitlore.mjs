@@ -11517,6 +11517,28 @@ var execGit = (args, opts = {}) => {
   });
   return gitResultFromSpawn(result);
 };
+var execGitBytes = (args, opts = {}) => {
+  const result = spawnSync("git", args, {
+    shell: false,
+    cwd: opts.cwd ?? process.cwd(),
+    input: opts.stdin ?? "",
+    env: opts.env,
+    maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
+    timeout: opts.timeout
+  });
+  const stderr = result.stderr === null ? "" : String(result.stderr);
+  if (result.status !== null) {
+    return { stdout: result.stdout ?? Buffer.alloc(0), stderr, code: result.status };
+  }
+  if (result.error !== void 0) {
+    return { stdout: Buffer.alloc(0), stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
+  }
+  return {
+    stdout: Buffer.alloc(0),
+    stderr: `${stderr}git terminated by signal ${result.signal ?? "unknown"}`,
+    code: GIT_SPAWN_FAILED
+  };
+};
 var GIT_FAILURE = "commitloreGitFailure";
 var isGitFailure = (error2) => error2 instanceof Error && error2[GIT_FAILURE] === true;
 var execGitOrThrow = (args, opts = {}) => {
@@ -13101,10 +13123,14 @@ var gitLogByShas = (cwd, shas, format, extra) => execGit(
   { cwd, stdin: `${shas.join("\n")}
 `, maxBuffer: LOG_MAX_BUFFER }
 );
-var readPaths = (cwd, shas) => {
+var readPaths = (cwd, shas) => new Map(
+  [...readPathsAndMeta(cwd, shas, false)].map(([sha, entry]) => [sha, entry.paths])
+);
+var readPathsAndMeta = (cwd, shas, withMeta) => {
   const byCommit = /* @__PURE__ */ new Map();
   if (shas.length === 0) return byCommit;
-  const result = gitLogByShas(cwd, shas, `%x01%H%x00`, ["-z", "--name-only", DIFF_MERGES]);
+  const format = withMeta ? `%x01%H%x00%ct%x00%cI%x00%G?%x00` : `%x01%H%x00`;
+  const result = gitLogByShas(cwd, shas, format, ["-z", "--name-only", DIFF_MERGES]);
   if (result.code !== 0) {
     throw Object.assign(new Error(`git log --name-only failed: ${result.stderr.trim()}`), {
       code: result.code,
@@ -13115,7 +13141,13 @@ var readPaths = (cwd, shas) => {
     const fields = record2.split(FIELD_SEP);
     const sha = fields[0];
     if (sha === void 0) continue;
-    byCommit.set(sha, parsePathFields(fields.slice(1)).sort());
+    const skip3 = withMeta ? 4 : 1;
+    byCommit.set(sha, {
+      paths: parsePathFields(fields.slice(skip3)).sort(),
+      committedTs: withMeta ? Number.parseInt(fields[1] ?? "0", 10) : 0,
+      committedAt: withMeta ? canonicalCommittedAt(fields[2] ?? "") : "",
+      signatureStatus: withMeta ? fields[3]?.trim() ?? "" : ""
+    });
   }
   return byCommit;
 };
@@ -13228,16 +13260,61 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost, guaranteeFirstBatch 
   }
   return records;
 };
-var annotatedCommits = (cwd, reachable) => {
-  const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF2}`, "list"], { cwd });
-  const annotated = listed.split("\n").filter((line2) => line2 !== "").map((line2) => line2.split(" ")[1] ?? "").filter((sha) => sha !== "" && reachable.has(sha));
-  if (annotated.length === 0) return [];
+var annotatedNotes = (cwd, refSha, reachable) => {
+  const listed = execGitOrThrow(["ls-tree", "-r", "-z", "--full-tree", refSha], { cwd });
+  const notes = [];
+  for (const entry of listed.split("\0")) {
+    if (entry === "") continue;
+    const tab = entry.indexOf("	");
+    if (tab === -1) continue;
+    const [, type, blob] = entry.slice(0, tab).split(/\s+/);
+    if (type !== "blob" || blob === void 0) continue;
+    const commit = entry.slice(tab + 1).replaceAll("/", "");
+    if (commit === "" || !reachable.has(commit)) continue;
+    notes.push({ commit, blob });
+  }
+  if (notes.length === 0) return [];
   const typed = execGitOrThrow(["cat-file", "--batch-check"], {
     cwd,
-    stdin: `${annotated.join("\n")}
+    stdin: `${notes.map((note) => note.commit).join("\n")}
 `
   });
-  return typed.split("\n").filter((line2) => line2.endsWith(" commit") || line2.includes(" commit ")).map((line2) => line2.split(" ")[0] ?? "").filter((sha) => sha !== "");
+  const commits = new Set(
+    typed.split("\n").filter((line2) => line2.endsWith(" commit") || line2.includes(" commit ")).map((line2) => line2.split(" ")[0] ?? "").filter((sha) => sha !== "")
+  );
+  return notes.filter((note) => commits.has(note.commit));
+};
+var readNoteBodies = (cwd, blobs) => {
+  const bodies = /* @__PURE__ */ new Map();
+  if (blobs.length === 0) return bodies;
+  const result = execGitBytes(["cat-file", "--batch"], {
+    cwd,
+    stdin: `${blobs.join("\n")}
+`,
+    maxBuffer: LOG_MAX_BUFFER
+  });
+  if (result.code !== 0) {
+    throw Object.assign(new Error(`git cat-file --batch failed: ${result.stderr.trim()}`), {
+      code: result.code,
+      stderr: result.stderr
+    });
+  }
+  let at = 0;
+  const out = result.stdout;
+  while (at < out.length) {
+    const newline = out.indexOf(10, at);
+    if (newline === -1) break;
+    const header2 = out.subarray(at, newline).toString("utf8");
+    at = newline + 1;
+    const [oid, type, size] = header2.split(" ");
+    if (oid === void 0 || type !== "blob" || size === void 0) {
+      continue;
+    }
+    const length = Number.parseInt(size, 10);
+    bodies.set(oid, out.subarray(at, at + length).toString("utf8"));
+    at += length + 1;
+  }
+  return bodies;
 };
 var readNotesFor = (cwd, commits, excluded, budget, cost, guaranteeFirstBatch = false) => {
   if (commits.length === 0) return [];
@@ -13248,59 +13325,60 @@ var readNotesFor = (cwd, commits, excluded, budget, cost, guaranteeFirstBatch = 
     if (budget !== void 0 && !(guaranteeFirstBatch && read === 0) && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) {
         cost.unreadNotes = commits.length - read;
-        cost.pendingNotes = commits.slice(read);
+        cost.pendingNotes = commits.slice(read).map((note) => note.commit);
       }
       return records;
     }
     read += batch.length;
-    const result = gitLogByShas(cwd, batch, "%x01%H%x00%ct%x00%cI%x00%G?%x00%N%x00", [
-      `--notes=${NOTES_REF2}`
-    ]);
-    if (result.code !== 0) {
-      throw Object.assign(new Error(`git log --notes failed: ${result.stderr.trim()}`), {
-        code: result.code,
-        stderr: result.stderr
-      });
-    }
-    const batchRecords = [];
-    const parsed = splitRecords(result.stdout).map((record2) => record2.split(FIELD_SEP)).filter(([sha, rawTs, committedAt, , noteText]) => sha !== void 0 && rawTs !== void 0 && committedAt !== void 0 && noteText !== void 0 && noteText.trim() !== "");
+    const bodies = readNoteBodies(cwd, batch.map((note) => note.blob));
+    const withText = batch.map((note) => ({ note, text: bodies.get(note.blob) })).filter((entry) => entry.text !== void 0 && entry.text.trim() !== "");
     const isolatedNotes = isolateBlocks(
-      parsed.map((fields) => `${NOTE_SUBJECT}
+      withText.map((entry) => `${NOTE_SUBJECT}
 
-${String(fields[4])}`)
+${entry.text}`)
     );
-    for (const fields of parsed) {
-      const [sha, rawTs, committedAt, signatureStatus, noteText] = fields;
+    const batchRecords = [];
+    for (const { note, text } of withText) {
       const blocks = parseRecordBlocks(`${NOTE_SUBJECT}
 
-${noteText}`, {
+${text}`, {
         isolated: isolatedNotes
       });
       blocks.forEach((rawTrailers, block) => {
         const trailers = stripConventional(rawTrailers, excluded);
         if (trailers.length === 0) return;
         batchRecords.push({
-          sha,
+          sha: note.commit,
           block,
-          committedAt: canonicalCommittedAt(committedAt),
-          committedTs: Number.parseInt(rawTs, 10),
-          signatureStatus: signatureStatus?.trim() ?? "",
+          committedAt: "",
+          committedTs: 0,
+          signatureStatus: "",
           source: "notes",
           trailers,
           paths: []
         });
       });
     }
-    const paths = readPaths(
+    const meta2 = readPathsAndMeta(
       cwd,
-      batchRecords.map((record2) => record2.sha)
+      batchRecords.map((record2) => record2.sha),
+      true
     );
-    for (const record2 of batchRecords) record2.paths = paths.get(record2.sha) ?? [];
+    for (const record2 of batchRecords) {
+      const entry = meta2.get(record2.sha);
+      record2.paths = entry?.paths ?? [];
+      record2.committedAt = entry?.committedAt ?? "";
+      record2.committedTs = entry?.committedTs ?? 0;
+      record2.signatureStatus = entry?.signatureStatus ?? "";
+    }
     records.push(...batchRecords);
   }
   return records;
 };
-var readNoteRecords = (cwd, reachable, excluded, budget, cost) => readNotesFor(cwd, annotatedCommits(cwd, reachable), excluded, budget, cost);
+var readNoteRecords = (cwd, reachable, excluded, budget, cost, refSha) => {
+  const pinned = refSha ?? revParseRef(cwd, NOTES_REF2);
+  return pinned === null ? [] : readNotesFor(cwd, annotatedNotes(cwd, pinned, reachable), excluded, budget, cost);
+};
 var revParse = (cwd, rev) => {
   const result = execGit(["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], { cwd });
   if (result.code === GIT_NO_SUCH_REF2 && result.stderr.trim() === "") return null;
@@ -13601,7 +13679,7 @@ var indexNotes = (handle, opts = {}, excluded, cost) => {
     return 0;
   }
   const local = { unreadCommits: 0, unreadNotes: 0 };
-  const annotated = refSha === null ? [] : annotatedCommits(handle.cwd, new Set(reachableFromHead(handle.cwd)));
+  const annotated = refSha === null ? [] : annotatedNotes(handle.cwd, refSha, new Set(reachableFromHead(handle.cwd)));
   const records = annotated.length === 0 ? [] : readNotesFor(handle.cwd, annotated, excluded, opts.budget, local);
   return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
@@ -13647,7 +13725,7 @@ var rebuildIndex = (handle, opts = {}) => {
   const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
   const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
   const notesRef = revParseRef(handle.cwd, NOTES_REF2);
-  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost);
+  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost, notesRef);
   const stats = {
     ...emptyStats(handle, started),
     rebuilt: true,
@@ -13725,7 +13803,11 @@ var drainPending = (handle, outer, excluded, stats) => {
   }
   const cost = { unreadCommits: 0, unreadNotes: 0 };
   const shas = notes.map((entry) => entry.sha);
-  const records = readNotesFor(handle.cwd, shas, excluded, budget, cost, !floorSpent);
+  const owed = new Set(shas);
+  const pinnedNotes = annotatedNotes(handle.cwd, listedFrom, owed).filter(
+    (note) => owed.has(note.commit)
+  );
+  const records = readNotesFor(handle.cwd, pinnedNotes, excluded, budget, cost, !floorSpent);
   const read = shas.length - cost.unreadNotes;
   if (read === 0) return;
   const applied = runInTransaction(handle.db, () => {
