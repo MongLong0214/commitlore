@@ -12869,8 +12869,9 @@ var loadDatabaseCtor = () => {
     );
   }
 };
-var SCHEMA_VERSION = 4;
+var SCHEMA_VERSION = 5;
 var NOTES_REF2 = "refs/notes/commitlore";
+var RESUME_SLICE_MS = 750;
 var LOG_BATCH = 1024;
 var BUDGETED_LOG_BATCH = 64;
 var budgetedBatchSizes = function* () {
@@ -12929,8 +12930,15 @@ CREATE TABLE IF NOT EXISTS meta (
   k TEXT PRIMARY KEY,
   v TEXT
 );
+
+CREATE TABLE IF NOT EXISTS scan_pending (
+  source TEXT    NOT NULL,
+  ord    INTEGER NOT NULL,
+  sha    TEXT    NOT NULL,
+  PRIMARY KEY (source, ord)
+);
 `;
-var REQUIRED_TABLES = ["trailers", "commit_paths", "meta"];
+var REQUIRED_TABLES = ["trailers", "commit_paths", "meta", "scan_pending"];
 var errorMessage = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var indexDbPath = (cwd = process.cwd()) => {
   const reported = execGitOrThrow(["rev-parse", "--git-path", "commitlore/index.db"], {
@@ -13069,14 +13077,14 @@ var explodeRecordBlocks = (cwd, records, excluded) => {
   });
 };
 var signatureAtom = (verifierGeneration) => verifierGeneration === null ? "" : "%G?";
-var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
+var readCommitRecords = (cwd, shas, excluded, budget, cost, guaranteeFirstBatch = false) => {
   let signatureField = null;
   const records = [];
   let read = 0;
   const batches = budget === void 0 ? chunked(shas, LOG_BATCH) : chunkedGrowing(shas, budgetedBatchSizes());
   for (const batch of batches) {
     signatureField ??= signatureAtom(signatureVerifierGeneration(cwd));
-    if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
+    if (budget !== void 0 && !(guaranteeFirstBatch && read === 0) && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) cost.unreadCommits = shas.length - read;
       return records;
     }
@@ -13111,7 +13119,7 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
         paths: []
       });
     }
-    if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
+    if (budget !== void 0 && !(guaranteeFirstBatch && read === batch.length) && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) cost.unreadCommits = shas.length - read + batch.length;
       return records;
     }
@@ -13127,7 +13135,7 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
   }
   return records;
 };
-var readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
+var annotatedCommits = (cwd, reachable) => {
   const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF2}`, "list"], { cwd });
   const annotated = listed.split("\n").filter((line2) => line2 !== "").map((line2) => line2.split(" ")[1] ?? "").filter((sha) => sha !== "" && reachable.has(sha));
   if (annotated.length === 0) return [];
@@ -13136,14 +13144,19 @@ var readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
     stdin: `${annotated.join("\n")}
 `
   });
-  const commits = typed.split("\n").filter((line2) => line2.endsWith(" commit") || line2.includes(" commit ")).map((line2) => line2.split(" ")[0] ?? "").filter((sha) => sha !== "");
+  return typed.split("\n").filter((line2) => line2.endsWith(" commit") || line2.includes(" commit ")).map((line2) => line2.split(" ")[0] ?? "").filter((sha) => sha !== "");
+};
+var readNotesFor = (cwd, commits, excluded, budget, cost, guaranteeFirstBatch = false) => {
   if (commits.length === 0) return [];
   const records = [];
   let read = 0;
   const noteBatches = budget === void 0 ? chunked(commits, LOG_BATCH) : chunkedGrowing(commits, budgetedBatchSizes());
   for (const batch of noteBatches) {
-    if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
-      if (cost !== void 0) cost.unreadNotes = commits.length - read;
+    if (budget !== void 0 && !(guaranteeFirstBatch && read === 0) && (budget.now ?? Date.now)() > budget.deadline) {
+      if (cost !== void 0) {
+        cost.unreadNotes = commits.length - read;
+        cost.pendingNotes = commits.slice(read);
+      }
       return records;
     }
     read += batch.length;
@@ -13189,6 +13202,7 @@ ${noteText}`);
   }
   return records;
 };
+var readNoteRecords = (cwd, reachable, excluded, budget, cost) => readNotesFor(cwd, annotatedCommits(cwd, reachable), excluded, budget, cost);
 var revParse = (cwd, rev) => {
   const result = execGit(["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], { cwd });
   if (result.code === GIT_NO_SUCH_REF2 && result.stderr.trim() === "") return null;
@@ -13243,17 +13257,30 @@ var writeMeta = (db, key, value) => {
     value
   );
 };
-var UNREAD_COMMITS_META = "unread_commits";
 var SIGNATURE_VERIFIER_META = "signature_verifier_generation";
-var persistUnread = (db, unread) => {
-  writeMeta(db, UNREAD_COMMITS_META, unread > 0 ? String(unread) : null);
+var NOTES_PENDING_REF_META = "notes_pending_ref";
+var pendingCount = (db, source) => db.prepare("SELECT count(*) AS n FROM scan_pending WHERE source = ?").get(source).n;
+var PENDING_DONE_SQL = "DELETE FROM scan_pending WHERE source = ? AND ord = ? AND sha = ?";
+var pendingEntries = (db, source) => db.prepare("SELECT ord, sha FROM scan_pending WHERE source = ? ORDER BY ord").all(source).map((row) => ({ ord: Number(row.ord), sha: String(row.sha) }));
+var writePending = (db, source, shas, from = 0) => {
+  db.prepare("DELETE FROM scan_pending WHERE source = ?").run(source);
+  const insert = db.prepare("INSERT INTO scan_pending (source, ord, sha) VALUES (?, ?, ?)");
+  shas.forEach((sha, offset) => insert.run(source, from + offset, sha));
 };
-var indexUnread = (handle) => {
-  const raw = readMeta(handle.db, UNREAD_COMMITS_META);
-  if (raw === null || raw === "") return 0;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+var appendPending = (db, source, shas) => {
+  if (shas.length === 0) return;
+  const highest = db.prepare("SELECT max(ord) AS m FROM scan_pending WHERE source = ?").get(source).m;
+  const insert = db.prepare(
+    "INSERT INTO scan_pending (source, ord, sha) VALUES (?, ?, ?) ON CONFLICT DO NOTHING"
+  );
+  const base = (highest ?? -1) + 1;
+  shas.forEach((sha, offset) => insert.run(source, base + offset, sha));
 };
+var indexUnread = (handle) => pendingCount(handle.db, "commit") + pendingCount(handle.db, "notes");
+var indexUnreadBySource = (handle) => ({
+  commits: pendingCount(handle.db, "commit"),
+  notes: pendingCount(handle.db, "notes")
+});
 var initMeta = (db, key, value) => {
   db.prepare("INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)").run(key, value);
 };
@@ -13417,9 +13444,9 @@ var resetIndexFile = (handle) => {
   handle.discardedReason = null;
   handle.fts = syncFts(handle.db, handle.ftsRequested, true);
 };
-var insertRecords = (handle, records) => {
+var insertRecords = (handle, records, opts = {}) => {
   const insertTrailer = handle.db.prepare(
-    `INSERT INTO trailers
+    `INSERT ${opts.repeatable === true ? "OR IGNORE " : ""}INTO trailers
        (commit_sha, block, seq, key, value, value_lc, committed_at, committed_ts, provenance, signature_status, source)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
@@ -13446,6 +13473,7 @@ var insertRecords = (handle, records) => {
           record2.signatureStatus,
           record2.source
         );
+        if (Number(inserted.changes) === 0) return;
         insertFts?.run(inserted.lastInsertRowid, valueLc);
         counts.trailers += 1;
       });
@@ -13466,15 +13494,25 @@ var deleteNoteRows = (handle) => {
     handle.db.exec(`DELETE FROM trailers WHERE source = 'notes'`);
   });
 };
-var indexNotes = (handle, opts = {}, excluded) => {
+var indexNotes = (handle, opts = {}, excluded, cost) => {
   const refSha = revParseRef(handle.cwd, NOTES_REF2);
   const indexed = readMeta(handle.db, "notes_ref_sha");
-  if (!(opts.force ?? false) && refSha === indexed) return 0;
-  const records = refSha === null ? [] : readNoteRecords(handle.cwd, new Set(reachableFromHead(handle.cwd)), excluded);
+  const force = opts.force ?? false;
+  if (!force && refSha === indexed) return 0;
+  if (!force && refSha !== null && readMeta(handle.db, NOTES_PENDING_REF_META) === refSha && pendingCount(handle.db, "notes") > 0) {
+    return 0;
+  }
+  const local = { unreadCommits: 0, unreadNotes: 0 };
+  const annotated = refSha === null ? [] : annotatedCommits(handle.cwd, new Set(reachableFromHead(handle.cwd)));
+  const records = annotated.length === 0 ? [] : readNotesFor(handle.cwd, annotated, excluded, opts.budget, local);
   return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
     const counts = insertRecords(handle, records);
-    writeMeta(handle.db, "notes_ref_sha", refSha);
+    const pending2 = local.pendingNotes ?? [];
+    writeMeta(handle.db, "notes_ref_sha", pending2.length === 0 ? refSha : null);
+    writeMeta(handle.db, NOTES_PENDING_REF_META, pending2.length === 0 ? null : refSha);
+    writePending(handle.db, "notes", pending2, annotated.length - pending2.length);
+    if (cost !== void 0) cost.unreadNotes += local.unreadNotes;
     return counts.trailers;
   });
 };
@@ -13506,13 +13544,12 @@ var rebuildIndex = (handle, opts = {}) => {
   if (stale !== null) resetIndexFile(handle);
   const started = Date.now();
   const head = revParse(handle.cwd, "HEAD");
-  const shas = head === null ? [] : revList(handle.cwd, "HEAD");
+  const shas = head === null ? [] : revList(handle.cwd, head);
   const excluded = /* @__PURE__ */ new Map();
   const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
   const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
   const notesRef = revParseRef(handle.cwd, NOTES_REF2);
   const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost);
-  const unread = cost.unreadCommits + cost.unreadNotes;
   const stats = {
     ...emptyStats(handle, started),
     rebuilt: true,
@@ -13533,13 +13570,75 @@ var rebuildIndex = (handle, opts = {}) => {
     stats.noteTrailersIndexed = noteCounts.trailers;
     stats.pathsIndexed += noteCounts.paths;
     writeMeta(handle.db, "last_indexed_sha", head);
-    writeMeta(handle.db, "notes_ref_sha", notesRef);
+    writePending(handle.db, "commit", shas.slice(shas.length - cost.unreadCommits));
+    const notesPending = cost.pendingNotes ?? [];
+    writeMeta(handle.db, "notes_ref_sha", notesPending.length === 0 ? notesRef : null);
+    writeMeta(handle.db, NOTES_PENDING_REF_META, notesPending.length === 0 ? null : notesRef);
+    writePending(handle.db, "notes", notesPending);
     writeMeta(handle.db, SIGNATURE_VERIFIER_META, signatureVerifierGeneration(handle.cwd));
-    persistUnread(handle.db, unread);
   });
   applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
+};
+var drainPending = (handle, outer, excluded, stats) => {
+  const clock = outer.now ?? Date.now;
+  const budget = {
+    deadline: Math.min(outer.deadline, clock() + RESUME_SLICE_MS),
+    ...outer.now === void 0 ? {} : { now: outer.now }
+  };
+  let floorSpent = false;
+  const commits = pendingEntries(handle.db, "commit");
+  if (commits.length > 0) {
+    const cost2 = { unreadCommits: 0, unreadNotes: 0 };
+    const shas2 = commits.map((entry) => entry.sha);
+    const records2 = readCommitRecords(handle.cwd, shas2, excluded, budget, cost2, true);
+    const read2 = shas2.length - cost2.unreadCommits;
+    floorSpent = read2 > 0;
+    if (read2 > 0) {
+      runInTransaction(handle.db, () => {
+        const counts = insertRecords(handle, records2, { repeatable: true });
+        stats.trailersIndexed += counts.trailers;
+        stats.pathsIndexed += counts.paths;
+        const done = handle.db.prepare(PENDING_DONE_SQL);
+        for (const entry of commits.slice(0, read2)) done.run("commit", entry.ord, entry.sha);
+      });
+      stats.commitsScanned += read2;
+    }
+  }
+  if (pendingCount(handle.db, "commit") > 0) return;
+  const notes = pendingEntries(handle.db, "notes");
+  if (notes.length === 0) return;
+  const listedFrom = readMeta(handle.db, NOTES_PENDING_REF_META);
+  const currentRef = revParseRef(handle.cwd, NOTES_REF2);
+  if (listedFrom === null || listedFrom !== currentRef) {
+    runInTransaction(handle.db, () => {
+      deleteNoteRows(handle);
+      writePending(handle.db, "notes", []);
+      writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+      writeMeta(handle.db, "notes_ref_sha", null);
+    });
+    return;
+  }
+  const cost = { unreadCommits: 0, unreadNotes: 0 };
+  const shas = notes.map((entry) => entry.sha);
+  const records = readNotesFor(handle.cwd, shas, excluded, budget, cost, !floorSpent);
+  const read = shas.length - cost.unreadNotes;
+  if (read === 0) return;
+  const applied = runInTransaction(handle.db, () => {
+    if (readMeta(handle.db, NOTES_PENDING_REF_META) !== listedFrom) return false;
+    const counts = insertRecords(handle, records, { repeatable: true });
+    stats.noteTrailersIndexed += counts.trailers;
+    stats.pathsIndexed += counts.paths;
+    const done = handle.db.prepare(PENDING_DONE_SQL);
+    for (const entry of notes.slice(0, read)) done.run("notes", entry.ord, entry.sha);
+    if (pendingCount(handle.db, "notes") === 0) {
+      writeMeta(handle.db, "notes_ref_sha", listedFrom);
+      writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+    }
+    return true;
+  });
+  if (applied) stats.notesScanned += read;
 };
 var incrementalProblem = (handle, head, last) => {
   if (last === null) return "the index has no baseline commit";
@@ -13581,7 +13680,15 @@ var updateIndex = (handle, opts = {}) => {
   const head = revParse(handle.cwd, "HEAD");
   if (head === null) {
     const stats2 = emptyStats(handle, started);
-    writeMeta(handle.db, "last_indexed_sha", null);
+    runInTransaction(handle.db, () => {
+      if (handle.fts) handle.db.exec("DELETE FROM trailers_fts");
+      handle.db.exec("DELETE FROM trailers");
+      handle.db.exec("DELETE FROM commit_paths");
+      handle.db.exec("DELETE FROM scan_pending");
+      writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+      writeMeta(handle.db, "notes_ref_sha", null);
+      writeMeta(handle.db, "last_indexed_sha", null);
+    });
     stats2.noteTrailersIndexed = indexNotes(handle, {}, excluded);
     applyExclusions(stats2, excluded);
     stats2.elapsedMs = Date.now() - started;
@@ -13595,21 +13702,32 @@ var updateIndex = (handle, opts = {}) => {
   }
   const stats = { ...emptyStats(handle, started), headSha: head };
   if (last !== null && last !== head) {
-    const shas = revList(handle.cwd, `${last}..HEAD`);
-    stats.commitsScanned = shas.length;
-    const records = readCommitRecords(handle.cwd, shas, excluded);
+    const shas = revList(handle.cwd, `${last}..${head}`);
+    const incremental = { unreadCommits: 0, unreadNotes: 0 };
+    const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, incremental);
+    const read = shas.length - incremental.unreadCommits;
+    stats.commitsScanned = read;
     try {
-      const counts = insertRecords(handle, records);
-      stats.trailersIndexed = counts.trailers;
-      stats.pathsIndexed = counts.paths;
+      runInTransaction(handle.db, () => {
+        const counts = insertRecords(handle, records);
+        stats.trailersIndexed = counts.trailers;
+        stats.pathsIndexed = counts.paths;
+        appendPending(handle.db, "commit", shas.slice(read));
+        writeMeta(handle.db, "last_indexed_sha", head);
+      });
     } catch (error2) {
       return rebuildOrRefuse(
         `incremental insert conflicted with existing rows (${errorMessage(error2)})`
       );
     }
-    writeMeta(handle.db, "last_indexed_sha", head);
   }
-  stats.noteTrailersIndexed = indexNotes(handle, {}, excluded);
+  if (opts.budget !== void 0) drainPending(handle, opts.budget, excluded, stats);
+  stats.noteTrailersIndexed += indexNotes(
+    handle,
+    opts.budget === void 0 ? {} : { budget: opts.budget },
+    excluded,
+    opts.cost
+  );
   applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
@@ -13770,6 +13888,7 @@ var indexInfo = (handle) => ({
   schemaVersion: readMeta(handle.db, "schema_version"),
   lastIndexedSha: readMeta(handle.db, "last_indexed_sha"),
   notesRefSha: readMeta(handle.db, "notes_ref_sha"),
+  unread: indexUnreadBySource(handle),
   trailers: handle.db.prepare("SELECT count(*) AS n FROM trailers").get()?.n ?? 0,
   commits: handle.db.prepare("SELECT count(DISTINCT commit_sha) AS n FROM trailers").get()?.n ?? 0,
   paths: handle.db.prepare("SELECT count(*) AS n FROM commit_paths").get()?.n ?? 0
@@ -22961,24 +23080,43 @@ var checkIndex = (ctx) => {
     const head = git2(["rev-parse", "HEAD"], gitOptions2(opts));
     const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
     const fts = info.fts ? "FTS5" : "no FTS5 (value search falls back to LIKE)";
+    const outstanding = info.unread.commits + info.unread.notes;
     const indexEvidence = {
       trailers: String(info.trailers),
       commits: String(info.commits),
       last_indexed_sha: info.lastIndexedSha || "none",
       head_sha: head.code === 0 ? head.stdout.trim() || "none" : "unavailable",
-      fts: info.fts ? "true" : "false"
+      fts: info.fts ? "true" : "false",
+      unread_commits: String(info.unread.commits),
+      unread_notes: String(info.unread.notes)
     };
-    return behind ? check(
-      "index-health",
-      "index",
-      "index health",
-      "warn",
-      `${info.trailers} trailers over ${info.commits} commits, behind HEAD \u2014 ${fts}`,
-      "commitlore index",
-      false,
-      void 0,
-      { evidence: indexEvidence }
-    ) : check(
+    if (behind) {
+      return check(
+        "index-health",
+        "index",
+        "index health",
+        "warn",
+        `${info.trailers} trailers over ${info.commits} commits, behind HEAD \u2014 ${fts}`,
+        "commitlore index",
+        false,
+        void 0,
+        { evidence: indexEvidence }
+      );
+    }
+    if (outstanding > 0) {
+      return check(
+        "index-health",
+        "index",
+        "index health",
+        "warn",
+        `${info.trailers} trailers over ${info.commits} commits, current with HEAD but ${outstanding} still unread from a budgeted scan \u2014 ${fts}`,
+        "commitlore index",
+        false,
+        void 0,
+        { evidence: indexEvidence }
+      );
+    }
+    return check(
       "index-health",
       "index",
       "index health",
