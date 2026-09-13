@@ -165,6 +165,16 @@ const openSource = (cwd, noIndex, budgetMs, now) => {
             }
             return fallback;
         };
+        // Every field below reports the source that actually answered, not the one
+        // this function set out to use.
+        //
+        // They were literals -- `fromIndex: true`, `corpusPasses: () => 0`, and an
+        // `unreadCommits` reading the *index's* queue. After a mid-query fallback
+        // all three went on describing the index while the scan produced the rows,
+        // and the last one is the dangerous member: a fallback scan that truncates
+        // while the index queue happens to be empty reported `unreadCommits: 0`,
+        // which `runQuery` turns into `coverage: "complete"` on an answer that is
+        // missing records. Found in review.
         return {
             fetch: (query) => {
                 if (fallback !== null)
@@ -176,10 +186,18 @@ const openSource = (cwd, noIndex, budgetMs, now) => {
                     return scanInstead(error).fetch(query);
                 }
             },
-            fromIndex: true,
-            corpusPasses: () => 0,
-            unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
-            close: () => closeIndex(handle),
+            get fromIndex() {
+                return fallback === null;
+            },
+            corpusPasses: () => (fallback === null ? 0 : fallback.corpusPasses()),
+            unreadCommits: () => fallback === null
+                ? Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes)
+                : fallback.unreadCommits(),
+            close: () => {
+                if (fallback !== null)
+                    fallback.close();
+                closeIndex(handle);
+            },
             diagnostics,
         };
     }
@@ -661,7 +679,10 @@ export const runQuery = (opts = {}) => {
     const paths = normalizePaths(opts);
     const scope = resolveScope(cwd, paths);
     const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow);
-    const diagnostics = [...source.diagnostics, ...scope.diagnostics];
+    // The array, not a copy of it. A fallback that begins during a read appends
+    // its explanation to `source.diagnostics` after this line, and copying here
+    // dropped exactly the message that says the answer came from somewhere else.
+    const diagnostics = scope.diagnostics.slice();
     try {
         if (opts.explainEmptyResult === true)
             diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
@@ -732,7 +753,11 @@ export const runQuery = (opts = {}) => {
             unreadCommits: unread,
             coverage: unread > 0 ? 'partial' : 'complete',
             vantage,
-            diagnostics,
+            // `source.diagnostics` is read here, not at the top: a fallback that
+            // begins during a read appends its explanation while the rows are being
+            // fetched, and a copy taken before that dropped the one message saying
+            // the answer came from somewhere else. Source first, as before.
+            diagnostics: [...source.diagnostics, ...diagnostics],
         };
     }
     finally {

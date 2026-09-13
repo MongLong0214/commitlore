@@ -879,6 +879,16 @@ const revList = (cwd, range) => execGitOrThrow(['rev-list', range], { cwd, maxBu
  * it exists for `indexNotes`, which re-reads the mirror without one.
  */
 const reachableFromHead = (cwd) => revParse(cwd, 'HEAD') === null ? [] : revList(cwd, 'HEAD');
+/**
+ * The same walk from a resolved commit rather than from the symbolic `HEAD`.
+ *
+ * `indexNotes` resolves HEAD once and both filters and stamps with that value,
+ * so the scope the rows were chosen by is the scope recorded beside them. A
+ * second `HEAD` read would let the two describe different commits.
+ */
+const reachableFrom = (cwd, head) => head === null ? [] : revList(cwd, head);
+/** Whether `ancestor` is reachable from `descendant`, git's own answer. */
+const isAncestor = (cwd, ancestor, descendant) => execGit(['merge-base', '--is-ancestor', ancestor, descendant], { cwd }).code === 0;
 // ---------------------------------------------------------------------------
 // Database lifecycle
 // ---------------------------------------------------------------------------
@@ -926,6 +936,24 @@ const SIGNATURE_VERIFIER_META = 'signature_verifier_generation';
  * the pending rows are, so the two stop overwriting each other.
  */
 const NOTES_PENDING_REF_META = 'notes_pending_ref';
+/**
+ * The HEAD a completed notes pass was scoped to, and the one its queue was
+ * listed under (#957 follow-on).
+ *
+ * A note row is not a property of the mirror alone. `annotatedNotes` filters
+ * the mirror by what HEAD reaches, so the same mirror yields different rows at
+ * different HEADs -- and the early return below compared only the mirror.
+ *
+ * That is not a race. Index at an ancestor whose mirror already carries a note
+ * on a descendant, then fast-forward: the commit scan advances, the notes scan
+ * returns immediately because the ref did not move, and the descendant's note
+ * is missing with nothing queued. Every later call repeats it. Reproduced on a
+ * two-commit repository -- the indexed answer was `coverage: "complete"` with
+ * no records while `--no-index` returned the note, which is the one thing the
+ * two paths may never do (`r-busy420`).
+ */
+const NOTES_HEAD_META = 'notes_head_sha';
+const NOTES_PENDING_HEAD_META = 'notes_pending_head';
 /**
  * What a truncated scan still owes, as the work itself rather than as a count.
  *
@@ -1472,23 +1500,72 @@ export const indexNotes = (handle, opts = {}, excluded, cost) => {
     const refSha = revParseRef(handle.cwd, NOTES_REF);
     const indexed = readMeta(handle.db, 'notes_ref_sha');
     const force = opts.force ?? false;
-    if (!force && refSha === indexed)
+    // Resolved once and carried through the pass, so the scope the rows are
+    // filtered by is the scope they are stamped with. Reading `HEAD` again below
+    // would let the two differ.
+    const headSha = revParse(handle.cwd, 'HEAD');
+    if (!force && refSha === indexed && headSha === readMeta(handle.db, NOTES_HEAD_META))
         return 0;
+    // The mirror is unchanged and HEAD only moved forward: the reachable set can
+    // only have grown, so the notes already indexed are still the right rows and
+    // the only ones that can be missing are on the commits the move added.
+    //
+    // Without this the scope fix costs a whole notes pass per commit -- measured
+    // at 40 `interpret-trailers` for one commit on a repository with 40 notes,
+    // paid by the post-commit hook every time. The narrow pass costs the notes on
+    // the new commits, which is almost always none.
+    //
+    // Only for a fast-forward. A HEAD that stops descending from the stamped one
+    // needs rows *removed*, and that case never reaches here: `incrementalProblem`
+    // answers it with a full rebuild.
+    const stampedHead = readMeta(handle.db, NOTES_HEAD_META);
+    if (!force &&
+        refSha === indexed &&
+        refSha !== null &&
+        headSha !== null &&
+        stampedHead !== null &&
+        pendingCount(handle.db, 'notes') === 0 &&
+        isAncestor(handle.cwd, stampedHead, headSha)) {
+        const added = revList(handle.cwd, `${stampedHead}..${headSha}`);
+        const local = { unreadCommits: 0, unreadNotes: 0 };
+        const fresh = added.length === 0
+            ? []
+            : annotatedNotes(handle.cwd, refSha, new Set(added));
+        const records = fresh.length === 0 ? [] : readNotesFor(handle.cwd, fresh, excluded, opts.budget, local);
+        // A truncated narrow pass must not stamp the new scope: the notes it did
+        // not reach would then be neither indexed nor owed. Falling through to the
+        // whole pass below is the safe answer, and it is what the next call does.
+        if ((local.pendingNotes ?? []).length === 0) {
+            return runInTransaction(handle.db, () => {
+                const counts = insertRecords(handle, records, { repeatable: true });
+                writeMeta(handle.db, NOTES_HEAD_META, headSha);
+                if (cost !== undefined)
+                    cost.unreadNotes += local.unreadNotes;
+                return counts.trailers;
+            });
+        }
+    }
     // Work already listed from this same mirror belongs to `drainPending`, which
     // is holding a position in it. Re-listing here would throw that position away
     // and replace the note rows with a fresh prefix on every call -- the mirror
     // would be re-read from the start forever, which is the defect this change
     // exists to remove, moved from the commits to the notes.
+    //
+    // Scoped by HEAD too: a queue listed at one HEAD holds the entries that HEAD
+    // reached, so resuming it under another would retire entries chosen for a
+    // scope that no longer applies. When HEAD has moved the guard falls through
+    // and the pass below re-lists, which is the repair.
     if (!force &&
         refSha !== null &&
         readMeta(handle.db, NOTES_PENDING_REF_META) === refSha &&
+        readMeta(handle.db, NOTES_PENDING_HEAD_META) === headSha &&
         pendingCount(handle.db, 'notes') > 0) {
         return 0;
     }
     const local = { unreadCommits: 0, unreadNotes: 0 };
     const annotated = refSha === null
         ? []
-        : annotatedNotes(handle.cwd, refSha, new Set(reachableFromHead(handle.cwd)));
+        : annotatedNotes(handle.cwd, refSha, new Set(reachableFrom(handle.cwd, headSha)));
     const records = annotated.length === 0
         ? []
         : readNotesFor(handle.cwd, annotated, excluded, opts.budget, local);
@@ -1504,6 +1581,8 @@ export const indexNotes = (handle, opts = {}, excluded, cost) => {
         const pending = local.pendingNotes ?? [];
         writeMeta(handle.db, 'notes_ref_sha', pending.length === 0 ? refSha : null);
         writeMeta(handle.db, NOTES_PENDING_REF_META, pending.length === 0 ? null : refSha);
+        writeMeta(handle.db, NOTES_HEAD_META, pending.length === 0 ? headSha : null);
+        writeMeta(handle.db, NOTES_PENDING_HEAD_META, pending.length === 0 ? null : headSha);
         writePending(handle.db, 'notes', pending, annotated.length - pending.length);
         if (cost !== undefined)
             cost.unreadNotes += local.unreadNotes;
@@ -1641,6 +1720,11 @@ export const rebuildIndex = (handle, opts = {}) => {
         const notesPending = cost.pendingNotes ?? [];
         writeMeta(handle.db, 'notes_ref_sha', notesPending.length === 0 ? notesRef : null);
         writeMeta(handle.db, NOTES_PENDING_REF_META, notesPending.length === 0 ? null : notesRef);
+        // The same scope stamp the incremental pass writes. A rebuild's notes are
+        // filtered by what this HEAD reaches, so the mirror alone does not say
+        // whether they are still the right rows (#957 follow-on).
+        writeMeta(handle.db, NOTES_HEAD_META, notesPending.length === 0 ? head : null);
+        writeMeta(handle.db, NOTES_PENDING_HEAD_META, notesPending.length === 0 ? null : head);
         writePending(handle.db, 'notes', notesPending);
         writeMeta(handle.db, SIGNATURE_VERIFIER_META, signatureVerifierGeneration(handle.cwd));
     });
@@ -1777,6 +1861,10 @@ const drainPending = (handle, outer, excluded, stats) => {
         if (pendingCount(handle.db, 'notes') === 0) {
             writeMeta(handle.db, 'notes_ref_sha', listedFrom);
             writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+            // The scope the queue was listed under, promoted with it. Reading HEAD
+            // here instead would stamp a scope this drain never filtered by.
+            writeMeta(handle.db, NOTES_HEAD_META, readMeta(handle.db, NOTES_PENDING_HEAD_META));
+            writeMeta(handle.db, NOTES_PENDING_HEAD_META, null);
         }
         return true;
     });
@@ -1858,6 +1946,8 @@ export const updateIndex = (handle, opts = {}) => {
             handle.db.exec('DELETE FROM commit_paths');
             handle.db.exec('DELETE FROM scan_pending');
             writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+            writeMeta(handle.db, NOTES_HEAD_META, null);
+            writeMeta(handle.db, NOTES_PENDING_HEAD_META, null);
             writeMeta(handle.db, 'notes_ref_sha', null);
             writeMeta(handle.db, 'last_indexed_sha', null);
         });
