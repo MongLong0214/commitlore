@@ -77,6 +77,62 @@ about what you can honestly write down, not a gate — a check that looked for t
 words "negative control" in a message would certify the claim without observing
 anything, which is the failure mode this project has already been bitten by.
 
+### Running the tests: `npm run test:local`
+
+`npx vitest run` saturates a developer machine on its own — roughly 7,400
+seconds of test time across workers for about 700 seconds of wall clock — and
+under any other load it reports failures that are not failures. Measured on one
+machine at one commit: the suite alone produced 6 failures, the suite beside two
+other heavy jobs produced 25, and the same files run a few at a time produced
+**0**. Eleven of fifteen in the loaded run were `Test timed out in 20000ms`.
+
+So run **`npm run test:local`** (`npm run build && vitest run --maxWorkers=4`)
+when you want a signal you can act on. Bounded parallelism is what makes the red
+mean something; the full-parallelism run is CI's shape, not a developer's.
+
+**It builds first, and that is not a convenience.** Many tests here spawn
+`dist/commitlore.mjs` rather than importing `src/`, so a suite run against a
+stale bundle is testing the last build and reporting it as this one. That has
+now produced three wrong answers in a single day of work: a mutation that failed
+to compile and left the previous bundle for the test to pass against, a budget
+test that read a rebuild someone else was in the middle of, and a fix that
+reported red because `git checkout -- dist/` had put the *released* bundle back
+before the run. None of the three looked like a build problem; all three looked
+like results.
+
+This matters beyond patience. A suite whose red is routinely discounted teaches
+the reader to discount a real failure too, which is a correctness risk wearing
+the clothes of an inconvenience.
+
+Two files scan this repository's own history on purpose and carry their own
+timeout (`vi.setConfig({ testTimeout: 120_000 })` at the top, with the
+measurement that chose the number): `test/guard.test.ts` and
+`test/inject.test.ts`. If you add a test that reads real history rather than a
+temporary fixture, do the same — and write down what you measured, not what felt
+safe.
+
+### Checking a negative control mechanically: `scripts/negative-control.mjs`
+
+The rule above is a rule about what you can honestly write down. Where it is
+cheap, you can also have it checked:
+
+```
+node scripts/negative-control.mjs            # HEAD
+node scripts/negative-control.mjs <commit>
+```
+
+It reverses each hunk the commit made under `src/`, runs the test files that
+commit added or changed, and reports the hunks nothing went red for. It needs a
+clean tree, and it refuses to run if the named tests do not already pass — a red
+suite reports every mutation as guarded, for the wrong reason.
+
+An `UNGUARDED` hunk is a finding to explain rather than a verdict. A comment, a
+message, a rename and a refactor all belong there honestly. A behaviour change
+does not.
+
+It is not a CI gate on purpose. A gate would be answered by writing tests that
+fail for any mutation, which is not the same as tests that check the property.
+
 ## Where to start
 
 1. Read [`docs/adr/`](docs/adr/) first — the ADRs carry the *why*, including what we deliberately rejected. Proposals that re-litigate a settled ADR need to address its Ruled-out list.

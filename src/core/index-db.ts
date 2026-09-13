@@ -1462,8 +1462,29 @@ const initMeta = (db: IndexDatabase, key: string, value: string): void => {
   db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run(key, value);
 };
 
+/**
+ * One lock acquisition for the whole schema, not one per statement (#958).
+ *
+ * `SCHEMA_SQL` is a dozen-odd `CREATE`s, and `exec` runs each in its own
+ * implicit transaction. Every one of those is a separate chance to lose a race,
+ * and losing any of them throws out of `openIndex` — observed as "database is
+ * locked" from `createSchema` with four processes opening a cold index
+ * together. `BEGIN IMMEDIATE` asks once, waits out `busy_timeout` once, and
+ * either gets the whole schema or none of it.
+ */
 const createSchema = (db: IndexDatabase): void => {
-  db.exec(SCHEMA_SQL);
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(SCHEMA_SQL);
+    db.exec('COMMIT');
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      /* the failure below is what the caller needs; a rollback that cannot run adds nothing */
+    }
+    throw error;
+  }
   initMeta(db, 'schema_version', String(SCHEMA_VERSION));
 };
 
@@ -1487,10 +1508,29 @@ const createSchema = (db: IndexDatabase): void => {
  */
 const transactionDepth = new WeakMap<IndexDatabase, number>();
 
+/**
+ * `BEGIN IMMEDIATE`, not `BEGIN` (#958).
+ *
+ * Every caller below writes. A plain `BEGIN` is deferred: it takes no lock, and
+ * the write lock is acquired on the first statement that needs it. SQLite will
+ * not apply `busy_timeout` to *that* acquisition — a deferred transaction that
+ * has already read cannot wait for a writer without breaking its own snapshot,
+ * so it returns `SQLITE_BUSY` at once. `busy_timeout` was set and had no effect
+ * on the case it was set for.
+ *
+ * Found by running it rather than reading it: four real processes draining one
+ * index, and a drainer died with "database is locked" on its first trial.
+ * `BEGIN IMMEDIATE` asks for the write lock up front, which is the acquisition
+ * `busy_timeout` does govern, so a contending drainer waits its turn instead of
+ * throwing.
+ *
+ * A nested call is a savepoint inside a transaction that already holds the
+ * lock, so it needs nothing here.
+ */
 const runInTransaction = <T>(db: IndexDatabase, fn: () => T): T => {
   const depth = transactionDepth.get(db) ?? 0;
   const savepoint = `commitlore_sp_${depth}`;
-  db.exec(depth === 0 ? 'BEGIN' : `SAVEPOINT ${savepoint}`);
+  db.exec(depth === 0 ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${savepoint}`);
   transactionDepth.set(db, depth + 1);
   try {
     const result = fn();
@@ -1628,6 +1668,25 @@ export const integrityProblem = (db: IndexDatabase): string | null => {
  */
 const BUSY_TIMEOUT_MS = 500;
 
+/** The file cannot be read as a database: a rebuild reason, never absorbed. */
+const SQLITE_NOTADB = 26;
+const SQLITE_CORRUPT = 11;
+
+/**
+ * SQLite's own result code for an error, or `null` if it did not come from SQLite.
+ *
+ * `node:sqlite` stamps `code: 'ERR_SQLITE_ERROR'` and a numeric `errcode`,
+ * which nothing outside it can forge. The low byte, because SQLite extends a
+ * primary code with detail in the high bits -- `SQLITE_IOERR_READ` is 266 and
+ * is still an I/O error.
+ */
+const sqliteResultCode = (error: unknown): number | null => {
+  if (typeof error !== 'object' || error === null) return null;
+  const holder = error as { code?: unknown; errcode?: unknown };
+  if (holder.code !== 'ERR_SQLITE_ERROR' || typeof holder.errcode !== 'number') return null;
+  return holder.errcode & 0xff;
+};
+
 const openDatabaseFile = (path: string, readonly: boolean): IndexDatabase => {
   const Ctor = loadDatabaseCtor();
   const db = new Ctor(path, { readOnly: readonly });
@@ -1637,8 +1696,46 @@ const openDatabaseFile = (path: string, readonly: boolean): IndexDatabase => {
   // reader still meets `SQLITE_BUSY` while the writer checkpoints.
   db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
   if (!readonly) {
-    db.exec('PRAGMA journal_mode = WAL');
-    db.exec('PRAGMA synchronous = NORMAL');
+    // Both are optimisations, and neither may take the process down (#958).
+    //
+    // Switching journal mode needs a moment with the database to itself, and
+    // several writers opening at once do not get one: observed as
+    // `SQLITE_IOERR` -- "disk I/O error", not "database is locked" -- thrown
+    // out of `openIndex` while four drainers started together. That is a crash
+    // on an ordinary invocation, on the path the PreToolUse hook takes per
+    // edit, for a pragma whose only job is to make the next query faster.
+    //
+    // A failure here leaves the database in rollback-journal mode, where a
+    // reader and a writer serialise instead of running together. Slower, and
+    // an answer.
+    try {
+      db.exec('PRAGMA journal_mode = WAL');
+      db.exec('PRAGMA synchronous = NORMAL');
+    } catch (error) {
+      // Tolerated by SQLite result code, never by message text.
+      //
+      // `openDatabaseFile` is where a file that is not a database first
+      // announces itself: SQLite opens lazily, so this pragma is the first
+      // statement to read the header, and the caller above turns that throw
+      // into "discard and rebuild". Swallowing everything here left the corrupt
+      // file in place for the schema creation below to fail on, past the point
+      // that repairs it -- caught by the test that already covered it.
+      //
+      // So the two codes that mean "this file is not usable" are re-raised and
+      // everything else is absorbed. `SQLITE_IOERR` is what four writers
+      // opening a cold index together actually produced, and `SQLITE_BUSY` is
+      // what a fifth would; neither says anything about the file.
+      //
+      // Matched on identity rather than on message text, which was the first
+      // form and is unsound in both directions: with
+      // `GIT_CONFIG_KEY_0=sqlite_busy`, git's rejection of the key carries that
+      // string into an exception message, and a substring test reads a broken
+      // git configuration as another process holding the index. Reproduced in
+      // review.
+      const code = sqliteResultCode(error);
+      if (code === null || code === SQLITE_NOTADB || code === SQLITE_CORRUPT) throw error;
+      /* rollback journal it is; the index is derived and every query still answers */
+    }
   }
   return db;
 };
