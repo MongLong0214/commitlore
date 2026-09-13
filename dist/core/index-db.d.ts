@@ -81,8 +81,16 @@ export type IndexDatabase = DatabaseSync;
  * in the same batched pass as its trailers. Signature verification is an
  * opt-in grading condition, so serving a v3 row without this fact could
  * incorrectly promote a record after a repository enables that mode.
+ *
+ * v5 adds `scan_pending` and changes what `meta.unread_commits` meant. A v4
+ * index recorded how many commits a truncated scan left but not WHICH, and a
+ * count cannot be resumed from: measured on a 1544-commit repository, the first
+ * budgeted call read 448 commits and seven further budgeted calls read none.
+ * The count also conflated commits with notes, so draining one source could
+ * report the other complete. A v4 index left partial therefore has no position
+ * to carry forward, and the version gate rebuilding it is that restart path.
  */
-export declare const SCHEMA_VERSION = 4;
+export declare const SCHEMA_VERSION = 5;
 export declare const NOTES_REF = "refs/notes/commitlore";
 export type RecordSource = 'commit' | 'notes';
 /** One indexed trailer, with the commit context a consumer route needs. */
@@ -235,6 +243,16 @@ export interface ScanCost {
      * scan, leaving every note unread, or survive it and expire in the notes.
      */
     unreadNotes: number;
+    /**
+     * The annotated commits the notes pass did not reach, in the order it would
+     * have read them.
+     *
+     * The commit pass needs no equivalent: its caller holds the walk it handed in
+     * and can take the tail itself. The notes pass derives its own list — the
+     * mirror, filtered to what HEAD reaches — so a caller that wants to persist
+     * what is left has no other way to see it.
+     */
+    pendingNotes?: string[];
 }
 /**
  * Reads the given commits, in one `git log` per batch, keeping only those that
@@ -266,10 +284,19 @@ export interface ScanCost {
  */
 export declare const signatureAtom: (verifierGeneration: string | null) => string;
 /**
- * Commits a previous budgeted rebuild left unread, persisted so a later query
- * can say so without walking history again. 0 when the index is whole.
+ * Records a truncated scan still owes, from both sources. 0 when the index is
+ * whole.
+ *
+ * Kept as one number because that is what every consumer renders — "N commits
+ * went unread, run `commitlore init`" — and because a caller that wants them
+ * apart can ask `indexUnreadBySource`.
  */
 export declare const indexUnread: (handle: IndexHandle) => number;
+/** The same total, split by the source that owes it. */
+export declare const indexUnreadBySource: (handle: IndexHandle) => {
+    commits: number;
+    notes: number;
+};
 /**
  * The b-tree walk, kept off the read path (#782).
  *
@@ -311,7 +338,8 @@ export declare const closeIndex: (handle: IndexHandle) => void;
  */
 export declare const indexNotes: (handle: IndexHandle, opts?: {
     force?: boolean;
-}, excluded?: ExclusionCounts) => number;
+    budget?: ScanBudget;
+}, excluded?: ExclusionCounts, cost?: ScanCost) => number;
 /**
  * Rebuilds from scratch: every commit reachable from HEAD, plus every note.
  * This is always safe and always sufficient — it is what makes the index
@@ -392,5 +420,15 @@ export declare const indexInfo: (handle: IndexHandle) => {
     trailers: number;
     commits: number;
     paths: number;
+    /**
+     * Records a truncated scan still owes. Reported here because "current with
+     * HEAD" and "holds everything" are different questions, and `doctor` was
+     * answering the second with the first: `last_indexed_sha` equals HEAD the
+     * moment a budgeted scan stamps it, outstanding work or not.
+     */
+    unread: {
+        commits: number;
+        notes: number;
+    };
 };
 export {};

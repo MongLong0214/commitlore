@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "351ba7f3ee28df06fa8b5d1967354637312ccb211543a9212d9349ae7fcdafbf"
+    "sha256": "afb9e4781252a0e4849706e5a715a284978f6039bd3081a38968cd11943959c9"
   },
   "artifact": {
-    "sha256": "3b7b809db5501e726e94be2c72903eb2f7f1382883dc69e6036e3954c0c01655",
+    "sha256": "9ebb421eb88e641a816dd78789ed8b14a4c1dc3e3277ac48e32ab4d674b7376e",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -266,11 +266,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/index-index-health.js",
-        "sha256": "1f3c0815f187c51df2ef4cfb046b39e950353bc7582be7f73bd09e4a0a454c93"
+        "sha256": "d2fd3533847043f8bf746aac6cf6dbbde95cb04811bce193a3ae059bdf89ebbb"
       },
       {
         "path": "dist/commands/doctor/checks/index-index-health.js.map",
-        "sha256": "0986a9850e3b216485c2840f3fe8395e0d2788edb0dc5f50b243d76478554863"
+        "sha256": "a5593b0d991d8190edafbf7735d057dd3a3fda6ab3063bda6c6e0818f32074b2"
       },
       {
         "path": "dist/commands/doctor/checks/runtime-cli-runtime.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "c7825e967a0275e0f6fb3a2039d425d322e90fe809a609842937d6768483ee5a"
+        "sha256": "f61803ebe10e4a0242e7da1a5392ed5961ee81cecc68645dcd1f7b7756c5f353"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -866,15 +866,15 @@
       },
       {
         "path": "dist/core/index-db.d.ts",
-        "sha256": "66a45a0854bc0d157ce4cd55e3d6e3d365eb8b4b0166e7e7bb343523fdd2d5eb"
+        "sha256": "1ef3814d399ee9feb17b69c9a5072a7667ddfa804bc4de7fedb4a35e30031c3c"
       },
       {
         "path": "dist/core/index-db.js",
-        "sha256": "8c0d28d88e3ad34776f4fa0bd6fa99330b2717f78bcd4debdb23e8261f69845b"
+        "sha256": "678cb701498fbe413f35e8c38df86bbf9ae6c7db6bf122559017e8402a488677"
       },
       {
         "path": "dist/core/index-db.js.map",
-        "sha256": "444f8fc6f3210fc3524d549c3354829f5efc27578f06fe07db3cfeb625d3bfc5"
+        "sha256": "95e1dfdbd187d2ab1eae6e86985db72ed7b6acc501c132ddcf53f4d4b25687ec"
       },
       {
         "path": "dist/core/inject.d.ts",

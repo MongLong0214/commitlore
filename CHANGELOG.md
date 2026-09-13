@@ -4,6 +4,91 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.0
+
+A scan that ran out of budget stopped, and then never started again. Everything
+below follows from that one thing, and from two rounds of external review that
+reproduced, between them, eight ways the fix for it would still have lost work.
+
+**A budgeted scan now carries on from where it stopped.** A truncated scan used
+to persist one number — how many commits it had left unread — and a number
+cannot be resumed from. Measured on a 1544-commit repository against an injected
+clock: the first budgeted call read 448 commits, and seven further budgeted
+calls read none. The index stayed 29% built until somebody ran `commitlore
+init`, which is the one command the situation exists to avoid needing. The
+unread work is now recorded as the work itself, in a `scan_pending` table, and a
+later budgeted call drains it. Four calls take that repository to a complete
+index whose rows are identical, one for one, to a single unbudgeted rebuild.
+
+**A slice per call, not the whole budget.** Finishing the index is not what the
+caller asked for; answering is. Spending the rest of the budget on the backlog
+converged in four calls and made every one of them cost three seconds — an edit
+hook that used to return in milliseconds paying full price on every fire. The
+drain takes a quarter of the ceiling, so the backlog still empties and each call
+stays close to what it cost before.
+
+**The unread count added commits to notes.** One `meta.unread_commits` held
+both, so draining either source could report the other complete. They are
+counted separately now, and `doctor` reports each.
+
+**A truncated notes pass claimed the mirror was indexed.** The rebuild stamped
+`notes_ref_sha` whether or not the notes were all read, and `indexNotes` returns
+immediately when that stamp matches — so the notes left over were never read
+again. Eleven of this repository's own notes were being dropped permanently
+while the stamp said otherwise. The stamp is now written only for a pass that
+finished, and outstanding notes carry the mirror they were listed from: draining
+a queue listed from an older mirror can no longer certify a newer one.
+
+**The walk enumerated a name it had already resolved.** `rebuildIndex` read
+`HEAD` with one git process and then walked `HEAD` with another, so a checkout
+landing between them attached the walk — and `last_indexed_sha` — to a history
+it never read. It walks the resolved object now.
+
+**A budgeted incremental had the same defect the scan had.** New commits beyond
+the ceiling were read, discarded, and left out of both the index and the unread
+count: reproduced at 130 new commits against a budget reaching 64, where three
+successive calls made no progress, all 130 were missing, and the index reported
+nothing owed. What the ceiling cuts off now joins the queue.
+
+**A queued entry is retired by identity, not by position.** A drainer selects
+its rows and then reads git holding no transaction, and a rebuild can replace
+the queue inside that window. Deleting on position alone retired whatever had
+moved into that slot — work nobody had done — and the index then called itself
+complete with a record permanently absent.
+
+**A note's identity is its commit, and its commit does not change when it
+does.** Retiring queued notes by sha therefore could not tell one version of a
+mirror's work from another: a drainer reading 64 notes from one version while
+another process re-listed the queue against the next retired the new queue's
+entries with the old version's content, leaving 64 old notes, 66 new ones and
+nothing outstanding. The mirror is checked again inside the write, and a queue
+that moved underneath is refused rather than retired.
+
+**A mirror that disappears takes its rows with it.** A truncated notes pass
+leaves both rows and a queue, belonging to one mirror. Dropping only the queue
+left an indexed prefix nothing pointed at, with `notes_ref_sha` and the live ref
+both unset — so `indexNotes` returned at its first line and those notes were
+served for good.
+
+**The one-batch floor is spent once per call, not once per source.** Giving it
+to both readers let a call with an already-spent budget read a full commit batch
+and then a full notes batch, twice what the floor is supposed to cost.
+
+**An unborn HEAD kept what it could no longer reach.** Switching to an orphan
+branch returns from `updateIndex` before either pending path, so the previous
+branch's rows and its whole backlog survived — the orphan served records from a
+history it does not contain, and three calls later still owed 130 commits
+against it. Everything derived is cleared with the history it came from.
+
+**`doctor` called an index current that was missing history.** `index-health`
+compared `last_indexed_sha` against HEAD, and a budgeted scan stamps that equal
+the moment it starts, outstanding work or not. It reads what is outstanding now,
+and warns.
+
+**The index schema is v5.** A v4 index left partial by an earlier release has no
+position to carry forward, so it is rebuilt once on first use — which is the
+existing mechanism for exactly this, and costs one rebuild.
+
 ## 1.2.19
 
 Four findings, and three of them came from running the monitor against the
