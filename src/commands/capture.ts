@@ -321,6 +321,14 @@ const runCapturePipeline = (opts: {
 
   // 4. Stage — passes ONLY the nonce and cwd to stage (CEO amendment)
   //    Never forwards base_head, diff hash, policy hash, or timestamp.
+  //
+  // Unconditional on purpose, and the condition belongs where it is rather than
+  // here. `stageCaptureRecord` refuses a stored result that is `empty` or
+  // `incomplete`, so a run whose records were all rejected stages nothing --
+  // checked by `test/capture-stage-after-refusal.test.ts`. A guard here on this
+  // call's `accepted` would restate that decision in a second place, agreeing
+  // today and free to drift tomorrow; it was written, measured against the same
+  // test, and found to change nothing.
   const stagedNonce = stageCaptureRecord({
     nonce: prepareResult.nonce,
     cwd,
