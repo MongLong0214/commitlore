@@ -131,7 +131,7 @@ describe('installer-hosts accepts only live CommitLore registrations', () => {
     //
     // The failure this must catch is the identity not finding a manifest at all,
     // which surfaces as the `0.0.0-unknown` fallback rather than as a mismatch.
-    expect(result.summary.runtimeIdentity).toMatchObject({ indexSchemaVersion: 4 });
+    expect(result.summary.runtimeIdentity).toMatchObject({ indexSchemaVersion: 5 });
     expect((result.summary.runtimeIdentity as { version: string }).version, 'a runtime that found no manifest reports this').not.toBe(
       '0.0.0-unknown',
     );

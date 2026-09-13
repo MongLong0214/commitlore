@@ -40,34 +40,55 @@ export const checkIndex = (ctx: DoctorContext): DoctorCheck => {
     const head = git(['rev-parse', 'HEAD'], gitOptions(opts));
     const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
     const fts = info.fts ? 'FTS5' : 'no FTS5 (value search falls back to LIKE)';
+    // A budgeted scan stamps `last_indexed_sha = HEAD` whether or not it read
+    // everything, so the HEAD comparison alone says "current" over an index
+    // that is still missing history. Reporting that as `ok` made this check
+    // agree with the one number it read and disagree with what the index holds.
+    const outstanding = info.unread.commits + info.unread.notes;
     const indexEvidence = {
       trailers: String(info.trailers),
       commits: String(info.commits),
       last_indexed_sha: info.lastIndexedSha || 'none',
       head_sha: head.code === 0 ? head.stdout.trim() || 'none' : 'unavailable',
       fts: info.fts ? 'true' : 'false',
+      unread_commits: String(info.unread.commits),
+      unread_notes: String(info.unread.notes),
     };
-    return behind
-      ? check(
-          'index-health', 'index',
-          'index health',
-          'warn',
-          `${info.trailers} trailers over ${info.commits} commits, behind HEAD — ${fts}`,
-          'commitlore index',
-          false,
-          undefined,
-          { evidence: indexEvidence },
-        )
-      : check(
-          'index-health', 'index',
-          'index health',
-          'ok',
-          `${info.trailers} trailers over ${info.commits} commits, current with HEAD — ${fts}`,
-          null,
-          false,
-          undefined,
-          { evidence: indexEvidence },
-        );
+    if (behind) {
+      return check(
+        'index-health', 'index',
+        'index health',
+        'warn',
+        `${info.trailers} trailers over ${info.commits} commits, behind HEAD — ${fts}`,
+        'commitlore index',
+        false,
+        undefined,
+        { evidence: indexEvidence },
+      );
+    }
+    if (outstanding > 0) {
+      return check(
+        'index-health', 'index',
+        'index health',
+        'warn',
+        `${info.trailers} trailers over ${info.commits} commits, current with HEAD but ` +
+          `${outstanding} still unread from a budgeted scan — ${fts}`,
+        'commitlore index',
+        false,
+        undefined,
+        { evidence: indexEvidence },
+      );
+    }
+    return check(
+      'index-health', 'index',
+      'index health',
+      'ok',
+      `${info.trailers} trailers over ${info.commits} commits, current with HEAD — ${fts}`,
+      null,
+      false,
+      undefined,
+      { evidence: indexEvidence },
+    );
   } catch (error) {
     return check(
       'index-health', 'index',

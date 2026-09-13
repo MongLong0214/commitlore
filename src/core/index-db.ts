@@ -152,10 +152,29 @@ export type IndexDatabase = DatabaseSync;
  * in the same batched pass as its trailers. Signature verification is an
  * opt-in grading condition, so serving a v3 row without this fact could
  * incorrectly promote a record after a repository enables that mode.
+ *
+ * v5 adds `scan_pending` and changes what `meta.unread_commits` meant. A v4
+ * index recorded how many commits a truncated scan left but not WHICH, and a
+ * count cannot be resumed from: measured on a 1544-commit repository, the first
+ * budgeted call read 448 commits and seven further budgeted calls read none.
+ * The count also conflated commits with notes, so draining one source could
+ * report the other complete. A v4 index left partial therefore has no position
+ * to carry forward, and the version gate rebuilding it is that restart path.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const NOTES_REF = 'refs/notes/commitlore';
+
+/**
+ * How much of a budgeted call may go into finishing a previous truncated scan.
+ *
+ * A quarter of `CONSUMER_SCAN_BUDGET_MS`, and the fraction is the point: the
+ * caller is a query, not a rebuild, and the backlog is drained opportunistically
+ * out of what the answer did not need. Spending the whole budget converged in
+ * four calls and cost every one of them three seconds; a slice converges over
+ * more calls and keeps each one close to what it cost before.
+ */
+const RESUME_SLICE_MS = 750;
 
 /** Commits per `git log` invocation. Bounds peak output size, not correctness. */
 const LOG_BATCH = 1024;
@@ -273,9 +292,16 @@ CREATE TABLE IF NOT EXISTS meta (
   k TEXT PRIMARY KEY,
   v TEXT
 );
+
+CREATE TABLE IF NOT EXISTS scan_pending (
+  source TEXT    NOT NULL,
+  ord    INTEGER NOT NULL,
+  sha    TEXT    NOT NULL,
+  PRIMARY KEY (source, ord)
+);
 `;
 
-const REQUIRED_TABLES = ['trailers', 'commit_paths', 'meta'];
+const REQUIRED_TABLES = ['trailers', 'commit_paths', 'meta', 'scan_pending'];
 
 export type RecordSource = 'commit' | 'notes';
 
@@ -498,6 +524,16 @@ export interface ScanCost {
    * scan, leaving every note unread, or survive it and expire in the notes.
    */
   unreadNotes: number;
+  /**
+   * The annotated commits the notes pass did not reach, in the order it would
+   * have read them.
+   *
+   * The commit pass needs no equivalent: its caller holds the walk it handed in
+   * and can take the tail itself. The notes pass derives its own list — the
+   * mirror, filtered to what HEAD reaches — so a caller that wants to persist
+   * what is left has no other way to see it.
+   */
+  pendingNotes?: string[];
 }
 
 const recordExclusion = (counts: ExclusionCounts | undefined, key: string): void => {
@@ -753,6 +789,21 @@ const readCommitRecords = (
   excluded?: ExclusionCounts,
   budget?: ScanBudget,
   cost?: ScanCost,
+  /**
+   * Read one batch before the deadline may cancel anything.
+   *
+   * Only the drain passes this, and it is what keeps the drain from spinning.
+   * The drain runs under a slice of the caller's ceiling, so a single batch that
+   * costs more than the slice is cancelled every time — measured: a clock
+   * stepping 400ms per reading against a 750ms slice cancelled the first batch
+   * on all eight calls, read nothing, and left the backlog exactly where it
+   * started. A queue that can only be drained by calls large enough to finish a
+   * batch is not resumable; it is the old defect with a table under it.
+   *
+   * The cost of the guarantee is one batch of overshoot, which is already the
+   * unit this scan overshoots by.
+   */
+  guaranteeFirstBatch = false,
 ): RawRecord[] => {
   // Resolved on the first batch, not on entry. Working out whether signature
   // mode is on costs a `git config`, and a scan with nothing to read -- which
@@ -773,7 +824,11 @@ const readCommitRecords = (
 
   for (const batch of batches) {
     signatureField ??= signatureAtom(signatureVerifierGeneration(cwd));
-    if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
+    if (
+      budget !== undefined &&
+      !(guaranteeFirstBatch && read === 0) &&
+      (budget.now ?? Date.now)() > budget.deadline
+    ) {
       if (cost !== undefined) cost.unreadCommits = shas.length - read;
       return records;
     }
@@ -828,7 +883,11 @@ const readCommitRecords = (
     // overshot a three-second budget to six. Bailing here drops this batch
     // whole rather than resolving half of it, which is what keeps the records
     // that are kept internally consistent.
-    if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
+    if (
+      budget !== undefined &&
+      !(guaranteeFirstBatch && read === batch.length) &&
+      (budget.now ?? Date.now)() > budget.deadline
+    ) {
       if (cost !== undefined) cost.unreadCommits = shas.length - read + batch.length;
       return records;
     }
@@ -883,13 +942,15 @@ const readCommitRecords = (
  * `commands/stale.ts` filters its notes the same way; without this the two
  * answered differently on the same repository.
  */
-const readNoteRecords = (
-  cwd: string,
-  reachable: ReadonlySet<string>,
-  excluded?: ExclusionCounts,
-  budget?: ScanBudget,
-  cost?: ScanCost,
-): RawRecord[] => {
+/**
+ * The annotated commits the notes pass would read, in the order it reads them.
+ *
+ * Separate from the reading because a resumed pass already holds its list and
+ * must not re-derive it: re-deriving would silently re-scope the work to
+ * whatever HEAD and the mirror say now, and the rows already written came from
+ * the earlier scope.
+ */
+const annotatedCommits = (cwd: string, reachable: ReadonlySet<string>): string[] => {
   const listed = execGitOrThrow(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
 
   const annotated = listed
@@ -909,11 +970,22 @@ const readNoteRecords = (
     cwd,
     stdin: `${annotated.join('\n')}\n`,
   });
-  const commits = typed
+  return typed
     .split('\n')
     .filter((line) => line.endsWith(' commit') || line.includes(' commit '))
     .map((line) => line.split(' ')[0] ?? '')
     .filter((sha) => sha !== '');
+};
+
+const readNotesFor = (
+  cwd: string,
+  commits: readonly string[],
+  excluded?: ExclusionCounts,
+  budget?: ScanBudget,
+  cost?: ScanCost,
+  /** See `readCommitRecords`: the drain must not be able to spin. */
+  guaranteeFirstBatch = false,
+): RawRecord[] => {
   if (commits.length === 0) return [];
 
   const records: RawRecord[] = [];
@@ -927,8 +999,15 @@ const readNoteRecords = (
       ? chunked(commits, LOG_BATCH)
       : chunkedGrowing(commits, budgetedBatchSizes());
   for (const batch of noteBatches) {
-    if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
-      if (cost !== undefined) cost.unreadNotes = commits.length - read;
+    if (
+      budget !== undefined &&
+      !(guaranteeFirstBatch && read === 0) &&
+      (budget.now ?? Date.now)() > budget.deadline
+    ) {
+      if (cost !== undefined) {
+        cost.unreadNotes = commits.length - read;
+        cost.pendingNotes = commits.slice(read);
+      }
       return records;
     }
     read += batch.length;
@@ -978,6 +1057,15 @@ const readNoteRecords = (
 
   return records;
 };
+
+const readNoteRecords = (
+  cwd: string,
+  reachable: ReadonlySet<string>,
+  excluded?: ExclusionCounts,
+  budget?: ScanBudget,
+  cost?: ScanCost,
+): RawRecord[] =>
+  readNotesFor(cwd, annotatedCommits(cwd, reachable), excluded, budget, cost);
 
 const revParse = (cwd: string, rev: string): string | null => {
   const result = execGit(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { cwd });
@@ -1071,26 +1159,128 @@ const writeMeta = (db: IndexDatabase, key: string, value: string | null): void =
   );
 };
 
-/** How many commits a budgeted rebuild left unread. 0 means the index is whole. */
-const UNREAD_COMMITS_META = 'unread_commits';
-
 /** Which keyring produced the cached `%G?` values, when signature mode is on (#653). */
 const SIGNATURE_VERIFIER_META = 'signature_verifier_generation';
 
-const persistUnread = (db: IndexDatabase, unread: number): void => {
-  writeMeta(db, UNREAD_COMMITS_META, unread > 0 ? String(unread) : null);
+/**
+ * Which mirror the outstanding note work was listed from.
+ *
+ * `notes_ref_sha` cannot answer this: a truncated notes pass deliberately
+ * leaves it unset, because the mirror is not indexed at that sha. Without a
+ * second key, `indexNotes` sees "unset" on every later call and re-lists the
+ * whole mirror — discarding the position `drainPending` is holding and
+ * replacing the note rows with a fresh prefix each time. This says whose work
+ * the pending rows are, so the two stop overwriting each other.
+ */
+const NOTES_PENDING_REF_META = 'notes_pending_ref';
+
+/**
+ * What a truncated scan still owes, as the work itself rather than as a count.
+ *
+ * v4 stored one number in `meta.unread_commits`, and a number cannot be resumed
+ * from: measured on a 1544-commit repository, the first budgeted call read 448
+ * commits and seven further budgeted calls read none, because nothing recorded
+ * WHICH 1096 were left. The number also added commits to notes, so draining
+ * either source could report the other complete.
+ *
+ * Rows are removed in the same transaction that inserts the records read from
+ * them (`drainPending`). That is what makes a range impossible to lose: a
+ * second process that read the same rows either inserts the same trailers and
+ * collides on `trailers_identity`, rolling its whole transaction back, or finds
+ * nothing to insert and deletes rows already gone. Neither outcome advances
+ * past work nobody did -- which a shared counter, incremented by each process
+ * by what it read, does.
+ *
+ * `ord` is the position in the walk that produced the list, so draining follows
+ * the order the scan would have taken: newest first, which is the order a
+ * lifecycle fold cares about most.
+ */
+const pendingCount = (db: IndexDatabase, source: RecordSource): number =>
+  (db.prepare('SELECT count(*) AS n FROM scan_pending WHERE source = ?').get(source) as {
+    n: number;
+  }).n;
+
+interface PendingEntry {
+  ord: number;
+  sha: string;
+}
+
+/**
+ * Marks one queued entry done, by identity rather than by position.
+ *
+ * The position alone is not an identity. A drainer selects its rows, then reads
+ * git with no transaction held, and in that window another process can replace
+ * the queue — a rebuild does exactly that. Deleting on `ord` alone then retires
+ * whatever now sits at that position, which may be work nobody has done:
+ * reproduced as a drainer selecting `(0, a)`, a rebuild re-queueing as
+ * `(0, x), (1, a)`, and the drainer deleting x's unread work while reporting
+ * the index complete. Naming the sha makes the delete match nothing when the
+ * queue underneath has moved, so that entry is simply read again.
+ */
+const PENDING_DONE_SQL = 'DELETE FROM scan_pending WHERE source = ? AND ord = ? AND sha = ?';
+
+const pendingEntries = (db: IndexDatabase, source: RecordSource): PendingEntry[] =>
+  db
+    .prepare('SELECT ord, sha FROM scan_pending WHERE source = ? ORDER BY ord')
+    .all(source)
+    .map((row) => ({ ord: Number(row.ord), sha: String(row.sha) }));
+
+/**
+ * Replaces one source's pending list. `from` is the offset of `shas[0]` in the
+ * walk, so a rebuild that read a prefix keeps the positions it stopped at
+ * rather than renumbering from zero.
+ */
+const writePending = (
+  db: IndexDatabase,
+  source: RecordSource,
+  shas: readonly string[],
+  from = 0,
+): void => {
+  db.prepare('DELETE FROM scan_pending WHERE source = ?').run(source);
+  const insert = db.prepare('INSERT INTO scan_pending (source, ord, sha) VALUES (?, ?, ?)');
+  shas.forEach((sha, offset) => insert.run(source, from + offset, sha));
 };
 
 /**
- * Commits a previous budgeted rebuild left unread, persisted so a later query
- * can say so without walking history again. 0 when the index is whole.
+ * Adds to one source's pending list without disturbing what is already there.
+ *
+ * The incremental range needs this: the commits it could not read are new work,
+ * and the backlog a previous truncated rebuild left is still owed. Replacing
+ * would drop one of the two. Positions continue past the highest in use, so the
+ * older backlog drains first and neither list renumbers under the other.
  */
-export const indexUnread = (handle: IndexHandle): number => {
-  const raw = readMeta(handle.db, UNREAD_COMMITS_META);
-  if (raw === null || raw === '') return 0;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+const appendPending = (db: IndexDatabase, source: RecordSource, shas: readonly string[]): void => {
+  if (shas.length === 0) return;
+  const highest = (
+    db.prepare('SELECT max(ord) AS m FROM scan_pending WHERE source = ?').get(source) as {
+      m: number | null;
+    }
+  ).m;
+  const insert = db.prepare(
+    'INSERT INTO scan_pending (source, ord, sha) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
+  );
+  const base = (highest ?? -1) + 1;
+  shas.forEach((sha, offset) => insert.run(source, base + offset, sha));
 };
+
+/**
+ * Records a truncated scan still owes, from both sources. 0 when the index is
+ * whole.
+ *
+ * Kept as one number because that is what every consumer renders — "N commits
+ * went unread, run `commitlore init`" — and because a caller that wants them
+ * apart can ask `indexUnreadBySource`.
+ */
+export const indexUnread = (handle: IndexHandle): number =>
+  pendingCount(handle.db, 'commit') + pendingCount(handle.db, 'notes');
+
+/** The same total, split by the source that owes it. */
+export const indexUnreadBySource = (
+  handle: IndexHandle,
+): { commits: number; notes: number } => ({
+  commits: pendingCount(handle.db, 'commit'),
+  notes: pendingCount(handle.db, 'notes'),
+});
 
 /**
  * Opening a database must never overwrite what it says about itself. Stamping
@@ -1422,10 +1612,24 @@ interface InsertCounts {
  * strategy: an incremental range never contains an already-indexed commit, so
  * a conflict means the baseline was wrong. The caller turns that throw into a
  * rebuild.
+ *
+ * `opts.repeatable` is the one exception, and only `drainPending` passes it.
+ * Retiring a queued commit is refused when the queue moved under the drainer
+ * (`PENDING_DONE_SQL`), so that commit is read again on a later call — by
+ * design, and the rows from the first read are then already present. A conflict
+ * there says "this work is done", not "the baseline was wrong", and the row it
+ * collides with is byte-identical because both reads derived it from the same
+ * commit. Counting only rows that actually landed keeps the stats honest, and
+ * the FTS mirror is written only for those, so a skipped insert cannot point a
+ * virtual-table row at a rowid it does not own.
  */
-const insertRecords = (handle: IndexHandle, records: readonly RawRecord[]): InsertCounts => {
+const insertRecords = (
+  handle: IndexHandle,
+  records: readonly RawRecord[],
+  opts: { repeatable?: boolean } = {},
+): InsertCounts => {
   const insertTrailer = handle.db.prepare(
-    `INSERT INTO trailers
+    `INSERT ${opts.repeatable === true ? 'OR IGNORE ' : ''}INTO trailers
        (commit_sha, block, seq, key, value, value_lc, committed_at, committed_ts, provenance, signature_status, source)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
@@ -1458,6 +1662,7 @@ const insertRecords = (handle: IndexHandle, records: readonly RawRecord[]): Inse
           record.signatureStatus,
           record.source,
         );
+        if (Number(inserted.changes) === 0) return;
         insertFts?.run(inserted.lastInsertRowid, valueLc);
         counts.trailers += 1;
       });
@@ -1491,22 +1696,51 @@ const deleteNoteRows = (handle: IndexHandle): void => {
  */
 export const indexNotes = (
   handle: IndexHandle,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; budget?: ScanBudget } = {},
   excluded?: ExclusionCounts,
+  cost?: ScanCost,
 ): number => {
   const refSha = revParseRef(handle.cwd, NOTES_REF);
   const indexed = readMeta(handle.db, 'notes_ref_sha');
+  const force = opts.force ?? false;
 
-  if (!(opts.force ?? false) && refSha === indexed) return 0;
+  if (!force && refSha === indexed) return 0;
 
+  // Work already listed from this same mirror belongs to `drainPending`, which
+  // is holding a position in it. Re-listing here would throw that position away
+  // and replace the note rows with a fresh prefix on every call -- the mirror
+  // would be re-read from the start forever, which is the defect this change
+  // exists to remove, moved from the commits to the notes.
+  if (
+    !force &&
+    refSha !== null &&
+    readMeta(handle.db, NOTES_PENDING_REF_META) === refSha &&
+    pendingCount(handle.db, 'notes') > 0
+  ) {
+    return 0;
+  }
+
+  const local: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
+  const annotated = refSha === null ? [] : annotatedCommits(handle.cwd, new Set(reachableFromHead(handle.cwd)));
   const records =
-    refSha === null
+    annotated.length === 0
       ? []
-      : readNoteRecords(handle.cwd, new Set(reachableFromHead(handle.cwd)), excluded);
+      : readNotesFor(handle.cwd, annotated, excluded, opts.budget, local);
+
   return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
     const counts = insertRecords(handle, records);
-    writeMeta(handle.db, 'notes_ref_sha', refSha);
+    // A truncated read replaces the mirror's rows with a prefix of itself, so
+    // the rows and the stamp must disagree deliberately: the ref is left unset
+    // and the remainder recorded, and `drainPending` finishes it under a later
+    // budget. Stamping here would say the mirror is indexed at a sha whose
+    // notes are only partly in the table -- which is what a truncated rebuild
+    // used to do, losing 11 of this repository's notes for good.
+    const pending = local.pendingNotes ?? [];
+    writeMeta(handle.db, 'notes_ref_sha', pending.length === 0 ? refSha : null);
+    writeMeta(handle.db, NOTES_PENDING_REF_META, pending.length === 0 ? null : refSha);
+    writePending(handle.db, 'notes', pending, annotated.length - pending.length);
+    if (cost !== undefined) cost.unreadNotes += local.unreadNotes;
     return counts.trailers;
   });
 };
@@ -1575,17 +1809,21 @@ export const rebuildIndex = (
 
   const started = Date.now();
   const head = revParse(handle.cwd, 'HEAD');
-  const shas = head === null ? [] : revList(handle.cwd, 'HEAD');
+  // Walked from the resolved object, not from the symbolic name. `HEAD` was
+  // being re-resolved by a second git process, so a checkout landing between
+  // the two associated the pending list -- and `last_indexed_sha` -- with a
+  // history this walk never saw.
+  const shas = head === null ? [] : revList(handle.cwd, head);
   const excluded: ExclusionCounts = new Map();
-  // A caller that did not pass `cost` still needs the unread count written to
-  // meta, so a later query can label the partial index. The object they did
-  // pass is mutated in place; this local one is only for the persist.
+  // A caller that did not pass `cost` still needs the unread work recorded, so
+  // a later query can label the partial index and a later budgeted call can
+  // finish it. The object they did pass is mutated in place; this local one is
+  // only for the persist.
   const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
   const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
   const notesRef = revParseRef(handle.cwd, NOTES_REF);
   const noteRecords =
     notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost);
-  const unread = cost.unreadCommits + cost.unreadNotes;
   const stats: IndexStats = {
     ...emptyStats(handle, started),
     rebuilt: true,
@@ -1608,18 +1846,164 @@ export const rebuildIndex = (
     stats.noteTrailersIndexed = noteCounts.trailers;
     stats.pathsIndexed += noteCounts.paths;
 
-    // HEAD even when unread > 0: new commits after this point are a
-    // `last..HEAD` incremental, which is the cheap half. The unread older
-    // commits stay unread until `index`/`init` rebuilds without a budget, and
-    // `unread_commits` is what stops that from reading as a complete index.
+    // HEAD even when the scan was truncated: new commits after this point are a
+    // `last..HEAD` incremental, which is the cheap half, and the commits this
+    // scan did not reach are older than HEAD, so the two ranges do not overlap.
+    // `scan_pending` is what stops the gap between them from reading as a
+    // complete index, and is what a later budgeted call finishes it from.
     writeMeta(handle.db, 'last_indexed_sha', head);
-    writeMeta(handle.db, 'notes_ref_sha', notesRef);
+    writePending(handle.db, 'commit', shas.slice(shas.length - cost.unreadCommits));
+
+    // The ref is stamped only for a notes pass that finished. Stamping it after
+    // a truncated one told `indexNotes` the mirror was already indexed at that
+    // sha, so the notes left over were never read again -- measured: 11 of this
+    // repository's notes, dropped permanently, while the ref claimed otherwise.
+    const notesPending = cost.pendingNotes ?? [];
+    writeMeta(handle.db, 'notes_ref_sha', notesPending.length === 0 ? notesRef : null);
+    writeMeta(handle.db, NOTES_PENDING_REF_META, notesPending.length === 0 ? null : notesRef);
+    writePending(handle.db, 'notes', notesPending);
+
     writeMeta(handle.db, SIGNATURE_VERIFIER_META, signatureVerifierGeneration(handle.cwd));
-    persistUnread(handle.db, unread);
   });
   applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
+};
+
+/**
+ * Reads what a previous truncated scan left, as far as this budget reaches.
+ *
+ * This is the half #522 never built. A budgeted caller may not start a full
+ * rebuild -- that is the unbounded wait the budget exists to refuse -- but
+ * carrying on from a recorded position is bounded by the same deadline as
+ * everything else in the call, so refusing it only kept the index permanently
+ * partial: measured on a 1544-commit repository, 448 commits read and seven
+ * further budgeted calls reading none.
+ *
+ * The git reads happen outside the write transaction; the transaction holds
+ * only the insert and the removal of the rows those records came from, so the
+ * two cannot disagree. A concurrent process that read the same rows collides on
+ * `trailers_identity` and rolls back whole rather than marking them done.
+ */
+const drainPending = (
+  handle: IndexHandle,
+  outer: ScanBudget,
+  excluded: ExclusionCounts,
+  stats: IndexStats,
+): void => {
+  // Capped well under the caller's own ceiling, and deliberately.
+  //
+  // Finishing the index is not what the caller asked for; answering is. Letting
+  // the drain spend whatever the budget had left turned a hook fire that used to
+  // return in milliseconds into one that spent the full three seconds, on every
+  // fire until the backlog cleared -- the index converged and the edit hook paid
+  // for it in latency every time. With the cap, each fire carries a slice and
+  // the backlog still empties, over more fires: 1544 commits went from four
+  // full-budget calls to roughly a dozen cheap ones.
+  //
+  // One batch can still overshoot this, the same way it can overshoot the outer
+  // budget: the deadline is checked between batches and once before the
+  // expensive half of one, never inside it.
+  const clock = outer.now ?? Date.now;
+  const budget: ScanBudget = {
+    deadline: Math.min(outer.deadline, clock() + RESUME_SLICE_MS),
+    ...(outer.now === undefined ? {} : { now: outer.now }),
+  };
+
+  // The floor is one batch for the whole drain, not one per source. Passing it
+  // to both readers let a call with an already-spent budget read a full commit
+  // batch and then a full notes batch, which is twice the overshoot the floor is
+  // supposed to cost.
+  let floorSpent = false;
+
+  const commits = pendingEntries(handle.db, 'commit');
+  if (commits.length > 0) {
+    const cost: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
+    const shas = commits.map((entry) => entry.sha);
+    const records = readCommitRecords(handle.cwd, shas, excluded, budget, cost, true);
+    const read = shas.length - cost.unreadCommits;
+    floorSpent = read > 0;
+    if (read > 0) {
+      runInTransaction(handle.db, () => {
+        const counts = insertRecords(handle, records, { repeatable: true });
+        stats.trailersIndexed += counts.trailers;
+        stats.pathsIndexed += counts.paths;
+        const done = handle.db.prepare(PENDING_DONE_SQL);
+        for (const entry of commits.slice(0, read)) done.run('commit', entry.ord, entry.sha);
+      });
+      stats.commitsScanned += read;
+    }
+  }
+
+  // Only once the commits are done. A note is filtered against what HEAD
+  // reaches, and reading it while commits from that same walk are still unread
+  // would scope it against a history the index does not yet hold.
+  if (pendingCount(handle.db, 'commit') > 0) return;
+
+  const notes = pendingEntries(handle.db, 'notes');
+  if (notes.length === 0) return;
+
+  // The queue holds annotated commits, which say nothing about which mirror
+  // listed them. Reading them against a mirror that has since moved and then
+  // stamping that mirror as indexed certifies a version this index never read:
+  // reproduced as a prefix listed from v1 plus one note read from v2, stamped
+  // v2, with a note v2 added missing and nothing reported outstanding. Once the
+  // mirror has moved the queue is stale, so it is dropped -- `indexNotes` then
+  // re-reads the mirror whole, which it has to do anyway because a note can be
+  // rewritten in place.
+  const listedFrom = readMeta(handle.db, NOTES_PENDING_REF_META);
+  const currentRef = revParseRef(handle.cwd, NOTES_REF);
+  if (listedFrom === null || listedFrom !== currentRef) {
+    runInTransaction(handle.db, () => {
+      // The rows already written came from the mirror the queue named, so they
+      // go with it. Keeping them and dropping only the queue leaves an
+      // indexed prefix of a mirror nothing points at any more, and nothing
+      // outstanding to correct it: reproduced by deleting the mirror with 64
+      // notes indexed and 66 queued, after which `refSha` and `notes_ref_sha`
+      // are both null, `indexNotes` returns at its first line, and those 64
+      // obsolete notes are served for good.
+      deleteNoteRows(handle);
+      writePending(handle.db, 'notes', []);
+      writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+      // Left unset rather than stamped: when a mirror still exists `indexNotes`
+      // must re-read it whole, and when it does not, an empty table stamped
+      // null is the true answer.
+      writeMeta(handle.db, 'notes_ref_sha', null);
+    });
+    return;
+  }
+
+  const cost: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
+  const shas = notes.map((entry) => entry.sha);
+  const records = readNotesFor(handle.cwd, shas, excluded, budget, cost, !floorSpent);
+  const read = shas.length - cost.unreadNotes;
+  if (read === 0) return;
+
+  const applied = runInTransaction(handle.db, () => {
+    // The mirror is checked again here, inside the write, and this is not
+    // belt-and-braces. An annotated commit's sha is the same object whichever
+    // version of its note the mirror holds, so the sha-qualified retirement
+    // cannot tell one from the other: reproduced as a drainer reading 64 notes
+    // from v1 while another process re-listed the queue against v2, then
+    // retiring v2's entries with v1's content and leaving the index holding 64
+    // old notes, 66 new ones, and nothing outstanding.
+    if (readMeta(handle.db, NOTES_PENDING_REF_META) !== listedFrom) return false;
+
+    const counts = insertRecords(handle, records, { repeatable: true });
+    stats.noteTrailersIndexed += counts.trailers;
+    stats.pathsIndexed += counts.paths;
+    const done = handle.db.prepare(PENDING_DONE_SQL);
+    for (const entry of notes.slice(0, read)) done.run('notes', entry.ord, entry.sha);
+    // Stamped with the mirror the queue was listed from, never with whatever the
+    // ref points at now. The two are equal here only because both guards above
+    // already refused the case where they are not.
+    if (pendingCount(handle.db, 'notes') === 0) {
+      writeMeta(handle.db, 'notes_ref_sha', listedFrom);
+      writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+    }
+    return true;
+  });
+  if (applied) stats.notesScanned += read;
 };
 
 /**
@@ -1686,7 +2070,22 @@ export const updateIndex = (
   if (head === null) {
     /* An empty repository is not an error; it is a repository with no records. */
     const stats = emptyStats(handle, started);
-    writeMeta(handle.db, 'last_indexed_sha', null);
+    // Everything derived goes with the history it was derived from. An unborn
+    // HEAD reaches no commit, so every row here describes a history this
+    // repository no longer has -- and the queue describes work against it.
+    // Leaving them made an orphan branch serve the old branch's records and
+    // hold its backlog for ever: reproduced as three calls reading nothing and
+    // retaining all 130 queued commits, because this branch returns before
+    // either pending path is reached.
+    runInTransaction(handle.db, () => {
+      if (handle.fts) handle.db.exec('DELETE FROM trailers_fts');
+      handle.db.exec('DELETE FROM trailers');
+      handle.db.exec('DELETE FROM commit_paths');
+      handle.db.exec('DELETE FROM scan_pending');
+      writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+      writeMeta(handle.db, 'notes_ref_sha', null);
+      writeMeta(handle.db, 'last_indexed_sha', null);
+    });
     stats.noteTrailersIndexed = indexNotes(handle, {}, excluded);
     applyExclusions(stats, excluded);
     stats.elapsedMs = Date.now() - started;
@@ -1698,9 +2097,10 @@ export const updateIndex = (
   if (blocker !== null) return rebuildOrRefuse(blocker);
 
   // A budgeted consumer rebuild stamps last_indexed_sha = HEAD so new commits
-  // stay incremental, and persists unread_commits so the answer stays labelled.
-  // `index`/`init` pass no budget: they are the command the label names, so a
-  // leftover unread count here is a rebuild they still owe, not a no-op.
+  // stay incremental, and records what it did not read so the answer stays
+  // labelled. `index`/`init` pass no budget: they are the command the label
+  // names, so leftover pending work here is a rebuild they still owe, not a
+  // no-op.
   if (opts.budget === undefined && indexUnread(handle) > 0) {
     return rebuildIndex(handle, { reason: 'finish a budgeted partial index', ...rebuildOpts });
   }
@@ -1708,22 +2108,49 @@ export const updateIndex = (
   const stats: IndexStats = { ...emptyStats(handle, started), headSha: head };
 
   if (last !== null && last !== head) {
-    const shas = revList(handle.cwd, `${last}..HEAD`);
-    stats.commitsScanned = shas.length;
-    const records = readCommitRecords(handle.cwd, shas, excluded);
+    const shas = revList(handle.cwd, `${last}..${head}`);
+    // Budgeted, so a caller that came back to a thousand new commits waits the
+    // same ceiling as everywhere else -- and whatever the ceiling cut off joins
+    // the queue rather than being dropped. Leaving it out of the queue and
+    // holding `last_indexed_sha` back instead looked safer and was not: every
+    // later call re-read the same prefix, inserted nothing, and reported the
+    // remainder as unread while `indexUnread` said zero. Reproduced at 130 new
+    // commits against a budget that reached 64: three calls, no progress, all
+    // 130 missing from the index and nothing recorded as owed.
+    //
+    // `revList` walks newest-first, so the prefix that was read is the newest
+    // and the queued remainder is the older end, adjacent to `last`. Stamping
+    // `last_indexed_sha = head` is therefore sound: the queue holds the gap.
+    const incremental: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
+    const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, incremental);
+    const read = shas.length - incremental.unreadCommits;
+    stats.commitsScanned = read;
     try {
-      const counts = insertRecords(handle, records);
-      stats.trailersIndexed = counts.trailers;
-      stats.pathsIndexed = counts.paths;
+      runInTransaction(handle.db, () => {
+        const counts = insertRecords(handle, records);
+        stats.trailersIndexed = counts.trailers;
+        stats.pathsIndexed = counts.paths;
+        appendPending(handle.db, 'commit', shas.slice(read));
+        writeMeta(handle.db, 'last_indexed_sha', head);
+      });
     } catch (error) {
       return rebuildOrRefuse(
         `incremental insert conflicted with existing rows (${errorMessage(error)})`,
       );
     }
-    writeMeta(handle.db, 'last_indexed_sha', head);
   }
 
-  stats.noteTrailersIndexed = indexNotes(handle, {}, excluded);
+  // Carrying on from where a truncated scan stopped. Only a budgeted caller
+  // reaches this: without a budget the branch above has already turned the
+  // backlog into a full rebuild, which is the stronger repair.
+  if (opts.budget !== undefined) drainPending(handle, opts.budget, excluded, stats);
+
+  stats.noteTrailersIndexed += indexNotes(
+    handle,
+    opts.budget === undefined ? {} : { budget: opts.budget },
+    excluded,
+    opts.cost,
+  );
   applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
@@ -2033,12 +2460,20 @@ export const indexInfo = (
   trailers: number;
   commits: number;
   paths: number;
+  /**
+   * Records a truncated scan still owes. Reported here because "current with
+   * HEAD" and "holds everything" are different questions, and `doctor` was
+   * answering the second with the first: `last_indexed_sha` equals HEAD the
+   * moment a budgeted scan stamps it, outstanding work or not.
+   */
+  unread: { commits: number; notes: number };
 } => ({
   path: handle.path,
   fts: handle.fts,
   schemaVersion: readMeta(handle.db, 'schema_version'),
   lastIndexedSha: readMeta(handle.db, 'last_indexed_sha'),
   notesRefSha: readMeta(handle.db, 'notes_ref_sha'),
+  unread: indexUnreadBySource(handle),
   trailers:
     (handle.db.prepare('SELECT count(*) AS n FROM trailers').get() as { n: number } | undefined)
       ?.n ?? 0,

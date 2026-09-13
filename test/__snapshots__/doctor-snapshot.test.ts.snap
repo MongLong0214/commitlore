@@ -34,7 +34,7 @@ exports[`#462 doctor text report, pinned > renders a stable report on a reposito
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/no-such-binary.mjs; commitlore.node: <node> (commitlore hooks install)
 3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json, and the Claude Code plugin is not installed for this user (commitlore inject install-claude-hook)
 ok      cli runtime — <root><path> runs (<version>)
-ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
+ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v5
 ok      installation integrity — 3 shipped files are present and readable
 skipped release freshness — not checked: COMMITLORE_NO_UPDATE_CHECK is set
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
@@ -67,7 +67,7 @@ exports[`#462 doctor text report, pinned > renders a stable report on a reposito
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node> (commitlore hooks install)
 3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json, and the Claude Code plugin is not installed for this user (commitlore inject install-claude-hook)
 ok      cli runtime — <root><path> runs (<version>)
-ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
+ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v5
 ok      installation integrity — 3 shipped files are present and readable
 skipped release freshness — not checked: COMMITLORE_NO_UPDATE_CHECK is set
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
@@ -96,7 +96,7 @@ ok      squash inheritance — no GitHub remote — the server-side squash path 
 exports[`#470 doctor text report header > keeps the per-check tail byte-identical to the pre-ticket rows 1`] = `
 {
   "broken": "ok      cli runtime — <root><path> runs (<version>)
-ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
+ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v5
 ok      installation integrity — 3 shipped files are present and readable
 skipped release freshness — not checked: COMMITLORE_NO_UPDATE_CHECK is set
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
@@ -121,7 +121,7 @@ ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS
 skipped squash conservation — no local branch looks like the source of a squash — nothing to check
 ok      squash inheritance — no GitHub remote — the server-side squash path this protects against does not apply. A local \`git merge --squash\` is carried by the installed prepare-commit-msg hook either way",
   "working": "ok      cli runtime — <root><path> runs (<version>)
-ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
+ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v5
 ok      installation integrity — 3 shipped files are present and readable
 skipped release freshness — not checked: COMMITLORE_NO_UPDATE_CHECK is set
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
