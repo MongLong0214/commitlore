@@ -13405,7 +13405,8 @@ var revParseRef = (cwd, ref) => {
   return sha === "" ? null : sha;
 };
 var revList = (cwd, range) => execGitOrThrow(["rev-list", range], { cwd, maxBuffer: LOG_MAX_BUFFER }).split("\n").filter((line2) => line2 !== "");
-var reachableFromHead = (cwd) => revParse(cwd, "HEAD") === null ? [] : revList(cwd, "HEAD");
+var reachableFrom = (cwd, head) => head === null ? [] : revList(cwd, head);
+var isAncestor = (cwd, ancestor, descendant) => execGit(["merge-base", "--is-ancestor", ancestor, descendant], { cwd }).code === 0;
 var tableExists = (db, name) => db.prepare(
   `SELECT count(*) AS n FROM sqlite_master WHERE type IN ('table','view') AND name = ?`
 ).get(name)?.n === 1;
@@ -13436,6 +13437,8 @@ var writeMeta = (db, key, value) => {
 };
 var SIGNATURE_VERIFIER_META = "signature_verifier_generation";
 var NOTES_PENDING_REF_META = "notes_pending_ref";
+var NOTES_HEAD_META = "notes_head_sha";
+var NOTES_PENDING_HEAD_META = "notes_pending_head";
 var pendingCount = (db, source) => db.prepare("SELECT count(*) AS n FROM scan_pending WHERE source = ?").get(source).n;
 var PENDING_DONE_SQL = "DELETE FROM scan_pending WHERE source = ? AND ord = ? AND sha = ?";
 var pendingEntries = (db, source) => db.prepare("SELECT ord, sha FROM scan_pending WHERE source = ? ORDER BY ord").all(source).map((row) => ({ ord: Number(row.ord), sha: String(row.sha) }));
@@ -13698,12 +13701,28 @@ var indexNotes = (handle, opts = {}, excluded, cost) => {
   const refSha = revParseRef(handle.cwd, NOTES_REF2);
   const indexed = readMeta(handle.db, "notes_ref_sha");
   const force = opts.force ?? false;
-  if (!force && refSha === indexed) return 0;
-  if (!force && refSha !== null && readMeta(handle.db, NOTES_PENDING_REF_META) === refSha && pendingCount(handle.db, "notes") > 0) {
+  const headSha2 = revParse(handle.cwd, "HEAD");
+  if (!force && refSha === indexed && headSha2 === readMeta(handle.db, NOTES_HEAD_META)) return 0;
+  const stampedHead = readMeta(handle.db, NOTES_HEAD_META);
+  if (!force && refSha === indexed && refSha !== null && headSha2 !== null && stampedHead !== null && pendingCount(handle.db, "notes") === 0 && isAncestor(handle.cwd, stampedHead, headSha2)) {
+    const added = revList(handle.cwd, `${stampedHead}..${headSha2}`);
+    const local2 = { unreadCommits: 0, unreadNotes: 0 };
+    const fresh = added.length === 0 ? [] : annotatedNotes(handle.cwd, refSha, new Set(added));
+    const records2 = fresh.length === 0 ? [] : readNotesFor(handle.cwd, fresh, excluded, opts.budget, local2);
+    if ((local2.pendingNotes ?? []).length === 0) {
+      return runInTransaction(handle.db, () => {
+        const counts = insertRecords(handle, records2, { repeatable: true });
+        writeMeta(handle.db, NOTES_HEAD_META, headSha2);
+        if (cost !== void 0) cost.unreadNotes += local2.unreadNotes;
+        return counts.trailers;
+      });
+    }
+  }
+  if (!force && refSha !== null && readMeta(handle.db, NOTES_PENDING_REF_META) === refSha && readMeta(handle.db, NOTES_PENDING_HEAD_META) === headSha2 && pendingCount(handle.db, "notes") > 0) {
     return 0;
   }
   const local = { unreadCommits: 0, unreadNotes: 0 };
-  const annotated = refSha === null ? [] : annotatedNotes(handle.cwd, refSha, new Set(reachableFromHead(handle.cwd)));
+  const annotated = refSha === null ? [] : annotatedNotes(handle.cwd, refSha, new Set(reachableFrom(handle.cwd, headSha2)));
   const records = annotated.length === 0 ? [] : readNotesFor(handle.cwd, annotated, excluded, opts.budget, local);
   return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
@@ -13711,6 +13730,8 @@ var indexNotes = (handle, opts = {}, excluded, cost) => {
     const pending2 = local.pendingNotes ?? [];
     writeMeta(handle.db, "notes_ref_sha", pending2.length === 0 ? refSha : null);
     writeMeta(handle.db, NOTES_PENDING_REF_META, pending2.length === 0 ? null : refSha);
+    writeMeta(handle.db, NOTES_HEAD_META, pending2.length === 0 ? headSha2 : null);
+    writeMeta(handle.db, NOTES_PENDING_HEAD_META, pending2.length === 0 ? null : headSha2);
     writePending(handle.db, "notes", pending2, annotated.length - pending2.length);
     if (cost !== void 0) cost.unreadNotes += local.unreadNotes;
     return counts.trailers;
@@ -13779,6 +13800,8 @@ var rebuildIndex = (handle, opts = {}) => {
     const notesPending = cost.pendingNotes ?? [];
     writeMeta(handle.db, "notes_ref_sha", notesPending.length === 0 ? notesRef : null);
     writeMeta(handle.db, NOTES_PENDING_REF_META, notesPending.length === 0 ? null : notesRef);
+    writeMeta(handle.db, NOTES_HEAD_META, notesPending.length === 0 ? head : null);
+    writeMeta(handle.db, NOTES_PENDING_HEAD_META, notesPending.length === 0 ? null : head);
     writePending(handle.db, "notes", notesPending);
     writeMeta(handle.db, SIGNATURE_VERIFIER_META, signatureVerifierGeneration(handle.cwd));
   });
@@ -13844,6 +13867,8 @@ var drainPending = (handle, outer, excluded, stats) => {
     if (pendingCount(handle.db, "notes") === 0) {
       writeMeta(handle.db, "notes_ref_sha", listedFrom);
       writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+      writeMeta(handle.db, NOTES_HEAD_META, readMeta(handle.db, NOTES_PENDING_HEAD_META));
+      writeMeta(handle.db, NOTES_PENDING_HEAD_META, null);
     }
     return true;
   });
@@ -13895,6 +13920,8 @@ var updateIndex = (handle, opts = {}) => {
       handle.db.exec("DELETE FROM commit_paths");
       handle.db.exec("DELETE FROM scan_pending");
       writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+      writeMeta(handle.db, NOTES_HEAD_META, null);
+      writeMeta(handle.db, NOTES_PENDING_HEAD_META, null);
       writeMeta(handle.db, "notes_ref_sha", null);
       writeMeta(handle.db, "last_indexed_sha", null);
     });
@@ -16379,10 +16406,15 @@ var openSource = (cwd, noIndex, budgetMs, now) => {
           return scanInstead(error2).fetch(query);
         }
       },
-      fromIndex: true,
-      corpusPasses: () => 0,
-      unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
-      close: () => closeIndex(handle),
+      get fromIndex() {
+        return fallback === null;
+      },
+      corpusPasses: () => fallback === null ? 0 : fallback.corpusPasses(),
+      unreadCommits: () => fallback === null ? Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes) : fallback.unreadCommits(),
+      close: () => {
+        if (fallback !== null) fallback.close();
+        closeIndex(handle);
+      },
       diagnostics
     };
   } catch (error2) {
@@ -16689,7 +16721,7 @@ var runQuery = (opts = {}) => {
   const paths = normalizePaths(opts);
   const scope = resolveScope(cwd, paths);
   const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow);
-  const diagnostics = [...source.diagnostics, ...scope.diagnostics];
+  const diagnostics = scope.diagnostics.slice();
   try {
     if (opts.explainEmptyResult === true) diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
     const states = foldStates(source, at, cutoff);
@@ -16752,7 +16784,11 @@ var runQuery = (opts = {}) => {
       unreadCommits: unread,
       coverage: unread > 0 ? "partial" : "complete",
       vantage,
-      diagnostics
+      // `source.diagnostics` is read here, not at the top: a fallback that
+      // begins during a read appends its explanation while the rows are being
+      // fetched, and a copy taken before that dropped the one message saying
+      // the answer came from somewhere else. Source first, as before.
+      diagnostics: [...source.diagnostics, ...diagnostics]
     };
   } finally {
     source.close();
@@ -24749,7 +24785,7 @@ var revParse2 = (ref, opts) => {
   const sha = result.stdout.trim();
   return result.code === 0 && sha !== "" ? sha : null;
 };
-var isAncestor = (a, b, opts) => execGit(["merge-base", "--is-ancestor", a, b], gitOptions4(opts)).code === 0;
+var isAncestor2 = (a, b, opts) => execGit(["merge-base", "--is-ancestor", a, b], gitOptions4(opts)).code === 0;
 var oneLine = (detail) => detail.replace(/\s+/g, " ").trim();
 var REMOTE_NOT_FOUND = /\brepository\b(?:\s+'[^']*'|\s+"[^"]*")?\s+not found/i;
 var TIMED_OUT = /\bETIMEDOUT\b/;
@@ -24782,14 +24818,14 @@ var syncRemote = (remote, opts = {}) => {
   }
   if (local !== null && theirs !== null) {
     if (local === theirs) return { remote, outcome: "in-sync", detail: "" };
-    if (isAncestor(local, theirs, opts)) {
+    if (isAncestor2(local, theirs, opts)) {
       if (opts.dryRun === true) {
         return { remote, outcome: "fetched", detail: "would fast-forward to the remote mirror" };
       }
       const updated = execGit(["update-ref", NOTES_REF, theirs], gitOptions4(opts));
       return updated.code === 0 ? { remote, outcome: "fetched", detail: "fast-forwarded to the remote mirror" } : failure3(remote, updated.stderr.trim() || "could not update the local notes ref");
     }
-    if (!isAncestor(theirs, local, opts)) {
+    if (!isAncestor2(theirs, local, opts)) {
       if (opts.dryRun === true) {
         return { remote, outcome: "merged", detail: "would merge both mirrors" };
       }
