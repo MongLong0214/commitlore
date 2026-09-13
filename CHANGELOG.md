@@ -4,6 +4,34 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.3
+
+A complete index could be replaced by a shorter one, and the only thing that had
+ever said so was a design review.
+
+**A rebuild no longer publishes less than what is installed.** `rebuildIndex`
+scans outside its transaction and replaces every table inside it, with no
+comparison against what is already there — so a scan that started earlier and
+read less lands on top of one that read more. Run rather than reasoned about, by
+holding a budgeted rebuild inside its scan while another committed a whole one:
+a complete index of 10,290 trailer rows became **591 rows with 1,491 commits
+owed**. Recoverable, because `scan_pending` names exactly what is left, and a
+6%-complete index answering every query until a later call drains it.
+
+`scan_pending` also measures coverage, so noticing needs no new bookkeeping:
+against the same HEAD, the index that owes less has read more. A budgeted
+rebuild that would install more outstanding work than is already installed keeps
+what is there instead.
+
+Scoped to budgeted rebuilds. Without a budget the caller is `index` or `init` —
+somebody asked — and that must replace whatever is installed, because the reason
+may be corruption or a schema this build cannot read.
+
+**Two unbudgeted rebuilds racing still overwrite each other.** Closing that needs
+the writer lock held across the scan, which serialises cold rebuilds on the path
+the budget exists to protect. Stated as the boundary rather than left to look
+like the narrow fix is general.
+
 ## 1.3.2
 
 The probes that decide whether a paragraph is an earlier record block now share

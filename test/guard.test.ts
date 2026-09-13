@@ -348,6 +348,25 @@ describe('guard stays quiet on unrelated proposals', () => {
  * `noIndex` throughout — the answers are identical (asserted below), and a test
  * has no business writing a cache into the repository it is measuring.
  */
+/**
+ * Every test below scans this repository's whole history with `noIndex: true`,
+ * which is the point — the corpus is the records this project actually wrote —
+ * and it is also why they carry their own timeout.
+ *
+ * Measured alone on an idle machine: 3.4s, 3.4s, 6.2s. Under any parallel load
+ * they reach 23s and 29s, and the 20s default then reports a timeout, which
+ * reads as a failure of the thing under test rather than of the budget it was
+ * given. That shape produced four "failures" in one run here that all passed
+ * when the files were run a few at a time. Every other suite in this repository
+ * that scans real history already carries an explicit timeout — `query` uses
+ * 120s, `index-resume` 300s — and these were the ones left on the default.
+ *
+ * The number is a ceiling on the wait, not a target: if one of these ever takes
+ * a minute on an idle machine, that is a regression and the timeout is not what
+ * should be changed.
+ */
+const REAL_HISTORY_TIMEOUT = 120_000;
+
 describe('guard against this repository', () => {
   const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -359,13 +378,13 @@ describe('guard against this repository', () => {
     // measuring an empty corpus and passing for the wrong reason.
     const corpus = runQuery({ cwd: REPO_ROOT, keys: ['Ruled-out'], noIndex: true });
     expect(corpus.records.length).toBeGreaterThanOrEqual(15);
-  });
+  }, REAL_HISTORY_TIMEOUT);
 
   for (const entry of dogfood.clean) {
     it(`does not flag: ${entry.text}`, () => {
       const matches = checkRepo(entry.text);
       expect(matches.map((match) => `${match.score} ${match.alternative}`)).toEqual([]);
-    });
+    }, REAL_HISTORY_TIMEOUT);
   }
 
   for (const entry of dogfood.flagged) {
@@ -375,7 +394,7 @@ describe('guard against this repository', () => {
       expect(match?.alternative).toBe(entry.expectAlternative);
       expect(match?.reason).not.toBe('');
       expect(match?.score).toBeGreaterThanOrEqual(DEFAULT_THRESHOLD);
-    });
+    }, REAL_HISTORY_TIMEOUT);
   }
 
   it('answers the same with the index as without', () => {
@@ -384,7 +403,7 @@ describe('guard against this repository', () => {
     const scanned = guard({ proposal: entry?.text ?? '', cwd: REPO_ROOT, noIndex: true }).matches;
     const indexed = guard({ proposal: entry?.text ?? '', cwd: REPO_ROOT }).matches;
     expect(JSON.stringify(indexed)).toBe(JSON.stringify(scanned));
-  });
+  }, REAL_HISTORY_TIMEOUT);
 });
 
 describe('guard on an adjacent proposal', () => {

@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "edfd65498f6ae48ba4160273cb2b91ee5f65799eb303df0c1674dbd60ff2788f"
+    "sha256": "f5c0dc4063270fc3059f8a60c1f75feb3ffa43915f9e05420e04ed74981c9a2d"
   },
   "artifact": {
-    "sha256": "85a76f0c28da1a16adf6013b86f1ec30f79557c01465fa5435056ac2c00b8993",
+    "sha256": "94eb46b4bb3c0e09f23bec5b11f8fc44de5057b24be039a530c1cf9f4d509094",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "1c99582c88bfbcae4a5b1d7b84d34d19268d2278852e7a10062cba9053ad5416"
+        "sha256": "76ac6043dbaef520bea4d915f3d929ab2f5547225d81cdeafbdb9811bf8ab6d6"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -870,11 +870,11 @@
       },
       {
         "path": "dist/core/index-db.js",
-        "sha256": "f2a6237817c18d42ad349ae3db62486f69253ede94a08d546cb097a1b5201364"
+        "sha256": "1b58e275987f2a355c1989cd404364d8d1b0df8c57497eae26d9242f0cb6106c"
       },
       {
         "path": "dist/core/index-db.js.map",
-        "sha256": "f64964b8ecffa5a747b0822aacd8c0e2af9ad7d0a95e45a796e4522059f032a8"
+        "sha256": "1fa86b9d83b555a3d7345929f5fbc45c401ee39b0d0a4233510012f4033f3e8a"
       },
       {
         "path": "dist/core/inject.d.ts",

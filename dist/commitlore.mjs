@@ -13645,6 +13645,11 @@ var rebuildIndex = (handle, opts = {}) => {
     notesScanned: noteRecords.length
   };
   runInTransaction(handle.db, () => {
+    if (opts.budget !== void 0 && head !== null && readMeta(handle.db, "last_indexed_sha") === head && pendingCount(handle.db, "commit") < cost.unreadCommits) {
+      stats.rebuilt = false;
+      stats.rebuildReason = "kept a more complete index that was already installed";
+      return;
+    }
     if (handle.fts) handle.db.exec("DELETE FROM trailers_fts");
     handle.db.exec("DELETE FROM trailers");
     handle.db.exec("DELETE FROM commit_paths");
