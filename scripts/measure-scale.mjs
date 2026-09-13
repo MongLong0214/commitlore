@@ -402,10 +402,112 @@ const storage = () => {
   );
 };
 
+// --- #951 item 1: commit count against record count, varied independently ----
+
+/**
+ * The measurement #951's first item is waiting on, in the form it asks for.
+ *
+ * "with commit count and record count varied independently" is the whole
+ * instruction. The #963 table above varies commit count against this
+ * repository's own history, where record density rides along with it -- so it
+ * cannot separate the two, and reading it as if it could is how a number
+ * becomes a property of the wrong thing.
+ *
+ * These are generated repositories, each its own fixture: one row holds the
+ * commit count and moves the density, the other holds the density and moves
+ * the commit count. A cost that tracks the first is per-record; one that tracks
+ * the second is per-commit.
+ */
+const perRecordOrPerCommit = () => {
+  out('\n#951 item 1  is validation per-commit work or per-record work?\n');
+  // These fixtures are generated fresh and carry no index, so these rows are the
+  // cold path whatever `--index` said -- which is the path `validate --range`
+  // takes anyway. Said here rather than left for a reader to assume, because
+  // `--index` is printed in the header above and would otherwise look like it
+  // applied.
+  out('    (generated fixtures, each with no index of its own: cold path)\n');
+
+  const fixture = (commits, ratio) => {
+    const dir = mkdtempSync(join(tmpdir(), 'commitlore-scale-fix-'));
+    execFileSync(
+      process.execPath,
+      [
+        join(PACKAGE_ROOT, 'scripts', 'make-synthetic-repo.mjs'),
+        '--out', dir,
+        '--commits', String(commits),
+        '--trailer-ratio', String(ratio),
+        '--prose-ratio', '0.05',
+        '--seed', '951',
+        '--quiet',
+      ],
+      { encoding: 'utf8' },
+    );
+    return dir;
+  };
+
+  const sample = (commits, ratio) => {
+    const dir = fixture(commits, ratio);
+    try {
+      const all = execFileSync('git', ['rev-list', 'HEAD'], { cwd: dir, encoding: 'utf8' })
+        .split('\n')
+        .filter((s) => s !== '');
+      const base = all[all.length - 1];
+      const records = execFileSync('git', ['log', '--format=%B', 'HEAD'], {
+        cwd: dir,
+        encoding: 'utf8',
+        maxBuffer: 1 << 28,
+      })
+        .split('\n')
+        .filter((line) => line.startsWith('Record-Id:')).length;
+
+      const log = join(shimDir, 'item1.log');
+      writeFileSync(log, '');
+      spawnSync(process.execPath, [cli, 'validate', '--range', `${base}..HEAD`, '--json'], {
+        cwd: dir,
+        encoding: 'utf8',
+        env: { ...process.env, PATH: `${shimDir}:${process.env.PATH ?? ''}`, CL_MEASURE_LOG: log },
+        maxBuffer: 1 << 28,
+      });
+      const { total } = shapesOf(log);
+      return { commits: all.length - 1, records, total };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  const show = (title, rows) => {
+    out(`    ${title}\n`);
+    out('      commits  records  processes   per-commit   per-record\n');
+    for (const r of rows) {
+      out(
+        `      ${String(r.commits).padStart(7)}  ${String(r.records).padStart(7)}  ` +
+          `${String(r.total).padStart(9)}  ` +
+          `${(r.total / Math.max(r.commits, 1)).toFixed(2).padStart(10)}  ` +
+          `${(r.total / Math.max(r.records, 1)).toFixed(2).padStart(11)}\n`,
+      );
+    }
+  };
+
+  show(
+    'commits held at 200, record density varied:',
+    [0.1, 0.3, 0.6, 0.9].map((ratio) => sample(200, ratio)),
+  );
+  show(
+    'record density held at 0.3, commit count varied:',
+    [100, 200, 400].map((commits) => sample(commits, 0.3)),
+  );
+  out(
+    '    A per-commit column that stays flat while density moves says the work is\n' +
+      '    per commit; a per-record column that stays flat while commits move says the\n' +
+      '    opposite. Whichever is flat is the one the cost is really indexed by.\n',
+  );
+};
+
 try {
   if (wants('962')) await mcpRepeats();
   if (wants('963')) rangeShapes();
   if (wants('964')) storage();
+  if (wants('951')) perRecordOrPerCommit();
 } finally {
   rmSync(shimDir, { recursive: true, force: true });
 }
