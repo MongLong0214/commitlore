@@ -626,6 +626,51 @@ describe('#951 a budgeted scan resumes where it stopped', () => {
     expect(rows).toBe(0);
   }, 300_000);
 
+  it('publishes the records and retires their queue entries together, or neither', () => {
+    const dir = syntheticRepo(400);
+    cold(dir);
+    closeIndex(ensureIndex({ cwd: dir, budget: expiringAfter(2) }).handle);
+
+    const before = withIndex(dir, (handle) => ({
+      trailers: rowsOf(handle).trailers.length,
+      paths: rowsOf(handle).paths.length,
+      pending: indexUnread(handle),
+    }));
+    expect(before.pending).toBeGreaterThan(0);
+
+    // The whole loss-impossibility argument is that a queue entry is deleted
+    // only in the same transaction that inserts the records read from it. That
+    // is a claim about a boundary, and a boundary is only real if crossing it
+    // fails. A trigger that refuses every retirement makes the drain's
+    // transaction abort after its inserts have already run: if the boundary
+    // holds, those inserts go too.
+    const guard = openIndex({ cwd: dir });
+    try {
+      guard.db.exec(
+        `CREATE TRIGGER refuse_retirement BEFORE DELETE ON scan_pending
+           BEGIN SELECT RAISE(ABORT, 'retirement refused by the test'); END`,
+      );
+    } finally {
+      closeIndex(guard);
+    }
+
+    expect(() => {
+      const { handle } = ensureIndex({ cwd: dir, budget: { deadline: -1, now: () => 0 } });
+      closeIndex(handle);
+    }).toThrow();
+
+    const after = withIndex(dir, (handle) => ({
+      trailers: rowsOf(handle).trailers.length,
+      paths: rowsOf(handle).paths.length,
+      pending: indexUnread(handle),
+    }));
+
+    // Nothing moved. Rows that landed without their entries being retired would
+    // be read again on the next call and collide; entries retired without their
+    // rows would lose those commits for good.
+    expect(after).toEqual(before);
+  }, 300_000);
+
   it('leaves an unbudgeted caller free to finish it in one rebuild', () => {
     const dir = syntheticRepo(400);
     cold(dir);

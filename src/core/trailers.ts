@@ -8,6 +8,11 @@
  * context for agents.
  */
 
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { type ExecGitOptions, execGit, execGitOrThrow } from './git.js';
 import { KNOWN_KEYS, type Trailer } from './types.js';
 
@@ -100,13 +105,156 @@ export const readTrailersAtom = (
  * exactly `parseRecordBlocks(message)`. The one entry point for a reader that
  * ran {@link readTrailersAtom}, so no reader composes the grammar itself.
  */
-export const parseRecordBlocksWithAtom = (message: string, atom: string | undefined): Trailer[][] =>
+export const parseRecordBlocksWithAtom = (
+  message: string,
+  atom: string | undefined,
+  isolated?: IsolatedBlocks,
+): Trailer[][] =>
   atom === undefined || atomIsAmbiguous(message)
-    ? parseRecordBlocks(message)
-    : parseRecordBlocks(message, { last: parseTrailersAtom(atom) });
+    ? parseRecordBlocks(message, isolated === undefined ? {} : { isolated })
+    : parseRecordBlocks(message, {
+        last: parseTrailersAtom(atom),
+        ...(isolated === undefined ? {} : { isolated }),
+      });
 
 /** Loose on purpose: see `parseRecordBlocks`. */
 const MENTIONS_RECORD_ID = /record-id/i;
+
+/**
+ * The answers `asIsolatedBlock` would give, for many paragraphs, in one process.
+ *
+ * Every candidate paragraph still goes through git — that is not negotiable
+ * (SPEC §2.1 B3) — but they no longer go one process at a time. On this
+ * repository a cold rebuild spent 155 `git interpret-trailers` processes and
+ * 114 of them were these probes.
+ *
+ * git accepts several files in one invocation and emits nothing between them,
+ * so the output cannot be attributed without a marker. **The marker goes in a
+ * file of its own**, interleaved between the paragraphs, and never into a
+ * paragraph.
+ *
+ * Appending it to the paragraph was the first design and it was wrong twice:
+ *
+ *   - git does not require every line of the block to be a trailer. A group
+ *     containing a *recognized* trailer is accepted once a quarter of its lines
+ *     are trailers, so one appended line can carry a paragraph over the
+ *     threshold. Measured: `Record-Id:` and `Signed-off-by:` above seven prose
+ *     lines parses to nothing alone, and appending the marker — 2/9 to 3/10 —
+ *     makes git emit a record block that does not exist.
+ *   - a scissors line (`# --- >8 ---`) makes git discard everything after it,
+ *     including an appended marker, while still emitting the trailers before
+ *     it. That paragraph's records then land in the next paragraph's group.
+ *     Measured: `Limit: alpha` attributed to the commit that wrote
+ *     `Limit: beta`.
+ *
+ * A marker in its own file cannot do either. Each paragraph file is byte-equal
+ * to what {@link asIsolatedBlock} pipes, so git's verdict on it is the verdict
+ * it would give alone; each marker file is one trailer line, which git accepts
+ * unconditionally. Verified on both shapes above and over every candidate in
+ * this repository's history.
+ *
+ * The markers are still counted, and strictly: every paragraph must return its
+ * own marker, in order. Anything else discards the chunk and the caller falls
+ * back to one process per paragraph, which is what this replaced. A failure
+ * here costs the processes it would have saved and never an answer, the same
+ * contract {@link readTrailersAtom} keeps.
+ */
+export interface IsolatedBlocks {
+  /** `undefined` when this paragraph was not probed; `[]` when git rejected it. */
+  get: (paragraph: string) => Trailer[] | undefined;
+}
+
+/** Paragraphs per invocation. Bounds the argument list, not correctness. */
+const PROBE_BATCH = 128;
+
+const EMPTY_ISOLATED: IsolatedBlocks = { get: () => undefined };
+
+/**
+ * Every paragraph these messages would have probed one at a time.
+ *
+ * The splitting and the candidate test happen here rather than in the caller,
+ * so which paragraphs are tested stays decided in this module for every reader
+ * alike — the same reason {@link parseRecordBlocksWithAtom} exists.
+ */
+export const isolateBlocks = (messages: readonly string[]): IsolatedBlocks => {
+  const wanted = new Set<string>();
+  for (const message of messages) {
+    const paragraphs = splitParagraphs(message);
+    for (const paragraph of paragraphs.slice(0, -1)) {
+      if (MENTIONS_RECORD_ID.test(paragraph)) wanted.add(paragraph);
+    }
+  }
+  if (wanted.size === 0) return EMPTY_ISOLATED;
+
+  const answers = new Map<string, Trailer[]>();
+  let scratch: string | undefined;
+  try {
+    scratch = mkdtempSync(join(tmpdir(), 'commitlore-probe-'));
+    const all = [...wanted];
+    for (let at = 0; at < all.length; at += PROBE_BATCH) {
+      const chunk = all.slice(at, at + PROBE_BATCH);
+      const resolved = probeChunk(scratch, chunk);
+      if (resolved === null) return EMPTY_ISOLATED;
+      for (const [paragraph, trailers] of resolved) answers.set(paragraph, trailers);
+    }
+  } catch {
+    return EMPTY_ISOLATED;
+  } finally {
+    // Its own guard, not the caller's. A cleanup that throws out of the
+    // `finally` replaces whichever answer was being returned -- including the
+    // fallback -- and turns an optimisation into the one thing it promised
+    // never to be: a way for this to change an answer.
+    if (scratch !== undefined) {
+      try {
+        rmSync(scratch, { recursive: true, force: true });
+      } catch {
+        /* a leftover temp directory is the operating system's to reclaim */
+      }
+    }
+  }
+
+  return { get: (paragraph) => answers.get(paragraph) };
+};
+
+/** One invocation, or `null` when its output could not be attributed. */
+const probeChunk = (scratch: string, paragraphs: readonly string[]): Map<string, Trailer[]> | null => {
+  const nonce = `X-Clprobe-${randomBytes(8).toString('hex')}`;
+  const files: string[] = [];
+  paragraphs.forEach((paragraph, index) => {
+    const subject = join(scratch, `p-${String(index)}.txt`);
+    // Byte-equal to what `asIsolatedBlock` pipes. Nothing is added to it, which
+    // is the whole reason git's verdict here is the verdict it would give alone.
+    writeFileSync(subject, `x\n\n${paragraph}`);
+    const marker = join(scratch, `m-${String(index)}.txt`);
+    writeFileSync(marker, `x\n\n${nonce}: ${String(index)}\n`);
+    files.push(subject, marker);
+  });
+
+  const result = execGit([...PARSE_ARGS, ...files]);
+  if (result.code !== 0) return null;
+
+  const answers = new Map<string, Trailer[]>();
+  let current: Trailer[] = [];
+  let expected = 0;
+  for (const line of result.stdout.split('\n')) {
+    if (line.length === 0) continue;
+    if (line.startsWith(`${nonce}:`)) {
+      // In order, one per paragraph, none missing and none extra. A marker out
+      // of sequence means output has moved between groups, which is the failure
+      // this whole scheme exists to make impossible to miss.
+      if (Number(line.slice(nonce.length + 1).trim()) !== expected) return null;
+      const paragraph = paragraphs[expected];
+      if (paragraph === undefined) return null;
+      answers.set(paragraph, current);
+      current = [];
+      expected += 1;
+      continue;
+    }
+    current.push(parseOutputLine(line));
+  }
+  if (current.length !== 0 || expected !== paragraphs.length) return null;
+  return answers;
+};
 
 /** Continuation lines in a canonical block are indented by two spaces (SPEC §2.3). */
 const CONTINUATION_INDENT = '  ';
@@ -305,7 +453,7 @@ const asIsolatedBlock = (paragraph: string): Trailer[] =>
  */
 export const parseRecordBlocks = (
   message: string,
-  opts: { last?: Trailer[] } = {},
+  opts: { last?: Trailer[]; isolated?: IsolatedBlocks } = {},
 ): Trailer[][] => {
   const last = opts.last ?? parseCommitMessage(message);
   const paragraphs = splitParagraphs(message);
@@ -326,7 +474,14 @@ export const parseRecordBlocks = (
     // wrong in the direction of one extra parse costs 8ms and being wrong the
     // other way loses a record.
     if (!MENTIONS_RECORD_ID.test(paragraph)) continue;
-    const candidate = asIsolatedBlock(paragraph);
+    // `opts.isolated` is the same probe, already run for many paragraphs at
+    // once ({@link isolateBlocks}). It replaces only where this paragraph's
+    // answer comes from -- which paragraphs are tested, and whether the answer
+    // is accepted, is decided here for every caller alike, so a reader with the
+    // batch and a reader without it compose the grammar in one place. A batch
+    // that could not be attributed returns nothing for every paragraph, and
+    // this falls through to the process.
+    const candidate = opts.isolated?.get(paragraph) ?? asIsolatedBlock(paragraph);
     if (candidate.length === 0) continue;
     if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
     extra.push(candidate);
