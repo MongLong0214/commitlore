@@ -5,7 +5,7 @@
  * diagnosed from Git and records alone, without coupling to sibling checks.
  */
 import { runQuery } from '../../../core/query.js';
-import { collectRange, newRangeCache } from '../../../core/squash.js';
+import { collectRange, newRangeCache, warmRangeCache } from '../../../core/squash.js';
 import { collectRecords } from '../../stale.js';
 import { check, gitOptions } from '../model.js';
 /** Local branches this check will look at, past which a repository is skipped rather than walked exhaustively. */
@@ -311,6 +311,17 @@ export const checkSquashConservation = (ctx) => {
     let uncheckable = 0;
     let checked = 0;
     const headSha = head.stdout.trim();
+    // Every candidate's messages parsed in one pass before any of them is walked
+    // (#975). Each range is short, and a short range's own batch saves nothing --
+    // `collectRange` skips the atom below two uncached messages precisely because
+    // for one message the batch costs the process it saves. Summed over the
+    // candidates that was the parse cost this row still carried.
+    //
+    // Warming rather than replacing the walks: `collectRange` remains the one
+    // place the grammar is applied, and it reads these from the cache exactly as
+    // it reads a commit two candidates share. A failure to warm leaves the cache
+    // cold and every range walks as before.
+    warmRangeCache(candidates.map((candidate) => `${candidate.base}..${candidate.sha}`), { cwd, cache });
     for (const candidate of candidates) {
         let records;
         try {

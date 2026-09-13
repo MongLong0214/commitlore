@@ -60,6 +60,7 @@ export const newCollectCache = () => ({
     commits: new Map(),
     notes: new Map(),
     blocks: new Map(),
+    last: new Map(),
 });
 /**
  * Every record block in the message, not just the last one (#898).
