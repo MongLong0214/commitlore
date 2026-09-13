@@ -54,7 +54,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { canonicalCommittedAt, execGit, execGitOrThrow, historyAvailability } from './git.js';
-import { parseRecordBlocks } from './trailers.js';
+import { parseRecordBlocks, parseRecordBlocksWithAtom } from './trailers.js';
 import { signatureVerifierGeneration } from './trusted-authors.js';
 import { canonicalConventionalTrailerKey, isConventionalTrailerKey, isCommitLoreKey, } from './types.js';
 /**
@@ -481,7 +481,15 @@ const explodeRecordBlocks = (cwd, records, excluded) => {
         // did.
         if (atomPassHasEverything(message))
             return [record];
-        const blocks = parseRecordBlocks(message);
+        // The walk already read this commit's own block as an atom, so re-deriving
+        // it here cost one `git interpret-trailers` process per message that
+        // reached this pass -- 94 of them on this repository's history, for an
+        // answer already in hand. `stale` and `squash-preserve` were moved onto
+        // `parseRecordBlocksWithAtom` for exactly this reason and the index was
+        // left; it decides nothing about which paragraphs are tested, only where
+        // the last block's bytes come from, and it falls back to the process
+        // whenever the atom cannot frame the message (`atomIsAmbiguous`).
+        const blocks = parseRecordBlocksWithAtom(message, record.atom);
         if (blocks.length <= 1)
             return [record];
         const earlierBlocks = blocks
@@ -599,6 +607,7 @@ guaranteeFirstBatch = false) => {
                 source: 'commit',
                 trailers: stripConventional(rawTrailers, excluded),
                 paths: [],
+                atom: trailerField ?? '',
             });
         }
         // A block whose only trailers were reserved strips to empty here; that is
