@@ -654,6 +654,18 @@ const budgetReaching = (tier: Tier): number => {
   return low;
 };
 
+/**
+ * Each probe in `budgetReaching` is a git scan, and the binary search makes nine
+ * of them per tier. Measured alone on an idle machine the suite's slowest test
+ * here is 8.3s, three runs within 200ms of each other — and under parallel load
+ * it reaches 39s, where the 20s default reports a timeout that reads as a
+ * failure of the truncation logic rather than of the budget it was given.
+ *
+ * `query` and `index-resume` already carry explicit timeouts for the same
+ * reason; this file was on the default. A ceiling on the wait, not a target.
+ */
+const BUDGET_SEARCH_TIMEOUT = 120_000;
+
 describe('budget truncation', () => {
   it('fits inside the budget whenever any record fits at all', () => {
     let fitted = 0;
@@ -670,7 +682,7 @@ describe('budget truncation', () => {
       expect(injection.text.length, `budget ${budget}`).toBeLessThanOrEqual(budget * 4);
     }
     expect(fitted).toBeGreaterThan(0);
-  });
+  }, BUDGET_SEARCH_TIMEOUT);
 
   it('cuts other, then Ruled-out, then Limit, then Warn', () => {
     const found = TIER_ORDER.map((tier) => ({ tier, budget: budgetReaching(tier) }));
@@ -682,7 +694,7 @@ describe('budget truncation', () => {
     for (let index = 1; index < found.length; index += 1) {
       expect(found[index]?.budget ?? 0).toBeLessThan(found[index - 1]?.budget ?? 0);
     }
-  });
+  }, BUDGET_SEARCH_TIMEOUT);
 
   it('drops whole sections in priority order', () => {
     const at = (tier: Tier): string => inject({ budget: budgetReaching(tier) }).text;
@@ -697,7 +709,7 @@ describe('budget truncation', () => {
     expect(sections(at('warn'))).toEqual(['Warn']);
     expect(inject({ budget: budgetReaching('warn') }).included).toBe(1);
     expect(sections(inject({ budget: 0 }).text)).toEqual([]);
-  });
+  }, BUDGET_SEARCH_TIMEOUT);
 
   it('keeps the highest-priority records, not the first ones it happened to see', () => {
     const text = inject({ budget: budgetReaching('limit') }).text;

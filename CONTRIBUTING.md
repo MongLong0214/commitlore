@@ -12,6 +12,44 @@ Thanks for looking. This project is MIT, free forever, and has no commercial tie
 
 A PR that says "should fix it" gets sent back. A PR that says "reproduced the failure with this script, here's the output before and after" gets merged.
 
+### Fixing a defect: run the negative control
+
+A test that passes proves the code passes that test. It does not prove the test
+would have noticed the defect — and twice in one day here, a suite was green on
+code that was broken. One cap made a resumable scan converge in **zero** calls
+instead of four, and all nine of its tests passed, because their injected clock
+never took the path the cap broke. Two other regression tests asserted the right
+property against SQL written in the test rather than against the implementation,
+so reverting the fix they guarded changed nothing.
+
+So, for a fix with a guarding test:
+
+1. Keep the test. Restore the defect with the smallest **implementation-only**
+   reversal you can write.
+2. Run the affected suite. The guarding test must fail, **for the reason the
+   defect causes** — not merely fail — and the rest of that suite must stay
+   green.
+3. Restore the fix and run it again.
+4. Put what you saw in `Verified:` — the reversal, the command, and the failure.
+   "Removing the identity predicate makes `index-concurrency-ordering` report a
+   queue of 208 where 400 was expected; restoring it passes" says something. "The
+   negative control was run" says only that you typed it.
+
+Two details worth knowing before you spend an afternoon on a control that
+proves nothing:
+
+- **Reverse what the test actually executes.** `test/index-resume.test.ts`
+  imports `src/`, so editing source is enough; `test/index-atom-reuse.test.ts`
+  spawns `dist/commitlore.mjs`, so a source edit without `npm run build` leaves
+  the test running the unmutated bundle. That control is not a control.
+- **"Only that test" is too strict.** Several tests may legitimately guard one
+  property. Require the tests you *name* to fail, within the suite you ran.
+
+An omitted control belongs in `Unverified:`, with the reason. This is a rule
+about what you can honestly write down, not a gate — a check that looked for the
+words "negative control" in a message would certify the claim without observing
+anything, which is the failure mode this project has already been bitten by.
+
 ## Where to start
 
 1. Read [`docs/adr/`](docs/adr/) first — the ADRs carry the *why*, including what we deliberately rejected. Proposals that re-litigate a settled ADR need to address its Ruled-out list.

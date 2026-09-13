@@ -167,9 +167,32 @@ describe('#958 a forced ordering between two indexing processes', () => {
     try {
       await awaitFile(ready, 'the child to reach its barrier');
 
-      // The other process: a rebuild that reads nothing and therefore queues the
-      // whole walk. Every position the child selected now names a different
-      // commit, and none of that work has been done.
+      // The other process. HEAD moves first, and that is not decoration: a
+      // budgeted rebuild refuses to install a worse queue against the SAME head
+      // (#968), so without the new commit this rebuild defers and the queue
+      // never moves — the premise below caught exactly that when the two
+      // changes first met. Against a new head the comparison does not apply,
+      // the rebuild reads nothing under a spent budget, and it queues the whole
+      // walk. Every position the child selected now names a different commit,
+      // and none of that work has been done.
+      writeFileSync(join(dir, 'moved-head.txt'), 'the other process committed\n');
+      execFileSync('git', ['add', 'moved-head.txt'], { cwd: dir });
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.name=CommitLore Test',
+          '-c',
+          'user.email=test@example.invalid',
+          'commit',
+          '-q',
+          '--no-verify',
+          '-m',
+          'moved head\n\nRecord-Id: r-moved01\nBlast: local\n',
+        ],
+        { cwd: dir },
+      );
+
       const handle = openIndex({ cwd: dir });
       try {
         updateIndex(handle, { force: true, budget: { deadline: -1, now: () => 0 } });
