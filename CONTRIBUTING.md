@@ -86,9 +86,19 @@ machine at one commit: the suite alone produced 6 failures, the suite beside two
 other heavy jobs produced 25, and the same files run a few at a time produced
 **0**. Eleven of fifteen in the loaded run were `Test timed out in 20000ms`.
 
-So run **`npm run test:local`** (`vitest run --maxWorkers=4`) when you want a
-signal you can act on. Bounded parallelism is what makes the red mean something;
-the full-parallelism run is CI's shape, not a developer's.
+So run **`npm run test:local`** (`npm run build && vitest run --maxWorkers=4`)
+when you want a signal you can act on. Bounded parallelism is what makes the red
+mean something; the full-parallelism run is CI's shape, not a developer's.
+
+**It builds first, and that is not a convenience.** Many tests here spawn
+`dist/commitlore.mjs` rather than importing `src/`, so a suite run against a
+stale bundle is testing the last build and reporting it as this one. That has
+now produced three wrong answers in a single day of work: a mutation that failed
+to compile and left the previous bundle for the test to pass against, a budget
+test that read a rebuild someone else was in the middle of, and a fix that
+reported red because `git checkout -- dist/` had put the *released* bundle back
+before the run. None of the three looked like a build problem; all three looked
+like results.
 
 This matters beyond patience. A suite whose red is routinely discounted teaches
 the reader to discount a real failure too, which is a correctness risk wearing
