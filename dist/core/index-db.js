@@ -54,7 +54,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { canonicalCommittedAt, execGit, execGitOrThrow, historyAvailability } from './git.js';
-import { parseRecordBlocks, parseRecordBlocksWithAtom } from './trailers.js';
+import { isolateBlocks, parseRecordBlocks, parseRecordBlocksWithAtom } from './trailers.js';
 import { signatureVerifierGeneration } from './trusted-authors.js';
 import { canonicalConventionalTrailerKey, isConventionalTrailerKey, isCommitLoreKey, } from './types.js';
 /**
@@ -468,6 +468,13 @@ const atomPassHasEverything = (message) => {
 };
 const explodeRecordBlocks = (cwd, records, excluded) => {
     const messages = readFullMessages(cwd, records.map((record) => record.sha));
+    // One probe pass for the whole batch instead of one process per candidate
+    // paragraph. Only the messages that reach the recovery pass are offered:
+    // `atomPassHasEverything` answers the rest without looking at a paragraph,
+    // and probing for them would trade processes for work nobody asked for.
+    const isolated = isolateBlocks(records
+        .map((record) => messages.get(record.sha))
+        .filter((message) => message !== undefined && !atomPassHasEverything(message)));
     return records.flatMap((record) => {
         const message = messages.get(record.sha);
         if (message === undefined)
@@ -489,7 +496,7 @@ const explodeRecordBlocks = (cwd, records, excluded) => {
         // left; it decides nothing about which paragraphs are tested, only where
         // the last block's bytes come from, and it falls back to the process
         // whenever the atom cannot frame the message (`atomIsAmbiguous`).
-        const blocks = parseRecordBlocksWithAtom(message, record.atom);
+        const blocks = parseRecordBlocksWithAtom(message, record.atom, isolated);
         if (blocks.length <= 1)
             return [record];
         const earlierBlocks = blocks
@@ -740,16 +747,27 @@ guaranteeFirstBatch = false) => {
             });
         }
         const batchRecords = [];
-        for (const record of splitRecords(result.stdout)) {
-            const fields = record.split(FIELD_SEP);
+        const parsed = splitRecords(result.stdout)
+            .map((record) => record.split(FIELD_SEP))
+            .filter(([sha, rawTs, committedAt, , noteText]) => sha !== undefined &&
+            rawTs !== undefined &&
+            committedAt !== undefined &&
+            noteText !== undefined &&
+            noteText.trim() !== '');
+        // One probe pass for every note in this batch, the same way
+        // `explodeRecordBlocks` does it for commit messages. A note's own block is
+        // still a process each -- `%N` carries the note text and `%(trailers)`
+        // parses the annotated *commit*, so there is no note atom to hand over --
+        // but its earlier blocks no longer cost one apiece. This path spent 46 of
+        // a cold rebuild's 48 `interpret-trailers` processes for eleven notes.
+        const isolatedNotes = isolateBlocks(parsed.map((fields) => `${NOTE_SUBJECT}\n\n${String(fields[4])}`));
+        for (const fields of parsed) {
             const [sha, rawTs, committedAt, signatureStatus, noteText] = fields;
-            if (sha === undefined || rawTs === undefined || committedAt === undefined)
-                continue;
-            if (noteText === undefined || noteText.trim() === '')
-                continue;
             // A note may itself carry several record blocks (SPEC §2.4): squash
             // inheritance writes one per source record (`core/squash.ts`).
-            const blocks = parseRecordBlocks(`${NOTE_SUBJECT}\n\n${noteText}`);
+            const blocks = parseRecordBlocks(`${NOTE_SUBJECT}\n\n${noteText}`, {
+                isolated: isolatedNotes,
+            });
             blocks.forEach((rawTrailers, block) => {
                 const trailers = stripConventional(rawTrailers, excluded);
                 if (trailers.length === 0)

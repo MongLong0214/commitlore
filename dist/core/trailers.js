@@ -7,6 +7,10 @@
  * unreproducible by line matching, and getting it wrong manufactures false
  * context for agents.
  */
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { execGit, execGitOrThrow } from './git.js';
 import { KNOWN_KEYS } from './types.js';
 const RECORD_ID_KEY = 'Record-Id';
@@ -86,11 +90,110 @@ export const readTrailersAtom = (selection, opts = {}) => {
  * exactly `parseRecordBlocks(message)`. The one entry point for a reader that
  * ran {@link readTrailersAtom}, so no reader composes the grammar itself.
  */
-export const parseRecordBlocksWithAtom = (message, atom) => atom === undefined || atomIsAmbiguous(message)
-    ? parseRecordBlocks(message)
-    : parseRecordBlocks(message, { last: parseTrailersAtom(atom) });
+export const parseRecordBlocksWithAtom = (message, atom, isolated) => atom === undefined || atomIsAmbiguous(message)
+    ? parseRecordBlocks(message, isolated === undefined ? {} : { isolated })
+    : parseRecordBlocks(message, {
+        last: parseTrailersAtom(atom),
+        ...(isolated === undefined ? {} : { isolated }),
+    });
 /** Loose on purpose: see `parseRecordBlocks`. */
 const MENTIONS_RECORD_ID = /record-id/i;
+/** Paragraphs per invocation. Bounds the argument list, not correctness. */
+const PROBE_BATCH = 128;
+const EMPTY_ISOLATED = { get: () => undefined };
+/**
+ * Every paragraph these messages would have probed one at a time.
+ *
+ * The splitting and the candidate test happen here rather than in the caller,
+ * so which paragraphs are tested stays decided in this module for every reader
+ * alike — the same reason {@link parseRecordBlocksWithAtom} exists.
+ */
+export const isolateBlocks = (messages) => {
+    const wanted = new Set();
+    for (const message of messages) {
+        const paragraphs = splitParagraphs(message);
+        for (const paragraph of paragraphs.slice(0, -1)) {
+            if (MENTIONS_RECORD_ID.test(paragraph))
+                wanted.add(paragraph);
+        }
+    }
+    if (wanted.size === 0)
+        return EMPTY_ISOLATED;
+    const answers = new Map();
+    let scratch;
+    try {
+        scratch = mkdtempSync(join(tmpdir(), 'commitlore-probe-'));
+        const all = [...wanted];
+        for (let at = 0; at < all.length; at += PROBE_BATCH) {
+            const chunk = all.slice(at, at + PROBE_BATCH);
+            const resolved = probeChunk(scratch, chunk);
+            if (resolved === null)
+                return EMPTY_ISOLATED;
+            for (const [paragraph, trailers] of resolved)
+                answers.set(paragraph, trailers);
+        }
+    }
+    catch {
+        return EMPTY_ISOLATED;
+    }
+    finally {
+        // Its own guard, not the caller's. A cleanup that throws out of the
+        // `finally` replaces whichever answer was being returned -- including the
+        // fallback -- and turns an optimisation into the one thing it promised
+        // never to be: a way for this to change an answer.
+        if (scratch !== undefined) {
+            try {
+                rmSync(scratch, { recursive: true, force: true });
+            }
+            catch {
+                /* a leftover temp directory is the operating system's to reclaim */
+            }
+        }
+    }
+    return { get: (paragraph) => answers.get(paragraph) };
+};
+/** One invocation, or `null` when its output could not be attributed. */
+const probeChunk = (scratch, paragraphs) => {
+    const nonce = `X-Clprobe-${randomBytes(8).toString('hex')}`;
+    const files = [];
+    paragraphs.forEach((paragraph, index) => {
+        const subject = join(scratch, `p-${String(index)}.txt`);
+        // Byte-equal to what `asIsolatedBlock` pipes. Nothing is added to it, which
+        // is the whole reason git's verdict here is the verdict it would give alone.
+        writeFileSync(subject, `x\n\n${paragraph}`);
+        const marker = join(scratch, `m-${String(index)}.txt`);
+        writeFileSync(marker, `x\n\n${nonce}: ${String(index)}\n`);
+        files.push(subject, marker);
+    });
+    const result = execGit([...PARSE_ARGS, ...files]);
+    if (result.code !== 0)
+        return null;
+    const answers = new Map();
+    let current = [];
+    let expected = 0;
+    for (const line of result.stdout.split('\n')) {
+        if (line.length === 0)
+            continue;
+        if (line.startsWith(`${nonce}:`)) {
+            // In order, one per paragraph, none missing and none extra. A marker out
+            // of sequence means output has moved between groups, which is the failure
+            // this whole scheme exists to make impossible to miss.
+            if (Number(line.slice(nonce.length + 1).trim()) !== expected)
+                return null;
+            const paragraph = paragraphs[expected];
+            if (paragraph === undefined)
+                return null;
+            answers.set(paragraph, current);
+            current = [];
+            expected += 1;
+            continue;
+        }
+        current.push(parseOutputLine(line));
+    }
+    if (current.length !== 0 || expected !== paragraphs.length)
+        return null;
+    return answers;
+};
 /** Continuation lines in a canonical block are indented by two spaces (SPEC §2.3). */
 const CONTINUATION_INDENT = '  ';
 /**
@@ -270,7 +373,14 @@ export const parseRecordBlocks = (message, opts = {}) => {
         // other way loses a record.
         if (!MENTIONS_RECORD_ID.test(paragraph))
             continue;
-        const candidate = asIsolatedBlock(paragraph);
+        // `opts.isolated` is the same probe, already run for many paragraphs at
+        // once ({@link isolateBlocks}). It replaces only where this paragraph's
+        // answer comes from -- which paragraphs are tested, and whether the answer
+        // is accepted, is decided here for every caller alike, so a reader with the
+        // batch and a reader without it compose the grammar in one place. A batch
+        // that could not be attributed returns nothing for every paragraph, and
+        // this falls through to the process.
+        const candidate = opts.isolated?.get(paragraph) ?? asIsolatedBlock(paragraph);
         if (candidate.length === 0)
             continue;
         if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY))
