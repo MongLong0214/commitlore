@@ -7,8 +7,8 @@ were not written here.
 ## 1.3.0
 
 A scan that ran out of budget stopped, and then never started again. Everything
-below follows from that one thing, and from an external review that reproduced
-four ways the first fix for it would still have lost work.
+below follows from that one thing, and from two rounds of external review that
+reproduced, between them, eight ways the fix for it would still have lost work.
 
 **A budgeted scan now carries on from where it stopped.** A truncated scan used
 to persist one number — how many commits it had left unread — and a number
@@ -55,6 +55,30 @@ its rows and then reads git holding no transaction, and a rebuild can replace
 the queue inside that window. Deleting on position alone retired whatever had
 moved into that slot — work nobody had done — and the index then called itself
 complete with a record permanently absent.
+
+**A note's identity is its commit, and its commit does not change when it
+does.** Retiring queued notes by sha therefore could not tell one version of a
+mirror's work from another: a drainer reading 64 notes from one version while
+another process re-listed the queue against the next retired the new queue's
+entries with the old version's content, leaving 64 old notes, 66 new ones and
+nothing outstanding. The mirror is checked again inside the write, and a queue
+that moved underneath is refused rather than retired.
+
+**A mirror that disappears takes its rows with it.** A truncated notes pass
+leaves both rows and a queue, belonging to one mirror. Dropping only the queue
+left an indexed prefix nothing pointed at, with `notes_ref_sha` and the live ref
+both unset — so `indexNotes` returned at its first line and those notes were
+served for good.
+
+**The one-batch floor is spent once per call, not once per source.** Giving it
+to both readers let a call with an already-spent budget read a full commit batch
+and then a full notes batch, twice what the floor is supposed to cost.
+
+**An unborn HEAD kept what it could no longer reach.** Switching to an orphan
+branch returns from `updateIndex` before either pending path, so the previous
+branch's rows and its whole backlog survived — the orphan served records from a
+history it does not contain, and three calls later still owed 130 commits
+against it. Everything derived is cleared with the history it came from.
 
 **`doctor` called an index current that was missing history.** `index-health`
 compared `last_indexed_sha` against HEAD, and a budgeted scan stamps that equal

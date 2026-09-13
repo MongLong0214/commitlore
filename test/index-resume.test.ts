@@ -116,6 +116,78 @@ const shiftQueue = (dir: string): void => {
   }
 };
 
+/**
+ * A real `refs/notes/commitlore` mirror over the newest commits.
+ *
+ * The notes half cannot be exercised with seeded rows alone: the drain refuses a
+ * queue whose recorded mirror does not match the live ref, and with no mirror at
+ * all both are null and it refuses on that.
+ */
+const addNotes = (dir: string, count: number): number => {
+  const shas = execFileSync('git', ['rev-list', `-${String(count)}`, 'HEAD'], {
+    cwd: dir,
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter((line) => line !== '');
+  for (const [i, sha] of shas.entries()) {
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=CommitLore Test',
+        '-c',
+        'user.email=test@example.invalid',
+        'notes',
+        '--ref=refs/notes/commitlore',
+        'add',
+        '-f',
+        '-m',
+        `note ${i}\n\nRecord-Id: r-note${i.toString(36)}\nWarn: from a note\n`,
+        sha,
+      ],
+      { cwd: dir },
+    );
+  }
+  return shas.length;
+};
+
+/**
+ * What another process's `indexNotes` does when the mirror has moved: the queue
+ * is re-listed against the new mirror, under the same annotated commit shas.
+ */
+const relistNotes = (dir: string): void => {
+  execFileSync(
+    'git',
+    [
+      '-c',
+      'user.name=CommitLore Test',
+      '-c',
+      'user.email=test@example.invalid',
+      'notes',
+      '--ref=refs/notes/commitlore',
+      'add',
+      '-f',
+      '-m',
+      'note rewritten\n\nRecord-Id: r-noterewrite\nWarn: second version\n',
+      execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim(),
+    ],
+    { cwd: dir },
+  );
+  const handle = openIndex({ cwd: dir });
+  try {
+    const moved = execFileSync('git', ['rev-parse', 'refs/notes/commitlore'], {
+      cwd: dir,
+      encoding: 'utf8',
+    }).trim();
+    handle.db
+      .prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v')
+      .run('notes_pending_ref', moved);
+  } finally {
+    closeIndex(handle);
+  }
+};
+
 /** Removes the index without removing the repository. */
 const cold = (dir: string): void => {
   rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
@@ -193,12 +265,8 @@ describe('#951 a budgeted scan resumes where it stopped', () => {
     const dir = syntheticRepo(400);
 
     cold(dir);
-    // The first call truncates; the rest each carry one slice. Three readings is
-    // the floor for a slice that completes a batch: one goes to computing the
-    // drain's own ceiling, and the batch loop checks twice before the expensive
-    // half. At two readings the batch is started and then dropped, so the index
-    // never advances -- which is a property of the clock in this test, not of
-    // the code, and is why the two budgets are written separately here.
+    // The first call truncates; the rest keep going. The two budgets are written
+    // separately because they are asking for different things.
     closeIndex(ensureIndex({ cwd: dir, budget: expiringAfter(2) }).handle);
     for (let call = 0; call < 40; call += 1) {
       const { handle } = ensureIndex({ cwd: dir, budget: expiringAfter(3) });
@@ -423,6 +491,139 @@ describe('#951 a budgeted scan resumes where it stopped', () => {
     })();
 
     expect(after).toBeLessThan(before);
+  }, 300_000);
+
+  it('drops the indexed prefix when the mirror the queue named is gone', () => {
+    const dir = syntheticRepo(40);
+    closeIndex(ensureIndex({ cwd: dir }).handle);
+
+    // A partial notes pass leaves rows AND a queue, both belonging to one
+    // mirror. Dropping only the queue when that mirror disappears leaves an
+    // indexed prefix nothing points at and nothing outstanding to correct it --
+    // `notes_ref_sha` and the live ref are then both null, so `indexNotes`
+    // returns at its first line and those rows are served for good.
+    withIndex(dir, (handle) => {
+      handle.db.exec('DELETE FROM scan_pending');
+      handle.db
+        .prepare(
+          `INSERT INTO trailers (commit_sha, block, seq, key, value, value_lc,
+             committed_at, committed_ts, provenance, signature_status, source)
+           VALUES (?, 0, 0, 'Warn', 'stale', 'stale', '2020-01-01T00:00:00+00:00', 1, NULL, '', 'notes')`,
+        )
+        .run('a'.repeat(40));
+      handle.db
+        .prepare('INSERT INTO scan_pending (source, ord, sha) VALUES (?, ?, ?)')
+        .run('notes', 0, 'b'.repeat(40));
+      const meta = handle.db.prepare(
+        'INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v',
+      );
+      meta.run('notes_pending_ref', 'c'.repeat(40));
+      meta.run('notes_ref_sha', null);
+    });
+
+    const { handle } = ensureIndex({ cwd: dir, budget: expiringAfter(20) });
+    const left = indexUnreadBySource(handle);
+    const stale = Number(
+      (
+        handle.db
+          .prepare(`SELECT count(*) AS n FROM trailers WHERE source = 'notes'`)
+          .get() as { n: number }
+      ).n,
+    );
+    closeIndex(handle);
+
+    expect(left.notes).toBe(0);
+    expect(stale).toBe(0);
+  }, 300_000);
+
+  it('spends its one-batch floor once per call, not once per source', () => {
+    // Sized so one truncation leaves a commit queue that fits inside a single
+    // batch while every note is still owed -- the state the double floor shows
+    // up in: the commit pass empties its queue, and the notes pass then takes a
+    // second guaranteed batch out of the same spent budget.
+    const dir = syntheticRepo(120);
+    addNotes(dir, 100);
+    cold(dir);
+    closeIndex(ensureIndex({ cwd: dir, budget: expiringAfter(2) }).handle);
+
+    const owed = withIndex(dir, indexUnreadBySource);
+    expect(owed.commits).toBeGreaterThan(0);
+    expect(owed.notes).toBeGreaterThan(0);
+
+    // A budget already spent on entry buys exactly one batch, from one source.
+    const { handle, stats } = ensureIndex({
+      cwd: dir,
+      budget: { deadline: -1, now: () => 0 },
+    });
+    closeIndex(handle);
+
+    expect(stats.commitsScanned).toBeGreaterThan(0);
+    expect(stats.notesScanned).toBe(0);
+  }, 300_000);
+
+  it('retires no note when the mirror is re-listed while it is being read', () => {
+    const dir = syntheticRepo(120);
+    addNotes(dir, 100);
+    cold(dir);
+    closeIndex(ensureIndex({ cwd: dir, budget: expiringAfter(2) }).handle);
+
+    // Commits first: the drain will not touch notes while any commit is owed.
+    // One spent-budget call finishes them -- the floor buys the one batch they
+    // fit in -- and spends the floor, so the notes queue is left whole.
+    closeIndex(ensureIndex({ cwd: dir, budget: { deadline: -1, now: () => 0 } }).handle);
+    const owed = withIndex(dir, indexUnreadBySource);
+    expect(owed.commits).toBe(0);
+    expect(owed.notes).toBeGreaterThan(0);
+    const queued = owed.notes;
+
+    // An annotated commit's sha is the same object whichever version of its note
+    // the mirror holds, so retiring by sha cannot tell v1's work from v2's. The
+    // clock is the interleaving point: reading 1 computes the drain's ceiling,
+    // reading 2 is inside the notes read, with the selection made and no
+    // transaction open.
+    let readings = 0;
+    const { handle, stats } = ensureIndex({
+      cwd: dir,
+      budget: {
+        deadline: 9_000,
+        now: () => {
+          readings += 1;
+          if (readings === 2) relistNotes(dir);
+          return readings <= 3 ? 0 : 99_000;
+        },
+      },
+    });
+    const after = indexUnreadBySource(handle);
+    closeIndex(handle);
+
+    // Nothing may be retired: the entries this drainer read belong to a mirror
+    // that is no longer the one the queue names.
+    expect(stats.notesScanned).toBe(0);
+    expect(after.notes).toBe(queued);
+  }, 300_000);
+
+  it('clears what it derived when HEAD becomes unborn', () => {
+    const dir = syntheticRepo(400);
+    cold(dir);
+
+    const first = ensureIndex({ cwd: dir, budget: expiringAfter(2) });
+    expect(indexUnread(first.handle)).toBeGreaterThan(0);
+    closeIndex(first.handle);
+
+    execFileSync('git', ['checkout', '-q', '--orphan', 'fresh'], { cwd: dir });
+    execFileSync('git', ['rm', '-rqf', '--cached', '.'], { cwd: dir });
+
+    // An unborn HEAD reaches no commit, so every row and every queued entry
+    // describes a history this repository no longer has. This branch of
+    // `updateIndex` returns before either pending path, so leaving them made the
+    // orphan serve the old branch's records and hold its backlog for ever.
+    const { handle } = ensureIndex({ cwd: dir, budget: expiringAfter(20) });
+    const left = indexUnread(handle);
+    const rows = rowsOf(handle).trailers.length;
+    closeIndex(handle);
+
+    expect(left).toBe(0);
+    expect(rows).toBe(0);
   }, 300_000);
 
   it('leaves an unbudgeted caller free to finish it in one rebuild', () => {

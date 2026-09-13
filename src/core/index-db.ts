@@ -1910,12 +1910,19 @@ const drainPending = (
     ...(outer.now === undefined ? {} : { now: outer.now }),
   };
 
+  // The floor is one batch for the whole drain, not one per source. Passing it
+  // to both readers let a call with an already-spent budget read a full commit
+  // batch and then a full notes batch, which is twice the overshoot the floor is
+  // supposed to cost.
+  let floorSpent = false;
+
   const commits = pendingEntries(handle.db, 'commit');
   if (commits.length > 0) {
     const cost: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
     const shas = commits.map((entry) => entry.sha);
     const records = readCommitRecords(handle.cwd, shas, excluded, budget, cost, true);
     const read = shas.length - cost.unreadCommits;
+    floorSpent = read > 0;
     if (read > 0) {
       runInTransaction(handle.db, () => {
         const counts = insertRecords(handle, records, { repeatable: true });
@@ -1948,33 +1955,55 @@ const drainPending = (
   const currentRef = revParseRef(handle.cwd, NOTES_REF);
   if (listedFrom === null || listedFrom !== currentRef) {
     runInTransaction(handle.db, () => {
+      // The rows already written came from the mirror the queue named, so they
+      // go with it. Keeping them and dropping only the queue leaves an
+      // indexed prefix of a mirror nothing points at any more, and nothing
+      // outstanding to correct it: reproduced by deleting the mirror with 64
+      // notes indexed and 66 queued, after which `refSha` and `notes_ref_sha`
+      // are both null, `indexNotes` returns at its first line, and those 64
+      // obsolete notes are served for good.
+      deleteNoteRows(handle);
       writePending(handle.db, 'notes', []);
       writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+      // Left unset rather than stamped: when a mirror still exists `indexNotes`
+      // must re-read it whole, and when it does not, an empty table stamped
+      // null is the true answer.
+      writeMeta(handle.db, 'notes_ref_sha', null);
     });
     return;
   }
 
   const cost: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
   const shas = notes.map((entry) => entry.sha);
-  const records = readNotesFor(handle.cwd, shas, excluded, budget, cost, true);
+  const records = readNotesFor(handle.cwd, shas, excluded, budget, cost, !floorSpent);
   const read = shas.length - cost.unreadNotes;
   if (read === 0) return;
 
-  runInTransaction(handle.db, () => {
+  const applied = runInTransaction(handle.db, () => {
+    // The mirror is checked again here, inside the write, and this is not
+    // belt-and-braces. An annotated commit's sha is the same object whichever
+    // version of its note the mirror holds, so the sha-qualified retirement
+    // cannot tell one from the other: reproduced as a drainer reading 64 notes
+    // from v1 while another process re-listed the queue against v2, then
+    // retiring v2's entries with v1's content and leaving the index holding 64
+    // old notes, 66 new ones, and nothing outstanding.
+    if (readMeta(handle.db, NOTES_PENDING_REF_META) !== listedFrom) return false;
+
     const counts = insertRecords(handle, records, { repeatable: true });
     stats.noteTrailersIndexed += counts.trailers;
     stats.pathsIndexed += counts.paths;
     const done = handle.db.prepare(PENDING_DONE_SQL);
     for (const entry of notes.slice(0, read)) done.run('notes', entry.ord, entry.sha);
     // Stamped with the mirror the queue was listed from, never with whatever the
-    // ref points at now. The two are equal here only because the guard above
+    // ref points at now. The two are equal here only because both guards above
     // already refused the case where they are not.
     if (pendingCount(handle.db, 'notes') === 0) {
       writeMeta(handle.db, 'notes_ref_sha', listedFrom);
       writeMeta(handle.db, NOTES_PENDING_REF_META, null);
     }
+    return true;
   });
-  stats.notesScanned += read;
+  if (applied) stats.notesScanned += read;
 };
 
 /**
@@ -2041,7 +2070,22 @@ export const updateIndex = (
   if (head === null) {
     /* An empty repository is not an error; it is a repository with no records. */
     const stats = emptyStats(handle, started);
-    writeMeta(handle.db, 'last_indexed_sha', null);
+    // Everything derived goes with the history it was derived from. An unborn
+    // HEAD reaches no commit, so every row here describes a history this
+    // repository no longer has -- and the queue describes work against it.
+    // Leaving them made an orphan branch serve the old branch's records and
+    // hold its backlog for ever: reproduced as three calls reading nothing and
+    // retaining all 130 queued commits, because this branch returns before
+    // either pending path is reached.
+    runInTransaction(handle.db, () => {
+      if (handle.fts) handle.db.exec('DELETE FROM trailers_fts');
+      handle.db.exec('DELETE FROM trailers');
+      handle.db.exec('DELETE FROM commit_paths');
+      handle.db.exec('DELETE FROM scan_pending');
+      writeMeta(handle.db, NOTES_PENDING_REF_META, null);
+      writeMeta(handle.db, 'notes_ref_sha', null);
+      writeMeta(handle.db, 'last_indexed_sha', null);
+    });
     stats.noteTrailersIndexed = indexNotes(handle, {}, excluded);
     applyExclusions(stats, excluded);
     stats.elapsedMs = Date.now() - started;
