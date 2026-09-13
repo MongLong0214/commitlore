@@ -1887,6 +1887,32 @@ export const rebuildIndex = (
   };
 
   runInTransaction(handle.db, () => {
+    // A rebuild scans outside this transaction and then replaces everything in
+    // it, so a scan that started earlier and read less can land on top of one
+    // that read more. Reproduced by holding a budgeted rebuild inside its scan
+    // while another committed a whole one: a complete index -- 10290 trailer
+    // rows, nothing outstanding -- became 591 rows and 1491 commits owed.
+    //
+    // `scan_pending` already measures coverage, so no bookkeeping is needed to
+    // notice: against the same HEAD, the index that owes less has read more.
+    // Refusing to replace a better one with a worse one costs this scan and
+    // keeps the answer.
+    //
+    // Only for a budgeted rebuild, which is a consumer doing this
+    // opportunistically. Without a budget the caller is `index` or `init` --
+    // somebody asked -- and that must rebuild whatever is installed, because
+    // the reason may be corruption or a schema this build cannot read.
+    if (
+      opts.budget !== undefined &&
+      head !== null &&
+      readMeta(handle.db, 'last_indexed_sha') === head &&
+      pendingCount(handle.db, 'commit') < cost.unreadCommits
+    ) {
+      stats.rebuilt = false;
+      stats.rebuildReason = 'kept a more complete index that was already installed';
+      return;
+    }
+
     if (handle.fts) handle.db.exec('DELETE FROM trailers_fts');
     handle.db.exec('DELETE FROM trailers');
     handle.db.exec('DELETE FROM commit_paths');
