@@ -10,6 +10,7 @@
  * `serializeTrailers` writes it and `git interpret-trailers --parse` reads it,
  * exactly as for a commit message. There is no second format.
  */
+import { type IsolatedBlocks } from './trailers.js';
 import type { Trailer } from './types.js';
 /** The mirror's ref. Not configurable: it is part of the protocol (SPEC §1). */
 export declare const NOTES_REF = "refs/notes/commitlore";
@@ -91,7 +92,20 @@ export declare const readRecord: (sha: string, opts?: NotesOptions) => Trailer[]
  * with `writeRecordBlocks` comes back as one array per block rather than
  * folded flat.
  */
-export declare const readRecordBlocks: (sha: string, opts?: NotesOptions) => Trailer[][];
+export declare const readRecordBlocks: (sha: string, opts?: NotesOptions, isolated?: IsolatedBlocks) => Trailer[][];
+/**
+ * The message each sha's note is read through, for a caller that wants to hand
+ * them all to {@link isolateBlocks} before parsing any of them.
+ *
+ * It returns the composed message rather than the note, because that is what
+ * the grammar sees and therefore what decides which paragraphs it would probe.
+ * A sha with no note is absent from the map.
+ *
+ * The note is read once here and the caller parses from the map, so this costs
+ * no more `git notes show` than `readRecordBlocks` would have — pairing it with
+ * `readRecordBlocks` afterwards would read every note twice.
+ */
+export declare const noteMessages: (shas: readonly string[], opts?: NotesOptions) => Map<string, string>;
 /**
  * Every object name that carries a note, in `git notes list` order.
  *

@@ -10,9 +10,9 @@
  */
 import { identityCarriesInjection, scanInjection, scanTrailer } from '../core/grade.js';
 import { execGit, canonicalCommittedAt } from '../core/git.js';
-import { listRecordShas, notesAvailability, readRecordBlocks, } from '../core/notes.js';
+import { listRecordShas, notesAvailability, noteMessages, } from '../core/notes.js';
 import { findDanglingRefs, findIdCollisions, foldLifecycle, isStale, } from '../core/stale.js';
-import { parseRecordBlocksWithAtom, readTrailersAtom } from '../core/trailers.js';
+import { isolateBlocks, parseRecordBlocks, parseRecordBlocksWithAtom, readTrailersAtom, } from '../core/trailers.js';
 /**
  * How many commits a scan reads when `--all-history` is not given. A bounded
  * default keeps `stale` fast on a deep repository; the cost is that anything
@@ -56,7 +56,11 @@ const RECORD_ID_KEY = 'Record-Id';
 const UNRESOLVED_WANT = 'undetermined — the scanned window does not carry this Record-Id and no commit message ' +
     'declares it; a declaration in the notes mirror outside the window would not be found ' +
     'here, so run with --all-history to decide';
-export const newCollectCache = () => ({ commits: new Map(), notes: new Map() });
+export const newCollectCache = () => ({
+    commits: new Map(),
+    notes: new Map(),
+    blocks: new Map(),
+});
 /**
  * Every record block in the message, not just the last one (#898).
  *
@@ -74,7 +78,7 @@ export const newCollectCache = () => ({ commits: new Map(), notes: new Map() });
  * A commit with no blocks still yields one record with no trailers, so the
  * commit count and the notes-mirror comparison below keep their shape.
  */
-const parseChunk = (chunk, cache, atoms) => {
+const parseChunk = (chunk, cache, atoms, isolated) => {
     const firstSep = chunk.indexOf(UNIT);
     if (firstSep === -1)
         return [];
@@ -90,7 +94,7 @@ const parseChunk = (chunk, cache, atoms) => {
     const committedAt = canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep));
     const message = chunk.slice(secondSep + 1);
     const blocks = CANDIDATE_LINE_RE.test(message)
-        ? parseRecordBlocksWithAtom(message, atoms?.get(sha))
+        ? parseRecordBlocksWithAtom(message, atoms?.get(sha), isolated)
         : [];
     const records = blocks.length === 0
         ? [{ sha, committedAt, trailers: [], source: 'commit' }]
@@ -140,7 +144,26 @@ export const collectRecords = (opts = {}) => {
         return second !== -1 && CANDIDATE_LINE_RE.test(chunk.slice(second + 1));
     }).length;
     const atoms = wouldUseAtom >= 2 ? readTrailersAtom(selection, { cwd }) : undefined;
-    const commitRecords = chunks.flatMap((chunk) => parseChunk(chunk, commitCache, atoms));
+    // The atom removes the process for each message's OWN block; every earlier
+    // paragraph was still one apiece. Attributed by stack on a 39-commit
+    // `validate --range`: of 245 `git interpret-trailers` processes, 156 were
+    // those probes and 111 of them arrived through here. They go in one
+    // invocation, the same way `explodeRecordBlocks` and `readNotesFor` take
+    // them.
+    //
+    // Offered only the messages this walk has not already answered from the
+    // cache, so a walk that is entirely cached probes nothing.
+    const uncachedMessages = chunks
+        .map((chunk) => {
+        const at = chunk.indexOf(UNIT);
+        if (at === -1 || commitCache?.has(chunk.slice(0, at)) === true)
+            return null;
+        const second = chunk.indexOf(UNIT, at + 1);
+        return second === -1 ? null : chunk.slice(second + 1);
+    })
+        .filter((message) => message !== null && CANDIDATE_LINE_RE.test(message));
+    const isolated = uncachedMessages.length > 0 ? isolateBlocks(uncachedMessages) : undefined;
+    const commitRecords = chunks.flatMap((chunk) => parseChunk(chunk, commitCache, atoms, isolated));
     // One commit may now contribute several records, so anything that counts
     // commits counts distinct shas. Counting records here would report a
     // multi-block repository as larger than it is, and would trip the truncation
@@ -159,6 +182,14 @@ export const collectRecords = (opts = {}) => {
             existing.trailers.push(...record.trailers);
         }
     }
+    // Every note this walk still has to read, read once, so their paragraph
+    // probes can share one process the way the commit messages' do. Pairing this
+    // with `readRecordBlocks` would read each note twice, so the parse below
+    // works from the map rather than going back to git.
+    const noteCache = opts.cache?.notes;
+    const noteShas = mirror.shas.filter((sha) => trailersBySha.has(sha) && noteCache?.has(sha) !== true);
+    const noteText = noteShas.length > 0 ? noteMessages(noteShas, { cwd }) : new Map();
+    const isolatedNotes = noteText.size > 0 ? isolateBlocks([...noteText.values()]) : undefined;
     const noteRecords = mirror.shas.flatMap((sha) => {
         const commit = trailersBySha.get(sha);
         if (commit === undefined)
@@ -169,10 +200,14 @@ export const collectRecords = (opts = {}) => {
         // of them back. Reading the note through `readRecord` -- `parseCommitMessage`,
         // the last paragraph -- left every earlier block invisible here and only
         // here: the #898 shape, on the mirror instead of the message.
-        const cachedNote = opts.cache?.notes.get(sha);
-        const blocks = cachedNote ?? readRecordBlocks(sha, { cwd });
+        const cachedNote = noteCache?.get(sha);
+        const message = noteText.get(sha);
+        const blocks = cachedNote ??
+            (message === undefined
+                ? []
+                : parseRecordBlocks(message, isolatedNotes === undefined ? {} : { isolated: isolatedNotes }));
         if (cachedNote === undefined)
-            opts.cache?.notes.set(sha, blocks);
+            noteCache?.set(sha, blocks);
         // Each block is its own record, and each is judged a mirror on its own
         // against everything the commit declares -- so a block that mirrors one
         // block of a squash is dropped while a block the message never carried

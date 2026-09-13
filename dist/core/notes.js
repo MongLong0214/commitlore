@@ -141,9 +141,33 @@ export const readRecord = (sha, opts = {}) => {
  * with `writeRecordBlocks` comes back as one array per block rather than
  * folded flat.
  */
-export const readRecordBlocks = (sha, opts = {}) => {
+export const readRecordBlocks = (sha, opts = {}, isolated) => {
     const note = showNote(sha, opts);
-    return note === null ? [] : parseRecordBlocks(`${SYNTHETIC_SUBJECT}\n\n${note}`);
+    if (note === null)
+        return [];
+    const message = `${SYNTHETIC_SUBJECT}\n\n${note}`;
+    return parseRecordBlocks(message, isolated === undefined ? {} : { isolated });
+};
+/**
+ * The message each sha's note is read through, for a caller that wants to hand
+ * them all to {@link isolateBlocks} before parsing any of them.
+ *
+ * It returns the composed message rather than the note, because that is what
+ * the grammar sees and therefore what decides which paragraphs it would probe.
+ * A sha with no note is absent from the map.
+ *
+ * The note is read once here and the caller parses from the map, so this costs
+ * no more `git notes show` than `readRecordBlocks` would have — pairing it with
+ * `readRecordBlocks` afterwards would read every note twice.
+ */
+export const noteMessages = (shas, opts = {}) => {
+    const messages = new Map();
+    for (const sha of shas) {
+        const note = showNote(sha, opts);
+        if (note !== null)
+            messages.set(sha, `${SYNTHETIC_SUBJECT}\n\n${note}`);
+    }
+    return messages;
 };
 /**
  * Every object name that carries a note, in `git notes list` order.

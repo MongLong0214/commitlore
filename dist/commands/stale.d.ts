@@ -60,6 +60,20 @@ export interface CollectCache {
         shas: string[];
         availability: NotesAvailability;
     };
+    /**
+     * A message's record blocks, keyed by the message itself.
+     *
+     * `validate` read the same message through the grammar three times per
+     * source: once for its own trailers, once more inside `parseRecordBlocks`
+     * because no `last` was handed over, and a third time in the reference pass.
+     * Each of those is a `git interpret-trailers` process, and a 39-commit range
+     * spent 278 of them.
+     *
+     * Keyed by text rather than by sha because the reference pass sees sources
+     * that have no sha yet -- a message being validated before it is committed is
+     * the case the hook takes.
+     */
+    readonly blocks: Map<string, Trailer[][]>;
 }
 export declare const newCollectCache: () => CollectCache;
 type RecordSource = NonNullable<StaleRecord['source']>;

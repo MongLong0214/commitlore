@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "f5c0dc4063270fc3059f8a60c1f75feb3ffa43915f9e05420e04ed74981c9a2d"
+    "sha256": "29b5ea4dcce17d4acca827c9f52de1c053bc008a5a9bb978ff6ec5c4f094e3a1"
   },
   "artifact": {
-    "sha256": "94eb46b4bb3c0e09f23bec5b11f8fc44de5057b24be039a530c1cf9f4d509094",
+    "sha256": "5f18943adc64e8525e50a261bbb632a7d8a54f520a7e174485a1c4d3d1be1d2a",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -586,15 +586,15 @@
       },
       {
         "path": "dist/commands/stale.d.ts",
-        "sha256": "7ba21e9f6056be39bef8670b2b2b73ac368efba662e630515260fc179b380210"
+        "sha256": "2ef2c84f4dd86f21e9bbec2ef00653395ee99da9160ad6c6231b4c4e20611683"
       },
       {
         "path": "dist/commands/stale.js",
-        "sha256": "9b8359e0b3eaecc56304db533564ffe834ee7253937ed3caf22fc0b61873fce0"
+        "sha256": "06dc46b9172c96e4191bdcbc170f8e3540b286c2a8b6303ce88cc8740d0a8016"
       },
       {
         "path": "dist/commands/stale.js.map",
-        "sha256": "fcfa7f2b95f49edb265ff220c1cbb5368439ff4f72293c17a852897880da83ed"
+        "sha256": "f2ebe82301e16e42cb7a51ecc7e1fd544c6f3a477e2429752669cb9582953e15"
       },
       {
         "path": "dist/commands/sync.d.ts",
@@ -638,15 +638,15 @@
       },
       {
         "path": "dist/commands/validate.js",
-        "sha256": "294252c60696813de6a6b6aaea78d02127a3f85de051b07a69d1c2cbbcbcb967"
+        "sha256": "e5eb1c96ba114bb9eb13157105fab9ea2bca8db3042945da008c72e3face880a"
       },
       {
         "path": "dist/commands/validate.js.map",
-        "sha256": "f3d5365efc070ac4f3e594e99fc1b22b668f263012879f804aa7f6e60e2f71f7"
+        "sha256": "c2a878f3e3623cc199bcf291cdb92e127efc0fc8ac5b0eecaec2f56e522d4a7f"
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "76ac6043dbaef520bea4d915f3d929ab2f5547225d81cdeafbdb9811bf8ab6d6"
+        "sha256": "7f84a3bf22ec3edfde1a2c43206907b52b27948ef02155d99a14fe6c2454c8f5"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -926,15 +926,15 @@
       },
       {
         "path": "dist/core/notes.d.ts",
-        "sha256": "60bd2b6e55a235c48d78d55e9a01d9bdbbc1fedbacef7f79b36945570c2bb5e0"
+        "sha256": "72f4f891addf27db8f46fc3a38da6c306a1defd625cbb6f53fa4ff3134bbd634"
       },
       {
         "path": "dist/core/notes.js",
-        "sha256": "4abce8d0cd0aa000b33f81ff8ff9be4613cdc80131247ba67b4e2baa0474466c"
+        "sha256": "6f9c14051d6ac158999088b683d9fa82798e9372e800b053df5ada7c57c258a2"
       },
       {
         "path": "dist/core/notes.js.map",
-        "sha256": "4d45201939bc92ed571ae74218129928b36bcf40b647cdfc948e54051c5834b0"
+        "sha256": "3314245f326af09abb10aed6953b288fb395456f94686c361e654830f67fc8c5"
       },
       {
         "path": "dist/core/path-tools.d.ts",
@@ -1050,11 +1050,11 @@
       },
       {
         "path": "dist/core/squash.js",
-        "sha256": "7ad79c19e1b28b7b7aafc49766d93a9eff90fc29d949d7add02ea2ca108df98e"
+        "sha256": "148ed1d71fbdd682bce27a5d8bdce91f66351e2e6ed9f70388381c93e02a446b"
       },
       {
         "path": "dist/core/squash.js.map",
-        "sha256": "e3bcc3ea5d12a9d11d923227483537bbd3332cc00ca0e4684301d62cdd7c1e43"
+        "sha256": "2f1ed0b373920736ce38cdd877ad366c72e3a4446c297a097e01fa1ee10c5433"
       },
       {
         "path": "dist/core/stale.d.ts",
