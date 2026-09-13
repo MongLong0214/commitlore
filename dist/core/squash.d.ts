@@ -95,6 +95,32 @@ export interface RangeCache {
     mirrored?: ReadonlySet<string>;
 }
 export declare const newRangeCache: () => RangeCache;
+/**
+ * Parse every message in a set of ranges at once, into a cache the per-range
+ * walks then read (#975).
+ *
+ * `collectRange` already batches — one atom process and one `isolateBlocks` for
+ * the whole range — but it batches *within* one range, and `doctor`'s squash
+ * row walks one short range per candidate branch. Each of those paid its own
+ * pair, and a range with a single uncached message skips the atom entirely
+ * (`wouldUseAtom >= 2`), because for one message the walk costs exactly the
+ * process it saves. Summed over the candidates that is the 71 `interpret-trailers`
+ * a `doctor` run still spent after the per-range batching landed.
+ *
+ * Batching across the ranges makes the whole row two processes instead of two
+ * per range. Nothing about the parse changes: `readTrailersAtom` returns the
+ * same atom for a sha whatever else was selected, and `isolateBlocks` probes
+ * each paragraph in its own interleaved file, so a message's blocks do not
+ * depend on what it was batched with. That equivalence is the thing the row
+ * comparison has to keep proving -- it is what `isolateBlocks` was built for
+ * and what `test/isolate-blocks.test.ts` pins.
+ *
+ * The revisions go on stdin rather than argv. 200 candidate branches is the
+ * cap, two object names per range is about 16 KiB of command line, and Windows
+ * refuses at 32 KiB -- close enough that the failure would be a rare
+ * environment rather than a test.
+ */
+export declare const warmRangeCache: (ranges: readonly string[], opts?: SquashOptions) => void;
 export interface AttachOptions extends SquashOptions {
     /** Replace an existing note on the target. Without it, one is an error. */
     force?: boolean;

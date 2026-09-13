@@ -881,11 +881,20 @@ describe('verifyCaptureRecords', () => {
     expect(replay.accepted).toEqual([]);
     expect(replay.incomplete).toBe(true);
 
-    // And nothing is left that `stage` could use. Leaving the transaction
-    // `verified` with the first record was the defect: `stage` reads what is
-    // stored, so the caller saw empty while the commit would have carried A.
-    expect(readPending(nonce, { cwd })).toBeNull();
-    expect(stageCaptureRecord({ nonce, cwd })).toBeNull();
+    // The replay is told why, rather than being handed an unexplained `empty`.
+    expect(replay.rejected.map((r) => r.reason)).toEqual(['not-prepared']);
+    expect(replay.rejected[0]?.detail).toContain('already verified');
+
+    // And the first call's transaction survives. It deleted here until #981:
+    // once the first caller has released its lock, a deliberate replay and a
+    // concurrent caller that arrived late are the same thing from inside, and
+    // deleting discards a verification whose caller was told it passed. The
+    // hazard this used to cover — a commit silently carrying A — is held by
+    // the prepare-commit-msg hook, which attaches `staged` and `applied`
+    // transactions and never a `verified` one.
+    const stored = readPending(nonce, { cwd });
+    expect(stored).not.toBeNull();
+    expect(stored?.phase).toBe('verified');
   });
 
   it('does not report a second verification as accepted when it cannot be stored', () => {
@@ -919,12 +928,22 @@ describe('verifyCaptureRecords', () => {
     expect(two.accepted).toEqual([]);
     expect(two.validation_result).toBe('empty');
     expect(two.incomplete).toBe(true);
+    expect(two.rejected.map((r) => r.reason)).toEqual(['not-prepared']);
 
-    // And the transaction is gone, so `stage` has nothing to reach for. Two
-    // verifications of one nonce disagreed; there is no reading of that where
-    // either result should reach a commit.
-    expect(readPending(nonce, { cwd })).toBeNull();
-    expect(stageCaptureRecord({ nonce, cwd })).toBeNull();
+    // What is stored is still the first call's record, and it is still the one
+    // `stage` reaches. The second caller is refused, not obeyed: the guarantee
+    // is that a verification nobody stored is never reported as accepted, not
+    // that its arrival destroys the one that was (#981).
+    const stored = readPending(nonce, { cwd });
+    expect(stored?.phase).toBe('verified');
+    // Compared against what the first call reported, not against the raw quote:
+    // the draft's trailer value is the record's, which need not be the whole
+    // sentence the evidence cites.
+    const limitOf = (record: unknown): string | undefined =>
+      (record as { trailers?: { key: string; value: string }[] }).trailers?.find(
+        (trailer) => trailer.key === 'Limit',
+      )?.value;
+    expect(limitOf(stored?.records[0])).toBe(limitOf(one.accepted[0]?.record));
   });
 
   // === Verification failure never blocks a commit ===

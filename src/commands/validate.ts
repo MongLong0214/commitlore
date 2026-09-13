@@ -40,9 +40,13 @@ import {
   type StaleRecord,
 } from '../core/stale.js';
 import {
+  isolateBlocks,
   labelRecordBlocks,
   parseCommitMessage,
+  parseCommitMessageWithAtom,
   parseRecordBlocks,
+  parseRecordBlocksWithAtom,
+  readTrailersAtom,
   splitRuledOut,
 } from '../core/trailers.js';
 import { KNOWN_KEYS, SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
@@ -469,25 +473,89 @@ const withheldTrailerWarnings = (
  * hoisting one to module scope would serve a rewritten message from memory,
  * which is the staleness these caches exist to avoid.
  */
-const blocksOf = (message: string, cache?: CollectCache): Trailer[][] => {
+const blocksOf = (message: string, cache?: CollectCache, hint?: Trailer[]): Trailer[][] => {
   const cached = cache?.blocks.get(message);
   if (cached !== undefined) return cached;
-  const blocks = parseRecordBlocks(message);
+  // The message's own block, from whoever already holds it: the caller's hint
+  // first, then the warmed cache. Without one `parseRecordBlocks` derives it
+  // again, and this function pays a second `git interpret-trailers` for an
+  // answer already in hand -- which is the defect on both sides of #963.
+  const last = hint ?? cache?.last.get(message);
+  const blocks =
+    last === undefined ? parseRecordBlocks(message) : parseRecordBlocks(message, { last });
   cache?.blocks.set(message, blocks);
   return blocks;
 };
 
+/**
+ * Every source's grammar, read once for the whole run (#963).
+ *
+ * Measured on a 79-commit range: 179 `interpret-trailers`, of which 156 were
+ * the same messages parsed twice apiece -- once by the shape pass and once by
+ * the reference pass, because the two held separate caches and neither handed
+ * the other what it had already computed.
+ *
+ * #963 proposed attacking the per-commit graph walk instead. The same
+ * measurement priced that at 81 of 445 processes, 18%, against 76% for this --
+ * so the walks stay, each one's reachable set still being what the check is
+ * about, and the grammar stops being re-read.
+ *
+ * Two batches, the same pair `collectRange` takes: `readTrailersAtom` answers
+ * every message's own block in one process, and `isolateBlocks` answers the
+ * earlier paragraphs of all of them in one more. Neither changes an answer --
+ * an atom is a property of the commit, and a paragraph is probed in its own
+ * interleaved file -- which is the invariant `test/isolate-blocks.test.ts`
+ * pins.
+ *
+ * Sources with no sha (a message being validated before it is committed, which
+ * is the hook's case) get the isolated probes and keep their own `parseCommitMessage`:
+ * there is no commit for an atom to come from.
+ */
+const warmSources = (sources: readonly MessageSource[], cwd: string, cache: CollectCache): void => {
+  const uncached = sources.filter((source) => !cache.last.has(source.message));
+  if (uncached.length === 0) return;
+
+  const shas = uncached
+    .map((source) => source.sha)
+    .filter((sha): sha is string => sha !== undefined);
+  // The shas go on stdin, not argv. A range is unbounded -- this repository's
+  // own release validation walks hundreds -- and 780 object names is 32 KB of
+  // command line, which is exactly where Windows refuses. `warmRangeCache`
+  // takes its revisions the same way for the same reason; doing it differently
+  // here would have left one of the two broken on a platform neither the
+  // ubuntu nor the macos matrix leg runs.
+  const atoms =
+    shas.length > 1
+      ? readTrailersAtom(['--no-walk', '--stdin'], { cwd, stdin: `${shas.join('\n')}\n` })
+      : new Map<string, string>();
+
+  const isolated =
+    uncached.length > 1 ? isolateBlocks(uncached.map((source) => source.message)) : undefined;
+
+  for (const source of uncached) {
+    const atom = source.sha === undefined ? undefined : atoms.get(source.sha);
+    const blocks = parseRecordBlocksWithAtom(source.message, atom, isolated);
+    cache.blocks.set(source.message, blocks);
+    // The own block is the last one the grammar returned, and only when the
+    // message actually ends in one: `parseRecordBlocks` returns earlier blocks
+    // too, and taking the last unconditionally would hand `inspectSource` an
+    // inherited block as the message's own.
+    cache.last.set(source.message, parseCommitMessageWithAtom(source.message, atom));
+  }
+};
+
 const inspectSource = (
   source: MessageSource,
+  cache?: CollectCache,
 ): { violations: LocatedViolation[]; warnings: string[] } => {
-  const trailers = parseCommitMessage(source.message);
+  const trailers = cache?.last.get(source.message) ?? parseCommitMessage(source.message);
   // The message's own block is already in hand, so `parseRecordBlocks` must not
   // derive it again: without `last` it calls `parseCommitMessage` itself, and
   // this function then paid two `git interpret-trailers` processes for one
   // answer. `opts.last` replaces only where those bytes come from -- which
   // paragraphs are tested, and whether they are accepted, is decided inside the
   // grammar for every caller alike.
-  const blocks = parseRecordBlocks(source.message, { last: trailers });
+  const blocks = blocksOf(source.message, cache, trailers);
   const earlierBlocks = trailers.length === 0 ? blocks : blocks.slice(0, -1);
 
   const lines = locateTrailerLines(source.message, trailers);
@@ -767,6 +835,8 @@ const checkReferences = (
   input: ValidateInput,
   sources: MessageSource[],
   cwd: string,
+  /** The shape pass's cache, already warmed: see `warmSources`. */
+  warmed?: CollectCache,
 ): ReferenceCheck => {
   if (
     input.messageFile === undefined &&
@@ -800,8 +870,11 @@ const checkReferences = (
         : undefined;
     let tipAllRecords: StaleRecord[] | undefined;
     let unreadCommits = 0;
-    // Shared by the tip scan and by every per-source scan below.
-    const cache = newCollectCache();
+    // Shared by the tip scan and by every per-source scan below -- and with
+    // the shape pass, which has already read every one of these messages
+    // through the grammar. A cache of its own here is what made that a second
+    // process per commit (#963).
+    const cache = warmed ?? newCollectCache();
     if (tipSha !== undefined) {
       const tipScan = recordsFor({ sha: tipSha, message: '' }, cwd, input, cache);
       if (tipScan.notes === 'unfetched') {
@@ -1034,9 +1107,15 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
   let warnings: string[];
   let secrets: SecretFinding[];
   let sources: MessageSource[];
+  const grammar = newCollectCache();
   try {
     sources = collectSources(input, cwd);
-    const inspections = sources.map(inspectSource);
+    // One cache for both passes, warmed once (#963). They used to hold
+    // separate ones, so every message went through the grammar twice: 79
+    // processes for the shape pass and 77 more for the reference pass, over a
+    // 79-commit range.
+    warmSources(sources, cwd, grammar);
+    const inspections = sources.map((source) => inspectSource(source, grammar));
     shapeViolations = inspections.flatMap((inspection) => inspection.violations);
     warnings = inspections.flatMap((inspection) => inspection.warnings);
     // A credential in a commit message is inscribed permanently -- rewriting
@@ -1054,7 +1133,7 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
     return usageError(messageOf(error));
   }
 
-  const references = checkReferences(input, sources, cwd);
+  const references = checkReferences(input, sources, cwd, grammar);
   // Shape and reference are independent detectors that overlap on one finding:
   // a `Record-Id` repeated across a message's own blocks is caught by
   // `identityCollisionViolations` from the message alone, and by

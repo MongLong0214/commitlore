@@ -4,6 +4,52 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.6
+
+Concurrency, measured instead of argued — and three defects that only showed up
+when four real processes met on one index.
+
+**A second verification of a capture no longer destroys the first.** A caller
+that verified a prepared nonce and finished could have its result deleted by the
+next caller to arrive: the store refuses every phase but `prepared`, and the
+refusal was answered by discarding the transaction. Once the first caller has
+released its lock and exited, a deliberate replay and a concurrent caller that
+arrived late are byte-identical from inside — so a verification whose caller had
+been told it passed was thrown away. It is now refused before anything is
+recomputed, and the refusal is reported: every drafted record comes back
+rejected, naming the phase and what to do about it. The guarantee that mattered
+is unchanged — a result nobody stored is still never reported as accepted.
+
+**Opening the index while another process opens it no longer throws.**
+`PRAGMA journal_mode = WAL` raised `SQLITE_IOERR` — "disk I/O error" — out of
+`openIndex` when several writers arrived together, which is a crash on the path
+the edit hook takes per edit. And the write transaction opened with a deferred
+`BEGIN`, which SQLite will not apply `busy_timeout` to: the timeout was set and
+had no effect on the case it was set for. Both fixed, and the journal-mode guard
+tests SQLite's own result code rather than the wording of a message — it
+re-raises the two codes that mean the file needs rebuilding and absorbs the rest.
+
+Contention itself still reaches the caller, and deliberately so. A version of
+this release absorbed it and reported a pass that had done nothing; review found
+that a notes refresh which lost its write lock then returned normally with the
+old rows in place, and a query served that stale index as complete where it had
+previously fallen back to a full scan. A derived cache must not answer "I am
+authoritative" when it means "I am behind".
+
+**`doctor` and `validate --range` stopped re-reading the same messages.**
+`doctor` parsed each candidate branch separately, and `validate --range` parsed
+every message twice because its shape pass and its reference pass held separate
+caches. Both now read a range once. On this repository: `doctor` goes from 70
+`interpret-trailers` to 30 and from 592 git processes to 531, with all 22 rows
+identical; a 79-commit `validate --range` goes from 179 to 14 and from 445
+processes to 281, with the report identical.
+
+**The test suite can be believed locally again.** `npm run test:local` bounds
+the workers, and the two files that scan real history carry timeouts sized from
+a measurement rather than from a default. Under full parallelism this suite was
+reporting failures that were not failures — eleven of fifteen were the 20-second
+default expiring on work that takes six.
+
 ## 1.3.5
 
 One pass over the notes mirror now reads one mirror.
