@@ -74,6 +74,7 @@ import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
+import { readPending } from '../core/pending.js';
 import { decodedDraftError } from '../core/harvest.js';
 import {
   CONSUMER_SCAN_BUDGET_MS,
@@ -588,6 +589,31 @@ const pathArg = (root: string, args: ToolArgs): string =>
  * caused it. A request naming a tool that does not exist is the other case, and
  * throws.
  */
+/**
+ * The Record-Ids a staged transaction will hand to the commit-msg hook.
+ *
+ * Read from the transaction that was just advanced, so it reports what is
+ * actually waiting rather than what the caller hoped for. An unreadable one
+ * yields an empty list rather than failing the stage that already succeeded:
+ * the staging is the outcome, and this is the description of it.
+ */
+const stagedRecordIds = (nonce: string, cwd: string): string[] => {
+  try {
+    const record = readPending(nonce, { cwd });
+    if (record === null) return [];
+    const ids: string[] = [];
+    for (const entry of record.records) {
+      const trailers = (entry as { trailers?: { key: string; value: string }[] }).trailers ?? [];
+      for (const trailer of trailers) {
+        if (trailer.key === 'Record-Id') ids.push(trailer.value);
+      }
+    }
+    return ids;
+  } catch {
+    return [];
+  }
+};
+
 export const createServer = (opts: McpServerOptions = {}): Server => {
   /**
    * Nonces whose most recent verification on *this connection* did not bind
@@ -874,7 +900,19 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
       if (result === null) {
         return asText({ staged: false, reason: 'nothing to stage (empty/incomplete verification or wrong phase)' });
       }
-      return asText({ staged: true, nonce: result });
+      // Names what it staged, not only that it staged (#989).
+      //
+      // `stage` reads the transaction stored under the nonce rather than what
+      // the caller's own verification computed, so "staged: true" alone cannot
+      // tell a caller whether the record now waiting is theirs. Returning the
+      // ids makes a mismatch visible at the moment it happens instead of after
+      // the commit carries it.
+      //
+      // Deliberately worded as what *was staged*, never what will be committed:
+      // the prepare-commit-msg hook selects the newest eligible transaction by
+      // `created_at`, so another nonce can still win afterwards. That is
+      // existing, tested behaviour and this does not change it.
+      return asText({ staged: true, nonce: result, staged_record_ids: stagedRecordIds(result, root) });
     },
   };
 

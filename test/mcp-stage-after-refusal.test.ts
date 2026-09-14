@@ -59,6 +59,7 @@ const TRANSCRIPT =
   'We decided: Do not use shared mutable state for config because it causes race conditions. ' +
   'We also decided: Keep the retry ceiling at three attempts because more masks real failures.';
 const QUOTE_A = 'Do not use shared mutable state for config because it causes race conditions';
+const QUOTE_B = 'Keep the retry ceiling at three attempts because more masks real failures';
 const UNSAID = 'a sentence that appears nowhere in this transcript at all';
 
 const draftFor = (quote: string, recordId: string): string =>
@@ -188,5 +189,73 @@ describe('#989 a refused connection cannot stage the nonce', () => {
 
     const staged = await call(stub, 'commitlore_stage_capture', { nonce });
     expect(staged).toMatch(/"staged":\s*false/);
+  }, 180_000);
+
+  /**
+   * The whole sequence this issue names, through to the commit.
+   *
+   * prepare → verify A (binds) → verify B (refused) → stage → commit, asserting
+   * what the commit carries and what B was told. The earlier cases stop at the
+   * stage call; this is the only place the actual hazard — "the commit carries A
+   * while B was told it got nothing" — is observed rather than argued.
+   *
+   * It also pins where the guard reaches, which a first draft of this test had
+   * wrong. The guard is keyed on *the connection that verified*, so B verifying
+   * and then staging on its own connection is refused even though B reconnected
+   * after A. The bypass needs a connection that never verified the nonce at all
+   * — a third one here — and that is the case the naming is for: the stage
+   * succeeds, and the answer says whose record is waiting.
+   */
+  it('refuses B on its own connection, and names A when a third connection stages', async () => {
+    const dir = repo('sequence');
+    const first = await connect(dir);
+    const nonce = await prepared(first);
+
+    // A binds.
+    const boundA = await call(first, 'commitlore_verify_capture', {
+      nonce,
+      draft: draftFor(QUOTE_A, 'r-calleraaa01'),
+      transcript: TRANSCRIPT,
+      diff: stagedDiff(dir),
+    });
+    expect(boundA, `A did not bind: ${boundA.slice(0, 300)}`).toMatch(/"validation_result":\s*"pass"/);
+
+    // B arrives on its own connection and is refused: the nonce already holds a
+    // verification, and this one binds nothing.
+    const second = await connect(dir);
+    const refusedB = await call(second, 'commitlore_verify_capture', {
+      nonce,
+      draft: draftFor(QUOTE_B, 'r-callerbbb01'),
+      transcript: TRANSCRIPT,
+      diff: stagedDiff(dir),
+    });
+    expect(refusedB).not.toMatch(/"validation_result":\s*"pass"/);
+    expect(refusedB, 'B must be told nothing of its own was accepted').toMatch(/"accepted":\s*\[\]/);
+
+    // B stages on the connection it was refused on: the guard applies.
+    const refusedStage = await call(second, 'commitlore_stage_capture', { nonce });
+    expect(refusedStage).toMatch(/"staged":\s*false/);
+    expect(refusedStage).toMatch(/not yours to stage/);
+
+    // A third connection has never verified this nonce, so the guard has nothing
+    // to go on and the legacy path stands. This is the documented bypass.
+    const third = await connect(dir);
+    const staged = await call(third, 'commitlore_stage_capture', { nonce });
+    expect(staged).toMatch(/"staged":\s*true/);
+    expect(
+      staged,
+      'a stage that succeeded must name what it staged, or nobody can tell whose it is',
+    ).toMatch(/r-calleraaa01/);
+    expect(staged, "and it must not claim B's record").not.toMatch(/r-callerbbb01/);
+
+    // The commit. This is the part the earlier cases never reached.
+    // The fixture set user.name/user.email in the repository itself, so the
+    // commit needs no identity flags -- and must run the hooks, because the
+    // hook is what attaches the staged record.
+    git(dir, ['commit', '-q', '-m', 'feat: the change B thought it was recording']);
+    const message = git(dir, ['log', '-1', '--format=%B']);
+
+    expect(message, "the commit carries A's record").toContain('r-calleraaa01');
+    expect(message, "and never B's, which was refused").not.toContain('r-callerbbb01');
   }, 180_000);
 });
