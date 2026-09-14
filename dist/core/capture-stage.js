@@ -36,6 +36,25 @@ export const stageCaptureRecord = (opts) => {
         return null;
     if (record.phase !== 'verified')
         return null;
+    // 1b. The receipt, when this caller presented one (#1005 step 2).
+    //
+    // Thrown rather than returned as `null`: every other `null` here means "there
+    // is nothing to stage", and a caller holding the wrong handle has a different
+    // problem with a different fix. Reporting both the same way is how a caller
+    // learns to read a real refusal as an empty transaction.
+    //
+    // A presented receipt that does not match is refused even when the stored one
+    // is absent, which is the case a caller can only reach by inventing a value:
+    // an old transaction carries no receipt, and a caller that never received one
+    // has nothing to present.
+    //
+    // The stored receipt is never echoed. A refusal that named it would hand the
+    // caller exactly what it failed to prove it had.
+    if (opts.receipt !== undefined && opts.receipt !== record.receipt) {
+        throw markCaptureError(new Error('Staging rejected: the receipt presented was not issued by the verification that bound ' +
+            'this transaction. What is stored under this nonce belongs to another caller; prepare ' +
+            'a new transaction and verify again.'), 'usage');
+    }
     // 2. Empty or incomplete verification → nothing to stage
     if (record.validation_result === 'empty')
         return null;

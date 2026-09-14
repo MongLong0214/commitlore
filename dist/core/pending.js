@@ -349,21 +349,30 @@ export const readPending = (nonce, opts) => {
 /**
  * Stores verification results in the pending transaction.
  * Only succeeds if the current phase is 'prepared', and only for the caller
- * that holds the nonce lock — a losing racer returns false rather than
+ * that holds the nonce lock — a losing racer returns null rather than
  * reporting a write that another process will overwrite (#591).
+ *
+ * Returns the receipt this verification was issued, which is the handle #1005
+ * will require at stage. `null` means nothing was stored, so there is no
+ * receipt to hold — the two answers are the same fact and cannot drift apart.
+ *
+ * It is generated here rather than taken from the caller on purpose: a caller
+ * that could choose its own receipt could choose one it had seen, which is the
+ * whole of what this is meant to prevent.
  */
 export const storeVerification = (nonce, opts) => {
     validateNonce(nonce);
     const lock = tryLockPending(nonce, opts.cwd);
     if (!lock.held)
-        return false;
+        return null;
     try {
         const record = readPending(nonce, { cwd: opts.cwd });
         if (!record)
-            return false;
+            return null;
         if (record.phase !== 'prepared')
-            return false;
+            return null;
         const now = new Date().toISOString();
+        const receipt = randomBytes(16).toString('hex');
         const updated = {
             ...record,
             phase: 'verified',
@@ -375,10 +384,11 @@ export const storeVerification = (nonce, opts) => {
             validation_result: opts.validation_result,
             overlap_check: opts.overlap_check,
             incomplete: opts.incomplete,
+            receipt,
         };
         const filePath = pendingFilePath(nonce, opts.cwd);
         atomicWriteJson(filePath, updated);
-        return true;
+        return receipt;
     }
     finally {
         if (lock.created)
