@@ -313,8 +313,25 @@ export const findDanglingRefs = (
 ): Violation[] => {
   const declared = new Set<string>();
   for (const record of records) {
-    const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
-    if (recordId !== undefined) declared.add(recordId);
+    // Every `Record-Id` on the record, not the one `trailerValue` would pick.
+    //
+    // A record here is a *block*, and a block can carry more than one
+    // declaration: squash inheritance writes each preserved record's trailers
+    // and git folds the lot into one trailer block, so one block was observed
+    // carrying sixteen of them (#1012). Reading only the first left the other
+    // fifteen undeclared, and a `Follows:` pointing at one of those -- in the
+    // same commit, in the same block -- was reported as `dangling-ref`, which
+    // says the id exists nowhere in history.
+    //
+    // The give-away was that a reference to the *first* id in a block resolved
+    // while one to the second did not, in the same message.
+    //
+    // `declaredAnywhere` in `commands/stale.ts` already collects every trailer
+    // this way. The two sites answered the same question differently, and the
+    // one that ran on a complete scan was the wrong one.
+    for (const trailer of record.trailers) {
+      if (trailer.key === RECORD_ID_KEY) declared.add(trailer.value);
+    }
   }
 
   const violations: Violation[] = [];

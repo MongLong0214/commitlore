@@ -15534,8 +15534,9 @@ var foldLifecycle = (records, opts) => {
 var findDanglingRefs = (records, referencedBy = records) => {
   const declared = /* @__PURE__ */ new Set();
   for (const record2 of records) {
-    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
-    if (recordId !== void 0) declared.add(recordId);
+    for (const trailer of record2.trailers) {
+      if (trailer.key === RECORD_ID_KEY2) declared.add(trailer.value);
+    }
   }
   const violations = [];
   for (const record2 of referencedBy) {
