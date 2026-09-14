@@ -90,7 +90,13 @@ So run **`npm run test:local`** (`npm run build && vitest run --maxWorkers=4`)
 when you want a signal you can act on. Bounded parallelism is what makes the red
 mean something; the full-parallelism run is CI's shape, not a developer's.
 
-**It builds first, and that is not a convenience.** Many tests here spawn
+`npm test` builds first too, so the trap below is closed on both documented
+paths. CI does not need it — it verifies that the committed `dist/` is the
+canonical build before it runs anything, so a stale bundle cannot reach a CI
+run. What is still open is a bare `npx vitest run`, which nothing but this
+paragraph guards.
+
+**Building first is not a convenience.** Many tests here spawn
 `dist/commitlore.mjs` rather than importing `src/`, so a suite run against a
 stale bundle is testing the last build and reporting it as this one. That has
 now produced three wrong answers in a single day of work: a mutation that failed

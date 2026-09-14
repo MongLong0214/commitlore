@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.3.9/install.sh | sh -s v1.3.9
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.3.11/install.sh | sh -s v1.3.11
 ```
 
 <details>
 <summary>想先阅读安装器吗？</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.3.9/install.sh
-sh install.sh v1.3.9
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.3.11/install.sh
+sh install.sh v1.3.11
 
 # 或者跳过脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v1.3.9 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.3.11 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -105,13 +105,13 @@ CommitLore 把那份判断留在代码旁边。
 macOS 和 Linux：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.3.9/install.sh | sh -s v1.3.9
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.3.11/install.sh | sh -s v1.3.11
 ```
 
 Windows：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.3.9/install.ps1))) v1.3.9
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.3.11/install.ps1))) v1.3.11
 ```
 
 需要 Node.js 22.23.2+ 和 Git。脚本会在写入任何内容前检查两者。
@@ -287,11 +287,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MongLong0214/commitlore
-          ref: v1.3.9
+          ref: v1.3.11
           path: .commitlore-cli
           persist-credentials: false
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.3.9
+      - uses: MongLong0214/commitlore/action/preserve@v1.3.11
         with:
           cli-path: .commitlore-cli/dist/cli.js
 ```
