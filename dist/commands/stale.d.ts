@@ -139,6 +139,10 @@ export interface StaleReport {
      * Counted rather than resolved on purpose: splitting a block at each
      * `Record-Id` would invent a boundary SPEC does not define and would make
      * `stale` report records `validate` calls invalid.
+     *
+     * Only ids that reach no state at all are listed. An id buried in a malformed
+     * commit block is usually the first id of a well-formed *note* block, and it
+     * folds from there; counting it here reports a loss that did not happen.
      */
     unfoldedDeclarations: UnfoldedDeclarations[];
 }

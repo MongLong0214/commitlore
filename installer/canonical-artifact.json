@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "159318e03a27ca9938c8019be40fb20264019db7e3c737cdb569e7710c2224f4"
+    "sha256": "e64dd9225c21bc1d5f6073c92e72f39c48ca307e2b8ecaf87a27b0e910b2666e"
   },
   "artifact": {
-    "sha256": "5f1e6c441f9ae1b7e3a47b4dfeecc06fc17ca298133aff48bf300ab2c70613de",
+    "sha256": "7df421dded6e5bd9b63c018801919f8b6c81b716b0e3bba90c295636a814eee0",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -586,15 +586,15 @@
       },
       {
         "path": "dist/commands/stale.d.ts",
-        "sha256": "765d079b3da5e08e7b7a3c9300aa142dfbba398cd370844d741b01c226b8dc10"
+        "sha256": "2efd33ae8ab0dc3317e57c73be131cb866ee2bf9512162419d9b2358eea9ade6"
       },
       {
         "path": "dist/commands/stale.js",
-        "sha256": "780de1197ffc856b393e4a847b81618faa18646a655355cbb113468feb946483"
+        "sha256": "36bfe543a91571a187027e31d9b62fa82a82f77c7cf412c419708b2720fd5953"
       },
       {
         "path": "dist/commands/stale.js.map",
-        "sha256": "b55062cc57927dced1ca9b8b90025ab4fce7cecfafb3b4f6501d31b5dd61c547"
+        "sha256": "113a30010ef29e94548c3d10dc185e1bf242041ed94a71e8b8a3f8c6e2f0c0ce"
       },
       {
         "path": "dist/commands/sync.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "eb1b0b3585aea35719fe56e13e4fc65758651b0d4a6d50496b390fbcde2fa1c8"
+        "sha256": "c85f61d44d36426ace6a6b4f1fecc6b42f4b3814dce482e83da73f00d6aef27a"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
