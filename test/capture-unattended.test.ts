@@ -165,7 +165,9 @@ const runWholePipeline = async (
     cwd,
   });
   expect(verified.validation_result).toBe('pass');
-  expect(stageCaptureRecord({ nonce: prepared.nonce, cwd })).toBe(prepared.nonce);
+  expect(stageCaptureRecord({ nonce: prepared.nonce, cwd, receipt: verified.receipt })).toBe(
+    prepared.nonce,
+  );
 
   const messageFile = join(cwd, 'COMMIT_EDITMSG');
   writeFileSync(messageFile, 'test commit\n');
@@ -302,7 +304,7 @@ describe('#511 opted in: unattended capture in auto mode', () => {
       unattended: true,
     });
     const diff = git(repo, ['diff', '--cached']);
-    verifyCaptureRecords({
+    const bound = verifyCaptureRecords({
       nonce: prepared.nonce,
       draft: draftRecords(),
       transcript: TRANSCRIPT,
@@ -312,9 +314,13 @@ describe('#511 opted in: unattended capture in auto mode', () => {
 
     // The consent is part of the policy the identity hash covers (ADR-0021
     // §7): withdrawing it between stage and commit is a policy change.
+    //
+    // The receipt is presented so the refusal under test is the one named. The
+    // authorization check runs first, and without it this would pass on a
+    // message about receipts (#1005).
     writeFileSync(policyPath, '{ "unattended": false }\n');
-    expect(() => stageCaptureRecord({ nonce: prepared.nonce, cwd: repo })).toThrow(
-      /policy identity changed since prepare/,
-    );
+    expect(() =>
+      stageCaptureRecord({ nonce: prepared.nonce, cwd: repo, receipt: bound.receipt }),
+    ).toThrow(/policy identity changed since prepare/);
   });
 });

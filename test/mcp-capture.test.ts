@@ -1019,10 +1019,10 @@ describe('commitlore_stage_capture', () => {
     const verifyResult = toolJson(verifyResponse);
     expect(verifyResult['validation_result']).toBe('pass');
 
-    // Stage
+    // Stage, presenting the receipt the verification returned (#1005).
     const stageResponse = await stub.request('tools/call', {
       name: 'commitlore_stage_capture',
-      arguments: { nonce },
+      arguments: { nonce, receipt: verifyResult['receipt'] },
     });
     expect(stageResponse.error).toBeUndefined();
     expect(stageResponse.result?.['isError']).not.toBe(true);
@@ -1249,7 +1249,7 @@ describe('commitlore_stage_capture mutation oracles', () => {
         ],
       },
     ];
-    await stub.request('tools/call', {
+    const oracleVerify = await stub.request('tools/call', {
       name: 'commitlore_verify_capture',
       arguments: { nonce, draft: JSON.stringify(draft), transcript, diff: '' },
     });
@@ -1259,7 +1259,7 @@ describe('commitlore_stage_capture mutation oracles', () => {
 
     const stageResponse = await stub.request('tools/call', {
       name: 'commitlore_stage_capture',
-      arguments: { nonce },
+      arguments: { nonce, receipt: toolJson(oracleVerify)['receipt'] },
     });
     const stageResult = toolJson(stageResponse);
     expect(stageResult['staged']).toBe(true);

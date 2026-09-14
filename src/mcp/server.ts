@@ -527,9 +527,11 @@ const TOOLS: readonly Tool[] = [
         receipt: {
           type: 'string',
           description:
-            'the receipt verify_capture returned to you. Optional today and checked when sent: ' +
-            'a receipt that was not issued by the verification which bound this transaction is ' +
-            'refused. Send it whenever you have one.',
+            'the receipt verify_capture returned to you. Required whenever the transaction was ' +
+            'bound by a verification that issued one, which is every transaction this build ' +
+            'binds; a receipt that was not issued by that verification is refused. Omit it only ' +
+            'for a transaction prepared by a build older than receipts. Always send the one you ' +
+            'were given.',
         },
       },
       required: ['nonce'],
@@ -910,8 +912,10 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
             'stored under it is not yours to stage. Prepare a new transaction and verify again.',
         });
       }
-      // Optional, and checked when sent (#1005 step 2). A host that has not
-      // upgraded sends none and is unaffected; step 3 is where that changes.
+      // Required when the stored transaction holds one, which is every
+      // transaction this build binds (#1005). Still optional in the schema
+      // because an older transaction has none to match, and requiring it there
+      // would refuse a transaction nobody can produce a receipt for.
       const receipt = stringArg(args, 'receipt');
       const result = stageCaptureRecord({
         nonce,

@@ -155,7 +155,11 @@ describe('a decision recorded through the MCP tools reaches the next agent', () 
     expect(verified).toContain('"validation_result"');
     expect(verified, `verify rejected the draft:\n${verified}`).not.toMatch(/"validation_result":\s*"empty"/);
 
-    await call(stub, 'commitlore_stage_capture', { nonce });
+    // The receipt the verification returned, which stage now requires for a
+    // transaction that has one (#1005).
+    const receipt = /"receipt"\s*:\s*"([0-9a-f]{32})"/.exec(verified)?.[1];
+    expect(receipt, `verify returned no receipt:\n${verified}`).toBeDefined();
+    await call(stub, 'commitlore_stage_capture', { nonce, receipt });
 
     git(dir, ['commit', '-q', '--no-verify', '-m', 'feat: return null instead of throwing']);
 
@@ -213,7 +217,11 @@ describe('a decision recorded through the MCP tools reaches the next agent', () 
     expect(verified, `rejected for the wrong reason:
 ${verified}`).toMatch(/evidence-not-found|not found in/);
 
-    await call(stub, 'commitlore_stage_capture', { nonce });
+    // The receipt the verification returned, which stage now requires for a
+    // transaction that has one (#1005).
+    const receipt = /"receipt"\s*:\s*"([0-9a-f]{32})"/.exec(verified)?.[1];
+    expect(receipt, `verify returned no receipt:\n${verified}`).toBeDefined();
+    await call(stub, 'commitlore_stage_capture', { nonce, receipt });
     git(dir, ['commit', '-q', '--no-verify', '-m', 'feat: increment']);
 
     expect(trailers(dir, 'Record-Id')).toEqual([]);
