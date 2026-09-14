@@ -4,6 +4,38 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.10
+
+A capture that verified nothing can no longer stage someone else's record, and
+two storage figures this project had quoted are replaced with ones that measure
+what they claim to.
+
+**`stage_capture` refuses a nonce this connection verified without binding
+anything.** The tool reads the transaction stored under the nonce, never what
+the calling verification computed — deliberately, so a caller cannot smuggle a
+diff hash past the server-side bindings. But there is no caller identity in the
+protocol, so a caller whose verification was refused could stage anyway and the
+next commit would carry the *first* caller's record: one the second caller was
+told it did not get. The server now remembers, per connection, which nonces its
+own verifications failed to bind.
+
+That is a mitigation rather than the closure, and the limits are stated rather
+than glossed: a reconnection bypasses it, and a nonce this connection never
+verified keeps the old behaviour. Closing it fully needs a receipt required at
+stage, which is a pending-format version bump and therefore a release sequence.
+
+**Storage is measured per table, and writes are counted as writes.** The old
+figures came from dividing the whole database by a row count, and from
+subtracting `page_count` — which measures growth, so an index rewriting tens of
+kilobytes per commit reported zero. Per-table sizes come from `dbstat` now, and
+writes from WAL frames, counted with the handle still open because the exit
+checkpoint erases them. A record-bearing commit rewrites 18 to 24 pages while
+the file does not grow at all; both columns now sit in the same table.
+
+**`npm test` builds first**, as `test:local` already did. Many tests spawn the
+built bundle rather than importing the source, and a stale one reports the last
+build as this one.
+
 ## 1.3.9
 
 A note's own trailer block is read in a batch now, the way a commit message's
