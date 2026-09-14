@@ -20997,11 +20997,17 @@ var collectRecords = (opts = {}) => {
   const shas = new Set(commitRecords.map((record2) => record2.sha));
   const trailersBySha = /* @__PURE__ */ new Map();
   for (const record2 of commitRecords) {
+    const firstId = record2.trailers.find((trailer) => trailer.key === RECORD_ID_KEY4)?.value;
     const existing = trailersBySha.get(record2.sha);
     if (existing === void 0) {
-      trailersBySha.set(record2.sha, { committedAt: record2.committedAt, trailers: [...record2.trailers] });
+      trailersBySha.set(record2.sha, {
+        committedAt: record2.committedAt,
+        trailers: [...record2.trailers],
+        folds: new Set(firstId === void 0 ? [] : [firstId])
+      });
     } else {
       existing.trailers.push(...record2.trailers);
+      if (firstId !== void 0) existing.folds.add(firstId);
     }
   }
   const noteCache = opts.cache?.notes;
@@ -21018,9 +21024,11 @@ var collectRecords = (opts = {}) => {
     const blocks = cachedNote ?? (message === void 0 ? [] : parseRecordBlocks(message, isolatedNotes === void 0 ? {} : { isolated: isolatedNotes }));
     if (cachedNote === void 0) noteCache?.set(sha, blocks);
     return blocks.flatMap((trailers) => {
-      const mirrored = trailers.every(
+      const noteId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY4)?.value;
+      const sameText = trailers.every(
         (note) => commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value)
       );
+      const mirrored = noteId === void 0 ? sameText : commit.folds.has(noteId) && sameText;
       return trailers.length === 0 || mirrored ? [] : [{ sha, committedAt: commit.committedAt, trailers, source: "notes" }];
     });
   });
@@ -21119,15 +21127,23 @@ var partitionRefs = (candidates, scan2, resolveIn) => {
   };
 };
 var unfoldedDeclarations = (records) => {
+  const declarationsIn = (record2) => record2.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY4).map((trailer) => trailer.value);
+  const folded = /* @__PURE__ */ new Set();
+  for (const record2 of records) {
+    const ids = declarationsIn(record2);
+    if (ids.length > 0) folded.add(ids[0]);
+  }
   const rows = [];
   for (const record2 of records) {
-    const ids = record2.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY4).map((trailer) => trailer.value);
+    const ids = declarationsIn(record2);
     if (ids.length < 2) continue;
+    const unread = ids.slice(1).filter((id2) => !folded.has(id2));
+    if (unread.length === 0) continue;
     rows.push({
       sha: record2.sha,
       source: record2.source,
       declared: ids.length,
-      unread: ids.slice(1)
+      unread
     });
   }
   return rows;
