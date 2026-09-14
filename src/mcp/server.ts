@@ -877,6 +877,12 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         rejected: result.rejected,
         incomplete: result.incomplete,
         overlap_check: result.overlap_check,
+        // Present only when this call's verification bound the transaction
+        // (#1005). A refused caller gets no receipt, which is the handle stage
+        // will require once the three-step migration finishes; today stage
+        // ignores it, so this field is additive and changes nothing a host
+        // already does.
+        ...(result.receipt === undefined ? {} : { receipt: result.receipt }),
       });
     },
     [STAGE_CAPTURE_TOOL]: (args) => {
