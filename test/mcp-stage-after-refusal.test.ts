@@ -139,7 +139,11 @@ describe('#989 a refused connection cannot stage the nonce', () => {
     });
     expect(verified).toMatch(/"validation_result":\s*"pass"/);
 
-    const staged = await call(stub, 'commitlore_stage_capture', { nonce });
+    // Presenting the receipt its own verification returned, which is what a
+    // caller that bound the transaction now does (#1005).
+    const receipt = /"receipt"\s*:\s*"([0-9a-f]{32})"/.exec(verified)?.[1];
+    expect(receipt, `no receipt to present: ${verified.slice(0, 300)}`).toBeTypeOf('string');
+    const staged = await call(stub, 'commitlore_stage_capture', { nonce, receipt });
     expect(staged).toMatch(/"staged":\s*true/);
   }, 180_000);
 
@@ -206,7 +210,7 @@ describe('#989 a refused connection cannot stage the nonce', () => {
    * — a third one here — and that is the case the naming is for: the stage
    * succeeds, and the answer says whose record is waiting.
    */
-  it('refuses B on its own connection, and names A when a third connection stages', async () => {
+  it('refuses B on its own connection, and refuses a third connection outright', async () => {
     const dir = repo('sequence');
     const first = await connect(dir);
     const nonce = await prepared(first);
@@ -237,26 +241,42 @@ describe('#989 a refused connection cannot stage the nonce', () => {
     expect(refusedStage).toMatch(/"staged":\s*false/);
     expect(refusedStage).toMatch(/not yours to stage/);
 
-    // A third connection has never verified this nonce, so the guard has nothing
-    // to go on and the legacy path stands. This is the documented bypass.
+    // The third connection: it never verified this nonce, so the per-connection
+    // guard has nothing to go on. This used to be the documented bypass, and the
+    // assertions below are the inverted form of what this test asserted when it
+    // was written -- it showed the commit carrying A's record while B was told it
+    // got nothing, and now it shows that being refused.
+    //
+    // The receipt is what closes it. The transaction was bound by A's
+    // verification, so it holds A's receipt, and a caller with no receipt cannot
+    // stage it however it connected (#1005).
     const third = await connect(dir);
-    const staged = await call(third, 'commitlore_stage_capture', { nonce });
-    expect(staged).toMatch(/"staged":\s*true/);
-    expect(
-      staged,
-      'a stage that succeeded must name what it staged, or nobody can tell whose it is',
-    ).toMatch(/r-calleraaa01/);
-    expect(staged, "and it must not claim B's record").not.toMatch(/r-callerbbb01/);
+    const refusedThird = await call(third, 'commitlore_stage_capture', { nonce });
+    expect(refusedThird, 'the third-connection bypass is open again').not.toMatch(
+      /"staged":\s*true/,
+    );
+    expect(refusedThird).toMatch(/none was presented/);
+    // And the refusal names neither record: nothing was staged, so there is
+    // nothing to name, and naming A's here would leak it to a caller that was
+    // just refused.
+    expect(refusedThird).not.toMatch(/r-calleraaa01/);
+    expect(refusedThird).not.toMatch(/r-callerbbb01/);
 
-    // The commit. This is the part the earlier cases never reached.
-    // The fixture set user.name/user.email in the repository itself, so the
-    // commit needs no identity flags -- and must run the hooks, because the
-    // hook is what attaches the staged record.
+    // The commit, which is where the defect used to become visible. Nothing was
+    // staged, so it carries no record at all -- not A's, and not B's.
     git(dir, ['commit', '-q', '-m', 'feat: the change B thought it was recording']);
     const message = git(dir, ['log', '-1', '--format=%B']);
 
-    expect(message, "the commit carries A's record").toContain('r-calleraaa01');
+    expect(message, "the commit carries A's record, which nobody staged").not.toContain(
+      'r-calleraaa01',
+    );
     expect(message, "and never B's, which was refused").not.toContain('r-callerbbb01');
+
+    // A was issued a receipt and could have staged with it -- before the commit
+    // above, which moved HEAD and unbinds the transaction for everyone. That
+    // path is asserted in the first case of this file rather than here, where
+    // it would fail for a reason that has nothing to do with receipts.
+    expect(boundA, 'A was never issued a receipt').toMatch(/"receipt"/);
   }, 180_000);
 });
 

@@ -38,7 +38,7 @@ const makeRepo = (): string => {
  * Run prepare + verify with a valid draft to get a verified nonce ready for staging.
  * The draft contains a valid Record-Id and evidence from the transcript.
  */
-const prepareAndVerify = (cwd: string): { nonce: string } => {
+const prepareAndVerify = (cwd: string): { nonce: string; receipt: string | undefined } => {
   const transcript = 'We chose sha256 because it is the standard hash function for integrity checking.';
   const diff = execSync('git diff --cached', { cwd, encoding: 'utf8' });
   const result = prepareCaptureContext({ cwd, transcript });
@@ -61,8 +61,11 @@ const prepareAndVerify = (cwd: string): { nonce: string } => {
     },
   ];
 
-  verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
-  return { nonce: result.nonce };
+  // The receipt goes back with the nonce, because a caller that verified has
+  // one and stage now requires it (#1005). A helper that dropped it would make
+  // every test here stage the way a caller cannot.
+  const verified = verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
+  return { nonce: result.nonce, receipt: verified.receipt };
 };
 
 // ---------------------------------------------------------------------------
@@ -72,9 +75,9 @@ const prepareAndVerify = (cwd: string): { nonce: string } => {
 describe('stageCaptureRecord', () => {
   it('writes a pending file with expiry and records (RED test)', () => {
     const cwd = makeRepo();
-    const { nonce } = prepareAndVerify(cwd);
+    const { nonce, receipt } = prepareAndVerify(cwd);
 
-    const staged = stageCaptureRecord({ nonce, cwd });
+    const staged = stageCaptureRecord({ nonce, cwd, receipt });
     expect(staged).toBe(nonce);
 
     // Read back the pending record
@@ -124,13 +127,13 @@ describe('stageCaptureRecord', () => {
         ],
       },
     ];
-    verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
+    const bound = verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
     const verified = readPending(result.nonce, { cwd });
     expect(verified!.phase).toBe('verified');
     expect(verified!.expires_at).toBeNull();
 
     // After stage: expires_at must be set
-    const staged = stageCaptureRecord({ nonce: result.nonce, cwd });
+    const staged = stageCaptureRecord({ nonce: result.nonce, cwd, receipt: bound.receipt });
     expect(staged).toBe(result.nonce);
     const stagedRecord = readPending(result.nonce, { cwd });
     expect(stagedRecord!.phase).toBe('staged');
@@ -161,9 +164,13 @@ describe('stageCaptureRecord', () => {
         ],
       },
     ];
-    verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
+    // An empty result still binds the transaction, so it still carries a
+    // receipt and the caller still presents one. Without it the authorization
+    // check fires first and this would assert `null` on a call that threw
+    // (#1005).
+    const bound = verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
 
-    const staged = stageCaptureRecord({ nonce: result.nonce, cwd });
+    const staged = stageCaptureRecord({ nonce: result.nonce, cwd, receipt: bound.receipt });
     expect(staged).toBeNull();
   });
 
@@ -195,9 +202,11 @@ describe('stageCaptureRecord', () => {
         ],
       },
     ];
-    verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
+    const bound = verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
 
-    expect(() => stageCaptureRecord({ nonce: result.nonce, cwd })).toThrow();
+    expect(() => stageCaptureRecord({ nonce: result.nonce, cwd, receipt: bound.receipt })).toThrow(
+      /max_records_per_commit/,
+    );
   });
 
   it('unverified nonce (prepared phase) cannot stage', () => {
@@ -212,9 +221,9 @@ describe('stageCaptureRecord', () => {
 
   it('expiryMinutes overrides the window length', () => {
     const cwd = makeRepo();
-    const { nonce } = prepareAndVerify(cwd);
+    const { nonce, receipt } = prepareAndVerify(cwd);
 
-    const staged = stageCaptureRecord({ nonce, cwd, expiryMinutes: 10 });
+    const staged = stageCaptureRecord({ nonce, cwd, receipt, expiryMinutes: 10 });
     expect(staged).toBe(nonce);
 
     const record = readPending(nonce, { cwd });
@@ -226,12 +235,12 @@ describe('stageCaptureRecord', () => {
 
   it('caller cannot substitute payload (stage input has nonce only)', () => {
     const cwd = makeRepo();
-    const { nonce } = prepareAndVerify(cwd);
+    const { nonce, receipt } = prepareAndVerify(cwd);
 
     // TypeScript enforces at compile time that stageCaptureRecord
     // accepts only nonce, cwd, and expiryMinutes. Runtime: verify
     // the function signature does not accept records/evidence/base_head.
-    const staged = stageCaptureRecord({ nonce, cwd });
+    const staged = stageCaptureRecord({ nonce, cwd, receipt });
     expect(staged).toBe(nonce);
 
     // The staged record's base_head was computed server-side at prepare time,
@@ -248,13 +257,13 @@ describe('stageCaptureRecord', () => {
     // time, the test that checks expires_at is null for prepared phase would catch it.
     // Here we explicitly verify the staged_at is the anchor.
     const cwd = makeRepo();
-    const { nonce } = prepareAndVerify(cwd);
+    const { nonce, receipt } = prepareAndVerify(cwd);
 
     // Read verified (pre-stage) state
     const preStage = readPending(nonce, { cwd });
     expect(preStage!.expires_at).toBeNull(); // Must be null before stage
 
-    const staged = stageCaptureRecord({ nonce, cwd });
+    const staged = stageCaptureRecord({ nonce, cwd, receipt });
     expect(staged).toBe(nonce);
 
     const postStage = readPending(nonce, { cwd });
@@ -293,27 +302,31 @@ describe('stageCaptureRecord', () => {
         ],
       },
     ];
-    verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
+    const bound = verifyCaptureRecords({ nonce: result.nonce, draft, transcript, diff, cwd });
 
     // Move HEAD after verify — stage must reject because base_head no longer matches
     writeFileSync(join(cwd, 'extra.txt'), 'extra content\n');
     execSync('git add extra.txt', { cwd });
     execSync('git commit -m "move HEAD" --no-verify --quiet', { cwd });
 
-    // The correct implementation throws because HEAD moved
-    expect(() => stageCaptureRecord({ nonce: result.nonce, cwd })).toThrow(/HEAD moved/);
+    // The receipt is presented, so the refusal under test is the one this is
+    // named for. Without it the authorization check fires first and this would
+    // pass on a message about receipts (#1005).
+    expect(() => stageCaptureRecord({ nonce: result.nonce, cwd, receipt: bound.receipt })).toThrow(
+      /HEAD moved/,
+    );
   });
 
   it('ORACLE-MUST-PASS: re-staging an already-staged nonce returns null', () => {
     // A staged nonce cannot be staged again — the phase is already 'staged'
     const cwd = makeRepo();
-    const { nonce } = prepareAndVerify(cwd);
+    const { nonce, receipt } = prepareAndVerify(cwd);
 
-    const first = stageCaptureRecord({ nonce, cwd });
+    const first = stageCaptureRecord({ nonce, cwd, receipt });
     expect(first).toBe(nonce);
 
     // Second attempt: phase is now 'staged', not 'verified'
-    const second = stageCaptureRecord({ nonce, cwd });
+    const second = stageCaptureRecord({ nonce, cwd, receipt });
     expect(second).toBeNull();
   });
 });
