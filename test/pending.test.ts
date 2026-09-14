@@ -113,7 +113,10 @@ describe('pending transaction store', () => {
       incomplete: false,
       evidence_hash: 'f'.repeat(64),
     });
-    expect(verified).toBe(true);
+    // The receipt this verification was issued (#1005), not a boolean: storing
+    // and holding a handle to what was stored are the same fact here, so they
+    // are one return value and cannot drift apart.
+    expect(verified).toMatch(/^[0-9a-f]{32}$/);
 
     const afterVerify = readPending(nonce, { cwd: repo });
     expect(afterVerify!.phase).toBe('verified');

@@ -71,6 +71,17 @@ export interface VerifyCaptureResult {
   validation_result: 'pass' | 'partial' | 'empty';
   incomplete: boolean;
   overlap_check: 'canonical_exact_only';
+  /**
+   * The receipt this call's verification was issued (#1005), when it bound the
+   * transaction.
+   *
+   * Absent for a read-only check, which binds nothing, and absent for a call
+   * that found the transaction already bound by someone else — that caller
+   * holds no handle to records it did not store, which is the point. Present
+   * for a refusal this caller *did* bind, including one that bound an empty
+   * result: this reports who bound the transaction, not whose records passed.
+   */
+  receipt?: string;
 }
 
 /** The duplicate-check view used by capture verification. */
@@ -349,10 +360,20 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
 
   const accepted: VerifiedRecord[] = [];
   const rejected: CaptureRejection[] = [];
-  // True when the result is bound to the transaction — vacuously so for a
-  // read-only check, which has nothing to bind.
-  const persist = (result: VerifyCaptureResult): boolean =>
-    opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
+  /**
+   * Binds the result to the transaction, and says what that binding is worth.
+   *
+   * `bound` is true when the result is the one the transaction now holds —
+   * vacuously so for a read-only check, which has nothing to bind and therefore
+   * earns no receipt. `receipt` is present only where a write actually happened,
+   * so "bound" and "holds a handle" stay separable: the read-only case is the
+   * one where they differ.
+   */
+  const persist = (result: VerifyCaptureResult): { bound: boolean; receipt: string | null } => {
+    if (opts.readOnly === true) return { bound: true, receipt: null };
+    const receipt = storeVerificationResult(nonce, cwd, result);
+    return { bound: receipt !== null, receipt };
+  };
 
   /**
    * The only way out of this function that writes.
@@ -366,7 +387,10 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
    * reintroduce by copying two lines.
    */
   const settle = (result: VerifyCaptureResult): VerifyCaptureResult => {
-    if (persist(result)) return result;
+    const stored = persist(result);
+    if (stored.bound) {
+      return stored.receipt === null ? result : { ...result, receipt: stored.receipt };
+    }
 
     // Changing only what is returned was not enough. `stage` reads the *stored*
     // transaction, so a replay whose result could not be stored left the
@@ -697,7 +721,7 @@ const storeVerificationResult = (
   nonce: string,
   cwd: string,
   result: VerifyCaptureResult,
-): boolean => {
+): string | null => {
   const evidenceHash = sha256(JSON.stringify(result.accepted.map((a) => a.record)));
   return storeVerification(nonce, {
     cwd,

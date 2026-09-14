@@ -4,6 +4,37 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.13
+
+`verify_capture` issues a receipt, and `stage_capture` refuses one it did not
+issue. Two of the three steps that close #1005; neither changes what a host that
+ignores them can do.
+
+**A verification that binds a transaction is issued a receipt.** `stage_capture`
+takes a nonce and stages whatever is stored under it, and nothing in the protocol
+proves the caller staging is the caller whose verification bound those records.
+1.3.11 closed the common case and made the mismatch visible; neither is the
+closure, and a third connection — one that never verified the nonce — can still
+stage it, which a test runs through to the commit rather than arguing.
+
+The per-connection guard cannot close that: there is no caller identity in the
+protocol, so "the caller that verified" is knowable only when it is the same
+connection. A receipt is that identity. `verify_capture` returns it; the caller
+that found the transaction already bound gets none.
+
+It says **you bound this transaction**, never "your records were accepted" — a
+verification whose evidence is not in the transcript still binds, to an empty
+result, and is correctly issued one.
+
+**`stage_capture` accepts an optional `receipt` and refuses a mismatch.** Sending
+none still works, which is the whole difference between this release and the one
+that closes the hole: a transaction written before this carries no receipt, and a
+host that has not upgraded sends none. Requiring it is step three, it is
+breaking, and it needs the pending format version bumped.
+
+A refusal never names the stored receipt, and leaves the transaction stageable by
+the caller that does hold it.
+
 ## 1.3.12
 
 A query asks git for each fact once instead of three times, and the canonical
