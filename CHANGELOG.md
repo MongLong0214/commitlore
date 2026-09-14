@@ -4,6 +4,34 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.15
+
+`stale` no longer reports a reference as dangling when the record it points at is
+declared in the same block.
+
+**Every `Record-Id` in a block counts as a declaration.** The check built its set
+of declared ids one per record, and a record here is a *block* — which can carry
+several declarations, because squash inheritance writes each preserved record's
+trailers with no blank line between them and git folds the lot into one trailer
+block. One commit carried sixteen of them, fifteen invisible, and a `Follows:`
+pointing at one of those — in the same commit, in the same block — was reported
+as `dangling-ref`, whose `want` is "an existing Record-Id in history".
+
+The asymmetry is what identified it: a second commit carried three ids and two
+`Follows:` lines, and the one pointing at the **first** id resolved while the one
+pointing at the second did not. Same message, same block, same scan.
+
+The fallback used when the scan window is truncated already collected every
+trailer correctly. The complete-scan path was the wrong one, which is why this
+survived — the repair written for a partial scan was right, and nobody asked the
+same question of the whole scan.
+
+This is the reference half of a one-id-per-record assumption. The lifecycle fold
+still has the other half and is untouched here: on the reporting repository, 52
+distinct declared ids fold to 32 states, so about twenty records have no
+lifecycle at all. That is a design decision rather than a repair and is tracked
+separately.
+
 ## 1.3.14
 
 `stage_capture` now requires the receipt for any transaction that has one, which
