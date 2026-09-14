@@ -4,7 +4,7 @@
  * It owns the derived-index observation because the index is an independent
  * cache whose health must never be inferred from another check's result.
  */
-import { closeIndex, indexInfo } from '../../../core/index-db.js';
+import { closeIndex, indexInfo, SCHEMA_VERSION } from '../../../core/index-db.js';
 import { check, gitOptions } from '../model.js';
 export const checkIndex = (ctx) => {
     const { opts, git, openIndex } = ctx;
@@ -34,6 +34,17 @@ export const checkIndex = (ctx) => {
         // that is still missing history. Reporting that as `ok` made this check
         // agree with the one number it read and disagree with what the index holds.
         const outstanding = info.unread.commits + info.unread.notes;
+        // The schema version, which this row did not read.
+        //
+        // `openIndex` and `queryTrailers` are low-level and carry no version gate --
+        // review confirmed a database stamped with a different version stays
+        // directly queryable through them. The query and validation routes do check
+        // before serving, so a mismatch is normally repaired rather than read; what
+        // was missing is any report of it. A row that describes what the index
+        // believes about itself and omits the one field deciding whether this build
+        // may believe it is reading the name and not the subject.
+        const stamped = info.schemaVersion;
+        const schemaMismatch = stamped !== null && stamped !== String(SCHEMA_VERSION);
         const indexEvidence = {
             trailers: String(info.trailers),
             commits: String(info.commits),
@@ -42,7 +53,15 @@ export const checkIndex = (ctx) => {
             fts: info.fts ? 'true' : 'false',
             unread_commits: String(info.unread.commits),
             unread_notes: String(info.unread.notes),
+            schema_version: stamped ?? 'none',
+            expects_schema: String(SCHEMA_VERSION),
         };
+        // Before the HEAD comparison, because a version this build cannot read makes
+        // every other number in this row a description of something it will discard.
+        if (schemaMismatch) {
+            return check('index-health', 'index', 'index health', 'warn', `the index is stamped schema v${String(stamped)} and this build reads v${String(SCHEMA_VERSION)} — ` +
+                'it will be discarded and rebuilt on first use, and the counts above describe the old one', 'commitlore index --rebuild', false, true, { evidence: indexEvidence });
+        }
         if (behind) {
             return check('index-health', 'index', 'index health', 'warn', `${info.trailers} trailers over ${info.commits} commits, behind HEAD — ${fts}`, 'commitlore index', false, undefined, { evidence: indexEvidence });
         }

@@ -88,15 +88,6 @@ export declare const resolveRepoPath: (root: string, raw: string) => string;
  * the resource this server declares.
  */
 export declare const contextUriPath: (uri: string) => string;
-/**
- * Builds the server, wired to one repository.
- *
- * A tool that fails on its input answers with `isError`, not with a JSON-RPC
- * error: the protocol reserves error responses for failures in *finding* the
- * tool, and a model that never sees the message cannot correct the call that
- * caused it. A request naming a tool that does not exist is the other case, and
- * throws.
- */
 export declare const createServer: (opts?: McpServerOptions) => Server;
 /** Connects the server to this process's stdin/stdout. Resolves once listening. */
 export declare const startStdioServer: (opts?: McpServerOptions) => Promise<Server>;
