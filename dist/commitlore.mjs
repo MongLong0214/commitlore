@@ -18209,6 +18209,14 @@ var stageCaptureRecord = (opts) => {
   const record2 = readPending(nonce, { cwd });
   if (!record2) return null;
   if (record2.phase !== "verified") return null;
+  if (record2.receipt !== void 0 && opts.receipt === void 0) {
+    throw markCaptureError(
+      new Error(
+        "Staging rejected: this transaction was bound by a verification that issued a receipt, and none was presented. Pass the receipt `verify_capture` returned to you. If you do not have one, the transaction is not yours to stage: prepare a new one and verify it."
+      ),
+      "usage"
+    );
+  }
   if (opts.receipt !== void 0 && opts.receipt !== record2.receipt) {
     throw markCaptureError(
       new Error(
@@ -19021,7 +19029,12 @@ commitlore capture: the built-in defaults were used for this capture
   });
   const stagedNonce = stageCaptureRecord({
     nonce: prepareResult.nonce,
-    cwd
+    cwd,
+    // The receipt this run's own verification was issued (#1005). Taken from
+    // the result rather than re-read from the transaction, which is the point:
+    // a caller presents what its verification returned, and a caller whose
+    // verification bound nothing has nothing to present.
+    ...verifyResult.receipt === void 0 ? {} : { receipt: verifyResult.receipt }
   });
   const rejected = [
     ...draftRejections,
@@ -37667,7 +37680,7 @@ var TOOLS = [
         },
         receipt: {
           type: "string",
-          description: "the receipt verify_capture returned to you. Optional today and checked when sent: a receipt that was not issued by the verification which bound this transaction is refused. Send it whenever you have one."
+          description: "the receipt verify_capture returned to you. Required whenever the transaction was bound by a verification that issued one, which is every transaction this build binds; a receipt that was not issued by that verification is refused. Omit it only for a transaction prepared by a build older than receipts. Always send the one you were given."
         }
       },
       required: ["nonce"],

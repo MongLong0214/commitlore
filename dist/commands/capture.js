@@ -211,6 +211,11 @@ const runCapturePipeline = (opts) => {
     const stagedNonce = stageCaptureRecord({
         nonce: prepareResult.nonce,
         cwd,
+        // The receipt this run's own verification was issued (#1005). Taken from
+        // the result rather than re-read from the transaction, which is the point:
+        // a caller presents what its verification returned, and a caller whose
+        // verification bound nothing has nothing to present.
+        ...(verifyResult.receipt === undefined ? {} : { receipt: verifyResult.receipt }),
     });
     const rejected = [
         ...draftRejections,

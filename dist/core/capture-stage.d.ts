@@ -20,11 +20,11 @@ export interface StageCaptureOptions {
     /** Override the expiry window (minutes). Default: 5. */
     expiryMinutes?: number;
     /**
-     * The receipt this caller's verification was issued (#1005 step 2).
+     * The receipt this caller's verification was issued (#1005).
      *
-     * Checked when presented and not required: a transaction written before
-     * receipts existed carries none, and a host that has not upgraded sends none.
-     * Step 3 makes it required, and that step is breaking for exactly those two.
+     * Required when the stored transaction has one, which is every transaction
+     * this build binds. Omitting it is only accepted for a transaction prepared
+     * before receipts existed, and one of those lives minutes.
      */
     receipt?: string;
 }

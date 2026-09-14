@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "2ef8d79a0bff245fe499deabc5d4148f7ec93a58bff4effe810b695ee8cbe471"
+    "sha256": "55372108b9222d751f0246f460dcea50f1f5cdb58a36a302cc9d8d7f63af31f7"
   },
   "artifact": {
-    "sha256": "62813aec1224449df95be0c39ab448249a2f84d90cc7b2c727f1a3b1a4e214ea",
+    "sha256": "3bd0344d5ead2a2a9bb2a2d70027443c309c4dc5ff2b96816f260a33c1db2caf",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -62,11 +62,11 @@
       },
       {
         "path": "dist/commands/capture.js",
-        "sha256": "c5a4c00e1a4acad6414d6fa9d82402d363ae3dba7d07188869c1f561c19bac3c"
+        "sha256": "b8d0a965e071cb8bbbdcf083012a9a451cf62b5443225bfeb4dd34d1755e30dd"
       },
       {
         "path": "dist/commands/capture.js.map",
-        "sha256": "621c61a70f65a601af9c9ba81789c076c0b9b8f13d1dbc1b9ad09a668fd8bd8b"
+        "sha256": "d8b0c4c8741d30c5bacae2357e9f7ea59b35181cc5a89cad9165fa0d957666e5"
       },
       {
         "path": "dist/commands/demo.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "26d76a290b3b8ee674c149485837a8c67a932cd03b65f6f6378bc2c86bb145c2"
+        "sha256": "e315ef36de159fbe2c8bc47f1832bd195050d5fe4b4755a4a9569be1b61d2821"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -746,15 +746,15 @@
       },
       {
         "path": "dist/core/capture-stage.d.ts",
-        "sha256": "04648b6d8290e1b0c63d47bde0989b922eb2f108e59a3ff60de171fbea96a8e3"
+        "sha256": "4ca8325eab22cca683aab43f7c04017070713e3e6882247e3560e4ef188c86cf"
       },
       {
         "path": "dist/core/capture-stage.js",
-        "sha256": "89ef2b7c1efeae251aa59206dce1b8a3afc88059951eb2134b4b077554d21a78"
+        "sha256": "9e3ddb2b38bf8489b5127b82e47127e85c3d9e8ff5c6a1e78e592912b9cf91b9"
       },
       {
         "path": "dist/core/capture-stage.js.map",
-        "sha256": "208069fb8b17d0f7a927e212c6c5dffa800ee26290cc508d2cd757215a25b858"
+        "sha256": "806dd6e61a42e7a97c6483fca1eb259e1bac4e5c2bfd9b5a46f188a94af410a0"
       },
       {
         "path": "dist/core/capture-verify.d.ts",
@@ -1266,11 +1266,11 @@
       },
       {
         "path": "dist/mcp/server.js",
-        "sha256": "330f133034a201f4a4e70e788c4f1336deec5f6c96daf07bda21187cee0d731b"
+        "sha256": "ed090c6132f28fd7b0b10b7273811e25c4c339b7367c74bcb7535e64906aca95"
       },
       {
         "path": "dist/mcp/server.js.map",
-        "sha256": "f6dd5eab931c6bf9f39747dc1255616feca600b7abd0ff7fc90c682c7c1ab479"
+        "sha256": "862d122f4b4b95ff72c055c4c06b0ed24fd34174333156f230f462e081363088"
       },
       {
         "path": "dist/mcp/validate-args.d.ts",
