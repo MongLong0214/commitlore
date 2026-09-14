@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "c336df5167ed280698524e1f997b5c8e0b2b449eb80014c746d9098ad21450ca"
+    "sha256": "cfcbb3588606c3be6c05b03957213b166e77e6bff3ee87781fe59deabc58707a"
   },
   "artifact": {
-    "sha256": "157fc1501e429c18b1c493ec4eb1f7bae0778bed9e4fce79dbb9da79a6bf1299",
+    "sha256": "c0eaa834713889c6726a7479b59214cb9e8a0a9650c6e8ee1acd741aecb94e32",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -266,11 +266,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/index-index-health.js",
-        "sha256": "d2fd3533847043f8bf746aac6cf6dbbde95cb04811bce193a3ae059bdf89ebbb"
+        "sha256": "9281d0fe47e1a5a0b6813bce230713a12cb642623269302cf97b11bae06dd98e"
       },
       {
         "path": "dist/commands/doctor/checks/index-index-health.js.map",
-        "sha256": "a5593b0d991d8190edafbf7735d057dd3a3fda6ab3063bda6c6e0818f32074b2"
+        "sha256": "27ef52f7382ef4a9eb4c5f1deeafca28c3e794f25c6f0b7241dfc9db64bba260"
       },
       {
         "path": "dist/commands/doctor/checks/runtime-cli-runtime.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "a9a9df56ac4d2e16c01b24b5e9d72d8529219448e9d0918dfbd5b7965dc686bc"
+        "sha256": "c1be91470926591a00ef80fe161689ef9360a0c1daa57a8472b4ed8ef516e1fd"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1098,11 +1098,11 @@
       },
       {
         "path": "dist/core/trusted-authors.js",
-        "sha256": "a3eba07927f5ff993226faf078511dc566d1065694e221175065aa4f040c8f23"
+        "sha256": "31438cc39801f3698ba1c3f4e1868ec228fb49d0ef9072590fb2498ac5e789fb"
       },
       {
         "path": "dist/core/trusted-authors.js.map",
-        "sha256": "996ed9c037870d99f922843589a8f32217e05ae15f5bba9bd14dac474651eb9a"
+        "sha256": "defe01e1a6ae69b80d197ad2935ec887e8b571b9b4dd4c6d59632799a894a526"
       },
       {
         "path": "dist/core/types.d.ts",
@@ -1262,15 +1262,15 @@
       },
       {
         "path": "dist/mcp/server.d.ts",
-        "sha256": "bbcd8996ccddb21b48315332897df68848c1ec0c4e5aef6a74a6680b9d368ed0"
+        "sha256": "876163dde7b11419bdd51ffe20fcd2fc858ee3b06a6d9d44e6e55ce929b7a78b"
       },
       {
         "path": "dist/mcp/server.js",
-        "sha256": "54d2e19f06bd157cfc9ef4cc4b2db1a0143cbde4f0d08e38159e6cf30ec91d62"
+        "sha256": "b0c7136c0db0aaea66e2fdd077bd5c6f876cd3bc1e5ba5b09dd2b3eeda379942"
       },
       {
         "path": "dist/mcp/server.js.map",
-        "sha256": "f9ce3e0b876f4dd3b244dfc37367a8413eb7cf1c37196fb54d17f22e5b65ba11"
+        "sha256": "7430f0488dde97d0b2f62724497d181945f581f1c62d9006d9dd5ea87e0a7cad"
       },
       {
         "path": "dist/mcp/validate-args.d.ts",

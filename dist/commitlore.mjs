@@ -23507,6 +23507,8 @@ var checkIndex = (ctx) => {
     const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
     const fts = info.fts ? "FTS5" : "no FTS5 (value search falls back to LIKE)";
     const outstanding = info.unread.commits + info.unread.notes;
+    const stamped = info.schemaVersion;
+    const schemaMismatch2 = stamped !== null && stamped !== String(SCHEMA_VERSION);
     const indexEvidence = {
       trailers: String(info.trailers),
       commits: String(info.commits),
@@ -23514,8 +23516,23 @@ var checkIndex = (ctx) => {
       head_sha: head.code === 0 ? head.stdout.trim() || "none" : "unavailable",
       fts: info.fts ? "true" : "false",
       unread_commits: String(info.unread.commits),
-      unread_notes: String(info.unread.notes)
+      unread_notes: String(info.unread.notes),
+      schema_version: stamped ?? "none",
+      expects_schema: String(SCHEMA_VERSION)
     };
+    if (schemaMismatch2) {
+      return check(
+        "index-health",
+        "index",
+        "index health",
+        "warn",
+        `the index is stamped schema v${String(stamped)} and this build reads v${String(SCHEMA_VERSION)} \u2014 it will be discarded and rebuilt on first use, and the counts above describe the old one`,
+        "commitlore index --rebuild",
+        false,
+        true,
+        { evidence: indexEvidence }
+      );
+    }
     if (behind) {
       return check(
         "index-health",
@@ -37645,6 +37662,22 @@ var kindArg = (args) => {
   return kind;
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
+var stagedRecordIds = (nonce, cwd) => {
+  try {
+    const record2 = readPending(nonce, { cwd });
+    if (record2 === null) return [];
+    const ids = [];
+    for (const entry of record2.records) {
+      const trailers = entry.trailers ?? [];
+      for (const trailer of trailers) {
+        if (trailer.key === "Record-Id") ids.push(trailer.value);
+      }
+    }
+    return ids;
+  } catch {
+    return [];
+  }
+};
 var createServer = (opts = {}) => {
   const unbound = /* @__PURE__ */ new Set();
   const root = resolve22(opts.cwd ?? process.cwd());
@@ -37846,7 +37879,7 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
       if (result === null) {
         return asText({ staged: false, reason: "nothing to stage (empty/incomplete verification or wrong phase)" });
       }
-      return asText({ staged: true, nonce: result });
+      return asText({ staged: true, nonce: result, staged_record_ids: stagedRecordIds(result, root) });
     }
   };
   server.setRequestHandler(ListToolsRequestSchema, () => ({
