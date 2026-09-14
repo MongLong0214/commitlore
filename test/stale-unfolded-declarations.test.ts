@@ -158,3 +158,66 @@ describe('#1015 stale names declarations it could not fold', () => {
     expect(formatReport(report)).toContain('(note)');
   }, 300_000);
 });
+
+/**
+ * #1015 second half: a note is the only well-formed copy, and was discarded.
+ *
+ * `collectRecords` drops a note block that duplicates what the commit already
+ * declares — correct when the commit's blocks are well formed, because then the
+ * commit yields one record per block and the note adds nothing.
+ *
+ * It was decided by asking whether every trailer in the note block also appears
+ * anywhere in the commit's trailers, unioned across blocks. A commit whose
+ * blocks were flattened into one carries every identity in that union and still
+ * yields a **single** record, so every well-formed block of the note is a subset
+ * of it and all of them were dropped. On the reporting repository that hid
+ * fifteen records that existed correctly in the mirror and nowhere else:
+ * `totalRecords` read 32 where it should read 47.
+ *
+ * The question is now whether the commit side yields a record for *that
+ * identity*, not whether the note's text appears somewhere in the commit. A
+ * block that declares no identity keeps the old test, which is the only question
+ * available for it.
+ */
+describe('#1015 a note block survives a flattened commit block', () => {
+  const flattened = {
+    sha: '2'.repeat(40),
+    committedAt: '2026-01-01T00:00:00Z',
+    source: 'commit' as const,
+    trailers: [
+      { key: 'Limit', value: 'the first record' },
+      { key: 'Record-Id', value: 'r-flatfirsta1' },
+      { key: 'Limit', value: 'the second record' },
+      { key: 'Record-Id', value: 'r-flatsecond2' },
+    ],
+  };
+
+  it('reports only what no source folds', () => {
+    // The note carries the second record as its own block, so it folds from
+    // there and is not a loss. Judged by the old subset test it would be
+    // dropped, and this would report it missing.
+    const note = {
+      sha: '2'.repeat(40),
+      committedAt: '2026-01-01T00:00:00Z',
+      source: 'notes' as const,
+      trailers: [
+        { key: 'Limit', value: 'the second record' },
+        { key: 'Record-Id', value: 'r-flatsecond2' },
+      ],
+    };
+
+    const report = buildReport(scanOf([flattened, note]), AT);
+    expect(report.unfoldedDeclarations).toEqual([]);
+    // Two records: the commit's first, and the note's second.
+    expect(report.totalRecords).toBe(2);
+  }, 300_000);
+
+  it('still reports it when no note carries it', () => {
+    // The control. Without it, "nothing unfolded" above could mean the check
+    // had stopped reporting anything.
+    const report = buildReport(scanOf([flattened]), AT);
+    expect(report.unfoldedDeclarations).toHaveLength(1);
+    expect(report.unfoldedDeclarations[0]?.unread).toEqual(['r-flatsecond2']);
+    expect(report.totalRecords).toBe(1);
+  }, 300_000);
+});

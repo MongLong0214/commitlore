@@ -290,13 +290,31 @@ export const collectRecords = (opts: CollectOptions = {}): Scan => {
   // The mirror comparison is against everything the commit declares, across all
   // of its blocks -- a note mirroring one block of a squash must still count as
   // mirrored.
-  const trailersBySha = new Map<string, { committedAt: string; trailers: Trailer[] }>();
+  //
+  // `folds` is the other half of that question, and the half the union cannot
+  // answer: which records the commit side actually *produces*. One block yields
+  // one record, identified by the first `Record-Id` in it, so a commit whose
+  // blocks were flattened into one -- which is what a squash composed outside
+  // this project does -- declares sixteen identities in its trailers and yields
+  // a single record. Judged by the union alone, every well-formed block of the
+  // note is a subset of that and is dropped as a duplicate, and fifteen records
+  // that exist only in the mirror disappear (#1015).
+  const trailersBySha = new Map<
+    string,
+    { committedAt: string; trailers: Trailer[]; folds: Set<string> }
+  >();
   for (const record of commitRecords) {
+    const firstId = record.trailers.find((trailer) => trailer.key === RECORD_ID_KEY)?.value;
     const existing = trailersBySha.get(record.sha);
     if (existing === undefined) {
-      trailersBySha.set(record.sha, { committedAt: record.committedAt, trailers: [...record.trailers] });
+      trailersBySha.set(record.sha, {
+        committedAt: record.committedAt,
+        trailers: [...record.trailers],
+        folds: new Set(firstId === undefined ? [] : [firstId]),
+      });
     } else {
       existing.trailers.push(...record.trailers);
+      if (firstId !== undefined) existing.folds.add(firstId);
     }
   }
 
@@ -334,9 +352,29 @@ export const collectRecords = (opts: CollectOptions = {}): Scan => {
     // block of a squash is dropped while a block the message never carried
     // stays, whichever order they appear in.
     return blocks.flatMap((trailers): CollectedRecord[] => {
-      const mirrored = trailers.every((note) =>
+      const noteId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY)?.value;
+      // A block that declares an identity is a duplicate only when the commit
+      // side yields a record for *that identity*. Being a subset of the
+      // commit's trailers is not enough: a flattened block contains every
+      // identity and yields one, so the subset test drops the only well-formed
+      // copies there are.
+      //
+      // A block that declares none keeps the old test, which is the only
+      // question available for it.
+      const sameText = trailers.every((note) =>
         commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value),
       );
+      // Both conditions, and each rules out a different failure.
+      //
+      // Without the identity test, a flattened commit block contains every
+      // identity and the subset test drops the only well-formed copies there
+      // are. Without the text test, a note that *claims* an identity the commit
+      // declares is dropped even when it says something else -- which is the
+      // divergent-note collision `validate` and `stale` both exist to report,
+      // and dropping it silently was the regression the first version of this
+      // introduced.
+      const mirrored =
+        noteId === undefined ? sameText : commit.folds.has(noteId) && sameText;
       return trailers.length === 0 || mirrored
         ? []
         : [{ sha, committedAt: commit.committedAt, trailers, source: 'notes' }];
@@ -386,6 +424,10 @@ export interface StaleReport {
    * Counted rather than resolved on purpose: splitting a block at each
    * `Record-Id` would invent a boundary SPEC does not define and would make
    * `stale` report records `validate` calls invalid.
+   *
+   * Only ids that reach no state at all are listed. An id buried in a malformed
+   * commit block is usually the first id of a well-formed *note* block, and it
+   * folds from there; counting it here reports a loss that did not happen.
    */
   unfoldedDeclarations: UnfoldedDeclarations[];
 }
@@ -608,17 +650,44 @@ const partitionRefs = (
  * ids -- which is worse than naming none.
  */
 const unfoldedDeclarations = (records: readonly CollectedRecord[]): UnfoldedDeclarations[] => {
+  const declarationsIn = (record: CollectedRecord): string[] =>
+    record.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY).map((trailer) => trailer.value);
+
+  /*
+   * Which ids the fold actually reaches, before deciding what it missed.
+   *
+   * The first version asked only "is this the second or later id in its block?"
+   * and was wrong by fifteen of thirty-two on the first repository it ran on. A
+   * squash's records live in the commit message *and* in the notes mirror, and
+   * the note carries them correctly -- one id per block. So an id buried in a
+   * malformed commit block is very often the first id of a well-formed note
+   * block, which means it folds and has a lifecycle after all.
+   *
+   * Reporting it anyway sends the reader to repair something that is already
+   * right, which is worse than the silence this replaced: a wrong number in a
+   * report about missing records is the one thing that cannot be tolerated here.
+   */
+  const folded = new Set<string>();
+  for (const record of records) {
+    const ids = declarationsIn(record);
+    // `foldLifecycle` takes what `trailerValue` returns, which is the first.
+    if (ids.length > 0) folded.add(ids[0] as string);
+  }
+
   const rows: UnfoldedDeclarations[] = [];
   for (const record of records) {
-    const ids = record.trailers
-      .filter((trailer) => trailer.key === RECORD_ID_KEY)
-      .map((trailer) => trailer.value);
+    const ids = declarationsIn(record);
     if (ids.length < 2) continue;
+    const unread = ids.slice(1).filter((id) => !folded.has(id));
+    // A block whose every buried id folds elsewhere has lost nothing. It is
+    // still malformed, and `validate` still says so -- that is `validate`'s row
+    // to write, not this one's.
+    if (unread.length === 0) continue;
     rows.push({
       sha: record.sha,
       source: record.source,
       declared: ids.length,
-      unread: ids.slice(1),
+      unread,
     });
   }
   return rows;
