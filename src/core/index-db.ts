@@ -62,6 +62,7 @@ import {
   execGitBytes,
   execGitOrThrow,
   historyAvailability,
+  type RepoFacts,
 } from './git.js';
 import {
   isolateBlocks,
@@ -399,6 +400,13 @@ export interface IndexHandle {
    * can report what actually happened instead of "no baseline commit".
    */
   discardedReason: string | null;
+  /**
+   * Repository facts this request has already read, or `undefined` when the
+   * caller is not one request. A handle is opened and closed per invocation, so
+   * this is exactly the lifetime #987 asked for — nothing here outlives the
+   * caller that opened the handle.
+   */
+  readonly facts: RepoFacts | undefined;
 }
 
 export interface OpenIndexOptions {
@@ -418,6 +426,11 @@ export interface OpenIndexOptions {
   budget?: ScanBudget;
   /** Filled in when `budget` trips. The same object the caller will report. */
   cost?: ScanCost;
+  /**
+   * Request-owned memo for repository facts. Absent means every read spawns,
+   * which is what a caller that is not one request wants.
+   */
+  facts?: RepoFacts;
 }
 
 /** One record block as git reports it, before it reaches SQLite. */
@@ -1256,8 +1269,16 @@ const readNoteRecords = (
     : readNotesFor(cwd, annotatedNotes(cwd, pinned, reachable), excluded, budget, cost);
 };
 
-const revParse = (cwd: string, rev: string): string | null => {
-  const result = execGit(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { cwd });
+/**
+ * One read, through this module's `execGit` so a test that stubs it is still
+ * consulted. Not `git.ts`'s own helper: that one closes over `git.ts`'s binding,
+ * which is a door the mocks here do not wrap (`r-pinnedmirror957`).
+ */
+const ask = (cwd: string, args: string[], facts?: RepoFacts) =>
+  facts === undefined ? execGit(args, { cwd }) : facts.once(args);
+
+const revParse = (cwd: string, rev: string, facts?: RepoFacts): string | null => {
+  const result = ask(cwd, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], facts);
   if (result.code === GIT_NO_SUCH_REF && result.stderr.trim() === '') return null;
   if (result.code !== 0) {
     throw Object.assign(new Error(`git could not resolve ${rev}: ${result.stderr.trim()}`), {
@@ -1270,8 +1291,8 @@ const revParse = (cwd: string, rev: string): string | null => {
 };
 
 /** Unlike `revParse`, does not peel to a commit — a notes ref points at a tree. */
-const revParseRef = (cwd: string, ref: string): string | null => {
-  const result = execGit(['rev-parse', '--verify', '--quiet', ref], { cwd });
+const revParseRef = (cwd: string, ref: string, facts?: RepoFacts): string | null => {
+  const result = ask(cwd, ['rev-parse', '--verify', '--quiet', ref], facts);
   if (result.code === GIT_NO_SUCH_REF && result.stderr.trim() === '') return null;
   if (result.code !== 0) {
     throw Object.assign(new Error(`git could not resolve ${ref}: ${result.stderr.trim()}`), {
@@ -1927,6 +1948,7 @@ export const openIndex = (opts: OpenIndexOptions = {}): IndexHandle => {
     cwd,
     readonly,
     ftsRequested,
+    facts: opts.facts,
     discardedReason: ftsDiscard ?? discardedReason,
     // Rebuilding the FTS table on open is how a damaged index became
     // unopenable: `DELETE FROM trailers_fts` and the reinsert run before any
@@ -2085,13 +2107,13 @@ export const indexNotes = (
   excluded?: ExclusionCounts,
   cost?: ScanCost,
 ): number => {
-  const refSha = revParseRef(handle.cwd, NOTES_REF);
+  const refSha = revParseRef(handle.cwd, NOTES_REF, handle.facts);
   const indexed = readMeta(handle.db, 'notes_ref_sha');
   const force = opts.force ?? false;
   // Resolved once and carried through the pass, so the scope the rows are
   // filtered by is the scope they are stamped with. Reading `HEAD` again below
   // would let the two differ.
-  const headSha = revParse(handle.cwd, 'HEAD');
+  const headSha = revParse(handle.cwd, 'HEAD', handle.facts);
 
   if (!force && refSha === indexed && headSha === readMeta(handle.db, NOTES_HEAD_META)) return 0;
 
@@ -2251,7 +2273,7 @@ export const rebuildIndex = (
   if (stale !== null) resetIndexFile(handle);
 
   const started = Date.now();
-  const head = revParse(handle.cwd, 'HEAD');
+  const head = revParse(handle.cwd, 'HEAD', handle.facts);
   // Walked from the resolved object, not from the symbolic name. `HEAD` was
   // being re-resolved by a second git process, so a checkout landing between
   // the two associated the pending list -- and `last_indexed_sha` -- with a
@@ -2264,7 +2286,7 @@ export const rebuildIndex = (
   // only for the persist.
   const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
   const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
-  const notesRef = revParseRef(handle.cwd, NOTES_REF);
+  const notesRef = revParseRef(handle.cwd, NOTES_REF, handle.facts);
   const noteRecords =
     notesRef === null
       ? []
@@ -2428,7 +2450,7 @@ const drainPending = (
   // re-reads the mirror whole, which it has to do anyway because a note can be
   // rewritten in place.
   const listedFrom = readMeta(handle.db, NOTES_PENDING_REF_META);
-  const currentRef = revParseRef(handle.cwd, NOTES_REF);
+  const currentRef = revParseRef(handle.cwd, NOTES_REF, handle.facts);
   if (listedFrom === null || listedFrom !== currentRef) {
     runInTransaction(handle.db, () => {
       // The rows already written came from the mirror the queue named, so they
@@ -2502,7 +2524,7 @@ const drainPending = (
 const incrementalProblem = (handle: IndexHandle, head: string, last: string | null): string | null => {
   if (last === null) return 'the index has no baseline commit';
   if (last === head) return null;
-  if (revParse(handle.cwd, last) === null) {
+  if (revParse(handle.cwd, last, handle.facts) === null) {
     return `the last indexed commit ${last.slice(0, 12)} is gone (history was rewritten)`;
   }
   const ancestor = execGit(['merge-base', '--is-ancestor', last, head], { cwd: handle.cwd });
@@ -2554,7 +2576,7 @@ export const updateIndex = (
   if (opts.force ?? false) return rebuildIndex(handle, { reason: 'rebuild requested', ...rebuildOpts });
 
   const excluded: ExclusionCounts = new Map();
-  const head = revParse(handle.cwd, 'HEAD');
+  const head = revParse(handle.cwd, 'HEAD', handle.facts);
   if (head === null) {
     /* An empty repository is not an error; it is a repository with no records. */
     const stats = emptyStats(handle, started);
@@ -2700,7 +2722,7 @@ export const openCurrentIndex = (opts: OpenIndexOptions = {}): IndexHandle => {
     const problem = healthProblem(handle.db, signatureVerifierGeneration(handle.cwd));
     if (problem !== null) throw new Error(problem);
 
-    const head = revParse(handle.cwd, 'HEAD');
+    const head = revParse(handle.cwd, 'HEAD', handle.facts);
     if (head !== null) {
       const blocker = incrementalProblem(handle, head, readMeta(handle.db, 'last_indexed_sha'));
       if (blocker !== null) throw new Error(blocker);
@@ -2718,6 +2740,10 @@ export const openCurrentIndex = (opts: OpenIndexOptions = {}): IndexHandle => {
       );
     }
 
+    // Deliberately not through `handle.facts`: this re-reads the ref to check
+    // that the pass which just ran ended up matching it. Serving it from the
+    // memo would compare the stamp against the value the pass itself used,
+    // which agrees by construction and checks nothing.
     const notesRef = revParseRef(handle.cwd, NOTES_REF);
     if (readMeta(handle.db, 'notes_ref_sha') !== notesRef) {
       throw new Error('index does not match refs/notes/commitlore');
