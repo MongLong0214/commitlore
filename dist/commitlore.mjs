@@ -37443,12 +37443,17 @@ var contextJson = (root, kind, path2) => {
       cwd: root,
       at,
       scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
-      trustedAuthors: configuredTrustedAuthors(root),
+      // The value read once above, not a second call to the same reader. It was
+      // passed here and spread again below, so a `context` query asked git for
+      // the trusted-author configuration twice for one answer -- and the
+      // spread's value was the same one, so the object this builds is
+      // unchanged. Each of those reads is a process, on the surface the edit
+      // hook drives per file.
+      trustedAuthors,
       ...configuredSignedDirectivesRequired(root) ? { requireSignedDirective: true } : {},
       ...trustedSignerFingerprints.length === 0 ? {} : { trustedSignerFingerprints },
       ...path2 === "" ? {} : { paths: [path2] },
-      ...keys === void 0 ? {} : { keys },
-      ...trustedAuthors.length === 0 ? {} : { trustedAuthors }
+      ...keys === void 0 ? {} : { keys }
     })
   );
   for (const diagnostic of result.diagnostics) warn(diagnostic);
@@ -37641,6 +37646,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
+  const unbound = /* @__PURE__ */ new Set();
   const root = resolve22(opts.cwd ?? process.cwd());
   const captureAssets = preflightCaptureAssets();
   const captureReady = captureAssets.ready;
@@ -37808,6 +37814,7 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
       if (structural !== null) {
         throw new Error(`malformed draft: ${structural}`);
       }
+      unbound.add(nonce);
       const result = verifyCaptureRecords({
         nonce,
         draft,
@@ -37815,6 +37822,7 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         diff,
         cwd: root
       });
+      if (result.accepted.length > 0 && !result.incomplete) unbound.delete(nonce);
       return asText({
         validation_result: result.validation_result,
         accepted: result.accepted,
@@ -37827,6 +37835,12 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
       const nonce = requiredString(args, "nonce");
       if (!/^[0-9a-f]{32}$/.test(nonce)) {
         throw new Error("nonce must be exactly 32 lowercase hex characters");
+      }
+      if (unbound.has(nonce)) {
+        return asText({
+          staged: false,
+          reason: "this connection last verified this nonce without binding any record, so what is stored under it is not yours to stage. Prepare a new transaction and verify again."
+        });
       }
       const result = stageCaptureRecord({ nonce, cwd: root });
       if (result === null) {

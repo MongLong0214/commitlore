@@ -258,12 +258,17 @@ const contextJson = (root, kind, path) => {
         cwd: root,
         at,
         scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
-        trustedAuthors: configuredTrustedAuthors(root),
+        // The value read once above, not a second call to the same reader. It was
+        // passed here and spread again below, so a `context` query asked git for
+        // the trusted-author configuration twice for one answer -- and the
+        // spread's value was the same one, so the object this builds is
+        // unchanged. Each of those reads is a process, on the surface the edit
+        // hook drives per file.
+        trustedAuthors,
         ...(configuredSignedDirectivesRequired(root) ? { requireSignedDirective: true } : {}),
         ...(trustedSignerFingerprints.length === 0 ? {} : { trustedSignerFingerprints }),
         ...(path === '' ? {} : { paths: [path] }),
         ...(keys === undefined ? {} : { keys }),
-        ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
     }));
     for (const diagnostic of result.diagnostics)
         warn(diagnostic);
@@ -502,6 +507,31 @@ const pathArg = (root, args) => resolveRepoPath(root, stringArg(args, 'path') ??
  * throws.
  */
 export const createServer = (opts = {}) => {
+    /**
+     * Nonces whose most recent verification on *this connection* did not bind
+     * anything (#989).
+     *
+     * `stage` reads the transaction stored under the nonce, never what the
+     * calling verification computed, so a caller whose verification was refused
+     * could stage anyway and the hook would append the *first* caller's records --
+     * a record the second caller was never shown. There is no caller identity in
+     * the protocol and no previous-call-success check, so knowing the nonce is
+     * enough.
+     *
+     * Closing that properly needs a receipt issued by the verification that
+     * succeeded, required at stage. That is a pending-format version bump, and
+     * existing readers reject anything but version 1 -- writing version 2 would
+     * strand the running sessions a staged migration exists to protect. It is a
+     * release sequence, planned on #989, not a field.
+     *
+     * This closes the ordinary case in the meantime, and only that: one logical
+     * caller on one stdio connection, verifying and then staging. Its limits are
+     * real and are not papered over -- a reconnection bypasses it, a nonce this
+     * connection never verified keeps the legacy behaviour, and two logical
+     * callers sharing one connection cannot be told apart. It is a mitigation,
+     * not the closure.
+     */
+    const unbound = new Set();
     const root = resolve(opts.cwd ?? process.cwd());
     const captureAssets = preflightCaptureAssets();
     const captureReady = captureAssets.ready;
@@ -707,6 +737,12 @@ export const createServer = (opts = {}) => {
             if (structural !== null) {
                 throw new Error(`malformed draft: ${structural}`);
             }
+            // Marked before the verification runs, and cleared only by one that
+            // actually bound records. A throw between here and the clear -- a
+            // malformed draft, an unreadable transcript -- therefore leaves the nonce
+            // marked, which is the answer that matches what happened: nothing of this
+            // caller's was stored.
+            unbound.add(nonce);
             const result = verifyCaptureRecords({
                 nonce,
                 draft: draft,
@@ -714,6 +750,8 @@ export const createServer = (opts = {}) => {
                 diff,
                 cwd: root,
             });
+            if (result.accepted.length > 0 && !result.incomplete)
+                unbound.delete(nonce);
             return asText({
                 validation_result: result.validation_result,
                 accepted: result.accepted,
@@ -727,6 +765,16 @@ export const createServer = (opts = {}) => {
             // Nonce validation at the boundary: lowercase hex, exactly 32 chars
             if (!/^[0-9a-f]{32}$/.test(nonce)) {
                 throw new Error('nonce must be exactly 32 lowercase hex characters');
+            }
+            // Refused rather than staged. What is stored under this nonce belongs to
+            // a verification that is not this caller's, and staging it would put a
+            // record into the next commit that this caller was told it did not get.
+            if (unbound.has(nonce)) {
+                return asText({
+                    staged: false,
+                    reason: 'this connection last verified this nonce without binding any record, so what is ' +
+                        'stored under it is not yours to stage. Prepare a new transaction and verify again.',
+                });
             }
             const result = stageCaptureRecord({ nonce, cwd: root });
             if (result === null) {
