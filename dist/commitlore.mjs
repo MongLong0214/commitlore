@@ -21097,7 +21097,8 @@ var buildReport = (scan2, at, resolveIn) => {
     // *later* commit declared the succession, which is the same question the
     // fold asks and must get the same order to answer it with.
     ...partitionRefs(findDanglingRefs(ordered), scan2, resolveIn),
-    idCollisions: findIdCollisions(ordered)
+    idCollisions: findIdCollisions(ordered),
+    unfoldedDeclarations: unfoldedDeclarations(ordered)
   };
 };
 var partitionRefs = (candidates, scan2, resolveIn) => {
@@ -21116,6 +21117,20 @@ var partitionRefs = (candidates, scan2, resolveIn) => {
     danglingRefs: candidates.filter((violation) => !declared.has(violation.got)),
     unresolvedRefs: []
   };
+};
+var unfoldedDeclarations = (records) => {
+  const rows = [];
+  for (const record2 of records) {
+    const ids = record2.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY4).map((trailer) => trailer.value);
+    if (ids.length < 2) continue;
+    rows.push({
+      sha: record2.sha,
+      source: record2.source,
+      declared: ids.length,
+      unread: ids.slice(1)
+    });
+  }
+  return rows;
 };
 var shortSha2 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
 var location = (state) => `${state.recordId}  ${shortSha2(state.sha)}  [${state.source}]`;
@@ -21151,8 +21166,25 @@ var formatReport = (report) => {
     ...section(
       "id collisions",
       report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)
+    ),
+    // Named rather than omitted, the way `unresolved refs` names a window this
+    // could not cover. The fix is `validate`, which is where the violation is
+    // defined, so the row says that rather than leaving the reader to guess
+    // what a declaration the fold skipped is supposed to mean (#1015).
+    ...section(
+      "declarations not folded",
+      report.unfoldedDeclarations.map(
+        (row) => `${shortSha2(row.sha)}${row.source === "notes" ? " (note)" : ""}  ${String(row.unread.length)} of ${String(row.declared)} unread: ${row.unread.join(", ")}`
+      )
     )
   ];
+  if (report.unfoldedDeclarations.length > 0) {
+    const unread = report.unfoldedDeclarations.reduce((sum, row) => sum + row.unread.length, 0);
+    lines.push(
+      "",
+      `note: ${String(unread)} declaration(s) have no lifecycle because their block declares more than one Record-Id, which is a cardinality violation \u2014 run commitlore validate on the commits above.`
+    );
+  }
   if (report.truncated) {
     lines.push(
       "",

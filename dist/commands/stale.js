@@ -366,6 +366,7 @@ resolveIn) => {
         // fold asks and must get the same order to answer it with.
         ...partitionRefs(findDanglingRefs(ordered), scan, resolveIn),
         idCollisions: findIdCollisions(ordered),
+        unfoldedDeclarations: unfoldedDeclarations(ordered),
     };
 };
 /**
@@ -401,6 +402,38 @@ const partitionRefs = (candidates, scan, resolveIn) => {
         unresolvedRefs: [],
     };
 };
+/**
+ * Declarations the fold will not take, because their block declares several.
+ *
+ * `foldLifecycle` reads one `Record-Id` per record and a record here is a
+ * *block*, so a block carrying several leaves the rest with no lifecycle state.
+ * That is not the fold being wrong -- `Record-Id` is single-valued, the block is
+ * malformed, and `validate` reports it as `cardinality`. What was wrong is that
+ * nothing said so: a repository declaring 52 ids reported 32 records and no
+ * difference (#1015).
+ *
+ * The first declaration is the one the fold keeps, matching `trailerValue`, so
+ * `unread` is every other one in the order the block declares them. If that
+ * choice ever changes, this has to change with it or the report names the wrong
+ * ids -- which is worse than naming none.
+ */
+const unfoldedDeclarations = (records) => {
+    const rows = [];
+    for (const record of records) {
+        const ids = record.trailers
+            .filter((trailer) => trailer.key === RECORD_ID_KEY)
+            .map((trailer) => trailer.value);
+        if (ids.length < 2)
+            continue;
+        rows.push({
+            sha: record.sha,
+            source: record.source,
+            declared: ids.length,
+            unread: ids.slice(1),
+        });
+    }
+    return rows;
+};
 const shortSha = (sha) => (sha.length > 8 ? sha.slice(0, 8) : sha);
 const location = (state) => `${state.recordId}  ${shortSha(state.sha)}  [${state.source}]`;
 const section = (title, lines) => lines.length === 0 ? [] : ['', title, ...lines.map((line) => `  ${line}`)];
@@ -417,7 +450,19 @@ export const formatReport = (report) => {
         ...section('dangling refs', report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)),
         ...section('unresolved refs', report.unresolvedRefs.map((violation) => `${violation.key}: ${violation.got}  ${violation.want}`)),
         ...section('id collisions', report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)),
+        // Named rather than omitted, the way `unresolved refs` names a window this
+        // could not cover. The fix is `validate`, which is where the violation is
+        // defined, so the row says that rather than leaving the reader to guess
+        // what a declaration the fold skipped is supposed to mean (#1015).
+        ...section('declarations not folded', report.unfoldedDeclarations.map((row) => `${shortSha(row.sha)}${row.source === 'notes' ? ' (note)' : ''}  ` +
+            `${String(row.unread.length)} of ${String(row.declared)} unread: ${row.unread.join(', ')}`)),
     ];
+    if (report.unfoldedDeclarations.length > 0) {
+        const unread = report.unfoldedDeclarations.reduce((sum, row) => sum + row.unread.length, 0);
+        lines.push('', `note: ${String(unread)} declaration(s) have no lifecycle because their block declares ` +
+            'more than one Record-Id, which is a cardinality violation — run commitlore validate ' +
+            'on the commits above.');
+    }
     if (report.truncated) {
         lines.push('', `note: only the most recent ${DEFAULT_SCAN_LIMIT} commits were scanned; run with --all-history for the whole record.`);
     }
