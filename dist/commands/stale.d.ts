@@ -125,6 +125,31 @@ export interface StaleReport {
      */
     unresolvedRefs: Violation[];
     idCollisions: Violation[];
+    /**
+     * #1015: declarations the fold could not take, because their block carries
+     * more than one `Record-Id`.
+     *
+     * `Record-Id` is single-valued (`core/types.ts`), so a block carrying several
+     * is malformed and `validate` reports it as `cardinality`. The fold has no
+     * defined answer for it and keeps one declaration per block; what was missing
+     * was any report that the others existed. A repository declaring 52 ids was
+     * reported as having 32 records with nothing saying where the other twenty
+     * went.
+     *
+     * Counted rather than resolved on purpose: splitting a block at each
+     * `Record-Id` would invent a boundary SPEC does not define and would make
+     * `stale` report records `validate` calls invalid.
+     */
+    unfoldedDeclarations: UnfoldedDeclarations[];
+}
+/** One commit whose block carried declarations the fold could not take. */
+export interface UnfoldedDeclarations {
+    sha: string;
+    source: RecordSource;
+    /** Declarations in the block, of which the fold keeps one. */
+    declared: number;
+    /** The ids the fold did not take, in the order the block declares them. */
+    unread: string[];
 }
 export declare const buildReport: (scan: Scan, at: Date, 
 /**
