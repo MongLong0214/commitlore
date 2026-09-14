@@ -51,6 +51,7 @@
  * substring matching (printable ASCII, >= 3 characters, no LIKE wildcards).
  */
 import type { DatabaseSync } from 'node:sqlite';
+import { type RepoFacts } from './git.js';
 import { type Trailer } from './types.js';
 export type IndexDatabase = DatabaseSync;
 /**
@@ -173,6 +174,13 @@ export interface IndexHandle {
      * can report what actually happened instead of "no baseline commit".
      */
     discardedReason: string | null;
+    /**
+     * Repository facts this request has already read, or `undefined` when the
+     * caller is not one request. A handle is opened and closed per invocation, so
+     * this is exactly the lifetime #987 asked for — nothing here outlives the
+     * caller that opened the handle.
+     */
+    readonly facts: RepoFacts | undefined;
 }
 export interface OpenIndexOptions {
     cwd?: string;
@@ -191,6 +199,11 @@ export interface OpenIndexOptions {
     budget?: ScanBudget;
     /** Filled in when `budget` trips. The same object the caller will report. */
     cost?: ScanCost;
+    /**
+     * Request-owned memo for repository facts. Absent means every read spawns,
+     * which is what a caller that is not one request wants.
+     */
+    facts?: RepoFacts;
 }
 /**
  * Absolute path of the index file. `--git-path` is what makes this correct

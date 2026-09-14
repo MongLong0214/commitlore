@@ -10,6 +10,7 @@
  * `serializeTrailers` writes it and `git interpret-trailers --parse` reads it,
  * exactly as for a commit message. There is no second format.
  */
+import { type RepoFacts } from './git.js';
 import { type IsolatedBlocks } from './trailers.js';
 import type { Trailer } from './types.js';
 /** The mirror's ref. Not configurable: it is part of the protocol (SPEC §1). */
@@ -34,6 +35,12 @@ export declare const NOTES_REF = "refs/notes/commitlore";
 export declare const NOTES_REFSPEC = "refs/notes/*:refs/notes/*";
 export interface NotesOptions {
     cwd?: string;
+    /**
+     * Facts this request has already read from the repository. Only the plain
+     * reads consult it -- anything that writes a ref, or that re-reads one to
+     * check it moved, must ask git itself.
+     */
+    facts?: RepoFacts;
 }
 export interface WriteRecordOptions extends NotesOptions {
     /** Overwrite an existing note. Without it, an existing note is an error. */

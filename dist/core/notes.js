@@ -249,7 +249,13 @@ export const forcesNotes = (refspec) => refspec.startsWith('+') && coversNotes(r
  * evidence that there is nothing upstream, so the answer stays incomplete.
  */
 export const notesAvailability = (opts = {}) => {
-    const ref = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
+    // The same argv the index pass resolves the mirror with, so one request asks
+    // once. `listRemotes` and the refspec reads below are still per-call: they
+    // read configuration, which this does not memoize.
+    const refArgv = ['rev-parse', '--verify', '--quiet', NOTES_REF];
+    // Branched here rather than through a helper in `git.ts`, so the spawn stays
+    // on this module's `execGit` and a test that stubs it still sees this read.
+    const ref = opts.facts === undefined ? execGit(refArgv, gitOptions(opts)) : opts.facts.once(refArgv);
     if (ref.code === 0)
         return 'present';
     // No remote is not "unverified"; it is verified. There is nowhere for an

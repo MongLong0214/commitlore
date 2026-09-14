@@ -53,6 +53,44 @@ export const execGit = (args, opts = {}) => {
     return gitResultFromSpawn(result);
 };
 /**
+ * The spawn is the caller's, not this module's, and that is not a style choice.
+ *
+ * `r-pinnedmirror957` records what happens when a reader reaches git through a
+ * door the tests do not know about: four tests here wrapped `execGit` and not
+ * `execGitBytes`, and every failure they injected passed straight through the
+ * unwrapped one while they went on passing. A memo that closed over this
+ * module's own `execGit` would be a third such door — a test that stubs the
+ * exported binding would not be consulted, and its injection would silently not
+ * arrive. Taking the function from the caller means the memo runs whatever the
+ * caller's binding resolves to, mocked or real.
+ */
+export const newRepoFacts = (cwd, exec) => {
+    const answered = new Map();
+    let reused = 0;
+    return {
+        once: (args) => {
+            const key = JSON.stringify(args);
+            const already = answered.get(key);
+            if (already !== undefined) {
+                reused += 1;
+                return already;
+            }
+            const result = exec(args, { cwd });
+            answered.set(key, result);
+            return result;
+        },
+        reused: () => reused,
+    };
+};
+/**
+ * `facts.once` when a request owns one, a plain spawn when it does not.
+ *
+ * Only for readers *in this module*, whose `execGit` is this module's either
+ * way. A reader in another module must branch at its own call site, so the
+ * spawn stays on the binding that module imported -- see `newRepoFacts`.
+ */
+const askGit = (cwd, args, facts) => facts === undefined ? execGit(args, { cwd }) : facts.once(args);
+/**
  * The same spawn, with stdout kept as bytes.
  *
  * `git cat-file --batch` frames each object with a byte length, and a decoded
@@ -141,11 +179,14 @@ const GIT_NO_SUCH_REF = 1;
  * repository, so `rev-parse --git-dir` is asked first: it succeeds for an empty
  * repository and fails for everything else.
  */
-export const historyAvailability = (cwd) => {
-    const dir = execGit(['rev-parse', '--git-dir'], { cwd });
+export const historyAvailability = (cwd, facts) => {
+    const dir = askGit(cwd, ['rev-parse', '--git-dir'], facts);
     if (dir.code !== 0)
         return 'unavailable';
-    const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], { cwd });
+    // The same argv the index's own HEAD resolution runs, so within one request
+    // the two share a spawn rather than asking twice. `r-4e29b7` recorded this
+    // pair as unmeasured; it is measured now, in `newRepoFacts`.
+    const head = askGit(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], facts);
     if (head.code === 0 && head.stdout.trim() !== '')
         return 'ready';
     // Exit 1 with no output is git saying the ref is absent — an unborn HEAD.
@@ -156,11 +197,13 @@ export const historyAvailability = (cwd) => {
     return 'unavailable';
 };
 export const SHALLOW_HISTORY_CAVEAT = 'this clone has shallow history, so this answer may be missing records that exist upstream';
-export const hasShallowHistory = (cwd) => {
-    const shallow = execGit(['rev-parse', '--git-path', 'shallow'], { cwd });
+export const hasShallowHistory = (cwd, facts) => {
+    // Only the pathname is memoized. Whether the file is *there* is read every
+    // time, because `git fetch --unshallow` removes it without changing its name.
+    const shallow = askGit(cwd, ['rev-parse', '--git-path', 'shallow'], facts);
     return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
-export const readVantage = (cwd) => {
+export const readVantage = (cwd, facts) => {
     /*
      * One `rev-parse`, not three. It takes several arguments and prints a line
      * for each, and every case this has to answer leaves usable output even when
@@ -173,9 +216,7 @@ export const readVantage = (cwd) => {
      * Lines are matched by shape rather than by position, because which of them
      * are present is exactly what varies between those cases.
      */
-    const read = execGit(['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD', '@{upstream}'], {
-        cwd,
-    });
+    const read = askGit(cwd, ['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD', '@{upstream}'], facts);
     const lines = read.stdout.split('\n').map((line) => line.trim()).filter((line) => line !== '');
     const sha = lines.find((line) => isFullObjectId(line)) ?? '';
     // `refs/heads/x`, never the bare `HEAD` a detached head prints -- reading that

@@ -43,6 +43,53 @@ export declare const gitResultFromSpawn: (result: SpawnSyncReturns<string>) => G
  */
 export declare const execGit: (args: string[], opts?: ExecGitOptions) => GitResult;
 /**
+ * Facts about a repository that cannot change while one request is being
+ * answered, read once and reused by whoever needs them next.
+ *
+ * The problem this solves is duplication inside a single invocation, not
+ * between invocations. Answering one `query` resolves HEAD at least three times
+ * -- the index refresh, `historyAvailability`, `readVantage` -- and two of those
+ * run byte-identical argv: `rev-parse --verify --quiet HEAD^{commit}`. Measured
+ * on this repository at 1,621 commits with a complete index, a query spends 18
+ * git processes and a *repeated* query spends 18 again, of which 9 are
+ * `rev-parse` and 4 are `config`.
+ *
+ * Keyed on the argv, so a reader opts in per call site and nothing is shared
+ * that the caller did not ask to share. That matters more than it looks: a
+ * command whose answer this invocation itself changes -- anything after a commit
+ * or a notes write -- must not be memoized, and an argv-keyed cache cannot tell
+ * the difference. The threading is the safety mechanism, not an inconvenience.
+ *
+ * The whole result is stored, never a parsed value. Callers distinguish "absent"
+ * from "git could not answer" by exit code and stderr (`historyAvailability`
+ * does exactly that), and a cache that kept only the sha would quietly flatten
+ * those into one.
+ *
+ * Lifetime is the request. There is deliberately no module-level instance: a
+ * cache that outlives an invocation is the staleness `r-staleonepass` rejects
+ * for `CollectCache` and `RangeCache`, and this is not an argument for
+ * revisiting that.
+ */
+export interface RepoFacts {
+    /** Runs `args` once per instance; later callers get the first result. */
+    once: (args: string[]) => GitResult;
+    /** How many spawns this instance avoided. For measurement, not for logic. */
+    reused: () => number;
+}
+/**
+ * The spawn is the caller's, not this module's, and that is not a style choice.
+ *
+ * `r-pinnedmirror957` records what happens when a reader reaches git through a
+ * door the tests do not know about: four tests here wrapped `execGit` and not
+ * `execGitBytes`, and every failure they injected passed straight through the
+ * unwrapped one while they went on passing. A memo that closed over this
+ * module's own `execGit` would be a third such door — a test that stubs the
+ * exported binding would not be consulted, and its injection would silently not
+ * arrive. Taking the function from the caller means the memo runs whatever the
+ * caller's binding resolves to, mocked or real.
+ */
+export declare const newRepoFacts: (cwd: string, exec: typeof execGit) => RepoFacts;
+/**
  * The same spawn, with stdout kept as bytes.
  *
  * `git cat-file --batch` frames each object with a byte length, and a decoded
@@ -110,9 +157,9 @@ export type HistoryAvailability = 'ready' | 'empty' | 'unavailable';
  * repository, so `rev-parse --git-dir` is asked first: it succeeds for an empty
  * repository and fails for everything else.
  */
-export declare const historyAvailability: (cwd: string) => HistoryAvailability;
+export declare const historyAvailability: (cwd: string, facts?: RepoFacts) => HistoryAvailability;
 export declare const SHALLOW_HISTORY_CAVEAT = "this clone has shallow history, so this answer may be missing records that exist upstream";
-export declare const hasShallowHistory: (cwd: string) => boolean;
+export declare const hasShallowHistory: (cwd: string, facts?: RepoFacts) => boolean;
 /**
  * Where an answer was read from — the half of completeness nothing reported.
  *
@@ -161,7 +208,7 @@ export interface Vantage {
      */
     readonly behind: number | null;
 }
-export declare const readVantage: (cwd: string) => Vantage;
+export declare const readVantage: (cwd: string, facts?: RepoFacts) => Vantage;
 /** The caveat for a vantage that is behind, in the words a caller can act on. */
 export declare const vantageCaveat: (vantage: Vantage) => string | null;
 /**

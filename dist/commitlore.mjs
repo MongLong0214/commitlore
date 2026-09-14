@@ -11517,6 +11517,25 @@ var execGit = (args, opts = {}) => {
   });
   return gitResultFromSpawn(result);
 };
+var newRepoFacts = (cwd, exec) => {
+  const answered = /* @__PURE__ */ new Map();
+  let reused = 0;
+  return {
+    once: (args) => {
+      const key = JSON.stringify(args);
+      const already = answered.get(key);
+      if (already !== void 0) {
+        reused += 1;
+        return already;
+      }
+      const result = exec(args, { cwd });
+      answered.set(key, result);
+      return result;
+    },
+    reused: () => reused
+  };
+};
+var askGit = (cwd, args, facts) => facts === void 0 ? execGit(args, { cwd }) : facts.once(args);
 var execGitBytes = (args, opts = {}) => {
   const result = spawnSync("git", args, {
     shell: false,
@@ -11563,23 +11582,25 @@ var resolveRevision = (cwd, revision) => {
   return isFullObjectId(resolved) ? resolved : null;
 };
 var GIT_NO_SUCH_REF = 1;
-var historyAvailability = (cwd) => {
-  const dir = execGit(["rev-parse", "--git-dir"], { cwd });
+var historyAvailability = (cwd, facts) => {
+  const dir = askGit(cwd, ["rev-parse", "--git-dir"], facts);
   if (dir.code !== 0) return "unavailable";
-  const head = execGit(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], { cwd });
+  const head = askGit(cwd, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], facts);
   if (head.code === 0 && head.stdout.trim() !== "") return "ready";
   if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === "") return "empty";
   return "unavailable";
 };
 var SHALLOW_HISTORY_CAVEAT = "this clone has shallow history, so this answer may be missing records that exist upstream";
-var hasShallowHistory = (cwd) => {
-  const shallow = execGit(["rev-parse", "--git-path", "shallow"], { cwd });
+var hasShallowHistory = (cwd, facts) => {
+  const shallow = askGit(cwd, ["rev-parse", "--git-path", "shallow"], facts);
   return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
-var readVantage = (cwd) => {
-  const read = execGit(["rev-parse", "HEAD", "--symbolic-full-name", "HEAD", "@{upstream}"], {
-    cwd
-  });
+var readVantage = (cwd, facts) => {
+  const read = askGit(
+    cwd,
+    ["rev-parse", "HEAD", "--symbolic-full-name", "HEAD", "@{upstream}"],
+    facts
+  );
   const lines = read.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
   const sha = lines.find((line2) => isFullObjectId(line2)) ?? "";
   const branchRef = lines.find((line2) => line2.startsWith("refs/heads/"));
@@ -11965,7 +11986,8 @@ var coversNotes = (refspec) => {
 };
 var forcesNotes = (refspec) => refspec.startsWith("+") && coversNotes(refspec);
 var notesAvailability = (opts = {}) => {
-  const ref = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF], gitOptions(opts));
+  const refArgv = ["rev-parse", "--verify", "--quiet", NOTES_REF];
+  const ref = opts.facts === void 0 ? execGit(refArgv, gitOptions(opts)) : opts.facts.once(refArgv);
   if (ref.code === 0) return "present";
   const remotes = listRemotes(opts);
   if (remotes.length === 0) return "absent";
@@ -13442,8 +13464,9 @@ var readNoteRecords = (cwd, reachable, excluded, budget, cost, refSha) => {
   const pinned = refSha ?? revParseRef(cwd, NOTES_REF2);
   return pinned === null ? [] : readNotesFor(cwd, annotatedNotes(cwd, pinned, reachable), excluded, budget, cost);
 };
-var revParse = (cwd, rev) => {
-  const result = execGit(["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], { cwd });
+var ask = (cwd, args, facts) => facts === void 0 ? execGit(args, { cwd }) : facts.once(args);
+var revParse = (cwd, rev, facts) => {
+  const result = ask(cwd, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], facts);
   if (result.code === GIT_NO_SUCH_REF2 && result.stderr.trim() === "") return null;
   if (result.code !== 0) {
     throw Object.assign(new Error(`git could not resolve ${rev}: ${result.stderr.trim()}`), {
@@ -13454,8 +13477,8 @@ var revParse = (cwd, rev) => {
   const sha = result.stdout.trim();
   return sha === "" ? null : sha;
 };
-var revParseRef = (cwd, ref) => {
-  const result = execGit(["rev-parse", "--verify", "--quiet", ref], { cwd });
+var revParseRef = (cwd, ref, facts) => {
+  const result = ask(cwd, ["rev-parse", "--verify", "--quiet", ref], facts);
   if (result.code === GIT_NO_SUCH_REF2 && result.stderr.trim() === "") return null;
   if (result.code !== 0) {
     throw Object.assign(new Error(`git could not resolve ${ref}: ${result.stderr.trim()}`), {
@@ -13690,6 +13713,7 @@ var openIndex = (opts = {}) => {
     cwd,
     readonly: readonly2,
     ftsRequested,
+    facts: opts.facts,
     discardedReason: ftsDiscard ?? discardedReason,
     // Rebuilding the FTS table on open is how a damaged index became
     // unopenable: `DELETE FROM trailers_fts` and the reinsert run before any
@@ -13777,10 +13801,10 @@ var deleteNoteRows = (handle) => {
   });
 };
 var indexNotes = (handle, opts = {}, excluded, cost) => {
-  const refSha = revParseRef(handle.cwd, NOTES_REF2);
+  const refSha = revParseRef(handle.cwd, NOTES_REF2, handle.facts);
   const indexed = readMeta(handle.db, "notes_ref_sha");
   const force = opts.force ?? false;
-  const headSha2 = revParse(handle.cwd, "HEAD");
+  const headSha2 = revParse(handle.cwd, "HEAD", handle.facts);
   if (!force && refSha === indexed && headSha2 === readMeta(handle.db, NOTES_HEAD_META)) return 0;
   const stampedHead = readMeta(handle.db, NOTES_HEAD_META);
   if (!force && refSha === indexed && refSha !== null && headSha2 !== null && stampedHead !== null && pendingCount(handle.db, "notes") === 0 && isAncestor(handle.cwd, stampedHead, headSha2)) {
@@ -13843,12 +13867,12 @@ var rebuildIndex = (handle, opts = {}) => {
   const stale = schemaMismatch(handle.db);
   if (stale !== null) resetIndexFile(handle);
   const started = Date.now();
-  const head = revParse(handle.cwd, "HEAD");
+  const head = revParse(handle.cwd, "HEAD", handle.facts);
   const shas = head === null ? [] : revList(handle.cwd, head);
   const excluded = /* @__PURE__ */ new Map();
   const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
   const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
-  const notesRef = revParseRef(handle.cwd, NOTES_REF2);
+  const notesRef = revParseRef(handle.cwd, NOTES_REF2, handle.facts);
   const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost, notesRef);
   const stats = {
     ...emptyStats(handle, started),
@@ -13917,7 +13941,7 @@ var drainPending = (handle, outer, excluded, stats) => {
   const notes = pendingEntries(handle.db, "notes");
   if (notes.length === 0) return;
   const listedFrom = readMeta(handle.db, NOTES_PENDING_REF_META);
-  const currentRef = revParseRef(handle.cwd, NOTES_REF2);
+  const currentRef = revParseRef(handle.cwd, NOTES_REF2, handle.facts);
   if (listedFrom === null || listedFrom !== currentRef) {
     runInTransaction(handle.db, () => {
       deleteNoteRows(handle);
@@ -13956,7 +13980,7 @@ var drainPending = (handle, outer, excluded, stats) => {
 var incrementalProblem = (handle, head, last) => {
   if (last === null) return "the index has no baseline commit";
   if (last === head) return null;
-  if (revParse(handle.cwd, last) === null) {
+  if (revParse(handle.cwd, last, handle.facts) === null) {
     return `the last indexed commit ${last.slice(0, 12)} is gone (history was rewritten)`;
   }
   const ancestor = execGit(["merge-base", "--is-ancestor", last, head], { cwd: handle.cwd });
@@ -13990,7 +14014,7 @@ var updateIndex = (handle, opts = {}) => {
   }
   if (opts.force ?? false) return rebuildIndex(handle, { reason: "rebuild requested", ...rebuildOpts });
   const excluded = /* @__PURE__ */ new Map();
-  const head = revParse(handle.cwd, "HEAD");
+  const head = revParse(handle.cwd, "HEAD", handle.facts);
   if (head === null) {
     const stats2 = emptyStats(handle, started);
     runInTransaction(handle.db, () => {
@@ -16456,13 +16480,14 @@ var scanSource = (cwd, diagnostics, budgetMs, now) => {
     diagnostics
   };
 };
-var openSource = (cwd, noIndex, budgetMs, now) => {
+var openSource = (cwd, noIndex, budgetMs, now, facts) => {
   if (noIndex) return scanSource(cwd, [], budgetMs, now);
   const cost = { unreadCommits: 0, unreadNotes: 0 };
   const clock = now ?? Date.now;
   try {
     const { handle } = ensureIndex({
       cwd,
+      ...facts === void 0 ? {} : { facts },
       ...budgetMs === void 0 ? {} : { budget: { deadline: clock() + budgetMs, now: clock }, cost }
     });
     pinReadSnapshot(handle);
@@ -16801,7 +16826,8 @@ var runQuery = (opts = {}) => {
   if (Number.isNaN(cutoff)) throw new Error("runQuery: opts.at is not a valid Date");
   const paths = normalizePaths(opts);
   const scope = resolveScope(cwd, paths);
-  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow);
+  const facts = newRepoFacts(cwd, execGit);
+  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow, facts);
   const diagnostics = scope.diagnostics.slice();
   try {
     if (opts.explainEmptyResult === true) diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
@@ -16827,7 +16853,7 @@ var runQuery = (opts = {}) => {
       record2.trust = "blocked";
       record2.matchedTrailerKeys = [RECORD_ID_KEY3];
     }
-    const history = historyAvailability(cwd);
+    const history = historyAvailability(cwd, facts);
     if (history === "unavailable") {
       diagnostics.push(
         "git could not read this repository, so this is not an answer about its contents \u2014 treat it as unknown, not as empty"
@@ -16839,15 +16865,15 @@ var runQuery = (opts = {}) => {
         source.fromIndex ? `the index is incomplete: the build stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to finish the index` : `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
       );
     }
-    const shallow = hasShallowHistory(cwd);
+    const shallow = hasShallowHistory(cwd, facts);
     if (shallow) diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
-    const notes = notesAvailability({ cwd });
+    const notes = notesAvailability({ cwd, facts });
     if (notes === "unfetched") {
       diagnostics.push(
         `the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch ${NOTES_REF} by default). fix: commitlore doctor --fix, then git fetch`
       );
     }
-    const vantage = readVantage(cwd);
+    const vantage = readVantage(cwd, facts);
     const behindCaveat = vantageCaveat(vantage);
     if (behindCaveat !== null) diagnostics.push(behindCaveat);
     return {
