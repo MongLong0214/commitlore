@@ -4,6 +4,41 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.17
+
+Fifteen records that existed correctly in the notes mirror were being thrown
+away, and 1.3.16's own report of the loss was nearly twice the real number. Both
+were found by checking that number against the repository it was built for.
+
+**A note block is kept when the commit does not actually yield that record.**
+`collectRecords` drops a note block that duplicates what the commit declares,
+decided by asking whether every trailer in it also appears somewhere in the
+commit's trailers, unioned across blocks. That is right while the commit's blocks
+are well formed — the commit yields one record per block and the note adds
+nothing.
+
+A commit whose blocks were flattened into one carries every identity in that
+union and still yields a **single** record. So every well-formed block of the
+note was a subset of it, all sixteen were dropped as duplicates, and the records
+that existed only in the mirror disappeared. On the repository measured,
+`totalRecords` read **32 where it should read 47**.
+
+The test is now whether the commit side yields a record for *that identity*,
+together with the text comparison. Identity alone was tried and broke three
+existing tests, which were right to break: a note that claims an identity the
+commit declares while saying something else is the divergent-note collision both
+`validate` and `stale` exist to report. Both conditions are required, and each
+rules out a different failure.
+
+**The count of unfolded declarations only counts what nothing folds.** It had
+counted an id as lost whenever it was not the first in its block, without asking
+whether it reached a state from somewhere else. On the same repository that was
+32 against a true 17 — a report about missing records that sent the reader to
+repair records that were already intact.
+
+The seventeen that remain are real, and nothing here recovers them: their records
+exist only inside a malformed commit block.
+
 ## 1.3.16
 
 `stale` names the declarations it could not fold, instead of leaving them out of
