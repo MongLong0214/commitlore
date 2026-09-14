@@ -259,3 +259,131 @@ describe('#989 a refused connection cannot stage the nonce', () => {
     expect(message, "and never B's, which was refused").not.toContain('r-callerbbb01');
   }, 180_000);
 });
+
+/**
+ * #1005 step 1, on the surface a host actually sees.
+ *
+ * The unit test beside this (`test/verify-receipt.test.ts`) pins that a binding
+ * verification is issued a receipt and a refused one is not. What it cannot pin
+ * is that the receipt reaches the caller: that crosses the MCP boundary, and a
+ * field computed correctly and then dropped from the response would satisfy the
+ * unit test exactly.
+ *
+ * Steps 2 and 3 both rest on the caller *having* this value, so the moment it
+ * stops arriving the migration has nothing to build on.
+ */
+describe('#1005 verify_capture hands the receipt to the caller that earned it', () => {
+  it('returns a receipt when the verification bound records', async () => {
+    const dir = repo('receipt-ok');
+    const stub = await connect(dir);
+    const nonce = await prepared(stub);
+
+    const verified = await call(stub, 'commitlore_verify_capture', {
+      nonce,
+      draft: draftFor(QUOTE_A, 'r-receiptaa01'),
+      transcript: TRANSCRIPT,
+      diff: stagedDiff(dir),
+    });
+    expect(verified).toMatch(/"validation_result":\s*"pass"/);
+
+    const receipt = /"receipt"\s*:\s*"([0-9a-f]{32})"/.exec(verified)?.[1];
+    expect(receipt, `no receipt in the response: ${verified.slice(0, 400)}`).toBeTypeOf('string');
+    // Not the nonce. A receipt equal to it would be no identity at all, since
+    // every caller that can stage already holds the nonce.
+    expect(receipt).not.toBe(nonce);
+  }, 180_000);
+
+  it('returns none to a second caller, which bound nothing', async () => {
+    // The half that makes the field worth anything, and the case #989 is about.
+    //
+    // Written the obvious way first and it was wrong: a draft whose evidence is
+    // not in the transcript still *binds* the transaction, to an empty result,
+    // and is correctly issued a receipt. A receipt says "you bound this
+    // transaction", not "your records were accepted" -- which is why #989's own
+    // guard is keyed on `accepted.length > 0`, not on whether the store
+    // succeeded. The caller that must come away empty-handed is the **second**
+    // one, whose verification finds the transaction already bound.
+    const dir = repo('receipt-second');
+    const stub = await connect(dir);
+    const nonce = await prepared(stub);
+
+    const first = await call(stub, 'commitlore_verify_capture', {
+      nonce,
+      draft: draftFor(QUOTE_A, 'r-firstbind01'),
+      transcript: TRANSCRIPT,
+      diff: stagedDiff(dir),
+    });
+    expect(first).toMatch(/"receipt"/);
+
+    const second = await call(stub, 'commitlore_verify_capture', {
+      nonce,
+      draft: draftFor(QUOTE_B, 'r-secondbind1'),
+      transcript: TRANSCRIPT,
+      diff: stagedDiff(dir),
+    });
+    expect(second, 'the second verification replaced the first').not.toMatch(/"validation_result":\s*"pass"/);
+    expect(second, 'a caller that bound nothing was handed a receipt').not.toMatch(/"receipt"/);
+  }, 180_000);
+});
+
+/**
+ * #1005 step 2, across the protocol boundary.
+ *
+ * The unit tests reach `stageCaptureRecord` directly, so they cannot see the
+ * argument being dropped between the tool schema and the call — a `receipt`
+ * declared in the schema and never read would satisfy every one of them while
+ * checking nothing. Step 3 turns this argument into the gate, so it has to
+ * actually arrive.
+ */
+describe('#1005 stage_capture checks a receipt sent over the protocol', () => {
+  it('stages when the receipt is the one verify_capture returned', async () => {
+    // The control: the same sequence with the right value must still work, or
+    // the refusal below proves nothing.
+    const dir = repo('stage-receipt-ok');
+    const stub = await connect(dir);
+    const nonce = await prepared(stub);
+
+    const verified = await call(stub, 'commitlore_verify_capture', {
+      nonce,
+      draft: draftFor(QUOTE_A, 'r-stagegood01'),
+      transcript: TRANSCRIPT,
+      diff: stagedDiff(dir),
+    });
+    const receipt = /"receipt"\s*:\s*"([0-9a-f]{32})"/.exec(verified)?.[1];
+    expect(receipt, `no receipt to present: ${verified.slice(0, 300)}`).toBeTypeOf('string');
+
+    const staged = await call(stub, 'commitlore_stage_capture', { nonce, receipt });
+    expect(staged).toMatch(/"staged":\s*true/);
+  }, 180_000);
+
+  it('refuses a receipt it never issued', async () => {
+    const dir = repo('stage-receipt-bad');
+    const stub = await connect(dir);
+    const nonce = await prepared(stub);
+
+    const verified = await call(stub, 'commitlore_verify_capture', {
+      nonce,
+      draft: draftFor(QUOTE_A, 'r-stagebad001'),
+      transcript: TRANSCRIPT,
+      diff: stagedDiff(dir),
+    });
+    const receipt = /"receipt"\s*:\s*"([0-9a-f]{32})"/.exec(verified)?.[1];
+    expect(receipt).toBeTypeOf('string');
+
+    // Shaped like one and never issued.
+    const refused = await call(stub, 'commitlore_stage_capture', {
+      nonce,
+      receipt: '0'.repeat(32),
+    });
+    expect(refused).toMatch(/receipt presented was not issued/);
+    expect(refused).not.toMatch(/"staged":\s*true/);
+    // And it does not echo what the caller failed to prove it held.
+    expect(refused).not.toContain(receipt as string);
+
+    // The transaction survived the refusal, so the caller that does hold the
+    // receipt can still stage. A refusal that consumed it would be a denial of
+    // service dressed as a check.
+    const staged = await call(stub, 'commitlore_stage_capture', { nonce, receipt });
+    expect(staged).toMatch(/"staged":\s*true/);
+  }, 180_000);
+});

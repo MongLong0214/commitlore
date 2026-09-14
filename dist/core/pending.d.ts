@@ -54,6 +54,30 @@ export interface PendingRecord {
      * so a capture that made no declaration leaves byte-identical bytes on disk.
      */
     unattended?: boolean;
+    /**
+     * Issued by the verification that bound this transaction's records (#1005).
+     *
+     * Step 1 of three: written here and returned to the caller that earned it,
+     * ignored at stage. Step 2 checks it when present; step 3 requires it, and
+     * only step 3 is breaking — a transaction written before step 1 carries no
+     * receipt and would stop being stageable.
+     *
+     * Optional for the same reason `unattended` is, and the reason this needs no
+     * `version` bump: a transaction that predates it must still read, and one
+     * written without it leaves byte-identical bytes on disk.
+     *
+     * It says "you bound this transaction", never "your records were accepted".
+     * A verification whose evidence is not in the transcript still binds — to an
+     * empty result — and is issued one; that is why #989's own guard is keyed on
+     * `accepted.length > 0` rather than on whether the store succeeded. The caller
+     * that comes away with nothing is the *second* one, whose verification finds
+     * the transaction already bound and stores nothing over it.
+     *
+     * What it can defend is a *protocol* caller that never verified this nonce.
+     * What it cannot defend against is anything that can read this file, since
+     * the receipt is stored in it. That is the threat #989 described and no more.
+     */
+    receipt?: string;
 }
 export declare class PendingFormatError extends Error {
     constructor(message: string);
@@ -182,10 +206,18 @@ export interface StoreVerificationOptions {
 /**
  * Stores verification results in the pending transaction.
  * Only succeeds if the current phase is 'prepared', and only for the caller
- * that holds the nonce lock — a losing racer returns false rather than
+ * that holds the nonce lock — a losing racer returns null rather than
  * reporting a write that another process will overwrite (#591).
+ *
+ * Returns the receipt this verification was issued, which is the handle #1005
+ * will require at stage. `null` means nothing was stored, so there is no
+ * receipt to hold — the two answers are the same fact and cannot drift apart.
+ *
+ * It is generated here rather than taken from the caller on purpose: a caller
+ * that could choose its own receipt could choose one it had seen, which is the
+ * whole of what this is meant to prevent.
  */
-export declare const storeVerification: (nonce: string, opts: StoreVerificationOptions) => boolean;
+export declare const storeVerification: (nonce: string, opts: StoreVerificationOptions) => string | null;
 export interface StagePendingOptions {
     cwd: string;
     expiryMinutes?: number;

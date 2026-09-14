@@ -19,6 +19,14 @@ export interface StageCaptureOptions {
     cwd: string;
     /** Override the expiry window (minutes). Default: 5. */
     expiryMinutes?: number;
+    /**
+     * The receipt this caller's verification was issued (#1005 step 2).
+     *
+     * Checked when presented and not required: a transaction written before
+     * receipts existed carries none, and a host that has not upgraded sends none.
+     * Step 3 makes it required, and that step is breaking for exactly those two.
+     */
+    receipt?: string;
 }
 /**
  * Stage a verified pending transaction.

@@ -46,6 +46,17 @@ export interface VerifyCaptureResult {
     validation_result: 'pass' | 'partial' | 'empty';
     incomplete: boolean;
     overlap_check: 'canonical_exact_only';
+    /**
+     * The receipt this call's verification was issued (#1005), when it bound the
+     * transaction.
+     *
+     * Absent for a read-only check, which binds nothing, and absent for a call
+     * that found the transaction already bound by someone else — that caller
+     * holds no handle to records it did not store, which is the point. Present
+     * for a refusal this caller *did* bind, including one that bound an empty
+     * result: this reports who bound the transaction, not whose records passed.
+     */
+    receipt?: string;
 }
 /** The duplicate-check view used by capture verification. */
 export interface CaptureVerificationHistory {

@@ -262,9 +262,21 @@ const runVerifyCaptureRecords = (opts) => {
     const { nonce, draft, transcript, diff, cwd } = opts;
     const accepted = [];
     const rejected = [];
-    // True when the result is bound to the transaction — vacuously so for a
-    // read-only check, which has nothing to bind.
-    const persist = (result) => opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
+    /**
+     * Binds the result to the transaction, and says what that binding is worth.
+     *
+     * `bound` is true when the result is the one the transaction now holds —
+     * vacuously so for a read-only check, which has nothing to bind and therefore
+     * earns no receipt. `receipt` is present only where a write actually happened,
+     * so "bound" and "holds a handle" stay separable: the read-only case is the
+     * one where they differ.
+     */
+    const persist = (result) => {
+        if (opts.readOnly === true)
+            return { bound: true, receipt: null };
+        const receipt = storeVerificationResult(nonce, cwd, result);
+        return { bound: receipt !== null, receipt };
+    };
     /**
      * The only way out of this function that writes.
      *
@@ -277,8 +289,10 @@ const runVerifyCaptureRecords = (opts) => {
      * reintroduce by copying two lines.
      */
     const settle = (result) => {
-        if (persist(result))
-            return result;
+        const stored = persist(result);
+        if (stored.bound) {
+            return stored.receipt === null ? result : { ...result, receipt: stored.receipt };
+        }
         // Changing only what is returned was not enough. `stage` reads the *stored*
         // transaction, so a replay whose result could not be stored left the
         // earlier record staged-able: the caller was told empty, and the commit

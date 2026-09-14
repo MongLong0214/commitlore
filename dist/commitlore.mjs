@@ -17597,12 +17597,13 @@ var readPending = (nonce, opts) => {
 var storeVerification = (nonce, opts) => {
   validateNonce(nonce);
   const lock = tryLockPending(nonce, opts.cwd);
-  if (!lock.held) return false;
+  if (!lock.held) return null;
   try {
     const record2 = readPending(nonce, { cwd: opts.cwd });
-    if (!record2) return false;
-    if (record2.phase !== "prepared") return false;
+    if (!record2) return null;
+    if (record2.phase !== "prepared") return null;
     const now = (/* @__PURE__ */ new Date()).toISOString();
+    const receipt = randomBytes2(16).toString("hex");
     const updated = {
       ...record2,
       phase: "verified",
@@ -17613,11 +17614,12 @@ var storeVerification = (nonce, opts) => {
       evidence_hash: opts.evidence_hash,
       validation_result: opts.validation_result,
       overlap_check: opts.overlap_check,
-      incomplete: opts.incomplete
+      incomplete: opts.incomplete,
+      receipt
     };
     const filePath = pendingFilePath(nonce, opts.cwd);
     atomicWriteJson(filePath, updated);
-    return true;
+    return receipt;
   } finally {
     if (lock.created) unlockPending(nonce, opts.cwd);
   }
@@ -17990,9 +17992,16 @@ var runVerifyCaptureRecords = (opts) => {
   const { nonce, draft, transcript, diff, cwd } = opts;
   const accepted = [];
   const rejected = [];
-  const persist = (result) => opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
+  const persist = (result) => {
+    if (opts.readOnly === true) return { bound: true, receipt: null };
+    const receipt = storeVerificationResult(nonce, cwd, result);
+    return { bound: receipt !== null, receipt };
+  };
   const settle = (result) => {
-    if (persist(result)) return result;
+    const stored = persist(result);
+    if (stored.bound) {
+      return stored.receipt === null ? result : { ...result, receipt: stored.receipt };
+    }
     if (opts.readOnly !== true) {
       try {
         deletePending(nonce, { cwd });
@@ -18200,6 +18209,14 @@ var stageCaptureRecord = (opts) => {
   const record2 = readPending(nonce, { cwd });
   if (!record2) return null;
   if (record2.phase !== "verified") return null;
+  if (opts.receipt !== void 0 && opts.receipt !== record2.receipt) {
+    throw markCaptureError(
+      new Error(
+        "Staging rejected: the receipt presented was not issued by the verification that bound this transaction. What is stored under this nonce belongs to another caller; prepare a new transaction and verify again."
+      ),
+      "usage"
+    );
+  }
   if (record2.validation_result === "empty") return null;
   if (record2.incomplete) return null;
   const policy = resolvePolicy(cwd);
@@ -37640,13 +37657,17 @@ var TOOLS = [
   },
   {
     name: STAGE_CAPTURE_TOOL,
-    description: "Stage a verified capture transaction: advances the pending record from verified to staged, stamps expires_at (staged_at + 5 minutes), and makes it eligible for the prepare-commit-msg hook. Accepts only a nonce; all bindings are server-owned and computed from stored state.",
+    description: "Stage a verified capture transaction: advances the pending record from verified to staged, stamps expires_at (staged_at + 5 minutes), and makes it eligible for the prepare-commit-msg hook. All bindings are server-owned and computed from stored state; the only inputs are the nonce and, optionally, the receipt your verification was issued.",
     inputSchema: {
       type: "object",
       properties: {
         nonce: {
           type: "string",
           description: "the 32-character lowercase hex nonce returned by prepare_capture"
+        },
+        receipt: {
+          type: "string",
+          description: "the receipt verify_capture returned to you. Optional today and checked when sent: a receipt that was not issued by the verification which bound this transaction is refused. Send it whenever you have one."
         }
       },
       required: ["nonce"],
@@ -37887,7 +37908,13 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         accepted: result.accepted,
         rejected: result.rejected,
         incomplete: result.incomplete,
-        overlap_check: result.overlap_check
+        overlap_check: result.overlap_check,
+        // Present only when this call's verification bound the transaction
+        // (#1005). A refused caller gets no receipt, which is the handle stage
+        // will require once the three-step migration finishes; today stage
+        // ignores it, so this field is additive and changes nothing a host
+        // already does.
+        ...result.receipt === void 0 ? {} : { receipt: result.receipt }
       });
     },
     [STAGE_CAPTURE_TOOL]: (args) => {
@@ -37901,7 +37928,12 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
           reason: "this connection last verified this nonce without binding any record, so what is stored under it is not yours to stage. Prepare a new transaction and verify again."
         });
       }
-      const result = stageCaptureRecord({ nonce, cwd: root });
+      const receipt = stringArg(args, "receipt");
+      const result = stageCaptureRecord({
+        nonce,
+        cwd: root,
+        ...receipt === void 0 ? {} : { receipt }
+      });
       if (result === null) {
         return asText({ staged: false, reason: "nothing to stage (empty/incomplete verification or wrong phase)" });
       }
