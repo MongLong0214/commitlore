@@ -317,9 +317,26 @@ jobs:
           # branch carries another. `git push` exiting zero says the push was
           # accepted, not that it is still the tip.
           expected="$(git rev-parse "$branch")"
-          landed="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$branch" --jq .object.sha)"
+          # Retried, for the same reason the commit lookup below is. A ref can
+          # 404 or answer with its previous value for a moment after the push
+          # that created it -- read-after-write, and the push has already
+          # returned. Without the retry that reads as "something else wrote it"
+          # and fails a build whose push succeeded: three times in one day
+          # (#994, #998, #1000), each time with the branch correct on the
+          # server and only the confirmation late.
+          #
+          # The check itself stays exactly as strict. What is retried is
+          # reading, never accepting: a ref that settles on a different sha
+          # still fails, and running out of attempts still fails.
+          landed=""
+          for attempt in 1 2 3 4 5 6; do
+            landed="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$branch" --jq .object.sha 2>/dev/null || true)"
+            [ "$landed" = "$expected" ] && break
+            echo "--- $branch reads as ${landed:-unreadable} (attempt $attempt); waiting for $expected"
+            sleep 3
+          done
           if [ "$landed" != "$expected" ]; then
-            echo "::error::$branch is $landed on the server, not the $expected this pushed -- something else wrote it"
+            echo "::error::$branch is ${landed:-unreadable} on the server, not the $expected this pushed -- something else wrote it"
             exit 1
           fi
 
