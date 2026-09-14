@@ -110,6 +110,56 @@ out(`    index ${indexState}   node ${process.version}\n`);
 out(`    load1 ${load.toFixed(2)} on ${String(cpus().length)} cpus`);
 out(load > 4 ? '   *** BUSY: counts are exact, read nothing into any duration ***\n' : '\n');
 
+
+/**
+ * Reads rows from the index with a throwaway child, so this harness never holds
+ * the database open while the thing it measures writes to it.
+ */
+const readJson = (dbPath, sql) => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `const {DatabaseSync}=require('node:sqlite');` +
+        `const d=new DatabaseSync(${JSON.stringify(dbPath)},{readOnly:true});` +
+        `process.stdout.write(JSON.stringify(d.prepare(${JSON.stringify(sql)}).all()));`,
+    ],
+    { encoding: 'utf8', maxBuffer: 1 << 26 },
+  );
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * One incremental update with the handle held open, reporting the WAL frames it
+ * wrote before anything checkpoints them away.
+ */
+const WAL_PROBE = `
+import { statSync } from 'node:fs';
+import { join } from 'node:path';
+const { openIndex, closeIndex, updateIndex } = await import(${JSON.stringify(join(PACKAGE_ROOT, 'dist', 'core', 'index-db.js'))});
+const dir = process.env.COMMITLORE_PROBE_DIR;
+const gitDir = (await import('node:child_process')).execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: dir, encoding: 'utf8' }).trim();
+const wal = join(gitDir, 'commitlore', 'index.db-wal');
+const size = () => { try { return statSync(wal).size; } catch { return 0; } };
+const handle = openIndex({ cwd: dir });
+try {
+  handle.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  const before = size();
+  const stats = updateIndex(handle, {});
+  const after = size();
+  const pageSize = Object.values(handle.db.prepare('PRAGMA page_size').get())[0];
+  const frame = 24 + Number(pageSize);
+  const toFrames = (bytes) => (bytes <= 32 ? 0 : Math.round((bytes - 32) / frame));
+  process.stdout.write(JSON.stringify({ frames: toFrames(after) - toFrames(before), trailersIndexed: stats.trailersIndexed }) + '\\n');
+} finally {
+  closeIndex(handle);
+}
+`;
+
 // --- #962: what a second request in one MCP process repeats -----------------
 
 const mcpRepeats = async () => {
@@ -322,20 +372,54 @@ const storage = () => {
   row('index.db bytes', bytes);
   row('trailer rows', trailers);
   row('commit_path rows', paths);
-  row('bytes per trailer row', trailers === 0 ? 'n/a' : Math.round(bytes / trailers));
   row('page_count x page_size', pragma('page_count') * pragma('page_size'));
   row('freelist pages', pragma('freelist_count'));
 
-  // Six commits, not one, alternating record-bearing and not.
+  // Per table, not the whole file divided by a row count.
   //
-  // One commit is the wrong sample and reports the wrong thing. The first write
-  // after a full rebuild transitions the file off a freshly compacted layout,
-  // and that one-off looked like per-commit cost: 4.66 MB and 1,138 pages on
-  // this repository, 139 KB on a generated one -- while every commit after it
-  // grew the file by exactly zero, because the pages come off the freelist.
-  // A measurement that stopped at the first would have priced "lossless" at a
-  // megabyte a commit.
+  // `bytes / trailer rows` averages in every index, the FTS mirror, the
+  // freelist and page overhead, and says nothing about the marginal size of a
+  // row in a table that does not exist yet. This project quoted 1,100 bytes a
+  // row from that division and used it to call a schema change cheap; the
+  // `trailers` table's own rows are 297.
+  out('\n    per table, from dbstat:\n');
+  const perTable = readJson(dbPath, `
+    SELECT name, sum(pgsize) AS bytes, count(*) AS pages FROM dbstat
+     WHERE name NOT LIKE 'sqlite_%' GROUP BY name ORDER BY bytes DESC LIMIT 8`);
+  for (const entry of perTable) {
+    out(
+      `      ${String(entry.name).padEnd(26)}${String(entry.bytes).padStart(10)} bytes` +
+        `${String(entry.pages).padStart(6)} pages\n`,
+    );
+  }
+  if (trailers > 0) {
+    const own = perTable.find((entry) => entry.name === 'trailers');
+    if (own !== undefined) row('bytes per trailers row', Math.round(Number(own.bytes) / trailers));
+  }
+
+  // Pages WRITTEN, not pages added.
+  //
+  // The file-size and `page_count` deltas below are growth. An update that
+  // rewrites a page in place, or takes one off the freelist, moves neither --
+  // which is how this harness previously reported "steady-state write
+  // amplification is zero" for an index that writes tens of kilobytes per
+  // commit. WAL frames count what actually reached the disk: the file is a
+  // 32-byte header plus one frame of `page_size + 24` per page written.
+  //
+  // Counted with the handle still open. Closing checkpoints the WAL and erases
+  // exactly what is being measured, which is why the first attempt read zero
+  // every time.
   const probes = 6;
+  const walPath = `${dbPath}-wal`;
+  const frames = () => {
+    try {
+      const size = statSync(walPath).size;
+      return size <= 32 ? 0 : Math.round((size - 32) / (24 + pragma('page_size')));
+    } catch {
+      return 0;
+    }
+  };
+
   const deltas = [];
   let made = 0;
   try {
@@ -358,45 +442,57 @@ const storage = () => {
         { cwd: repo },
       );
       made += 1;
-      const before = statSync(dbPath).size;
-      const pagesBefore = pragma('page_count');
-      const result = spawnSync(process.execPath, [cli, 'index', '--json'], {
-        cwd: repo,
+
+      const beforeBytes = statSync(dbPath).size;
+      const beforePages = pragma('page_count');
+      // The update runs in a child that holds the handle open across it and
+      // reports the frames before closing: a close checkpoints the WAL and
+      // erases exactly what this counts.
+      const probe = spawnSync(process.execPath, ['--input-type=module', '--eval', WAL_PROBE], {
         encoding: 'utf8',
-        maxBuffer: 1 << 28,
+        maxBuffer: 1 << 26,
+        env: { ...process.env, COMMITLORE_PROBE_DIR: repo },
       });
+      let wrote = '?';
       let rows = '?';
       try {
-        rows = String(JSON.parse(result.stdout).trailersIndexed);
+        const parsed = JSON.parse((probe.stdout.trim().split('\n').pop() ?? '{}'));
+        wrote = String(parsed.frames);
+        rows = String(parsed.trailersIndexed);
       } catch {
-        /* the count is a nicety; the byte delta is the measurement */
+        /* the byte deltas still stand on their own */
       }
       deltas.push({
         at,
         recorded,
         rows,
-        fileDelta: statSync(dbPath).size - before,
-        pageDelta: pragma('page_count') - pagesBefore,
+        fileDelta: statSync(dbPath).size - beforeBytes,
+        pageDelta: pragma('page_count') - beforePages,
+        frames: wrote,
       });
     }
   } finally {
-    // The probe commits are this script's, not the repository's.
-    if (made > 0) execFileSync('git', ['reset', '-q', '--mixed', `HEAD~${String(made)}`], { cwd: repo });
+    if (made > 0) {
+      execFileSync('git', ['reset', '-q', '--mixed', `HEAD~${String(made)}`], { cwd: repo });
+    }
     for (let at = 0; at < probes; at += 1) {
       rmSync(join(repo, `.commitlore-amplify-probe-${String(at)}`), { force: true });
     }
   }
 
-  out('\n    further commits, indexed incrementally one at a time:\n');
-  out('    #   record   rows   file delta   page delta\n');
+  out('\n    further commits, indexed one at a time (frames = pages written):\n');
+  out('      #   record   rows   file delta   page delta   frames   bytes written\n');
   for (const d of deltas) {
     out(
-      `    ${String(d.at).padStart(1)}   ${(d.recorded ? 'yes' : 'no').padEnd(6)}   ` +
-        `${d.rows.padStart(4)}   ${String(d.fileDelta).padStart(10)}   ${String(d.pageDelta).padStart(10)}\n`,
+      `      ${String(d.at)}   ${(d.recorded ? 'yes' : 'no').padEnd(6)}   ` +
+        `${d.rows.padStart(4)}   ${String(d.fileDelta).padStart(10)}   ` +
+        `${String(d.pageDelta).padStart(10)}   ${d.frames.padStart(6)}   ` +
+        `${String((Number(d.frames) || 0) * pragma('page_size')).padStart(12)}\n`,
     );
   }
   out(
-    '\n    Read the steady state, not the first row. "Lossless" would cost one row per\n' +
+    '\n    Read the frames column, not the file delta: a file that did not grow is not\n' +
+      '    a file nobody wrote to. And read the steady state, not the first row. "Lossless" would cost one row per\n' +
       '    processed commit whether it carries a record or not; the per-row figure above\n' +
       '    is what to multiply by the commit count to price it.\n',
   );
