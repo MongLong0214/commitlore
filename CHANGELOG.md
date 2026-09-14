@@ -4,6 +4,35 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.12
+
+A query asks git for each fact once instead of three times, and the canonical
+release workflow stops failing on a read it already knew to retry.
+
+**One request, one reading of each repository fact.** Answering a query resolved
+HEAD three times — the index refresh, the history-availability check and the
+vantage read — and two of those ran byte-identical argv. The notes ref was
+resolved twice the same way. On this repository at 1,621 commits with a complete
+index, a query spent **18** git processes and now spends **14**; a second path
+went 19 to 15. The saving lands on the first request, not only on a repeat, so it
+does not depend on how often a session happens to ask the same thing twice.
+
+The memo is threaded to each call site rather than wrapped around the spawn,
+because a command whose answer the same invocation changed must not be reused and
+nothing keyed on argv alone could tell the difference. One site is left reading
+git directly on purpose and says why: the check that re-reads the notes ref to
+confirm a pass matched it would, through the memo, compare the pass against
+itself.
+
+It lives for exactly one invocation. Nothing survives between requests, which is
+the half of the original proposal that was withdrawn — the histogram behind it
+established repeated work, not the net saving after validating every dependency,
+and three of those dependencies cost more to check than the issue assumed.
+
+**`canonical-merge` retries the ref read-back it pushed.** The workflow read the
+ref it had just pushed and failed with a 404 three times in one day, one line
+above a retry loop that existed for the read below it. Same loop, both reads.
+
 ## 1.3.11
 
 Two reports now say what they know, and three issues closed by a `Closes` line
