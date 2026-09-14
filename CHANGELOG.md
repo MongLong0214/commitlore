@@ -4,6 +4,44 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.16
+
+`stale` names the declarations it could not fold, instead of leaving them out of
+the count without a word.
+
+**A block that declares several `Record-Id`s leaves all but one with no
+lifecycle.** They cannot be reported superseded, expired or for review. On the
+repository this was found in, that is **32 declarations across seven blocks**,
+and the header said `of 32 record(s)` with nothing about them.
+
+The fold is not wrong to keep one. `Record-Id` is single-valued, so a block
+declaring several is malformed and `validate` reports it as `cardinality` — there
+is no defined answer for the fold to give. What was missing was any report that
+the others existed, which is the same silence `unresolved refs` exists to break
+for a window the scan could not cover.
+
+```
+declarations not folded
+  055ac9e4  15 of 16 unread: r-34ed9bf9ff05, r-33015efa341a, ...
+
+note: 32 declaration(s) have no lifecycle because their block declares more than
+one Record-Id, which is a cardinality violation — run commitlore validate on the
+commits above.
+```
+
+`--json` carries it as `unfoldedDeclarations`, so a CI job can fail on it. A
+repository whose blocks declare one id each gains no row.
+
+**Where those blocks come from is not a writer bug here.** The affected commits
+carry `committer: GitHub <noreply@github.com>`: the squash button on github.com
+composes the message itself and drops the blank lines that separated the blocks.
+`squash-preserve --message-file` writes correctly separated blocks, including for
+a range whose commits already carry several.
+
+Splitting a block at each `Record-Id` was rejected: it invents a record boundary
+SPEC does not define, and would make `stale` report records `validate` calls
+invalid.
+
 ## 1.3.15
 
 `stale` no longer reports a reference as dangling when the record it points at is

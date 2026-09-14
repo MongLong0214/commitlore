@@ -372,6 +372,32 @@ export interface StaleReport {
    */
   unresolvedRefs: Violation[];
   idCollisions: Violation[];
+  /**
+   * #1015: declarations the fold could not take, because their block carries
+   * more than one `Record-Id`.
+   *
+   * `Record-Id` is single-valued (`core/types.ts`), so a block carrying several
+   * is malformed and `validate` reports it as `cardinality`. The fold has no
+   * defined answer for it and keeps one declaration per block; what was missing
+   * was any report that the others existed. A repository declaring 52 ids was
+   * reported as having 32 records with nothing saying where the other twenty
+   * went.
+   *
+   * Counted rather than resolved on purpose: splitting a block at each
+   * `Record-Id` would invent a boundary SPEC does not define and would make
+   * `stale` report records `validate` calls invalid.
+   */
+  unfoldedDeclarations: UnfoldedDeclarations[];
+}
+
+/** One commit whose block carried declarations the fold could not take. */
+export interface UnfoldedDeclarations {
+  sha: string;
+  source: RecordSource;
+  /** Declarations in the block, of which the fold keeps one. */
+  declared: number;
+  /** The ids the fold did not take, in the order the block declares them. */
+  unread: string[];
 }
 
 /**
@@ -524,6 +550,7 @@ export const buildReport = (
     // fold asks and must get the same order to answer it with.
     ...partitionRefs(findDanglingRefs(ordered), scan, resolveIn),
     idCollisions: findIdCollisions(ordered),
+    unfoldedDeclarations: unfoldedDeclarations(ordered),
   };
 };
 
@@ -563,6 +590,38 @@ const partitionRefs = (
     danglingRefs: candidates.filter((violation) => !declared.has(violation.got)),
     unresolvedRefs: [],
   };
+};
+
+/**
+ * Declarations the fold will not take, because their block declares several.
+ *
+ * `foldLifecycle` reads one `Record-Id` per record and a record here is a
+ * *block*, so a block carrying several leaves the rest with no lifecycle state.
+ * That is not the fold being wrong -- `Record-Id` is single-valued, the block is
+ * malformed, and `validate` reports it as `cardinality`. What was wrong is that
+ * nothing said so: a repository declaring 52 ids reported 32 records and no
+ * difference (#1015).
+ *
+ * The first declaration is the one the fold keeps, matching `trailerValue`, so
+ * `unread` is every other one in the order the block declares them. If that
+ * choice ever changes, this has to change with it or the report names the wrong
+ * ids -- which is worse than naming none.
+ */
+const unfoldedDeclarations = (records: readonly CollectedRecord[]): UnfoldedDeclarations[] => {
+  const rows: UnfoldedDeclarations[] = [];
+  for (const record of records) {
+    const ids = record.trailers
+      .filter((trailer) => trailer.key === RECORD_ID_KEY)
+      .map((trailer) => trailer.value);
+    if (ids.length < 2) continue;
+    rows.push({
+      sha: record.sha,
+      source: record.source,
+      declared: ids.length,
+      unread: ids.slice(1),
+    });
+  }
+  return rows;
 };
 
 const shortSha = (sha: string): string => (sha.length > 8 ? sha.slice(0, 8) : sha);
@@ -607,7 +666,29 @@ export const formatReport = (report: StaleReport): string => {
       'id collisions',
       report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`),
     ),
+    // Named rather than omitted, the way `unresolved refs` names a window this
+    // could not cover. The fix is `validate`, which is where the violation is
+    // defined, so the row says that rather than leaving the reader to guess
+    // what a declaration the fold skipped is supposed to mean (#1015).
+    ...section(
+      'declarations not folded',
+      report.unfoldedDeclarations.map(
+        (row) =>
+          `${shortSha(row.sha)}${row.source === 'notes' ? ' (note)' : ''}  ` +
+          `${String(row.unread.length)} of ${String(row.declared)} unread: ${row.unread.join(', ')}`,
+      ),
+    ),
   ];
+
+  if (report.unfoldedDeclarations.length > 0) {
+    const unread = report.unfoldedDeclarations.reduce((sum, row) => sum + row.unread.length, 0);
+    lines.push(
+      '',
+      `note: ${String(unread)} declaration(s) have no lifecycle because their block declares ` +
+        'more than one Record-Id, which is a cardinality violation — run commitlore validate ' +
+        'on the commits above.',
+    );
+  }
 
   if (report.truncated) {
     lines.push(
