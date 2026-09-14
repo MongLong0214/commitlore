@@ -54,7 +54,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { canonicalCommittedAt, execGit, execGitBytes, execGitOrThrow, historyAvailability, } from './git.js';
-import { isolateBlocks, parseRecordBlocks, parseRecordBlocksWithAtom } from './trailers.js';
+import { isolateBlocks, parseMessagesBatched, parseRecordBlocks, parseRecordBlocksWithAtom, } from './trailers.js';
 import { signatureVerifierGeneration } from './trusted-authors.js';
 import { canonicalConventionalTrailerKey, isConventionalTrailerKey, isCommitLoreKey, } from './types.js';
 /**
@@ -787,18 +787,34 @@ guaranteeFirstBatch = false) => {
         const withText = batch
             .map((note) => ({ note, text: bodies.get(note.blob) }))
             .filter((entry) => entry.text !== undefined && entry.text.trim() !== '');
-        // One probe pass for every note in this batch, the same way
-        // `explodeRecordBlocks` does it for commit messages. A note's own block is
-        // still a process each -- there is no trailer atom for a note body, since
-        // `%(trailers)` parses the annotated *commit* -- but its earlier blocks no
-        // longer cost one apiece.
-        const isolatedNotes = isolateBlocks(withText.map((entry) => `${NOTE_SUBJECT}\n\n${entry.text}`));
+        // Two passes for the whole batch, where a note used to cost two processes
+        // apiece.
+        //
+        // `isolateBlocks` answers the earlier paragraphs, as it does for commit
+        // messages. The note's **own** block used to be a process each, because
+        // `%(trailers)` parses the annotated *commit* and a note body has no atom --
+        // 22 of a `doctor` run's 30 remaining `interpret-trailers`.
+        //
+        // `parseMessagesBatched` closes that, and the difference between the two is
+        // the reason it is safe. It asks git the same question `parseCommitMessage`
+        // asks, about the same bytes; only the plumbing differs. Probing a note's
+        // *last* paragraph in isolation would be a different question, and is the
+        // shape that fabricated a record once -- it is not what this does.
+        const noteMessages = withText.map((entry) => `${NOTE_SUBJECT}\n\n${entry.text}`);
+        const isolatedNotes = isolateBlocks(noteMessages);
+        // `null` when the batch could not be attributed. Every note then pays its
+        // own process again, which is the previous behaviour rather than a wrong
+        // answer.
+        const ownBlocks = parseMessagesBatched(noteMessages);
         const batchRecords = [];
         for (const { note, text } of withText) {
             // A note may itself carry several record blocks (SPEC §2.4): squash
             // inheritance writes one per source record (`core/squash.ts`).
-            const blocks = parseRecordBlocks(`${NOTE_SUBJECT}\n\n${text}`, {
+            const message = `${NOTE_SUBJECT}\n\n${text}`;
+            const own = ownBlocks?.get(message);
+            const blocks = parseRecordBlocks(message, {
                 isolated: isolatedNotes,
+                ...(own === undefined ? {} : { last: own }),
             });
             blocks.forEach((rawTrailers, block) => {
                 const trailers = stripConventional(rawTrailers, excluded);

@@ -11677,6 +11677,65 @@ var isolateBlocks = (messages) => {
   }
   return { get: (paragraph) => answers.get(paragraph) };
 };
+var parseMessagesBatched = (messages) => {
+  const wanted = [...new Set(messages)];
+  if (wanted.length === 0) return /* @__PURE__ */ new Map();
+  let scratch;
+  try {
+    scratch = mkdtempSync(join(tmpdir(), "commitlore-msgs-"));
+    const answers = /* @__PURE__ */ new Map();
+    for (let at = 0; at < wanted.length; at += PROBE_BATCH) {
+      const chunk = wanted.slice(at, at + PROBE_BATCH);
+      const resolved = parseChunkOfMessages(scratch, chunk, at);
+      if (resolved === null) return null;
+      for (const [message, trailers] of resolved) answers.set(message, trailers);
+    }
+    return answers;
+  } catch {
+    return null;
+  } finally {
+    if (scratch !== void 0) {
+      try {
+        rmSync(scratch, { recursive: true, force: true });
+      } catch {
+      }
+    }
+  }
+};
+var parseChunkOfMessages = (scratch, messages, offset) => {
+  const nonce = `X-Clmsg-${randomBytes(8).toString("hex")}`;
+  const files = [];
+  messages.forEach((message, index) => {
+    const at = offset + index;
+    const body = join(scratch, `w-${String(at)}.txt`);
+    writeFileSync(body, message);
+    const marker = join(scratch, `k-${String(at)}.txt`);
+    writeFileSync(marker, `x
+
+${nonce}: ${String(index)}
+`);
+    files.push(body, marker);
+  });
+  const result = execGit([...PARSE_ARGS, ...files]);
+  if (result.code !== 0) return null;
+  const answers = /* @__PURE__ */ new Map();
+  let current = [];
+  let expected = 0;
+  for (const line2 of result.stdout.split("\n")) {
+    if (line2.length === 0) continue;
+    if (line2.startsWith(`${nonce}:`)) {
+      if (Number(line2.slice(nonce.length + 1).trim()) !== expected) return null;
+      const message = messages[expected];
+      if (message === void 0) return null;
+      answers.set(message, current);
+      current = [];
+      expected += 1;
+      continue;
+    }
+    current.push(parseOutputLine(line2));
+  }
+  return expected === messages.length ? answers : null;
+};
 var probeChunk = (scratch, paragraphs) => {
   const nonce = `X-Clprobe-${randomBytes(8).toString("hex")}`;
   const files = [];
@@ -13333,17 +13392,20 @@ var readNotesFor = (cwd, commits, excluded, budget, cost, guaranteeFirstBatch = 
     read += batch.length;
     const bodies = readNoteBodies(cwd, batch.map((note) => note.blob));
     const withText = batch.map((note) => ({ note, text: bodies.get(note.blob) })).filter((entry) => entry.text !== void 0 && entry.text.trim() !== "");
-    const isolatedNotes = isolateBlocks(
-      withText.map((entry) => `${NOTE_SUBJECT}
+    const noteMessages2 = withText.map((entry) => `${NOTE_SUBJECT}
 
-${entry.text}`)
-    );
+${entry.text}`);
+    const isolatedNotes = isolateBlocks(noteMessages2);
+    const ownBlocks = parseMessagesBatched(noteMessages2);
     const batchRecords = [];
     for (const { note, text } of withText) {
-      const blocks = parseRecordBlocks(`${NOTE_SUBJECT}
+      const message = `${NOTE_SUBJECT}
 
-${text}`, {
-        isolated: isolatedNotes
+${text}`;
+      const own = ownBlocks?.get(message);
+      const blocks = parseRecordBlocks(message, {
+        isolated: isolatedNotes,
+        ...own === void 0 ? {} : { last: own }
       });
       blocks.forEach((rawTrailers, block) => {
         const trailers = stripConventional(rawTrailers, excluded);
