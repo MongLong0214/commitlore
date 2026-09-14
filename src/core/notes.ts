@@ -11,7 +11,7 @@
  * exactly as for a commit message. There is no second format.
  */
 
-import { type ExecGitOptions, execGit, execGitOrThrow } from './git.js';
+import { type ExecGitOptions, execGit, execGitOrThrow, type RepoFacts } from './git.js';
 import { parseCommitMessage, parseRecordBlocks, type IsolatedBlocks, serializeTrailers } from './trailers.js';
 import type { Trailer } from './types.js';
 
@@ -57,6 +57,12 @@ const SYNTHETIC_SUBJECT = 'commitlore notes mirror';
 
 export interface NotesOptions {
   cwd?: string;
+  /**
+   * Facts this request has already read from the repository. Only the plain
+   * reads consult it -- anything that writes a ref, or that re-reads one to
+   * check it moved, must ask git itself.
+   */
+  facts?: RepoFacts;
 }
 
 export interface WriteRecordOptions extends NotesOptions {
@@ -339,7 +345,13 @@ export const forcesNotes = (refspec: string): boolean =>
  * evidence that there is nothing upstream, so the answer stays incomplete.
  */
 export const notesAvailability = (opts: NotesOptions = {}): NotesAvailability => {
-  const ref = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
+  // The same argv the index pass resolves the mirror with, so one request asks
+  // once. `listRemotes` and the refspec reads below are still per-call: they
+  // read configuration, which this does not memoize.
+  const refArgv = ['rev-parse', '--verify', '--quiet', NOTES_REF];
+  // Branched here rather than through a helper in `git.ts`, so the spawn stays
+  // on this module's `execGit` and a test that stubs it still sees this read.
+  const ref = opts.facts === undefined ? execGit(refArgv, gitOptions(opts)) : opts.facts.once(refArgv);
   if (ref.code === 0) return 'present';
 
   // No remote is not "unverified"; it is verified. There is nowhere for an

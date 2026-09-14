@@ -856,8 +856,14 @@ refSha) => {
         ? []
         : readNotesFor(cwd, annotatedNotes(cwd, pinned, reachable), excluded, budget, cost);
 };
-const revParse = (cwd, rev) => {
-    const result = execGit(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { cwd });
+/**
+ * One read, through this module's `execGit` so a test that stubs it is still
+ * consulted. Not `git.ts`'s own helper: that one closes over `git.ts`'s binding,
+ * which is a door the mocks here do not wrap (`r-pinnedmirror957`).
+ */
+const ask = (cwd, args, facts) => facts === undefined ? execGit(args, { cwd }) : facts.once(args);
+const revParse = (cwd, rev, facts) => {
+    const result = ask(cwd, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], facts);
     if (result.code === GIT_NO_SUCH_REF && result.stderr.trim() === '')
         return null;
     if (result.code !== 0) {
@@ -870,8 +876,8 @@ const revParse = (cwd, rev) => {
     return sha === '' ? null : sha;
 };
 /** Unlike `revParse`, does not peel to a commit — a notes ref points at a tree. */
-const revParseRef = (cwd, ref) => {
-    const result = execGit(['rev-parse', '--verify', '--quiet', ref], { cwd });
+const revParseRef = (cwd, ref, facts) => {
+    const result = ask(cwd, ['rev-parse', '--verify', '--quiet', ref], facts);
     if (result.code === GIT_NO_SUCH_REF && result.stderr.trim() === '')
         return null;
     if (result.code !== 0) {
@@ -1464,6 +1470,7 @@ export const openIndex = (opts = {}) => {
         cwd,
         readonly,
         ftsRequested,
+        facts: opts.facts,
         discardedReason: ftsDiscard ?? discardedReason,
         // Rebuilding the FTS table on open is how a damaged index became
         // unopenable: `DELETE FROM trailers_fts` and the reinsert run before any
@@ -1578,13 +1585,13 @@ const deleteNoteRows = (handle) => {
  * and notes are sparse enough that whole is cheap.
  */
 export const indexNotes = (handle, opts = {}, excluded, cost) => {
-    const refSha = revParseRef(handle.cwd, NOTES_REF);
+    const refSha = revParseRef(handle.cwd, NOTES_REF, handle.facts);
     const indexed = readMeta(handle.db, 'notes_ref_sha');
     const force = opts.force ?? false;
     // Resolved once and carried through the pass, so the scope the rows are
     // filtered by is the scope they are stamped with. Reading `HEAD` again below
     // would let the two differ.
-    const headSha = revParse(handle.cwd, 'HEAD');
+    const headSha = revParse(handle.cwd, 'HEAD', handle.facts);
     if (!force && refSha === indexed && headSha === readMeta(handle.db, NOTES_HEAD_META))
         return 0;
     // The mirror is unchanged and HEAD only moved forward: the reachable set can
@@ -1727,7 +1734,7 @@ export const rebuildIndex = (handle, opts = {}) => {
     if (stale !== null)
         resetIndexFile(handle);
     const started = Date.now();
-    const head = revParse(handle.cwd, 'HEAD');
+    const head = revParse(handle.cwd, 'HEAD', handle.facts);
     // Walked from the resolved object, not from the symbolic name. `HEAD` was
     // being re-resolved by a second git process, so a checkout landing between
     // the two associated the pending list -- and `last_indexed_sha` -- with a
@@ -1740,7 +1747,7 @@ export const rebuildIndex = (handle, opts = {}) => {
     // only for the persist.
     const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
     const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
-    const notesRef = revParseRef(handle.cwd, NOTES_REF);
+    const notesRef = revParseRef(handle.cwd, NOTES_REF, handle.facts);
     const noteRecords = notesRef === null
         ? []
         : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost, notesRef);
@@ -1888,7 +1895,7 @@ const drainPending = (handle, outer, excluded, stats) => {
     // re-reads the mirror whole, which it has to do anyway because a note can be
     // rewritten in place.
     const listedFrom = readMeta(handle.db, NOTES_PENDING_REF_META);
-    const currentRef = revParseRef(handle.cwd, NOTES_REF);
+    const currentRef = revParseRef(handle.cwd, NOTES_REF, handle.facts);
     if (listedFrom === null || listedFrom !== currentRef) {
         runInTransaction(handle.db, () => {
             // The rows already written came from the mirror the queue named, so they
@@ -1962,7 +1969,7 @@ const incrementalProblem = (handle, head, last) => {
         return 'the index has no baseline commit';
     if (last === head)
         return null;
-    if (revParse(handle.cwd, last) === null) {
+    if (revParse(handle.cwd, last, handle.facts) === null) {
         return `the last indexed commit ${last.slice(0, 12)} is gone (history was rewritten)`;
     }
     const ancestor = execGit(['merge-base', '--is-ancestor', last, head], { cwd: handle.cwd });
@@ -2009,7 +2016,7 @@ export const updateIndex = (handle, opts = {}) => {
     if (opts.force ?? false)
         return rebuildIndex(handle, { reason: 'rebuild requested', ...rebuildOpts });
     const excluded = new Map();
-    const head = revParse(handle.cwd, 'HEAD');
+    const head = revParse(handle.cwd, 'HEAD', handle.facts);
     if (head === null) {
         /* An empty repository is not an error; it is a repository with no records. */
         const stats = emptyStats(handle, started);
@@ -2144,7 +2151,7 @@ export const openCurrentIndex = (opts = {}) => {
         const problem = healthProblem(handle.db, signatureVerifierGeneration(handle.cwd));
         if (problem !== null)
             throw new Error(problem);
-        const head = revParse(handle.cwd, 'HEAD');
+        const head = revParse(handle.cwd, 'HEAD', handle.facts);
         if (head !== null) {
             const blocker = incrementalProblem(handle, head, readMeta(handle.db, 'last_indexed_sha'));
             if (blocker !== null)
@@ -2158,6 +2165,10 @@ export const openCurrentIndex = (opts = {}) => {
             throw new Error(`index is at ${indexedHead?.slice(0, 12) ?? '(no baseline)'} but HEAD is ` +
                 `${head?.slice(0, 12) ?? '(unborn)'}`);
         }
+        // Deliberately not through `handle.facts`: this re-reads the ref to check
+        // that the pass which just ran ended up matching it. Serving it from the
+        // memo would compare the stamp against the value the pass itself used,
+        // which agrees by construction and checks nothing.
         const notesRef = revParseRef(handle.cwd, NOTES_REF);
         if (readMeta(handle.db, 'notes_ref_sha') !== notesRef) {
             throw new Error('index does not match refs/notes/commitlore');
