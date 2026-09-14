@@ -460,10 +460,11 @@ describe('Scenario 2: MCP three-tool sequence then commit', () => {
       // Must be pass or partial (not empty) to proceed to stage
       expect(['pass', 'partial']).toContain(verifyResult['validation_result']);
 
-      // 3. stage_capture
+      // 3. stage_capture, presenting the receipt the verification returned:
+      // stage requires it for a transaction that has one (#1005).
       const stageResp = await stub.request('tools/call', {
         name: 'commitlore_stage_capture',
-        arguments: { nonce },
+        arguments: { nonce, receipt: verifyResult['receipt'] },
       });
       expect(stageResp.result?.['isError']).not.toBe(true);
       const stageResult = toolJson(stageResp);

@@ -192,7 +192,9 @@ const prepareVerifyStage = (cwd: string, recordId: string): string => {
     cwd,
   });
   expect(verified.validation_result, JSON.stringify(verified.rejected)).toBe('pass');
-  expect(stageCaptureRecord({ nonce: prepared.nonce, cwd })).toBe(prepared.nonce);
+  expect(stageCaptureRecord({ nonce: prepared.nonce, cwd, receipt: verified.receipt })).toBe(
+    prepared.nonce,
+  );
   return prepared.nonce;
 };
 

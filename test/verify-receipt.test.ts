@@ -29,7 +29,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -261,11 +261,37 @@ describe('#1005 step 2: stage checks a presented receipt', () => {
     expect(message).not.toContain(receipt);
   }, 300_000);
 
-  it('still stages when no receipt is presented at all', () => {
-    // Step 2's other half, and the reason step 3 is a separate release: a host
-    // that has not upgraded sends nothing and must keep working. When step 3
-    // lands this expectation inverts.
+  it('refuses when no receipt is presented for a transaction that has one', () => {
+    // The inversion. This asserted the opposite one release ago, when the
+    // requirement was planned as "always required" and therefore breaking. It
+    // is keyed on the stored transaction instead: a transaction this build
+    // bound has a receipt, so staging it without one is refused, while an older
+    // transaction that has none is untouched (below).
     const { cwd, nonce } = verifiedByThePipeline();
+
+    expect(() => stageCaptureRecord({ nonce, cwd })).toThrow(/none was presented/);
+    expect(readPending(nonce, { cwd })?.phase).toBe('verified');
+  }, 300_000);
+
+  it('still stages a transaction that has no receipt of its own', () => {
+    // The compatibility half, and the reason nothing had to be migrated. A
+    // transaction prepared before receipts existed carries none, and a caller
+    // has none to present; requiring one there would refuse a transaction
+    // nobody can produce a receipt for.
+    //
+    // Forged by removing the field, because this build cannot produce such a
+    // transaction any more -- which is the point.
+    const { cwd, nonce } = verifiedByThePipeline();
+    const path = join(
+      git(cwd, ['rev-parse', '--git-path', 'commitlore/pending']).trim().startsWith('/')
+        ? git(cwd, ['rev-parse', '--git-path', 'commitlore/pending']).trim()
+        : join(cwd, git(cwd, ['rev-parse', '--git-path', 'commitlore/pending']).trim()),
+      `${nonce}.json`,
+    );
+    const stored = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    expect(stored['receipt'], 'the fixture had no receipt to remove').toBeTypeOf('string');
+    delete stored['receipt'];
+    writeFileSync(path, `${JSON.stringify(stored, null, 2)}\n`);
 
     expect(stageCaptureRecord({ nonce, cwd })).toBe(nonce);
     expect(readPending(nonce, { cwd })?.phase).toBe('staged');

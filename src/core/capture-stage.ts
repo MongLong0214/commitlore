@@ -31,11 +31,11 @@ export interface StageCaptureOptions {
   /** Override the expiry window (minutes). Default: 5. */
   expiryMinutes?: number;
   /**
-   * The receipt this caller's verification was issued (#1005 step 2).
+   * The receipt this caller's verification was issued (#1005).
    *
-   * Checked when presented and not required: a transaction written before
-   * receipts existed carries none, and a host that has not upgraded sends none.
-   * Step 3 makes it required, and that step is breaking for exactly those two.
+   * Required when the stored transaction has one, which is every transaction
+   * this build binds. Omitting it is only accepted for a transaction prepared
+   * before receipts existed, and one of those lives minutes.
    */
   receipt?: string;
 }
@@ -60,20 +60,37 @@ export const stageCaptureRecord = (opts: StageCaptureOptions): string | null => 
   if (!record) return null;
   if (record.phase !== 'verified') return null;
 
-  // 1b. The receipt, when this caller presented one (#1005 step 2).
+  // 1b. The receipt (#1005).
+  //
+  // Required when the transaction has one, and only then. That conditional is
+  // the whole design: it was first planned as "require it always", which breaks
+  // every transaction written before receipts existed and therefore needed a
+  // format version bump and a release of its own. Keying the requirement on
+  // what the transaction actually holds closes the hole for everything this
+  // build creates while leaving an older transaction stageable, so nothing has
+  // to be migrated at all.
+  //
+  // What still gets through is a transaction prepared by a build older than
+  // receipts and staged after the upgrade. A pending transaction lives minutes
+  // -- `expires_at` is `staged_at` plus five -- so that window closes itself.
   //
   // Thrown rather than returned as `null`: every other `null` here means "there
-  // is nothing to stage", and a caller holding the wrong handle has a different
-  // problem with a different fix. Reporting both the same way is how a caller
-  // learns to read a real refusal as an empty transaction.
-  //
-  // A presented receipt that does not match is refused even when the stored one
-  // is absent, which is the case a caller can only reach by inventing a value:
-  // an old transaction carries no receipt, and a caller that never received one
-  // has nothing to present.
+  // is nothing to stage", and a caller holding the wrong handle, or none, has a
+  // different problem with a different fix. Reporting both the same way is how
+  // a caller learns to read a real refusal as an empty transaction.
   //
   // The stored receipt is never echoed. A refusal that named it would hand the
   // caller exactly what it failed to prove it had.
+  if (record.receipt !== undefined && opts.receipt === undefined) {
+    throw markCaptureError(
+      new Error(
+        'Staging rejected: this transaction was bound by a verification that issued a receipt, ' +
+          'and none was presented. Pass the receipt `verify_capture` returned to you. If you do ' +
+          'not have one, the transaction is not yours to stage: prepare a new one and verify it.',
+      ),
+      'usage',
+    );
+  }
   if (opts.receipt !== undefined && opts.receipt !== record.receipt) {
     throw markCaptureError(
       new Error(

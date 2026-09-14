@@ -4,6 +4,45 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.14
+
+`stage_capture` now requires the receipt for any transaction that has one, which
+closes the hole #989 left open — without breaking anything, and without the
+format migration it was scheduled behind.
+
+**A caller that cannot prove it bound the transaction cannot stage it.** Staging
+took a nonce and staged whatever was stored under it, so a connection that never
+verified could attach the first caller's record and the commit would carry it.
+The per-connection guard added in 1.3.11 could not close that: there is no caller
+identity in the protocol, so "the caller that verified" was knowable only when it
+was the same connection.
+
+The rule is keyed on the transaction rather than on the release:
+
+| stored receipt | presented | outcome |
+|---|---|---|
+| absent | absent | staged — a transaction older than receipts |
+| present | absent | **refused** |
+| present | wrong | refused |
+| present | right | staged |
+
+Every transaction this build binds carries a receipt, so every one of them is
+protected. Nothing is migrated and no pending file is discarded. What is left is
+a transaction prepared by an older build and staged after the upgrade, and a
+pending transaction lives minutes — `expires_at` is `staged_at` plus five — so
+that window closes itself.
+
+Planning it as "always required" is what made it look breaking, and that plan
+would have spent a release and a format version bump to close a five-minute
+window.
+
+**Authorization is checked before the binding conditions.** A caller with no
+receipt is told about the receipt and never about HEAD, the staged diff or the
+policy identity. Four existing tests saw a different message because of it, and
+each now presents a receipt rather than being relaxed: a test asserting `HEAD
+moved` from a call that cannot get past authorization was asserting the wrong
+refusal.
+
 ## 1.3.13
 
 `verify_capture` issues a receipt, and `stage_capture` refuses one it did not

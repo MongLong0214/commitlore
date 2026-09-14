@@ -788,7 +788,9 @@ describe('verifyCaptureRecords', () => {
 
       expect(result.accepted).toHaveLength(1);
       expect(result.incomplete).toBe(true);
-      expect(stageCaptureRecord({ nonce, cwd: shallow })).toBeNull();
+      // An incomplete result still binds, so it still carries a receipt and the
+      // caller still presents one (#1005).
+      expect(stageCaptureRecord({ nonce, cwd: shallow, receipt: result.receipt })).toBeNull();
     } finally {
       rmSync(parent, { recursive: true, force: true });
     }
