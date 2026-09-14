@@ -48,7 +48,9 @@ import {
   execGit,
   hasShallowHistory,
   historyAvailability,
+  newRepoFacts,
   readVantage,
+  type RepoFacts,
   SHALLOW_HISTORY_CAVEAT,
   vantageCaveat,
   type HistoryAvailability,
@@ -394,6 +396,7 @@ const openSource = (
   noIndex: boolean,
   budgetMs?: number,
   now?: () => number,
+  facts?: RepoFacts,
 ): RowSource => {
   if (noIndex) return scanSource(cwd, [], budgetMs, now);
   const cost: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
@@ -401,6 +404,7 @@ const openSource = (
   try {
     const { handle } = ensureIndex({
       cwd,
+      ...(facts === undefined ? {} : { facts }),
       ...(budgetMs === undefined
         ? {}
         : { budget: { deadline: clock() + budgetMs, now: clock }, cost }),
@@ -1015,7 +1019,16 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
 
   const paths = normalizePaths(opts);
   const scope = resolveScope(cwd, paths);
-  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow);
+  /*
+   * One request, one reading of each repository fact. HEAD is resolved by the
+   * index refresh, by `historyAvailability` and by `readVantage`, and the first
+   * two run byte-identical argv; the notes ref is resolved by the index pass and
+   * again by `notesAvailability`. Nothing here outlives this call, which is the
+   * lifetime #987 asked for and the reason this is not the staleness
+   * `r-staleonepass` rejects.
+   */
+  const facts = newRepoFacts(cwd, execGit);
+  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow, facts);
   // The array, not a copy of it. A fallback that begins during a read appends
   // its explanation to `source.diagnostics` after this line, and copying here
   // dropped exactly the message that says the answer came from somewhere else.
@@ -1054,7 +1067,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
 
     // Config only — no network. Cheap enough to run on every answer, and the
     // answer it qualifies is the empty one, which is the answer nobody inspects.
-    const history = historyAvailability(cwd);
+    const history = historyAvailability(cwd, facts);
     if (history === 'unavailable') {
       diagnostics.push(
         'git could not read this repository, so this is not an answer about its contents — ' +
@@ -1075,10 +1088,10 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       );
     }
 
-    const shallow = hasShallowHistory(cwd);
+    const shallow = hasShallowHistory(cwd, facts);
     if (shallow) diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
 
-    const notes = notesAvailability({ cwd });
+    const notes = notesAvailability({ cwd, facts });
     if (notes === 'unfetched') {
       diagnostics.push(
         'the notes mirror has not been fetched here, so this answer may be missing records ' +
@@ -1091,7 +1104,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
     // branches, and a diagnostic for one that only reads prose. Both, because
     // the failure this reports is an *empty* answer, and a caller who has to
     // know to look at a new field to find that out is the defect rebuilt.
-    const vantage = readVantage(cwd);
+    const vantage = readVantage(cwd, facts);
     const behindCaveat = vantageCaveat(vantage);
     if (behindCaveat !== null) diagnostics.push(behindCaveat);
 
