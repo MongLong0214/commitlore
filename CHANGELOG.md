@@ -4,6 +4,44 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.3.11
+
+Two reports now say what they know, and three issues closed by a `Closes` line
+that did not do what they asked are met.
+
+**`stage_capture` names the records it staged.** It returns the Record-Ids now
+waiting, which a scripted caller previously had no way to read back — the nonce
+was the only handle, and the tool that owns the transaction would not name its
+contents. Worded as what *was staged* and never as what will be committed,
+because the hook still selects the newest eligible transaction by `created_at`
+and another nonce can win.
+
+**`doctor` reports the schema version the index is stamped with.** The
+`index-health` row described a database's trailer count, commit count and HEAD
+position while omitting the one field deciding whether this build may believe any
+of it: a mismatched version is discarded unread on first use, so every other
+number in the row describes something about to be thrown away. The mismatch is
+reported ahead of the HEAD comparison, so the reader is not sent after the wrong
+repair. It reports the hole rather than closing it — `openIndex` and
+`queryTrailers` still carry no version gate.
+
+**Three issues were closed without meeting their acceptance, and now meet it.**
+A query whose notes refresh could not run is no longer answerable as a current
+index: with the absorbed-contention build restored, that query reports
+`coverage: "complete"` with **zero of twelve** note records and no diagnostic.
+The HEAD-moves-mid-pass property is asserted inside a pass rather than between
+passes, and it has no negative control for a reason worth writing down — the
+listing is the first thing a pass does, so there is no moment at which the scope
+could be re-derived. And the collision-work profile was retaken by allocation
+rather than CPU: holding commits at 200 and moving record density from 22 to 181,
+those functions allocate 0 KB at both densities.
+
+**`trusted-authors.ts` is searchable again.** Its field separator was a literal
+NUL byte, so `rg` reported `binary file matches` and searched nothing — every
+grep-based sweep of this repository skipped the file silently, and looking for a
+function defined in it was answered with "it does not exist". The separator is an
+escape now. The bytes hashed are identical, so no index is re-keyed.
+
 ## 1.3.10
 
 A capture that verified nothing can no longer stage someone else's record, and
