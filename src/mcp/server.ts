@@ -515,13 +515,21 @@ const TOOLS: readonly Tool[] = [
     description:
       'Stage a verified capture transaction: advances the pending record from verified to staged, ' +
       'stamps expires_at (staged_at + 5 minutes), and makes it eligible for the prepare-commit-msg hook. ' +
-      'Accepts only a nonce; all bindings are server-owned and computed from stored state.',
+      'All bindings are server-owned and computed from stored state; the only inputs are the nonce ' +
+      'and, optionally, the receipt your verification was issued.',
     inputSchema: {
       type: 'object',
       properties: {
         nonce: {
           type: 'string',
           description: 'the 32-character lowercase hex nonce returned by prepare_capture',
+        },
+        receipt: {
+          type: 'string',
+          description:
+            'the receipt verify_capture returned to you. Optional today and checked when sent: ' +
+            'a receipt that was not issued by the verification which bound this transaction is ' +
+            'refused. Send it whenever you have one.',
         },
       },
       required: ['nonce'],
@@ -902,7 +910,14 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
             'stored under it is not yours to stage. Prepare a new transaction and verify again.',
         });
       }
-      const result = stageCaptureRecord({ nonce, cwd: root });
+      // Optional, and checked when sent (#1005 step 2). A host that has not
+      // upgraded sends none and is unaffected; step 3 is where that changes.
+      const receipt = stringArg(args, 'receipt');
+      const result = stageCaptureRecord({
+        nonce,
+        cwd: root,
+        ...(receipt === undefined ? {} : { receipt }),
+      });
       if (result === null) {
         return asText({ staged: false, reason: 'nothing to stage (empty/incomplete verification or wrong phase)' });
       }

@@ -942,6 +942,22 @@ describe('commitlore_verify_capture mutation oracles', () => {
 // T-1009: commitlore_stage_capture
 // ===========================================================================
 
+/**
+ * The values `capture-stage.ts` computes server-side and never takes from a
+ * caller. Listed here by name so a schema that started accepting one fails on
+ * the requirement rather than on a field count.
+ */
+const BINDINGS = [
+  'base_head',
+  'staged_diff_hash',
+  'staged_tree_oid',
+  'policy_identity_hash',
+  'staged_at',
+  'expires_at',
+  'records',
+  'evidence_hash',
+] as const;
+
 describe('commitlore_stage_capture', () => {
   let repo: string;
   let stub: Stub;
@@ -1137,7 +1153,17 @@ describe('commitlore_stage_capture', () => {
     expect(stageResult).toHaveProperty('reason');
   });
 
-  it('accepts only nonce in the input schema (no extra fields)', async () => {
+  it('accepts no caller-supplied binding in the input schema', async () => {
+    // What this protects is the invariant at the head of `capture-stage.ts`:
+    // every binding is computed server-side, never taken from the caller. It
+    // used to assert `properties === ['nonce']`, which is a stricter statement
+    // than the requirement and failed when `receipt` was added (#1005) -- a
+    // value the server issues and compares against its own stored copy, never
+    // one it computes a binding from.
+    //
+    // So it is written as two claims now. The allow-list keeps a new field from
+    // arriving unnoticed, and the binding list says what may never arrive
+    // however it is spelled.
     const response = await stub.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as {
       name: string;
@@ -1146,9 +1172,19 @@ describe('commitlore_stage_capture', () => {
     const tool = tools.find((t) => t.name === 'commitlore_stage_capture');
     expect(tool).toBeDefined();
     const schema = tool!.inputSchema!;
+    const props = Object.keys(schema['properties'] as Record<string, unknown>);
+
     expect(schema['required']).toEqual(['nonce']);
-    expect(Object.keys(schema['properties'] as Record<string, unknown>)).toEqual(['nonce']);
     expect(schema['additionalProperties']).toBe(false);
+    expect(props, 'a field was added to stage_capture without a decision').toEqual([
+      'nonce',
+      'receipt',
+    ]);
+    for (const binding of BINDINGS) {
+      expect(props, `${binding} is server-owned and must not be a caller input`).not.toContain(
+        binding,
+      );
+    }
   });
 });
 
@@ -1168,8 +1204,10 @@ describe('commitlore_stage_capture mutation oracles', () => {
 
   afterAll(() => { stub?.close(); });
 
-  it('MUST FAIL: schema must not accept a caller-supplied base_head', async () => {
-    // Verify the schema has ONLY nonce — if base_head were accepted, this fails
+  it('MUST FAIL: schema must not accept a caller-supplied binding', async () => {
+    // Named for `base_head` and about every binding: if any of them became a
+    // caller input, the transaction would be bound to what the caller asserted
+    // rather than to what the repository actually holds.
     const response = await stub.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as {
       name: string;
@@ -1178,9 +1216,11 @@ describe('commitlore_stage_capture mutation oracles', () => {
     const tool = tools.find((t) => t.name === 'commitlore_stage_capture');
     expect(tool).toBeDefined();
     const props = Object.keys(tool!.inputSchema!['properties'] as Record<string, unknown>);
-    // If someone adds base_head to the schema, this assertion fails
-    expect(props).not.toContain('base_head');
-    expect(props).toEqual(['nonce']);
+    for (const binding of BINDINGS) {
+      expect(props).not.toContain(binding);
+    }
+    // And nothing beyond the two inputs that are deliberately accepted.
+    expect(props).toEqual(['nonce', 'receipt']);
   });
 
   it('MUST FAIL: expires_at must be anchored to staged_at not created_at', async () => {

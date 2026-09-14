@@ -35,6 +35,9 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { prepareCaptureContext } from '../src/core/capture-prepare.js';
+import { stageCaptureRecord } from '../src/core/capture-stage.js';
+import { verifyCaptureRecords } from '../src/core/capture-verify.js';
 import { createPending, readPending, stagePending, storeVerification } from '../src/core/pending.js';
 
 const temporaries: string[] = [];
@@ -82,6 +85,59 @@ const verify = (nonce: string, cwd: string): string | null =>
     incomplete: false,
     evidence_hash: 'f'.repeat(64),
   });
+
+/**
+ * A transaction built by the real pipeline, which is what step 2 needs.
+ *
+ * The fixture above writes its hashes by hand, which is enough for
+ * `storeVerification` and `stagePending`. `stageCaptureRecord` recomputes the
+ * staged diff, the tree and the policy identity and refuses a mismatch, so a
+ * hand-written hash fails there for a reason that has nothing to do with
+ * receipts — which is how the first draft of these tests failed.
+ */
+const TRANSCRIPT =
+  'We chose sha256 because it is the standard hash function for integrity checking.';
+
+const verifiedByThePipeline = (): { cwd: string; nonce: string; receipt: string } => {
+  const cwd = mkdtempSync(join(tmpdir(), 'commitlore-receipt-stage-'));
+  temporaries.push(cwd);
+  git(cwd, ['init', '-q', '--initial-branch=main']);
+  writeFileSync(join(cwd, 'init.txt'), 'initial content\n');
+  git(cwd, ['add', '-A']);
+  git(cwd, [...IDENTITY, 'commit', '-q', '--no-verify', '-m', 'init\n\nno record here\n']);
+  // Something staged, so the transaction has a diff to bind to.
+  writeFileSync(join(cwd, 'init.txt'), 'initial content\nmodified\n');
+  git(cwd, ['add', '-A']);
+
+  const diff = git(cwd, ['diff', '--cached']);
+  const { nonce } = prepareCaptureContext({ cwd, transcript: TRANSCRIPT });
+  const result = verifyCaptureRecords({
+    nonce,
+    draft: [
+      {
+        trailers: [
+          { key: 'Limit', value: 'use sha256 for integrity checking' },
+          { key: 'Record-Id', value: 'r-stagercpt01' },
+        ],
+        evidence: [
+          {
+            key: 'Limit',
+            source: 'transcript' as const,
+            quote: 'chose sha256 because it is the standard hash function for integrity checking',
+            locator: 'L1-L1',
+          },
+        ],
+      },
+    ],
+    transcript: TRANSCRIPT,
+    diff,
+    cwd,
+  });
+  if (result.receipt === undefined) {
+    throw new Error(`the fixture's verification bound nothing: ${JSON.stringify(result.rejected)}`);
+  }
+  return { cwd, nonce, receipt: result.receipt };
+};
 
 describe('#1005 step 1: verification issues a receipt', () => {
   it('returns a receipt and stores the same value on the transaction', () => {
@@ -143,5 +199,75 @@ describe('#1005 step 1: verification issues a receipt', () => {
     expect(prepared, 'the fixture produced no transaction').not.toBeNull();
     expect(prepared?.receipt, 'a prepared transaction carries no receipt yet').toBeUndefined();
     expect(prepared?.phase).toBe('prepared');
+  }, 300_000);
+});
+
+/**
+ * #1005 step 2: stage checks a receipt it is given, and still allows none.
+ *
+ * The half of step 2 that is easy to get wrong is the second clause. Requiring
+ * the receipt here would close the hole a release earlier — and break every
+ * transaction written before step 1, which carries none. So the migration's
+ * value is in what it *keeps* working, and that needs asserting as firmly as
+ * the refusal does.
+ */
+describe('#1005 step 2: stage checks a presented receipt', () => {
+  it('stages when the receipt is the one this transaction issued', () => {
+    // The control. Without it, "it refused" below could mean the fixture never
+    // had anything stageable.
+    const { cwd, nonce, receipt } = verifiedByThePipeline();
+
+    expect(stageCaptureRecord({ nonce, cwd, receipt })).toBe(nonce);
+    expect(readPending(nonce, { cwd })?.phase).toBe('staged');
+  }, 300_000);
+
+  it('refuses a receipt it never issued', () => {
+    const { cwd, nonce } = verifiedByThePipeline();
+
+    // Shaped like a receipt and never issued: the case a caller reaches by
+    // holding another transaction's handle, or by inventing one.
+    expect(() => stageCaptureRecord({ nonce, cwd, receipt: '0'.repeat(32) })).toThrow(
+      /receipt presented was not issued/,
+    );
+    // And the refusal left the transaction alone, rather than consuming it.
+    expect(readPending(nonce, { cwd })?.phase).toBe('verified');
+  }, 300_000);
+
+  it('refuses one transaction receipt presented for another', () => {
+    // The realistic shape of the mistake, and the one #989 describes: a caller
+    // holding a genuine handle to something else.
+    const mine = verifiedByThePipeline();
+    const theirs = verifiedByThePipeline();
+    expect(mine.receipt).not.toBe(theirs.receipt);
+
+    expect(() =>
+      stageCaptureRecord({ nonce: theirs.nonce, cwd: theirs.cwd, receipt: mine.receipt }),
+    ).toThrow(/receipt presented was not issued/);
+    expect(readPending(theirs.nonce, { cwd: theirs.cwd })?.phase).toBe('verified');
+  }, 300_000);
+
+  it('does not name the stored receipt in the refusal', () => {
+    // A refusal that echoed it would hand the caller the thing it just failed
+    // to prove it had.
+    const { cwd, nonce, receipt } = verifiedByThePipeline();
+
+    let message = '';
+    try {
+      stageCaptureRecord({ nonce, cwd, receipt: '1'.repeat(32) });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message, 'the refusal did not happen').toMatch(/receipt presented was not issued/);
+    expect(message).not.toContain(receipt);
+  }, 300_000);
+
+  it('still stages when no receipt is presented at all', () => {
+    // Step 2's other half, and the reason step 3 is a separate release: a host
+    // that has not upgraded sends nothing and must keep working. When step 3
+    // lands this expectation inverts.
+    const { cwd, nonce } = verifiedByThePipeline();
+
+    expect(stageCaptureRecord({ nonce, cwd })).toBe(nonce);
+    expect(readPending(nonce, { cwd })?.phase).toBe('staged');
   }, 300_000);
 });
