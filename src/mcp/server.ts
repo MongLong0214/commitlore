@@ -306,6 +306,11 @@ const contextJson = (root: string, kind: QueryKind, path: string): JsonOutput =>
   // at the day's final millisecond means the hook, query resource and
   // before-change tool share one lifecycle input and stable answer for that
   // day without hiding commits made later that day.
+  //
+  // `stale` reports its own `at` as the wall clock, so the two fields share a
+  // name and mean different instants (#1025). Neither can outvote the other:
+  // the expiry boundary is 00:00:00Z of the day after a date-form `Expires:`,
+  // so any two instants inside one UTC day are on the same side of it.
   const at = new Date(`${now.toISOString().slice(0, 10)}T23:59:59.999Z`);
   const result = withholdBlocked(
     runQuery({
@@ -343,7 +348,12 @@ const asText = (value: unknown): CallToolResult => ({
 /** Every tool here reads; none of them touches anything outside the machine. */
 const READS_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 
-const TOOLS: readonly Tool[] = [
+/**
+ * Exported so a test can read what a host is told about each tool (#1025).
+ * Two tools shipped the same description while their schemas differed in the
+ * way that decides which one to call, and nothing was checking.
+ */
+export const TOOLS: readonly Tool[] = [
   {
     name: RUNTIME_IDENTITY_TOOL,
     description: 'Report the exact CommitLore entrypoint, package root, version and index schema this MCP server executes.',
@@ -411,16 +421,31 @@ const TOOLS: readonly Tool[] = [
   },
   {
     name: BEFORE_CHANGE_TOOL,
+    // Its own description, not `guard`'s (#1025). The two shipped the same
+    // sentence while their schemas differ in the way that matters -- `guard`
+    // requires a proposal and takes an optional path, this requires a path and
+    // takes an optional proposal -- and they return different shapes. A model
+    // choosing from descriptions alone read two identical strings, picked the
+    // one whose words matched, and never found that this is the tool that
+    // answers "what do I need to know before touching this file".
     description:
-      'Check a proposal against the Ruled-out records for a path before acting on it. ' +
-      'Returns every record whose alternative matches, with the reason it was rejected. ' +
+      'Everything recorded about a path, before editing it: the active decisions, ' +
+      'the gaps in what could be verified, and any ruled-out alternative a proposal ' +
+      'would revive. Returns `active_decisions`, `verification_gaps`, ' +
+      '`possible_revival_matches`, `guard_confidence` and `cache_key`. ' +
+      'Pass `path` alone for context. Pass `proposal` as well to also run the guard ' +
+      'against that path\'s Ruled-out records; without it `guard_confidence` is ' +
+      '"not-run" and `possible_revival_matches` is empty because nothing was checked, ' +
+      'not because nothing matched. ' +
       // The same disclosure `commitlore_guard` carries, because the two run the
-      // same matcher. This tool shipped the sentence ADR-0020 §3 ordered removed
-      // -- "a verdict, not an absence" -- which tells a model that silence here
-      // is a safety result. At 22% recall it is not: a miss is the common case,
-      // and this is the surface the model actually reads before it edits.
-      'Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. ' +
-      'An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.',
+      // same matcher when a proposal is supplied. This tool shipped the sentence
+      // ADR-0020 §3 ordered removed -- "a verdict, not an absence" -- which tells
+      // a model that silence here is a safety result. At 22% recall it is not: a
+      // miss is the common case, and this is the surface the model actually
+      // reads before it edits.
+      'The guard is an experimental advisory: precision 44.8%, recall 22.0% on the ' +
+      '417-decision corpus. An empty `possible_revival_matches` does not guarantee ' +
+      'the proposal avoids every ruled-out alternative.',
     inputSchema: {
       type: 'object',
       properties: {
