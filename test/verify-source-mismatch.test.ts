@@ -184,3 +184,59 @@ describe('#1022 a substituted source never settles the transaction', () => {
     expect(result.source_mismatch).toBeUndefined();
   }, 300_000);
 });
+
+/**
+ * #1021: a verification that accepted nothing does not bind the transaction.
+ *
+ * A capture whose every draft record the verifier discarded — which the contract
+ * calls a normal outcome — reached `phase: "verified"` and stayed there, marked
+ * `stale` and `gc_eligible` and never collected.
+ *
+ * `pending ls` is the only way a host can ask *"is a capture staged for the
+ * commit about to happen?"*, and `doctor` tells hosts to build exactly that
+ * check. The obvious reading of `verified` is yes. A host that built it had
+ * every commit after its first empty capture read as covered.
+ *
+ * `prepared` says what is true: the sources are hashed and nothing has been
+ * verified against them. It also makes the nonce reusable, where before a
+ * capture that recorded nothing spent the transaction.
+ *
+ * Three existing tests pinned the old contract and were changed with this, not
+ * around it — each now asserts the stronger fact that nothing was bound.
+ */
+describe('#1021 an empty verification leaves the transaction prepared', () => {
+  it('stores nothing and issues no receipt when every record is discarded', () => {
+    const { cwd, nonce, diff } = prepared();
+
+    const result = verifyCaptureRecords({ nonce, draft: [], transcript: TRANSCRIPT, diff, cwd });
+
+    expect(result.validation_result).toBe('empty');
+    expect(result.receipt, 'an empty verification was issued a receipt').toBeUndefined();
+
+    const stored = readPending(nonce, { cwd });
+    expect(stored?.phase, 'this is the state a host reads as "ready to stage"').toBe('prepared');
+    expect(stored?.verified_at).toBeNull();
+  }, 300_000);
+
+  it('lets a later draft bind the same transaction', () => {
+    const { cwd, nonce, diff } = prepared();
+
+    verifyCaptureRecords({ nonce, draft: [], transcript: TRANSCRIPT, diff, cwd });
+    const second = verifyCaptureRecords({ nonce, draft: DRAFT, transcript: TRANSCRIPT, diff, cwd });
+
+    expect(second.accepted).toHaveLength(1);
+    expect(second.receipt).toMatch(/^[0-9a-f]{32}$/);
+    expect(readPending(nonce, { cwd })?.phase).toBe('verified');
+  }, 300_000);
+
+  it('still binds when a record is accepted', () => {
+    // The control. A change that stopped binding altogether would satisfy both
+    // cases above and break capture entirely.
+    const { cwd, nonce, diff } = prepared();
+
+    const result = verifyCaptureRecords({ nonce, draft: DRAFT, transcript: TRANSCRIPT, diff, cwd });
+    expect(result.accepted).toHaveLength(1);
+    expect(result.receipt).toMatch(/^[0-9a-f]{32}$/);
+    expect(readPending(nonce, { cwd })?.phase).toBe('verified');
+  }, 300_000);
+});

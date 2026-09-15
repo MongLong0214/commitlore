@@ -400,6 +400,30 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
    * reintroduce by copying two lines.
    */
   const settle = (result: VerifyCaptureResult): VerifyCaptureResult => {
+    /*
+     * A verification that accepted nothing does not bind the transaction (#1021).
+     *
+     * `verified` was reached by a capture whose every draft record the verifier
+     * discarded -- which the contract calls a normal outcome -- and the
+     * transaction then sat in `pending ls` at that phase indefinitely, marked
+     * `stale` and `gc_eligible` and never collected. `pending ls` is the only
+     * way a host can ask "is a capture staged for the commit about to happen",
+     * and the obvious reading of `verified` is yes. A host that built that check
+     * had every commit after the first empty capture read as covered.
+     *
+     * Leaving it `prepared` says what is true: the sources are hashed and
+     * nothing has been verified against them. It also lets the same nonce be
+     * verified again with a better draft, where before the transaction was
+     * spent on the attempt that recorded nothing.
+     *
+     * This does not reopen what `settle` exists to prevent -- a refusal dropped
+     * while an earlier stored result stays stageable. That hazard is about a
+     * result with records in it; a transaction holding no accepted record has
+     * nothing that could be staged, and `stageCaptureRecord` refuses an empty
+     * or non-`verified` transaction either way.
+     */
+    if (result.accepted.length === 0) return result;
+
     const stored = persist(result);
     if (stored.bound) {
       return stored.receipt === null ? result : { ...result, receipt: stored.receipt };
