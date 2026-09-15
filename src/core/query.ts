@@ -83,6 +83,7 @@ import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js
 import { redactSecretsIn } from './secret-guard.js';
 import {
   foldLifecycle,
+  divergentIdKeys,
   hasAmbiguousIdCollision,
   type RecordState,
   type StaleRecord,
@@ -222,6 +223,12 @@ export interface GradedRecord extends Record {
   provenanceValue?: string;
   trust?: TrustGrade;
   identityCollision?: boolean;
+  /**
+   * The keys on which the colliding declarations disagree (#1020). Absent when
+   * the ambiguity has no per-key answer, in which case the whole record is
+   * withheld as before.
+   */
+  collisionKeys?: string[];
   /** Internal grading input; JSON renderers deliberately do not expose this cache fact. */
   commitSignatures: ReadonlyMap<string, string>;
   matchedTrailerKeys?: string[];
@@ -957,6 +964,9 @@ const mergeByIdentity = (
     const provenanceValue = trailerValue(trailers, PROVENANCE_KEY);
     const provenance = parseProvenance(provenanceValue);
     const identityCollision = hasAmbiguousIdCollision(ordered);
+    // Only a mirror divergence has a per-key answer; the other ambiguities
+    // return an empty set and keep the whole-record withholding (#1020).
+    const collisionKeys = identityCollision ? [...divergentIdKeys(ordered)].sort() : [];
 
     merged.push({
       trailers,
@@ -981,6 +991,7 @@ const mergeByIdentity = (
       ...(provenance === undefined ? {} : { provenance }),
       ...(provenanceValue === undefined ? {} : { provenanceValue }),
       ...(identityCollision ? { identityCollision: true } : {}),
+      ...(identityCollision && collisionKeys.length > 0 ? { collisionKeys } : {}),
       ...(state?.supersededBy === undefined ? {} : { supersededBy: state.supersededBy }),
       ...(state?.expiresAt === undefined ? {} : { expiresAt: state.expiresAt }),
     });
@@ -1060,10 +1071,58 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       opts.requireSignedDirective === true,
       opts.trustedSignerFingerprints,
     );
+    /*
+     * A collision withholds the axes that diverged, not the whole record (#1020).
+     *
+     * The reporter lost every `Limit:`, `Ruled-out:` and `Warn:` on the only
+     * record covering the file they were about to edit -- and what had actually
+     * diverged was two metadata lines, a dropped `Undo: easy` and a folded
+     * repeat of `Certainty: firm`. The content axes were byte-identical in both
+     * declarations. They read the record with `git log` instead, and found a
+     * `Ruled-out:` for the alternative they were about to try again.
+     *
+     * Withholding an axis both declarations agree on protects nothing, and the
+     * rule this exists for survives the narrowing: notes are remote-reachable,
+     * so divergent note content must not inherit an identity a human approved.
+     * Where every declaration carries the same values under a key, the approved
+     * commit message says exactly that.
+     *
+     * An ambiguity that is not a mirror divergence -- two records sharing a
+     * commit, or declared in the same second -- is about *which record this
+     * identity names*, so no per-key answer exists and the whole record is still
+     * withheld. `divergentIdKeys` returns an empty set for those, which is what
+     * the fallback below reads.
+     */
+    let blockedWholeRecords = 0;
+    let blockedAxes = 0;
     for (const record of records) {
       if (record.identityCollision !== true) continue;
-      record.trust = 'blocked';
-      record.matchedTrailerKeys = [RECORD_ID_KEY];
+      const diverged = record.collisionKeys ?? [];
+      if (diverged.length === 0) {
+        record.trust = 'blocked';
+        record.matchedTrailerKeys = [RECORD_ID_KEY];
+        blockedWholeRecords += 1;
+        continue;
+      }
+      const divergedKeys = new Set(diverged);
+      record.trailers = record.trailers.filter((trailer) => !divergedKeys.has(trailer.key));
+      blockedAxes += diverged.length;
+    }
+    if (blockedAxes > 0) {
+      diagnostics.push(
+        `${String(blockedAxes)} trailer key(s) are withheld because a record's commit message and ` +
+          'its note on refs/notes/commitlore declare different values for them; the keys that ' +
+          'agree are served as usual. ' +
+          'fix: read both with git log -1 --format=%B <sha> and ' +
+          'git notes --ref=refs/notes/commitlore show <sha>, then make them agree',
+      );
+    }
+    if (blockedWholeRecords > 0) {
+      diagnostics.push(
+        `${String(blockedWholeRecords)} record(s) are withheld entirely: their Record-Id names more ` +
+          'than one record, so there is no axis to serve. ' +
+          'fix: read the declarations with git log and git notes, and give one of them a new Record-Id',
+      );
     }
 
     // Config only — no network. Cheap enough to run on every answer, and the
