@@ -4,6 +4,58 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.4.0
+
+Six reports, and the first is the one to read: a credential in a trailer reached
+every agent context that asked about the file.
+
+**A credential is masked on the way out of every reader.** `validate` detected a
+secret in a trailer value and reported it as `AKIA…`; every reader on the other
+side printed the same value whole. `inject` worst of all — that is the projection
+handed to a model before it edits a path, so one secret in one record was
+replayed into every agent context that asked about that file, for as long as the
+record stayed active.
+
+The commit-msg hook is the intended gate and not the only door: a missing hook is
+a `warn`, `--no-verify` skips it, `backfill` reads commits that predate it, and
+the notes mirror carries records that only ever passed somebody else's gate. The
+masking runs in the one place `inject`, `context`, `limits`, `ruled-out`,
+`warnings` and the MCP tools all read through.
+
+**A substituted source no longer settles a transaction as verified.** The
+mismatch was reported only by rejecting individual draft records, so a draft of
+`{"records": []}` — a correct and common answer — produced an empty `rejected`,
+`incomplete: false` and a receipt: the shape of a clean final verification, for a
+call whose transcript and diff were both wrong. It then locked the nonce holding
+a verification built from sources it never matched. The condition is
+transaction-shaped and the signal was record-shaped, so it now returns without
+binding and reports `source_mismatch`.
+
+**A capture that accepted nothing stays `prepared`.** It reached `verified` and
+sat in `pending ls` forever, and `pending ls` is the only way a host can ask "is a
+capture staged for the commit about to happen". A host that built that check had
+every commit after its first empty capture read as covered.
+
+**A divergent mirror withholds the axes that diverged, not the record.** A
+`Record-Id` in both a commit message and its note, differing at all, made every
+axis `[blocked]` — the reporter lost every `Limit:`, `Ruled-out:` and `Warn:` on
+the only record covering the file they were about to edit, over two metadata
+lines. Where every declaration agrees on a key, the approved commit message says
+exactly that, so it is served; only the keys that actually differ are withheld.
+
+**The prompt bounds the diff, and verify no longer needs it echoed.** The
+transcript was windowed and reported while the diff went in whole: 190,300 of a
+200,071-character prompt on one feature branch, which overran the client's limit
+so capture could not proceed. The diff is windowed to its own budget and reported
+as `diff_window`, and `verify_capture` reads the staged diff itself rather than
+asking a model to reproduce 190,000 characters without drift.
+
+**`before_change` describes itself, and `stale` speaks the coverage
+vocabulary.** The two tools shipped identical descriptions while their schemas
+differ in the way that decides which to call. And `stale` reported truncation
+under a key the server instructions never teach, so an agent taught to check
+`coverage` read `totalRecords: 0` from a partial scan as "nothing is stale".
+
 ## 1.3.17
 
 Fifteen records that existed correctly in the notes mirror were being thrown
