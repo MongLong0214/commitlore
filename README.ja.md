@@ -163,11 +163,10 @@ record ごとの確認なしに承認済み record を stage したい場合、�
 commitlore: active records for src/pricing.ts
 
 Limit
-  [claim] r-price01  calculatePrice owns final checkout pricing only
+  [claim]      r-price01  a1b2c3d4  calculatePrice owns final checkout pricing only
 
 Ruled-out
-  [claim] r-price01  Reuse it for admin quotes |
-                     eligibility and rounding semantics differ
+  [claim]      r-price01  a1b2c3d4  Reuse it for admin quotes | eligibility and rounding semantics differ
 ```
 
 `[claim]` は「情報として吟味する」という意味です。リポジトリは、より強い signed-authority mode を
@@ -401,9 +400,7 @@ agent study は普遍的な model 効果を確立しません。delivery は mod
   一回につき既定で 800 token まで payload を使い、`--budget` で変えます。record のないリポジトリは何も使わず、
   これはインストールではなく採用とともに生じるコストです。
 - **答えは部分的な場合があります。** coverage は開示され、部分結果にないことは record がない証明ではありません。
-  repository-wide coverage、symbol anchor、interactive record builder は未解決です:
-  [#32](https://github.com/MongLong0214/commitlore/issues/32)、
-  [#33](https://github.com/MongLong0214/commitlore/issues/33)。
+  `commitlore coverage` がスキャンの到達範囲を報告します。
 - **commit trailer は clone とともに来ますが、notes は来ません。** Git は既定で `refs/notes/*` を fetch しないため、
   `refs/notes/commitlore` の record は `commitlore init` がその mirror を構成するまで通常の clone にはありません。
 - **ホスト型 backend はありません。** ただし server または hook がコンテキストを返した後は、host が自身のポリシーで
@@ -479,7 +476,6 @@ record は通常の Git trailer または notes です。Protocol 2.0 は lifecy
 - [セキュリティモデル](SECURITY.md)
 - [根拠と制約](docs/evidence.md)
 - [本番契約](docs/PRODUCTION-READINESS-SSOT.md)
-- [ドキュメント索引](docs/README.md)
 
 ## コントリビュート
 

@@ -167,11 +167,10 @@ Before editing `src/pricing.ts`:
 commitlore: active records for src/pricing.ts
 
 Limit
-  [claim] r-price01  calculatePrice owns final checkout pricing only
+  [claim]      r-price01  a1b2c3d4  calculatePrice owns final checkout pricing only
 
 Ruled-out
-  [claim] r-price01  Reuse it for admin quotes |
-                     eligibility and rounding semantics differ
+  [claim]      r-price01  a1b2c3d4  Reuse it for admin quotes | eligibility and rounding semantics differ
 ```
 
 `[claim]` means "weigh this as information." A repository can opt into the
@@ -418,10 +417,8 @@ proof that a model read or followed a record.
   repository with no records spends nothing, which means this is a cost that
   arrives with adoption rather than with installation.
 - **An answer may be partial.** Coverage is disclosed; absence from a partial
-  result is not proof that no record exists. Repository-wide coverage, symbol anchors,
-  and an interactive record builder remain open:
-  [#32](https://github.com/MongLong0214/commitlore/issues/32),
-  [#33](https://github.com/MongLong0214/commitlore/issues/33).
+  result is not proof that no record exists. `commitlore coverage` reports what a
+  scan reached.
 - **Commit trailers travel with a clone; notes do not.** Git does not fetch
   `refs/notes/*` by default, so a record in `refs/notes/commitlore` is absent
   from an ordinary clone until `commitlore init` configures that mirror.
@@ -504,7 +501,6 @@ and the cases where the original benchmark or diagnosis was wrong.
 - [Security model](SECURITY.md)
 - [Evidence and limitations](docs/evidence.md)
 - [Production contract](docs/PRODUCTION-READINESS-SSOT.md)
-- [Documentation index](docs/README.md)
 
 ## Contributing
 
