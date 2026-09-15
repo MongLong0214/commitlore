@@ -31,7 +31,7 @@ import {
   unlockPending,
   type PendingRecord,
 } from './pending.js';
-import { hasShallowHistory } from './git.js';
+import { hasShallowHistory, execGitOrThrow } from './git.js';
 import { explainWithholding, scanTrailer } from './grade.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
@@ -46,7 +46,21 @@ export interface VerifyCaptureOptions {
   nonce: string;
   draft: DraftRecord[];
   transcript: string;
-  diff: string;
+  /**
+   * The staged diff. Optional: omitted, the server reads it itself (#1023).
+   *
+   * It was required and compared byte for byte against the hash `prepare`
+   * stored, which asks a model to reproduce content the server produced -- on
+   * the reporting branch, 190,300 characters with zero drift. The server read
+   * the repository to make that diff and can read it again; the hash comparison
+   * is unchanged either way, so a caller that sends nothing gets the same
+   * guarantee without the echo.
+   *
+   * Still accepted, because a caller with the bytes in hand asserting them is a
+   * strictly stronger statement than the server asserting them to itself, and
+   * `capture --diff` exists to make exactly that assertion.
+   */
+  diff?: string;
   cwd: string;
   /**
    * An in-memory prepared transaction. Shadow uses this instead of reading a
@@ -95,6 +109,16 @@ export interface VerifyCaptureResult {
    * holds, so it is answered here rather than per record.
    */
   source_mismatch?: 'transcript' | 'diff';
+  /**
+   * Set when the nonce names no transaction at all (#1023).
+   *
+   * That case returned `validation_result: "empty"` with `incomplete: true` and
+   * nothing saying why, which is indistinguishable from the ordinary "nothing
+   * survived" outcome. It was covered by accident: the required-`diff` check ran
+   * first and turned a typo'd nonce into a usage error. With the diff optional
+   * the cover is gone, so the fact is reported on its own.
+   */
+  no_transaction?: true;
 }
 
 /** The duplicate-check view used by capture verification. */
@@ -369,7 +393,13 @@ const recoveryFor = (phase: PendingRecord['phase'], nonce: string): string => {
 };
 
 const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResult => {
-  const { nonce, draft, transcript, diff, cwd } = opts;
+  const { nonce, draft, transcript, cwd } = opts;
+  /*
+   * Read from the index when the caller sent nothing (#1023). The stored hash
+   * still decides: an index that moved since `prepare` fails the comparison
+   * below and is reported as a diff mismatch, which is what it is.
+   */
+  const diff = opts.diff ?? execGitOrThrow(['diff', '--cached'], { cwd });
 
   const accepted: VerifiedRecord[] = [];
   const rejected: CaptureRejection[] = [];
@@ -464,13 +494,16 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
     // 1. Re-read prepared transaction and verify source hashes
     const pending = opts.pending ?? readPending(nonce, { cwd });
     if (!pending) {
-      // No transaction found — return empty (never throw)
+      // No transaction found. Still never throws -- the caller decides what a
+      // missing transaction means -- but it says so, rather than returning the
+      // shape of a verification that ran and found nothing (#1023).
       return {
         accepted: [],
         rejected: [],
         validation_result: 'empty',
         incomplete: true,
         overlap_check: 'canonical_exact_only',
+        no_transaction: true,
       };
     }
 

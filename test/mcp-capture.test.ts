@@ -825,7 +825,7 @@ describe('commitlore_verify_capture', () => {
     expect(content[0]?.text).toMatch(/nonce/i);
   });
 
-  it('#594 rejects an omitted diff as isError, not an empty verification', async () => {
+  it('#594 keeps an omitted diff from reading as an empty verification', async () => {
     const transcript = 'User chose Rust instead of Go for memory safety guarantees.';
     const prepResponse = await stub.request('tools/call', {
       name: 'commitlore_prepare_capture',
@@ -833,14 +833,21 @@ describe('commitlore_verify_capture', () => {
     });
     const nonce = toolJson(prepResponse)['nonce'] as string;
 
+    // Omitting the diff is a legitimate call since #1023: the server reads the
+    // staged diff itself rather than asking a model to reproduce content the
+    // server produced. What #594 exists to prevent still cannot happen -- the
+    // hash `prepare` stored still decides, and a diff that does not match it is
+    // reported as a mismatch rather than as the ordinary "nothing survived".
     const omitted = await stub.request('tools/call', {
       name: 'commitlore_verify_capture',
       arguments: { nonce, draft: '{"records":[]}', transcript },
     });
-    expect(omitted.result?.['isError']).toBe(true);
-    expect(toolText(omitted)).toMatch(/diff is required/i);
-    expect(toolText(omitted)).not.toContain('validation_result');
+    expect(omitted.result?.['isError']).not.toBe(true);
+    expect(toolJson(omitted)['validation_result']).toBeDefined();
 
+    // And `''` still means "nothing is staged", which is a different claim from
+    // "you read it" and must not be substituted for it. Here nothing *is*
+    // staged, so both agree; the point is that they are separate inputs.
     const wellFormed = await stub.request('tools/call', {
       name: 'commitlore_verify_capture',
       arguments: { nonce, draft: '{"records":[]}', transcript, diff: '' },

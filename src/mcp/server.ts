@@ -497,10 +497,13 @@ const TOOLS: readonly Tool[] = [
         },
         diff: {
           type: 'string',
-          description: 'the staged diff (same content hashed at prepare time)',
+          description:
+            'optional: the staged diff, if you have it. Omit it and the server reads the staged ' +
+            'diff itself and checks it against the hash prepare stored — the same guarantee, ' +
+            'without asking you to reproduce content the server produced.',
         },
       },
-      required: ['nonce', 'draft', 'transcript', 'diff'],
+      required: ['nonce', 'draft', 'transcript'],
       additionalProperties: false,
     },
     annotations: {
@@ -827,10 +830,12 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
       // Schema already required a string; do not substitute '' for an omission.
       // That substitution was #594: a malformed call looked like an empty
       // verification, which is the ordinary "nothing survived" outcome.
+      // Optional since #1023: omitted, `verifyCaptureRecords` reads the staged
+      // diff itself and checks it against the hash `prepare` stored. The
+      // substitution #594 forbade -- treating an omission as `''` -- is still
+      // forbidden: `undefined` means "you read it", `''` would mean "nothing is
+      // staged", and those are different claims.
       const diff = stringArg(args, 'diff');
-      if (diff === undefined) {
-        throw new Error('diff is required');
-      }
 
       // Parse draft JSON — malformed input is a caller error
       let draft: unknown[];
@@ -877,9 +882,18 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         nonce,
         draft: draft as import('../core/harvest.js').DraftRecord[],
         transcript,
-        diff,
+        ...(diff === undefined ? {} : { diff }),
         cwd: root,
       });
+      // A nonce that names no transaction is a caller error, not a verification
+      // that found nothing (#594's property, kept now that the required-`diff`
+      // check no longer covers it by accident -- #1023).
+      if (result.no_transaction === true) {
+        throw new Error(
+          `no prepared transaction for nonce ${nonce}; call prepare_capture first, or check the ` +
+            'nonce you were given',
+        );
+      }
       if (result.accepted.length > 0 && !result.incomplete) unbound.delete(nonce);
       return asText({
         validation_result: result.validation_result,
