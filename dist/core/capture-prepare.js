@@ -9,7 +9,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { markCaptureError } from './capture-outcome.js';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch } from './guard.js';
-import { windowTranscript, buildHarvestPromptWithWindow } from './harvest.js';
+import { windowTranscript, buildHarvestPromptWithWindow, } from './harvest.js';
 import { policySourceLabel, resolvePolicy } from './capture-policy.js';
 import { createPending, makePreparedPending, } from './pending.js';
 import { isFullObjectId } from './types.js';
@@ -161,6 +161,7 @@ const prepareValues = (opts) => {
         source_hashes: sourceHashes,
         prompt: harvest.prompt,
         transcript_window: harvest.window,
+        diff_window: harvest.diffWindow,
         guard_advisory: advisory,
         policy_error: policy.error,
     };
@@ -200,6 +201,7 @@ export const prepareCaptureContext = (opts) => {
         source_hashes: prepared.source_hashes,
         prompt: prepared.prompt,
         transcript_window: prepared.transcript_window,
+        diff_window: prepared.diff_window,
         policy_error: prepared.policy_error,
         guard_advisory: prepared.guard_advisory,
     };
@@ -233,6 +235,7 @@ export const prepareCaptureContextReadOnly = (opts) => {
         source_hashes: prepared.source_hashes,
         prompt: prepared.prompt,
         transcript_window: prepared.transcript_window,
+        diff_window: prepared.diff_window,
         policy_error: prepared.policy_error,
         guard_advisory: prepared.guard_advisory,
         pending,

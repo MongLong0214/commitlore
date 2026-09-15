@@ -963,7 +963,12 @@ describe('#594 advertised schemas are enforced at the handler boundary', () => {
     expect(toolText(response)).toMatch(/unknown argument: extra/i);
   });
 
-  it('rejects an omitted diff on verify_capture as isError, not an empty verification', async () => {
+  it('never turns a bad verify_capture call into an empty verification', async () => {
+    // #594's property, which survives the diff becoming optional in #1023: a
+    // call that cannot be verified must not come back looking like the ordinary
+    // "nothing survived" outcome. The diff is no longer what makes this one bad
+    // -- the nonce names no transaction -- and the answer must still be an error
+    // rather than a clean-looking empty result.
     const response = await stub.request('tools/call', {
       name: 'commitlore_verify_capture',
       arguments: {
@@ -973,7 +978,6 @@ describe('#594 advertised schemas are enforced at the handler boundary', () => {
       },
     });
     expect(response.result?.['isError']).toBe(true);
-    expect(toolText(response)).toMatch(/diff is required/i);
     expect(toolText(response)).not.toContain('validation_result');
   });
 

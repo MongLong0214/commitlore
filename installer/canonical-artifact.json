@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "e64dd9225c21bc1d5f6073c92e72f39c48ca307e2b8ecaf87a27b0e910b2666e"
+    "sha256": "243809242afc59ac84870de5ce09dbd54d8e157a321b56c9f05e5b497bf56090"
   },
   "artifact": {
-    "sha256": "7df421dded6e5bd9b63c018801919f8b6c81b716b0e3bba90c295636a814eee0",
+    "sha256": "c29a00c8751b6bad10812810d9b6d712a214dfdd3f79ec59fb9426ab438c1cb7",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -586,15 +586,15 @@
       },
       {
         "path": "dist/commands/stale.d.ts",
-        "sha256": "2efd33ae8ab0dc3317e57c73be131cb866ee2bf9512162419d9b2358eea9ade6"
+        "sha256": "7cc21d5020257054f665b2d72a8ebd5bb9a11c863ed65255e819a5118aeed3bb"
       },
       {
         "path": "dist/commands/stale.js",
-        "sha256": "36bfe543a91571a187027e31d9b62fa82a82f77c7cf412c419708b2720fd5953"
+        "sha256": "c55b84b268d1cd21452e60b270a4115a79d8150f4076e8f747ad0b4889b73191"
       },
       {
         "path": "dist/commands/stale.js.map",
-        "sha256": "113a30010ef29e94548c3d10dc185e1bf242041ed94a71e8b8a3f8c6e2f0c0ce"
+        "sha256": "a94f2cf3c32b1a95f605ed0fe9bc52d174ae5b72d32fdb62f452aee81e474279"
       },
       {
         "path": "dist/commands/sync.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "c85f61d44d36426ace6a6b4f1fecc6b42f4b3814dce482e83da73f00d6aef27a"
+        "sha256": "c3fcfb60dd76e3463b864433817c6231f7ad13f351772072e6e0f2f932886cc2"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -722,15 +722,15 @@
       },
       {
         "path": "dist/core/capture-prepare.d.ts",
-        "sha256": "259c18c2c6e7e148ddd0b86f32b9f2930a626d1721b6f8f852356ff9aa9f922a"
+        "sha256": "547dd47e8de297b81ef44f08e705cf8e1a405c2a69da63fe4d9d0c114f96d659"
       },
       {
         "path": "dist/core/capture-prepare.js",
-        "sha256": "3e52098c3f2b1525d0a6df264a358dc8a21759ac0b18654109e2bef7d45da637"
+        "sha256": "aad0e18eef1a81aab6cc11e0dfc5a7fa703db49e6f7a61a24f03d44e4b0ab0b5"
       },
       {
         "path": "dist/core/capture-prepare.js.map",
-        "sha256": "58580a32c31fd4a28b0f0bc6a175995e2f18bde25287e736f6082f3ea7ad3924"
+        "sha256": "63f1b7e0324c7e8725a3ed87ed5ab5bb05a1e58cc16e81e17f85545dc0f34abf"
       },
       {
         "path": "dist/core/capture-shadow.d.ts",
@@ -758,15 +758,15 @@
       },
       {
         "path": "dist/core/capture-verify.d.ts",
-        "sha256": "4165893f4c4dc1b21349f713cf1c6ddfed0ababc1f5ef13f78eae08fda4a6909"
+        "sha256": "a591f457bf7223764c04d4c5701a1fdf849418c70637c08124d413c2587c9e75"
       },
       {
         "path": "dist/core/capture-verify.js",
-        "sha256": "0daa323abdc7ea674c84ff35b9467bf93c09d1d1a8bd289569a8b77714efd476"
+        "sha256": "e7255d77811995e42a7a1393495ff3c717dfd3816808392234ac7bd5e71da5ac"
       },
       {
         "path": "dist/core/capture-verify.js.map",
-        "sha256": "25027a78aa96109665f6186c30b25932e456e6e9355cf8fc3230196864b8f3de"
+        "sha256": "3e42dec7763d194fec263f5cee2ec665e4dc5af5c986cbdee30d48e4f41a4f84"
       },
       {
         "path": "dist/core/codex-plugin.d.ts",
@@ -830,15 +830,15 @@
       },
       {
         "path": "dist/core/harvest.d.ts",
-        "sha256": "0dc07b9032e3fb831f849d56f86a02bbc931f1a73730bd8a2db6284bc90b88fc"
+        "sha256": "9fcdc16dadd36f3d4417ecb0416f31c88936200210d245bfdf7d9df08d276563"
       },
       {
         "path": "dist/core/harvest.js",
-        "sha256": "f7adc326687776122a3ebb6452e0062b6818b6fd25db92bb8cc17ded59506079"
+        "sha256": "09c5dd3c3936a4671a3c32fffa28830f33d158645f2261f36fff5074b707d12e"
       },
       {
         "path": "dist/core/harvest.js.map",
-        "sha256": "16d00b5e6606ae65eceb9d41f3f2272566bcc380e9b04627b0e743bb50fb7e87"
+        "sha256": "c56e0a1c3cd5864b8928e45053d9b335d2204752687a60ef9b5023f5520ad331"
       },
       {
         "path": "dist/core/hermes-config.d.ts",
@@ -882,11 +882,11 @@
       },
       {
         "path": "dist/core/inject.js",
-        "sha256": "19aba4cae7704acae322d0e8d73dfa0a983b5d9864bd9828811e3ba59c4cc929"
+        "sha256": "221fb6aeff12117f76c4a314ee24a84e9450bb55fbc00792c0be4fbc37748103"
       },
       {
         "path": "dist/core/inject.js.map",
-        "sha256": "83d770193827f1bf480caada3ec7a466e36b8b7e4f2b2966b2be02c34a16b201"
+        "sha256": "489a98c58337eec27b59dac635ca907c5aa5839af9399c2aa4012d8fbc87aa81"
       },
       {
         "path": "dist/core/latest-release.d.ts",
@@ -986,15 +986,15 @@
       },
       {
         "path": "dist/core/query.d.ts",
-        "sha256": "dbb293746e25e7404dd2925c15ccc031289c9a15eb897a75f6d4cd0ea8e54d5c"
+        "sha256": "8a35122663bf42d47ce8934b6b019237b95cf5e9257ba7bcd36c10aa0949ad6d"
       },
       {
         "path": "dist/core/query.js",
-        "sha256": "492b73e75458a0e608825e30f0bd20a4172bfe209cf873e5fdcc7fef1d0bcdb4"
+        "sha256": "bbe1c8e63e617c227addac1268222cabc205e58233e993165178f395e0775c48"
       },
       {
         "path": "dist/core/query.js.map",
-        "sha256": "e33e49031b1a59baf761a68a165ef50ce85c4d4a8e27092fbac8852fa3330c90"
+        "sha256": "b9899e9aa76f276527636fea8cee536fa43124a4e261330cfe3c9ea2585d856b"
       },
       {
         "path": "dist/core/release-version.d.ts",
@@ -1034,15 +1034,15 @@
       },
       {
         "path": "dist/core/secret-guard.d.ts",
-        "sha256": "d5f093f54acb02f6e98fbbe5664dfc650eb0775dca81a09b03451bd8ec0d33b5"
+        "sha256": "4d0d2915da2600db5135d66a9fdbc2375677cf346491a6321033c65496004ea9"
       },
       {
         "path": "dist/core/secret-guard.js",
-        "sha256": "88cc48f720f4723062749cf707fb519a950264ef07fd92805fa9376fea944833"
+        "sha256": "e6f4307c7292f50a954082452fae5dbca3e1465d6d7e356e8728b03ba42d15c9"
       },
       {
         "path": "dist/core/secret-guard.js.map",
-        "sha256": "c2c97cda35093f7cadf0e6ccff15cbd4c5e3c28bf615fdd0aedbed165a315afc"
+        "sha256": "4a190ff6915255dd270c3d45a4081864f5448fbaf6e54c0dfbd1128094c20bc2"
       },
       {
         "path": "dist/core/squash.d.ts",
@@ -1058,15 +1058,15 @@
       },
       {
         "path": "dist/core/stale.d.ts",
-        "sha256": "9dffd454ed69fd23002a762be863f0d433a1088fcc5a328c6b5471b519ed2e8c"
+        "sha256": "f1662c45ba06e9904cdcc802673d8a0c29bd9e72eba54bac7f56f03348a8da69"
       },
       {
         "path": "dist/core/stale.js",
-        "sha256": "1b0010a4c86573581ab95ba8b0036ba52ee0ccbead156c221e68901c2a267b6f"
+        "sha256": "634818a106df8c7c0afc35931a61b4c6084396fdb2ee45e8e3fef55e59b563df"
       },
       {
         "path": "dist/core/stale.js.map",
-        "sha256": "1984037c6f58c68edb86f4ff59668e2862e72bb6c986a6c3cfd3a3c0621979e8"
+        "sha256": "cd4b5d1739854e2be26367e1c9a95475697381225e0b7620b02b712425feb66a"
       },
       {
         "path": "dist/core/sync.d.ts",
@@ -1262,15 +1262,15 @@
       },
       {
         "path": "dist/mcp/server.d.ts",
-        "sha256": "876163dde7b11419bdd51ffe20fcd2fc858ee3b06a6d9d44e6e55ce929b7a78b"
+        "sha256": "03b0cd59015cf2630cad0c26bf351759a9b5899a47d2ac008152545641f5aa32"
       },
       {
         "path": "dist/mcp/server.js",
-        "sha256": "ed090c6132f28fd7b0b10b7273811e25c4c339b7367c74bcb7535e64906aca95"
+        "sha256": "22503064d3d3e6e0de6e54138d634511a077d042969f36c6686e5f204960d4ee"
       },
       {
         "path": "dist/mcp/server.js.map",
-        "sha256": "862d122f4b4b95ff72c055c4c06b0ed24fd34174333156f230f462e081363088"
+        "sha256": "3a1881b4913bc8bc28e9ff0b2213646896a48b4aa17ffb6f993511a7bd461f54"
       },
       {
         "path": "dist/mcp/validate-args.d.ts",

@@ -393,6 +393,7 @@ resolveIn) => {
         at: at.toISOString(),
         commits: scan.commits,
         truncated: scan.truncated,
+        coverage: scan.truncated ? 'partial' : 'complete',
         notes: scan.notes,
         totalRecords: states.length,
         records: stale,

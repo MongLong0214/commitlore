@@ -217,11 +217,13 @@ describe('a decision recorded through the MCP tools reaches the next agent', () 
     expect(verified, `rejected for the wrong reason:
 ${verified}`).toMatch(/evidence-not-found|not found in/);
 
-    // The receipt the verification returned, which stage now requires for a
-    // transaction that has one (#1005).
-    const receipt = /"receipt"\s*:\s*"([0-9a-f]{32})"/.exec(verified)?.[1];
-    expect(receipt, `verify returned no receipt:\n${verified}`).toBeDefined();
-    await call(stub, 'commitlore_stage_capture', { nonce, receipt });
+    // No receipt, because nothing was bound (#1021). A verification that
+    // accepted nothing leaves the transaction `prepared`, so there is no handle
+    // to hold and nothing for stage to take.
+    expect(verified, 'a refusal was issued a receipt').not.toMatch(/"receipt"/);
+
+    const stageAttempt = await call(stub, 'commitlore_stage_capture', { nonce });
+    expect(stageAttempt).toMatch(/"staged":\s*false/);
     git(dir, ['commit', '-q', '--no-verify', '-m', 'feat: increment']);
 
     expect(trailers(dir, 'Record-Id')).toEqual([]);

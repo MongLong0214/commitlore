@@ -150,6 +150,12 @@ export interface GradedRecord extends Record {
     provenanceValue?: string;
     trust?: TrustGrade;
     identityCollision?: boolean;
+    /**
+     * The keys on which the colliding declarations disagree (#1020). Absent when
+     * the ambiguity has no per-key answer, in which case the whole record is
+     * withheld as before.
+     */
+    collisionKeys?: string[];
     /** Internal grading input; JSON renderers deliberately do not expose this cache fact. */
     commitSignatures: ReadonlyMap<string, string>;
     matchedTrailerKeys?: string[];

@@ -21,7 +21,7 @@ import { verifyDraft } from './harvest-verify.js';
 import { resolvePolicy } from './capture-policy.js';
 const PROVENANCE_KEY = 'Provenance';
 import { deletePending, isUnreadablePendingFile, readPending, storeVerification, tryLockPending, unlockPending, } from './pending.js';
-import { hasShallowHistory } from './git.js';
+import { hasShallowHistory, execGitOrThrow } from './git.js';
 import { explainWithholding, scanTrailer } from './grade.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
@@ -259,7 +259,13 @@ const recoveryFor = (phase, nonce) => {
     return 'Prepare a new transaction to record anything else.';
 };
 const runVerifyCaptureRecords = (opts) => {
-    const { nonce, draft, transcript, diff, cwd } = opts;
+    const { nonce, draft, transcript, cwd } = opts;
+    /*
+     * Read from the index when the caller sent nothing (#1023). The stored hash
+     * still decides: an index that moved since `prepare` fails the comparison
+     * below and is reported as a diff mismatch, which is what it is.
+     */
+    const diff = opts.diff ?? execGitOrThrow(['diff', '--cached'], { cwd });
     const accepted = [];
     const rejected = [];
     /**
@@ -289,6 +295,30 @@ const runVerifyCaptureRecords = (opts) => {
      * reintroduce by copying two lines.
      */
     const settle = (result) => {
+        /*
+         * A verification that accepted nothing does not bind the transaction (#1021).
+         *
+         * `verified` was reached by a capture whose every draft record the verifier
+         * discarded -- which the contract calls a normal outcome -- and the
+         * transaction then sat in `pending ls` at that phase indefinitely, marked
+         * `stale` and `gc_eligible` and never collected. `pending ls` is the only
+         * way a host can ask "is a capture staged for the commit about to happen",
+         * and the obvious reading of `verified` is yes. A host that built that check
+         * had every commit after the first empty capture read as covered.
+         *
+         * Leaving it `prepared` says what is true: the sources are hashed and
+         * nothing has been verified against them. It also lets the same nonce be
+         * verified again with a better draft, where before the transaction was
+         * spent on the attempt that recorded nothing.
+         *
+         * This does not reopen what `settle` exists to prevent -- a refusal dropped
+         * while an earlier stored result stays stageable. That hazard is about a
+         * result with records in it; a transaction holding no accepted record has
+         * nothing that could be staged, and `stageCaptureRecord` refuses an empty
+         * or non-`verified` transaction either way.
+         */
+        if (result.accepted.length === 0)
+            return result;
         const stored = persist(result);
         if (stored.bound) {
             return stored.receipt === null ? result : { ...result, receipt: stored.receipt };
@@ -327,13 +357,16 @@ const runVerifyCaptureRecords = (opts) => {
         // 1. Re-read prepared transaction and verify source hashes
         const pending = opts.pending ?? readPending(nonce, { cwd });
         if (!pending) {
-            // No transaction found — return empty (never throw)
+            // No transaction found. Still never throws -- the caller decides what a
+            // missing transaction means -- but it says so, rather than returning the
+            // shape of a verification that ran and found nothing (#1023).
             return {
                 accepted: [],
                 rejected: [],
                 validation_result: 'empty',
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
+                no_transaction: true,
             };
         }
         // A transaction that is no longer `prepared` already carries a result, and
@@ -375,41 +408,49 @@ const runVerifyCaptureRecords = (opts) => {
         // Source hash verification: reject if the transcript or diff was substituted
         const transcriptHash = sha256(transcript);
         const diffHash = sha256(diff);
-        if (pending.source_hashes.transcript !== transcriptHash) {
-            // Source mismatch — every record is rejected
+        /*
+         * A substituted source ends the call without binding the transaction (#1022).
+         *
+         * Two things were wrong. The mismatch was reported only by rejecting each
+         * draft record, so an empty draft produced an empty `rejected` and
+         * `incomplete: false` -- a clean, final-looking answer for a call whose
+         * sources were both wrong. And it went through `settle`, which persists the
+         * result and issues a receipt, moving the transaction out of `prepared`;
+         * from there `storeVerification` refuses every later call, so the nonce was
+         * locked holding a verification built from sources it never matched, and the
+         * recovery it named was a CLI command an agent on MCP cannot run.
+         *
+         * Returning without `settle` leaves the transaction `prepared`, which is
+         * what it still is: nothing was verified. That does not reopen what `settle`
+         * exists to prevent -- a refusal that is dropped while an earlier stored
+         * result stays stageable -- because this path accepts nothing and therefore
+         * has nothing that could be staged in its place.
+         *
+         * `rejected` is still filled per record for a caller that sent some, and
+         * `source_mismatch` carries the same fact where a caller sent none.
+         */
+        const mismatch = (which) => {
             for (const record of draft) {
                 rejected.push({
                     record,
                     reason: 'source-mismatch',
-                    detail: 'transcript hash does not match the prepared transaction',
+                    detail: `${which} hash does not match the prepared transaction`,
                 });
             }
-            const result = {
+            return {
                 accepted: [],
                 rejected,
                 validation_result: 'empty',
-                incomplete: false,
+                // Nothing was verified, so nothing about this answer is complete.
+                incomplete: true,
                 overlap_check: 'canonical_exact_only',
+                source_mismatch: which,
             };
-            return settle(result);
-        }
-        if (pending.source_hashes.diff !== diffHash) {
-            for (const record of draft) {
-                rejected.push({
-                    record,
-                    reason: 'source-mismatch',
-                    detail: 'diff hash does not match the prepared transaction',
-                });
-            }
-            const result = {
-                accepted: [],
-                rejected,
-                validation_result: 'empty',
-                incomplete: false,
-                overlap_check: 'canonical_exact_only',
-            };
-            return settle(result);
-        }
+        };
+        if (pending.source_hashes.transcript !== transcriptHash)
+            return mismatch('transcript');
+        if (pending.source_hashes.diff !== diffHash)
+            return mismatch('diff');
         // 2. Check notes availability — unfetched means incomplete
         const notes = notesAvailability({ cwd });
         if (notes === 'unfetched') {

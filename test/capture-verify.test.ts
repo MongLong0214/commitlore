@@ -634,10 +634,16 @@ describe('verifyCaptureRecords', () => {
     expect(result.rejected[0]!.detail).toMatch(/r-zzzzzz/);
     expect(result.validation_result).toBe('empty');
 
+    // The transaction is untouched, because nothing was verified against it
+    // (#1021). This asserted `validation_result: 'empty'` on the stored file
+    // while the phase read `verified`, which is the state a host reads as "a
+    // capture is ready to stage". A verification that accepted nothing binds
+    // nothing, so the sources stay hashed and the nonce stays usable.
     const pending = readPending(nonce, { cwd });
     expect(pending).not.toBeNull();
-    expect(pending!.validation_result).toBe('empty');
+    expect(pending!.phase).toBe('prepared');
     expect(pending!.records).toHaveLength(0);
+    expect(pending!.receipt, 'a refusal earned a handle to something').toBeUndefined();
   });
 
   it('accepts a draft whose Follows names a Record-Id already in history', () => {
@@ -972,10 +978,11 @@ describe('verifyCaptureRecords', () => {
     // Must return normally — no throw
     expect(result.validation_result).toBe('empty');
     expect(result.accepted).toHaveLength(0);
-    // The transaction is stored as verified with empty result
+    // And the transaction stays `prepared` (#1021). It used to be stored as
+    // `verified` holding an empty result, which is what a host reading
+    // `pending ls` takes for a capture waiting on the next commit.
     const pending = readPending(nonce, { cwd });
-    expect(pending!.phase).toBe('verified');
-    expect(pending!.validation_result).toBe('empty');
+    expect(pending!.phase).toBe('prepared');
   });
 
   // ==========================================================================

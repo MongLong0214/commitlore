@@ -1009,7 +1009,11 @@ export const buildInjection = (opts: InjectOptions): Injection => {
   const grades = new Map<string, Grade>(
     active.map((record) => [
       record.recordId ?? `${record.sha}:${record.source}`,
-      record.identityCollision === true
+      // Withheld whole only where the collision has no per-key answer (#1020).
+      // A mirror that diverges on some keys has already had exactly those keys
+      // removed by `runQuery`; what is left is what every declaration agrees on,
+      // and blocking it here would restore the loss the narrowing removed.
+      record.identityCollision === true && (record.collisionKeys ?? []).length === 0
         ? {
             provenance: record.provenance?.kind ?? 'unknown',
             lifecycle: record.lifecycle,

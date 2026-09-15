@@ -40,6 +40,28 @@ export interface ScanOptions {
     minConfidence?: 'high' | 'medium';
 }
 /**
+ * Replaces every credential in one line of text with its redacted form.
+ *
+ * `scanForSecrets` answers *whether* a message carries credentials, which is
+ * what a gate needs. A reader that hands record text to an agent needs the other
+ * half: the same text with the material taken out. Detection and masking both
+ * live here so a caller cannot get one without the other, and so the redaction
+ * is the one `validate` already reports rather than a second implementation of
+ * the same idea.
+ *
+ * Takes a single line, because a trailer value is one -- git unfolds
+ * continuations into it -- and returns the text unchanged when nothing matched,
+ * so a caller can compare by identity to know whether anything was removed.
+ *
+ * The replacement is the rule's masked excerpt, not a fixed marker, so the
+ * reader can still see which kind of credential was there and match it against
+ * what `validate` reported for the same commit.
+ */
+export declare const redactSecretsIn: (value: string) => {
+    text: string;
+    findings: SecretFinding[];
+};
+/**
  * Scans a commit message for credentials, in message order.
  *
  * An empty array means no rule fired — which is a statement about this rule
