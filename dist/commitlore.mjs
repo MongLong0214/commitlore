@@ -12399,6 +12399,11 @@ var numberLines = (text, firstLine6 = 1) => {
   return lines.map((line2, index) => `${String(firstLine6 + index).padStart(width)} | ${line2}`).join("\n");
 };
 var DEFAULT_TRANSCRIPT_BUDGET_BYTES = 256 * 1024;
+var DEFAULT_DIFF_BUDGET_BYTES = 64 * 1024;
+var diffBudgetBytes = () => {
+  const raw = Number(process.env["COMMITLORE_DIFF_BUDGET_BYTES"]);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_DIFF_BUDGET_BYTES;
+};
 var transcriptBudgetBytes = () => {
   const raw = Number(process.env["COMMITLORE_TRANSCRIPT_BUDGET_BYTES"]);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_TRANSCRIPT_BUDGET_BYTES;
@@ -12455,6 +12460,34 @@ var windowNotice = (window) => {
   const omitted = window.first_line - 1;
   return [
     `(This is the end of the transcript: lines ${window.first_line}-${window.last_line} of ${window.total_lines}, ${omitted} earlier line(s) omitted to bound this prompt${window.first_line_partial ? `, and line ${window.first_line} is shown from its middle` : ""}. The numbers below are the transcript's own, so a locator you write still names the line in the whole file. Cite only what you can see here.)`,
+    ""
+  ];
+};
+var windowDiff = (diff, budget = diffBudgetBytes()) => {
+  const totalBytes = Buffer.byteLength(diff, "utf8");
+  if (totalBytes <= budget) {
+    return { text: diff, window: { total_bytes: totalBytes, window_bytes: totalBytes, truncated: false } };
+  }
+  const lines = diff.split("\n");
+  const kept = [];
+  let bytes = 0;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line2 = lines[index];
+    const cost = Buffer.byteLength(line2, "utf8") + 1;
+    if (bytes + cost > budget) break;
+    kept.unshift(line2);
+    bytes += cost;
+  }
+  const text = kept.length > 0 ? kept.join("\n") : Buffer.from(lines[lines.length - 1] ?? "", "utf8").subarray(-budget).toString("utf8");
+  return {
+    text,
+    window: { total_bytes: totalBytes, window_bytes: Buffer.byteLength(text, "utf8"), truncated: true }
+  };
+};
+var diffNotice = (window) => {
+  if (!window.truncated) return [];
+  return [
+    `(This is the end of the diff: ${window.window_bytes} of ${window.total_bytes} bytes, the earlier hunks omitted to bound this prompt. Cite only what you can see here \u2014 a quote from a hunk that is not shown cannot be verified and the record will be dropped.)`,
     ""
   ];
 };
@@ -12520,7 +12553,9 @@ var buildHarvestContract = () => {
 };
 var buildHarvestPromptWithWindow = (input, precomputed) => {
   const entries = loadVocabulary().filter((entry) => entry.key !== "Verified");
-  const diff = input.diff.trim() === "" ? "(no diff \u2014 nothing is staged)" : input.diff.replace(/\n+$/, "");
+  const staged = input.diff.replace(/\n+$/, "");
+  const { text: diffText, window: diffWindow } = windowDiff(staged);
+  const diff = input.diff.trim() === "" ? "(no diff \u2014 nothing is staged)" : diffText;
   const { text, window } = precomputed ?? windowTranscript(input.transcript);
   const prompt = [
     "# CommitLore harvest",
@@ -12548,10 +12583,11 @@ var buildHarvestPromptWithWindow = (input, precomputed) => {
     "",
     "## DIFF",
     "",
+    ...diffNotice(diffWindow),
     diff,
     ""
   ].join("\n");
-  return { prompt, window };
+  return { prompt, window, diffWindow };
 };
 var buildHarvestPrompt = (input) => buildHarvestPromptWithWindow(input).prompt;
 var RECORD_FIELDS = ["trailers", "evidence"];
@@ -15625,6 +15661,24 @@ var notesPayloadDiverges = (group) => {
 };
 var hasAmbiguousGroup = (group) => sharesACommit(group) || instantConflicts(group).size > 0 || notesPayloadDiverges(group);
 var hasAmbiguousIdCollision = (records) => [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
+var valuesUnder = (record2, key) => record2.trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value).sort().join("");
+var divergentIdKeys = (records) => {
+  const diverged = /* @__PURE__ */ new Set();
+  for (const group of groupsByRecordId(records).values()) {
+    if (!notesPayloadDiverges(group)) continue;
+    const rivals = group.filter((record2) => !isOwnCommitMirror(record2, group));
+    if (rivals.length < 2) continue;
+    const keys = new Set(
+      rivals.flatMap((record2) => record2.trailers.map((trailer) => trailer.key))
+    );
+    keys.delete(RECORD_ID_KEY2);
+    for (const key of keys) {
+      const answers = new Set(rivals.map((record2) => valuesUnder(record2, key)));
+      if (answers.size > 1) diverged.add(key);
+    }
+  }
+  return diverged;
+};
 var hasDeclaredSuccession = (recordId, ordered) => {
   let declarations2 = 0;
   for (const { record: record2 } of ordered) {
@@ -16435,6 +16489,186 @@ var gradeDeclarations = (record2, declarations2, ctx) => {
   return worst ?? gradeRecord(record2, ctx);
 };
 
+// src/hooks/secret-rules.ts
+var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
+var TEMPLATE_MARKERS = /<[^>]{0,64}>|\{\{|\$\{|\.\.\.|…/;
+var REPEATED_RUN = /(.)\1{5,}/;
+var isPlaceholder = (candidate) => PLACEHOLDER_WORDS.test(candidate) || TEMPLATE_MARKERS.test(candidate) || REPEATED_RUN.test(candidate);
+var SECRET_RULES = [
+  {
+    id: "aws-access-key-id",
+    description: "AWS access key id",
+    // gitleaks: aws-access-token. The prefix set is AWS's own (AKIA long-term,
+    // ASIA temporary, ABIA bearer, ACCA context, A3T… service-specific).
+    pattern: /\b(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b/g,
+    confidence: "high"
+  },
+  {
+    id: "aws-secret-access-key",
+    description: "AWS secret access key",
+    // No prefix exists to key on — 40 base64 characters alone would match half
+    // the hashes in a message — so the identifier is required. Quotes are
+    // optional here because the shell-export form (`AWS_SECRET_ACCESS_KEY=…`)
+    // is how this value actually leaks, and the 40-character shape carries the
+    // rule on its own.
+    pattern: /(?<![A-Za-z])aws[_-]?secret[_-]?(?:access[_-]?)?key["']?\s{0,8}[:=]\s{0,8}["']?(?<check>[A-Za-z0-9/+=]{40})/gi,
+    confidence: "high"
+  },
+  {
+    id: "github-token",
+    description: "GitHub personal access, OAuth, app or refresh token",
+    // gitleaks: github-pat (ghp_), github-oauth (gho_), github-app-token
+    // (ghu_/ghs_), github-refresh-token (ghr_). One rule, because the remedy
+    // and the urgency are identical for all five.
+    pattern: /\bgh[pousr]_[A-Za-z0-9]{36,255}/g,
+    confidence: "high"
+  },
+  {
+    id: "github-fine-grained-pat",
+    description: "GitHub fine-grained personal access token",
+    // gitleaks pins the tail at 82; the floor is loosened to 60 so a future
+    // length change degrades into a hit rather than into silence.
+    pattern: /\bgithub_pat_[A-Za-z0-9_]{60,255}/g,
+    confidence: "high"
+  },
+  {
+    id: "openai-api-key",
+    description: "OpenAI API key",
+    // Two shapes, and the split is what keeps this rule quiet. The legacy form
+    // is `sk-` plus alphanumerics only: allowing `-` in the tail would match
+    // any branch-name-shaped word starting with `sk-`. The project/service
+    // forms do allow `-`, so they are gated behind their own prefixes instead.
+    pattern: /\bsk-(?:(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,255}|[A-Za-z0-9]{32,255})/g,
+    confidence: "high"
+  },
+  {
+    id: "anthropic-api-key",
+    description: "Anthropic API key",
+    // gitleaks: anthropic-api-key (`sk-ant-api03-…`, `sk-ant-admin01-…`). The
+    // key-class segment is left open so a new class is still detected. Cannot
+    // collide with the OpenAI rule above: `ant` is three characters, short of
+    // that rule's 32-character alphanumeric floor.
+    pattern: /\bsk-ant-[A-Za-z0-9]{2,32}-[A-Za-z0-9_-]{20,255}/g,
+    confidence: "high"
+  },
+  {
+    id: "slack-token",
+    description: "Slack API token",
+    // gitleaks: slack-bot-token and friends, collapsed to the shared prefix.
+    pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,255}/g,
+    confidence: "high"
+  },
+  {
+    id: "private-key-block",
+    description: "PEM private key block",
+    // The header alone is the finding. A commit message that quotes the BEGIN
+    // line has already told everyone where the key is, whether or not the body
+    // came along.
+    pattern: /-----BEGIN[A-Z0-9 ]{0,32}PRIVATE KEY(?: BLOCK)?-----/g,
+    confidence: "high"
+  },
+  {
+    id: "url-embedded-credentials",
+    description: "credentials embedded in a URL",
+    // `scheme://user:password@host`. The password is the `check` group so a
+    // documented `https://user:<password>@host` stays quiet, and every part is
+    // bounded so a long line cannot make the engine walk it repeatedly.
+    // `[^\s:@/]` for the user and `[^\s@/]` for the password are what keep
+    // `postgres://cache.internal:5432/db` out: the port is followed by `/`,
+    // never by `@`.
+    pattern: /\b[a-z][a-z0-9+.-]{1,31}:\/\/[^\s:@/]{1,64}:(?<check>[^\s@/]{3,128})@[^\s/]{1,255}/gi,
+    confidence: "high"
+  },
+  {
+    id: "generic-credential-assignment",
+    description: "a secret-looking name assigned a credential-shaped value",
+    // The catch-all, and the only rule that can fire on ordinary English — so
+    // it is `medium`, and it demands three things at once: a credential-ish
+    // name, an assignment, and a quoted value with no whitespace in it. That
+    // last requirement is what separates `password: "hunter2seventeen"` from
+    // `password: "must be rotated"`, and it is why prose about tokens and
+    // secrets passes. The leading lookbehind, rather than `\b`, is so
+    // `DATABASE_PASSWORD="…"` is caught (`_` is a word character, so `\b`
+    // would not match) while `retokenize: "…"` is not.
+    pattern: /(?<![A-Za-z])(?:api[_-]?key|apikey|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|credentials?|password|passwd|secret|token)["']?\s{0,8}[:=]\s{0,8}["'](?<check>[^"'\s]{8,200})["']/gi,
+    confidence: "medium"
+  }
+];
+
+// src/core/secret-guard.ts
+var CONFIDENCE_RANK = { high: 2, medium: 1 };
+var REDACT_PREFIX = 4;
+var COMMENT_CHAR = "#";
+var SCISSORS = /^#\s{0,8}-{3,}\s{0,8}>8\s{0,8}-{3,}/;
+var redact = (text) => `${text.slice(0, Math.min(REDACT_PREFIX, Math.max(text.length - 1, 0)))}\u2026`;
+var scannedLines = (message) => {
+  const kept = [];
+  for (const [index, raw] of message.split("\n").entries()) {
+    const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    if (SCISSORS.test(text)) break;
+    if (text.startsWith(COMMENT_CHAR)) continue;
+    kept.push({ line: index + 1, text });
+  }
+  return kept;
+};
+var hitsFor = (rule, source) => {
+  const found = [];
+  for (const match of source.text.matchAll(rule.pattern)) {
+    const text = match[0];
+    if (isPlaceholder(match.groups?.["check"] ?? text)) continue;
+    const start = match.index ?? 0;
+    found.push({ rule, line: source.line, start, end: start + text.length, redacted: redact(text) });
+  }
+  return found;
+};
+var overlaps = (a, b) => a.line === b.line && a.start < b.end && b.start < a.end;
+var dropShadowed = (hits) => hits.filter(
+  (hit) => !hits.some(
+    (other) => other !== hit && overlaps(hit, other) && CONFIDENCE_RANK[other.rule.confidence] > CONFIDENCE_RANK[hit.rule.confidence]
+  )
+);
+var redactSecretsIn = (value) => {
+  const line2 = { line: 1, text: value };
+  const hits = dropShadowed(SECRET_RULES.flatMap((rule) => hitsFor(rule, line2)));
+  if (hits.length === 0) return { text: value, findings: [] };
+  const ordered = [...hits].sort((a, b) => b.start - a.start);
+  let text = value;
+  for (const hit of ordered) {
+    text = `${text.slice(0, hit.start)}${hit.redacted}${text.slice(hit.end)}`;
+  }
+  const findings = [...hits].sort((a, b) => a.start - b.start || a.rule.id.localeCompare(b.rule.id)).map((hit) => ({
+    ruleId: hit.rule.id,
+    description: hit.rule.description,
+    line: hit.line,
+    redacted: hit.redacted,
+    confidence: hit.rule.confidence
+  }));
+  return { text, findings };
+};
+var scanForSecrets = (message, opts) => {
+  const floor = CONFIDENCE_RANK[opts?.minConfidence ?? "medium"];
+  const hits = scannedLines(message).flatMap(
+    (source) => SECRET_RULES.flatMap((rule) => hitsFor(rule, source))
+  );
+  return dropShadowed(hits).filter((hit) => CONFIDENCE_RANK[hit.rule.confidence] >= floor).sort((a, b) => a.line - b.line || a.start - b.start || a.rule.id.localeCompare(b.rule.id)).map((hit) => ({
+    ruleId: hit.rule.id,
+    description: hit.rule.description,
+    line: hit.line,
+    redacted: hit.redacted,
+    confidence: hit.rule.confidence
+  }));
+};
+var formatFindings = (findings) => {
+  if (findings.length === 0) return "";
+  return [
+    ...findings.map(
+      (finding) => `${finding.line}: ${finding.ruleId} (${finding.confidence}) \u2014 ${finding.description} \u2014 ${finding.redacted}`
+    ),
+    "Remove the value from the message. If it has already left this machine, rotate it \u2014 rewriting history does not reach existing clones.",
+    ""
+  ].join("\n");
+};
+
 // src/core/query.ts
 var LIMIT_KEY = "Limit";
 var RULED_OUT_KEY2 = "Ruled-out";
@@ -16782,6 +17016,7 @@ var mergeByIdentity = (records, states) => {
     const provenanceValue = trailerValue2(trailers, PROVENANCE_KEY3);
     const provenance = parseProvenance(provenanceValue);
     const identityCollision = hasAmbiguousIdCollision(ordered);
+    const collisionKeys = identityCollision ? [...divergentIdKeys(ordered)].sort() : [];
     merged.push({
       trailers,
       sha: latest2.sha,
@@ -16803,6 +17038,7 @@ var mergeByIdentity = (records, states) => {
       ...provenance === void 0 ? {} : { provenance },
       ...provenanceValue === void 0 ? {} : { provenanceValue },
       ...identityCollision ? { identityCollision: true } : {},
+      ...identityCollision && collisionKeys.length > 0 ? { collisionKeys } : {},
       ...state?.supersededBy === void 0 ? {} : { supersededBy: state.supersededBy },
       ...state?.expiresAt === void 0 ? {} : { expiresAt: state.expiresAt }
     });
@@ -16849,10 +17085,30 @@ var runQuery = (opts = {}) => {
       opts.requireSignedDirective === true,
       opts.trustedSignerFingerprints
     );
+    let blockedWholeRecords = 0;
+    let blockedAxes = 0;
     for (const record2 of records) {
       if (record2.identityCollision !== true) continue;
-      record2.trust = "blocked";
-      record2.matchedTrailerKeys = [RECORD_ID_KEY3];
+      const diverged = record2.collisionKeys ?? [];
+      if (diverged.length === 0) {
+        record2.trust = "blocked";
+        record2.matchedTrailerKeys = [RECORD_ID_KEY3];
+        blockedWholeRecords += 1;
+        continue;
+      }
+      const divergedKeys = new Set(diverged);
+      record2.trailers = record2.trailers.filter((trailer) => !divergedKeys.has(trailer.key));
+      blockedAxes += diverged.length;
+    }
+    if (blockedAxes > 0) {
+      diagnostics.push(
+        `${String(blockedAxes)} trailer key(s) are withheld because a record's commit message and its note on refs/notes/commitlore declare different values for them; the keys that agree are served as usual. fix: read both with git log -1 --format=%B <sha> and git notes --ref=refs/notes/commitlore show <sha>, then make them agree`
+      );
+    }
+    if (blockedWholeRecords > 0) {
+      diagnostics.push(
+        `${String(blockedWholeRecords)} record(s) are withheld entirely: their Record-Id names more than one record, so there is no axis to serve. fix: read the declarations with git log and git notes, and give one of them a new Record-Id`
+      );
     }
     const history = historyAvailability(cwd, facts);
     if (history === "unavailable") {
@@ -16877,6 +17133,20 @@ var runQuery = (opts = {}) => {
     const vantage = readVantage(cwd, facts);
     const behindCaveat = vantageCaveat(vantage);
     if (behindCaveat !== null) diagnostics.push(behindCaveat);
+    let redactedValues = 0;
+    for (const record2 of records) {
+      for (const trailer of record2.trailers) {
+        const masked = redactSecretsIn(trailer.value);
+        if (masked.text === trailer.value) continue;
+        trailer.value = masked.text;
+        redactedValues += 1;
+      }
+    }
+    if (redactedValues > 0) {
+      diagnostics.push(
+        `${String(redactedValues)} trailer value(s) match a credential rule and are shown masked; the record is unchanged in git. fix: commitlore validate names the rule and the line, and a credential that reached a commit has to be rotated -- rewriting history does not reach existing clones`
+      );
+    }
     return {
       records: opts.limit === void 0 ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
       fromIndex: source.fromIndex,
@@ -17816,6 +18086,7 @@ var prepareValues = (opts) => {
     source_hashes: sourceHashes,
     prompt: harvest2.prompt,
     transcript_window: harvest2.window,
+    diff_window: harvest2.diffWindow,
     guard_advisory: advisory,
     policy_error: policy.error
   };
@@ -17841,6 +18112,7 @@ var prepareCaptureContext = (opts) => {
     source_hashes: prepared.source_hashes,
     prompt: prepared.prompt,
     transcript_window: prepared.transcript_window,
+    diff_window: prepared.diff_window,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory
   };
@@ -17867,6 +18139,7 @@ var prepareCaptureContextReadOnly = (opts) => {
     source_hashes: prepared.source_hashes,
     prompt: prepared.prompt,
     transcript_window: prepared.transcript_window,
+    diff_window: prepared.diff_window,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory,
     pending: pending2
@@ -17990,7 +18263,8 @@ var recoveryFor = (phase, nonce) => {
   return "Prepare a new transaction to record anything else.";
 };
 var runVerifyCaptureRecords = (opts) => {
-  const { nonce, draft, transcript, diff, cwd } = opts;
+  const { nonce, draft, transcript, cwd } = opts;
+  const diff = opts.diff ?? execGitOrThrow(["diff", "--cached"], { cwd });
   const accepted = [];
   const rejected = [];
   const persist = (result) => {
@@ -17999,6 +18273,7 @@ var runVerifyCaptureRecords = (opts) => {
     return { bound: receipt !== null, receipt };
   };
   const settle = (result) => {
+    if (result.accepted.length === 0) return result;
     const stored = persist(result);
     if (stored.bound) {
       return stored.receipt === null ? result : { ...result, receipt: stored.receipt };
@@ -18025,7 +18300,8 @@ var runVerifyCaptureRecords = (opts) => {
         rejected: [],
         validation_result: "empty",
         incomplete: true,
-        overlap_check: "canonical_exact_only"
+        overlap_check: "canonical_exact_only",
+        no_transaction: true
       };
     }
     if (pending2.phase !== "prepared" && opts.readOnly !== true) {
@@ -18046,40 +18322,26 @@ var runVerifyCaptureRecords = (opts) => {
     }
     const transcriptHash = sha2562(transcript);
     const diffHash = sha2562(diff);
-    if (pending2.source_hashes.transcript !== transcriptHash) {
+    const mismatch = (which) => {
       for (const record2 of draft) {
         rejected.push({
           record: record2,
           reason: "source-mismatch",
-          detail: "transcript hash does not match the prepared transaction"
+          detail: `${which} hash does not match the prepared transaction`
         });
       }
-      const result2 = {
+      return {
         accepted: [],
         rejected,
         validation_result: "empty",
-        incomplete: false,
-        overlap_check: "canonical_exact_only"
+        // Nothing was verified, so nothing about this answer is complete.
+        incomplete: true,
+        overlap_check: "canonical_exact_only",
+        source_mismatch: which
       };
-      return settle(result2);
-    }
-    if (pending2.source_hashes.diff !== diffHash) {
-      for (const record2 of draft) {
-        rejected.push({
-          record: record2,
-          reason: "source-mismatch",
-          detail: "diff hash does not match the prepared transaction"
-        });
-      }
-      const result2 = {
-        accepted: [],
-        rejected,
-        validation_result: "empty",
-        incomplete: false,
-        overlap_check: "canonical_exact_only"
-      };
-      return settle(result2);
-    }
+    };
+    if (pending2.source_hashes.transcript !== transcriptHash) return mismatch("transcript");
+    if (pending2.source_hashes.diff !== diffHash) return mismatch("diff");
     const notes = notesAvailability({ cwd });
     if (notes === "unfetched") {
       const result2 = {
@@ -18272,168 +18534,6 @@ var stageCaptureRecord = (opts) => {
   const success3 = stagePending(nonce, stageOpts);
   if (!success3) return null;
   return nonce;
-};
-
-// src/hooks/secret-rules.ts
-var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
-var TEMPLATE_MARKERS = /<[^>]{0,64}>|\{\{|\$\{|\.\.\.|…/;
-var REPEATED_RUN = /(.)\1{5,}/;
-var isPlaceholder = (candidate) => PLACEHOLDER_WORDS.test(candidate) || TEMPLATE_MARKERS.test(candidate) || REPEATED_RUN.test(candidate);
-var SECRET_RULES = [
-  {
-    id: "aws-access-key-id",
-    description: "AWS access key id",
-    // gitleaks: aws-access-token. The prefix set is AWS's own (AKIA long-term,
-    // ASIA temporary, ABIA bearer, ACCA context, A3T… service-specific).
-    pattern: /\b(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b/g,
-    confidence: "high"
-  },
-  {
-    id: "aws-secret-access-key",
-    description: "AWS secret access key",
-    // No prefix exists to key on — 40 base64 characters alone would match half
-    // the hashes in a message — so the identifier is required. Quotes are
-    // optional here because the shell-export form (`AWS_SECRET_ACCESS_KEY=…`)
-    // is how this value actually leaks, and the 40-character shape carries the
-    // rule on its own.
-    pattern: /(?<![A-Za-z])aws[_-]?secret[_-]?(?:access[_-]?)?key["']?\s{0,8}[:=]\s{0,8}["']?(?<check>[A-Za-z0-9/+=]{40})/gi,
-    confidence: "high"
-  },
-  {
-    id: "github-token",
-    description: "GitHub personal access, OAuth, app or refresh token",
-    // gitleaks: github-pat (ghp_), github-oauth (gho_), github-app-token
-    // (ghu_/ghs_), github-refresh-token (ghr_). One rule, because the remedy
-    // and the urgency are identical for all five.
-    pattern: /\bgh[pousr]_[A-Za-z0-9]{36,255}/g,
-    confidence: "high"
-  },
-  {
-    id: "github-fine-grained-pat",
-    description: "GitHub fine-grained personal access token",
-    // gitleaks pins the tail at 82; the floor is loosened to 60 so a future
-    // length change degrades into a hit rather than into silence.
-    pattern: /\bgithub_pat_[A-Za-z0-9_]{60,255}/g,
-    confidence: "high"
-  },
-  {
-    id: "openai-api-key",
-    description: "OpenAI API key",
-    // Two shapes, and the split is what keeps this rule quiet. The legacy form
-    // is `sk-` plus alphanumerics only: allowing `-` in the tail would match
-    // any branch-name-shaped word starting with `sk-`. The project/service
-    // forms do allow `-`, so they are gated behind their own prefixes instead.
-    pattern: /\bsk-(?:(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,255}|[A-Za-z0-9]{32,255})/g,
-    confidence: "high"
-  },
-  {
-    id: "anthropic-api-key",
-    description: "Anthropic API key",
-    // gitleaks: anthropic-api-key (`sk-ant-api03-…`, `sk-ant-admin01-…`). The
-    // key-class segment is left open so a new class is still detected. Cannot
-    // collide with the OpenAI rule above: `ant` is three characters, short of
-    // that rule's 32-character alphanumeric floor.
-    pattern: /\bsk-ant-[A-Za-z0-9]{2,32}-[A-Za-z0-9_-]{20,255}/g,
-    confidence: "high"
-  },
-  {
-    id: "slack-token",
-    description: "Slack API token",
-    // gitleaks: slack-bot-token and friends, collapsed to the shared prefix.
-    pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,255}/g,
-    confidence: "high"
-  },
-  {
-    id: "private-key-block",
-    description: "PEM private key block",
-    // The header alone is the finding. A commit message that quotes the BEGIN
-    // line has already told everyone where the key is, whether or not the body
-    // came along.
-    pattern: /-----BEGIN[A-Z0-9 ]{0,32}PRIVATE KEY(?: BLOCK)?-----/g,
-    confidence: "high"
-  },
-  {
-    id: "url-embedded-credentials",
-    description: "credentials embedded in a URL",
-    // `scheme://user:password@host`. The password is the `check` group so a
-    // documented `https://user:<password>@host` stays quiet, and every part is
-    // bounded so a long line cannot make the engine walk it repeatedly.
-    // `[^\s:@/]` for the user and `[^\s@/]` for the password are what keep
-    // `postgres://cache.internal:5432/db` out: the port is followed by `/`,
-    // never by `@`.
-    pattern: /\b[a-z][a-z0-9+.-]{1,31}:\/\/[^\s:@/]{1,64}:(?<check>[^\s@/]{3,128})@[^\s/]{1,255}/gi,
-    confidence: "high"
-  },
-  {
-    id: "generic-credential-assignment",
-    description: "a secret-looking name assigned a credential-shaped value",
-    // The catch-all, and the only rule that can fire on ordinary English — so
-    // it is `medium`, and it demands three things at once: a credential-ish
-    // name, an assignment, and a quoted value with no whitespace in it. That
-    // last requirement is what separates `password: "hunter2seventeen"` from
-    // `password: "must be rotated"`, and it is why prose about tokens and
-    // secrets passes. The leading lookbehind, rather than `\b`, is so
-    // `DATABASE_PASSWORD="…"` is caught (`_` is a word character, so `\b`
-    // would not match) while `retokenize: "…"` is not.
-    pattern: /(?<![A-Za-z])(?:api[_-]?key|apikey|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|credentials?|password|passwd|secret|token)["']?\s{0,8}[:=]\s{0,8}["'](?<check>[^"'\s]{8,200})["']/gi,
-    confidence: "medium"
-  }
-];
-
-// src/core/secret-guard.ts
-var CONFIDENCE_RANK = { high: 2, medium: 1 };
-var REDACT_PREFIX = 4;
-var COMMENT_CHAR = "#";
-var SCISSORS = /^#\s{0,8}-{3,}\s{0,8}>8\s{0,8}-{3,}/;
-var redact = (text) => `${text.slice(0, Math.min(REDACT_PREFIX, Math.max(text.length - 1, 0)))}\u2026`;
-var scannedLines = (message) => {
-  const kept = [];
-  for (const [index, raw] of message.split("\n").entries()) {
-    const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-    if (SCISSORS.test(text)) break;
-    if (text.startsWith(COMMENT_CHAR)) continue;
-    kept.push({ line: index + 1, text });
-  }
-  return kept;
-};
-var hitsFor = (rule, source) => {
-  const found = [];
-  for (const match of source.text.matchAll(rule.pattern)) {
-    const text = match[0];
-    if (isPlaceholder(match.groups?.["check"] ?? text)) continue;
-    const start = match.index ?? 0;
-    found.push({ rule, line: source.line, start, end: start + text.length, redacted: redact(text) });
-  }
-  return found;
-};
-var overlaps = (a, b) => a.line === b.line && a.start < b.end && b.start < a.end;
-var dropShadowed = (hits) => hits.filter(
-  (hit) => !hits.some(
-    (other) => other !== hit && overlaps(hit, other) && CONFIDENCE_RANK[other.rule.confidence] > CONFIDENCE_RANK[hit.rule.confidence]
-  )
-);
-var scanForSecrets = (message, opts) => {
-  const floor = CONFIDENCE_RANK[opts?.minConfidence ?? "medium"];
-  const hits = scannedLines(message).flatMap(
-    (source) => SECRET_RULES.flatMap((rule) => hitsFor(rule, source))
-  );
-  return dropShadowed(hits).filter((hit) => CONFIDENCE_RANK[hit.rule.confidence] >= floor).sort((a, b) => a.line - b.line || a.start - b.start || a.rule.id.localeCompare(b.rule.id)).map((hit) => ({
-    ruleId: hit.rule.id,
-    description: hit.rule.description,
-    line: hit.line,
-    redacted: hit.redacted,
-    confidence: hit.rule.confidence
-  }));
-};
-var formatFindings = (findings) => {
-  if (findings.length === 0) return "";
-  return [
-    ...findings.map(
-      (finding) => `${finding.line}: ${finding.ruleId} (${finding.confidence}) \u2014 ${finding.description} \u2014 ${finding.redacted}`
-    ),
-    "Remove the value from the message. If it has already left this machine, rotate it \u2014 rewriting history does not reach existing clones.",
-    ""
-  ].join("\n");
 };
 
 // src/core/capture-shadow.ts
@@ -21098,6 +21198,7 @@ var buildReport = (scan2, at, resolveIn) => {
     at: at.toISOString(),
     commits: scan2.commits,
     truncated: scan2.truncated,
+    coverage: scan2.truncated ? "partial" : "complete",
     notes: scan2.notes,
     totalRecords: states.length,
     records: stale,
@@ -27831,7 +27932,11 @@ var buildInjection = (opts) => {
   const grades = new Map(
     active.map((record2) => [
       record2.recordId ?? `${record2.sha}:${record2.source}`,
-      record2.identityCollision === true ? {
+      // Withheld whole only where the collision has no per-key answer (#1020).
+      // A mirror that diverges on some keys has already had exactly those keys
+      // removed by `runQuery`; what is left is what every declaration agrees on,
+      // and blocking it here would restore the loss the narrowing removed.
+      record2.identityCollision === true && (record2.collisionKeys ?? []).length === 0 ? {
         provenance: record2.provenance?.kind ?? "unknown",
         lifecycle: record2.lifecycle,
         trust: "blocked",
@@ -37641,7 +37746,14 @@ var TOOLS = [
   },
   {
     name: BEFORE_CHANGE_TOOL,
-    description: "Check a proposal against the Ruled-out records for a path before acting on it. Returns every record whose alternative matches, with the reason it was rejected. Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.",
+    // Its own description, not `guard`'s (#1025). The two shipped the same
+    // sentence while their schemas differ in the way that matters -- `guard`
+    // requires a proposal and takes an optional path, this requires a path and
+    // takes an optional proposal -- and they return different shapes. A model
+    // choosing from descriptions alone read two identical strings, picked the
+    // one whose words matched, and never found that this is the tool that
+    // answers "what do I need to know before touching this file".
+    description: 'Everything recorded about a path, before editing it: the active decisions, the gaps in what could be verified, and any ruled-out alternative a proposal would revive. Returns `active_decisions`, `verification_gaps`, `possible_revival_matches`, `guard_confidence` and `cache_key`. Pass `path` alone for context. Pass `proposal` as well to also run the guard against that path\'s Ruled-out records; without it `guard_confidence` is "not-run" and `possible_revival_matches` is empty because nothing was checked, not because nothing matched. The guard is an experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. An empty `possible_revival_matches` does not guarantee the proposal avoids every ruled-out alternative.',
     inputSchema: {
       type: "object",
       properties: {
@@ -37704,10 +37816,10 @@ var TOOLS = [
         },
         diff: {
           type: "string",
-          description: "the staged diff (same content hashed at prepare time)"
+          description: "optional: the staged diff, if you have it. Omit it and the server reads the staged diff itself and checks it against the hash prepare stored \u2014 the same guarantee, without asking you to reproduce content the server produced."
         }
       },
-      required: ["nonce", "draft", "transcript", "diff"],
+      required: ["nonce", "draft", "transcript"],
       additionalProperties: false
     },
     annotations: {
@@ -37934,9 +38046,6 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
       const draftRaw = requiredString(args, "draft");
       const transcript = requiredString(args, "transcript");
       const diff = stringArg(args, "diff");
-      if (diff === void 0) {
-        throw new Error("diff is required");
-      }
       let draft;
       try {
         const parsed = JSON.parse(draftRaw);
@@ -37961,9 +38070,14 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         nonce,
         draft,
         transcript,
-        diff,
+        ...diff === void 0 ? {} : { diff },
         cwd: root
       });
+      if (result.no_transaction === true) {
+        throw new Error(
+          `no prepared transaction for nonce ${nonce}; call prepare_capture first, or check the nonce you were given`
+        );
+      }
       if (result.accepted.length > 0 && !result.incomplete) unbound.delete(nonce);
       return asText({
         validation_result: result.validation_result,
@@ -37971,6 +38085,11 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         rejected: result.rejected,
         incomplete: result.incomplete,
         overlap_check: result.overlap_check,
+        // Record-independent, so an empty draft cannot swallow it (#1022). A
+        // call that carries this verified nothing and bound nothing: the
+        // transaction is still `prepared` and the same nonce can be verified
+        // again with the sources `prepare` actually hashed.
+        ...result.source_mismatch === void 0 ? {} : { source_mismatch: result.source_mismatch },
         // Present only when this call's verification bound the transaction
         // (#1005). A refused caller gets no receipt, which is the handle stage
         // will require once the three-step migration finishes; today stage

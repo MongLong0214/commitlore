@@ -270,7 +270,27 @@ const numberLines = (text, firstLine = 1) => {
  * of the session that implements it, and the diff being captured is that end.
  */
 const DEFAULT_TRANSCRIPT_BUDGET_BYTES = 256 * 1024;
+/**
+ * What the prompt will carry of the diff (#1023).
+ *
+ * The transcript was bounded and reported; the diff went in whole with no budget
+ * and no notice. On a 65-file feature branch that made the prompt 200,071
+ * characters of which the diff was 190,300 -- ninety-five per cent, and
+ * thirty-four times the size of the whole transcript beside it, which the
+ * windowing machinery had measured at forty-six times under its own budget and
+ * said so. The result overran the client's token limit and capture could not
+ * proceed at all.
+ *
+ * Smaller than the transcript budget on purpose. A transcript is where the
+ * decision was argued, which is what a record has to quote; the diff is what the
+ * record is *about*. Its tail is what was changed most recently.
+ */
+const DEFAULT_DIFF_BUDGET_BYTES = 64 * 1024;
 /** An override, for an operator whose model reads more, or less, than this. */
+const diffBudgetBytes = () => {
+    const raw = Number(process.env['COMMITLORE_DIFF_BUDGET_BYTES']);
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_DIFF_BUDGET_BYTES;
+};
 const transcriptBudgetBytes = () => {
     const raw = Number(process.env['COMMITLORE_TRANSCRIPT_BUDGET_BYTES']);
     return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_TRANSCRIPT_BUDGET_BYTES;
@@ -351,6 +371,54 @@ const windowNotice = (window) => {
             `${window.first_line_partial ? `, and line ${window.first_line} is shown from its middle` : ''}. ` +
             'The numbers below are the transcript\'s own, so a locator you write still names ' +
             'the line in the whole file. Cite only what you can see here.)',
+        '',
+    ];
+};
+/**
+ * The tail of the diff that fits the budget, cut at a line boundary.
+ *
+ * The tail rather than the head: a diff is read for what changed, and the end of
+ * `git diff --cached` is the most recently staged hunks. Cut at a line so a hunk
+ * header is never shown half-written, which would read as a malformed diff
+ * rather than as a bounded one.
+ *
+ * Whole-diff bytes are reported even when nothing was cut, so the caller can see
+ * the size it did get as well as the one it did not -- the same shape
+ * `TranscriptWindow` already reports.
+ */
+const windowDiff = (diff, budget = diffBudgetBytes()) => {
+    const totalBytes = Buffer.byteLength(diff, 'utf8');
+    if (totalBytes <= budget) {
+        return { text: diff, window: { total_bytes: totalBytes, window_bytes: totalBytes, truncated: false } };
+    }
+    const lines = diff.split('\n');
+    const kept = [];
+    let bytes = 0;
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+        const line = lines[index];
+        const cost = Buffer.byteLength(line, 'utf8') + 1;
+        if (bytes + cost > budget)
+            break;
+        kept.unshift(line);
+        bytes += cost;
+    }
+    // One line longer than the whole budget: show its tail rather than nothing,
+    // which is what `windowTranscript` does for the same reason.
+    const text = kept.length > 0
+        ? kept.join('\n')
+        : Buffer.from(lines[lines.length - 1] ?? '', 'utf8').subarray(-budget).toString('utf8');
+    return {
+        text,
+        window: { total_bytes: totalBytes, window_bytes: Buffer.byteLength(text, 'utf8'), truncated: true },
+    };
+};
+const diffNotice = (window) => {
+    if (!window.truncated)
+        return [];
+    return [
+        `(This is the end of the diff: ${window.window_bytes} of ${window.total_bytes} bytes, ` +
+            'the earlier hunks omitted to bound this prompt. Cite only what you can see here — ' +
+            'a quote from a hunk that is not shown cannot be verified and the record will be dropped.)',
         '',
     ];
 };
@@ -452,7 +520,9 @@ precomputed) => {
      * exactly that. A rule is present in every prompt, so it prices identically and
      * is read whether or not anything is staged.
      */
-    const diff = input.diff.trim() === '' ? '(no diff — nothing is staged)' : input.diff.replace(/\n+$/, '');
+    const staged = input.diff.replace(/\n+$/, '');
+    const { text: diffText, window: diffWindow } = windowDiff(staged);
+    const diff = input.diff.trim() === '' ? '(no diff — nothing is staged)' : diffText;
     const { text, window } = precomputed ?? windowTranscript(input.transcript);
     const prompt = [
         '# CommitLore harvest',
@@ -480,10 +550,11 @@ precomputed) => {
         '',
         '## DIFF',
         '',
+        ...diffNotice(diffWindow),
         diff,
         '',
     ].join('\n');
-    return { prompt, window };
+    return { prompt, window, diffWindow };
 };
 /** The prompt alone, for the callers that only emit it. */
 export const buildHarvestPrompt = (input) => buildHarvestPromptWithWindow(input).prompt;

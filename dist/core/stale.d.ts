@@ -99,6 +99,29 @@ export declare const findDanglingRefs: (records: StaleRecord[], referencedBy?: S
 /** Whether a record cannot be safely merged because its identity is ambiguous. */
 export declare const hasAmbiguousIdCollision: (records: StaleRecord[]) => boolean;
 /**
+ * The keys on which a mirror and the block it mirrors actually disagree (#1020).
+ *
+ * `notesPayloadDiverges` answers whether the declarations differ at all, and the
+ * caller withholds the whole record on that answer. The reporter lost every
+ * `Limit:`, `Ruled-out:` and `Warn:` on the only record covering the file they
+ * were about to edit, over two metadata lines: the note had dropped `Undo: easy`
+ * and folded a repeated `Certainty: firm`. The content axes were byte-identical
+ * in both declarations.
+ *
+ * Withholding an axis both declarations agree on protects nothing. The rule the
+ * whole-record block exists for -- `r-refint74`, that notes are remote-reachable
+ * so divergent note content must not inherit an identity a human approved --
+ * holds per key: where every declaration carries the same values under a key,
+ * the commit message a human approved says exactly that.
+ *
+ * Returns an empty set when nothing diverges, and also when the ambiguity is not
+ * a mirror divergence at all: two records sharing a commit, or declared in the
+ * same second, are ambiguous about *which record this identity names*, and no
+ * per-key answer applies. Those keep the whole-record withholding, and the
+ * caller checks `hasAmbiguousIdCollision` first for exactly that reason.
+ */
+export declare const divergentIdKeys: (records: StaleRecord[]) => ReadonlySet<string>;
+/**
  * Whether a `Record-Id` that appears more than once in `records` has a later
  * commit declaring `Supersedes:` for it, making the duplication an intentional
  * succession rather than an error.

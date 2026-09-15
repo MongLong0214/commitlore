@@ -87,6 +87,46 @@ const dropShadowed = (hits) => hits.filter((hit) => !hits.some((other) => other 
     overlaps(hit, other) &&
     CONFIDENCE_RANK[other.rule.confidence] > CONFIDENCE_RANK[hit.rule.confidence]));
 /**
+ * Replaces every credential in one line of text with its redacted form.
+ *
+ * `scanForSecrets` answers *whether* a message carries credentials, which is
+ * what a gate needs. A reader that hands record text to an agent needs the other
+ * half: the same text with the material taken out. Detection and masking both
+ * live here so a caller cannot get one without the other, and so the redaction
+ * is the one `validate` already reports rather than a second implementation of
+ * the same idea.
+ *
+ * Takes a single line, because a trailer value is one -- git unfolds
+ * continuations into it -- and returns the text unchanged when nothing matched,
+ * so a caller can compare by identity to know whether anything was removed.
+ *
+ * The replacement is the rule's masked excerpt, not a fixed marker, so the
+ * reader can still see which kind of credential was there and match it against
+ * what `validate` reported for the same commit.
+ */
+export const redactSecretsIn = (value) => {
+    const line = { line: 1, text: value };
+    const hits = dropShadowed(SECRET_RULES.flatMap((rule) => hitsFor(rule, line)));
+    if (hits.length === 0)
+        return { text: value, findings: [] };
+    // Spliced from the end so an earlier hit's offsets stay valid.
+    const ordered = [...hits].sort((a, b) => b.start - a.start);
+    let text = value;
+    for (const hit of ordered) {
+        text = `${text.slice(0, hit.start)}${hit.redacted}${text.slice(hit.end)}`;
+    }
+    const findings = [...hits]
+        .sort((a, b) => a.start - b.start || a.rule.id.localeCompare(b.rule.id))
+        .map((hit) => ({
+        ruleId: hit.rule.id,
+        description: hit.rule.description,
+        line: hit.line,
+        redacted: hit.redacted,
+        confidence: hit.rule.confidence,
+    }));
+    return { text, findings };
+};
+/**
  * Scans a commit message for credentials, in message order.
  *
  * An empty array means no rule fired — which is a statement about this rule

@@ -23,7 +23,21 @@ export interface VerifyCaptureOptions {
     nonce: string;
     draft: DraftRecord[];
     transcript: string;
-    diff: string;
+    /**
+     * The staged diff. Optional: omitted, the server reads it itself (#1023).
+     *
+     * It was required and compared byte for byte against the hash `prepare`
+     * stored, which asks a model to reproduce content the server produced -- on
+     * the reporting branch, 190,300 characters with zero drift. The server read
+     * the repository to make that diff and can read it again; the hash comparison
+     * is unchanged either way, so a caller that sends nothing gets the same
+     * guarantee without the echo.
+     *
+     * Still accepted, because a caller with the bytes in hand asserting them is a
+     * strictly stronger statement than the server asserting them to itself, and
+     * `capture --diff` exists to make exactly that assertion.
+     */
+    diff?: string;
     cwd: string;
     /**
      * An in-memory prepared transaction. Shadow uses this instead of reading a
@@ -57,6 +71,29 @@ export interface VerifyCaptureResult {
      * result: this reports who bound the transaction, not whose records passed.
      */
     receipt?: string;
+    /**
+     * Which source did not match what `prepare` hashed (#1022).
+     *
+     * Record-independent on purpose. The mismatch used to be reported only by
+     * rejecting each draft record, so a draft of `{"records": []}` -- which the
+     * harvest contract calls a correct and common answer -- produced an empty
+     * `rejected`, `incomplete: false`, and a receipt: the shape of a clean final
+     * verification, for a call whose transcript and diff were both substituted.
+     *
+     * Whether the sources match has nothing to do with how many records the draft
+     * holds, so it is answered here rather than per record.
+     */
+    source_mismatch?: 'transcript' | 'diff';
+    /**
+     * Set when the nonce names no transaction at all (#1023).
+     *
+     * That case returned `validation_result: "empty"` with `incomplete: true` and
+     * nothing saying why, which is indistinguishable from the ordinary "nothing
+     * survived" outcome. It was covered by accident: the required-`diff` check ran
+     * first and turned a typo'd nonce into a usage error. With the diff optional
+     * the cover is gone, so the fact is reported on its own.
+     */
+    no_transaction?: true;
 }
 /** The duplicate-check view used by capture verification. */
 export interface CaptureVerificationHistory {

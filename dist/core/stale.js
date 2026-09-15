@@ -415,6 +415,54 @@ const notesPayloadDiverges = (group) => {
 const hasAmbiguousGroup = (group) => sharesACommit(group) || instantConflicts(group).size > 0 || notesPayloadDiverges(group);
 /** Whether a record cannot be safely merged because its identity is ambiguous. */
 export const hasAmbiguousIdCollision = (records) => [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
+/** Every value a record declares under one key, as a sorted multiset. */
+const valuesUnder = (record, key) => record.trailers
+    .filter((trailer) => trailer.key === key)
+    .map((trailer) => trailer.value)
+    .sort()
+    .join('\u0001');
+/**
+ * The keys on which a mirror and the block it mirrors actually disagree (#1020).
+ *
+ * `notesPayloadDiverges` answers whether the declarations differ at all, and the
+ * caller withholds the whole record on that answer. The reporter lost every
+ * `Limit:`, `Ruled-out:` and `Warn:` on the only record covering the file they
+ * were about to edit, over two metadata lines: the note had dropped `Undo: easy`
+ * and folded a repeated `Certainty: firm`. The content axes were byte-identical
+ * in both declarations.
+ *
+ * Withholding an axis both declarations agree on protects nothing. The rule the
+ * whole-record block exists for -- `r-refint74`, that notes are remote-reachable
+ * so divergent note content must not inherit an identity a human approved --
+ * holds per key: where every declaration carries the same values under a key,
+ * the commit message a human approved says exactly that.
+ *
+ * Returns an empty set when nothing diverges, and also when the ambiguity is not
+ * a mirror divergence at all: two records sharing a commit, or declared in the
+ * same second, are ambiguous about *which record this identity names*, and no
+ * per-key answer applies. Those keep the whole-record withholding, and the
+ * caller checks `hasAmbiguousIdCollision` first for exactly that reason.
+ */
+export const divergentIdKeys = (records) => {
+    const diverged = new Set();
+    for (const group of groupsByRecordId(records).values()) {
+        if (!notesPayloadDiverges(group))
+            continue;
+        // Same exclusion the divergence test makes: a note that mirrors its own
+        // commit is not a rival, so the pair speaks with one voice.
+        const rivals = group.filter((record) => !isOwnCommitMirror(record, group));
+        if (rivals.length < 2)
+            continue;
+        const keys = new Set(rivals.flatMap((record) => record.trailers.map((trailer) => trailer.key)));
+        keys.delete(RECORD_ID_KEY);
+        for (const key of keys) {
+            const answers = new Set(rivals.map((record) => valuesUnder(record, key)));
+            if (answers.size > 1)
+                diverged.add(key);
+        }
+    }
+    return diverged;
+};
 /** A later commit may explicitly replace a duplicated identity with Supersedes. */
 const hasDeclaredSuccession = (recordId, ordered) => {
     let declarations = 0;

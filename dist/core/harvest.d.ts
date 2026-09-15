@@ -119,6 +119,12 @@ export declare const windowTranscript: (transcript: string, budget?: number) => 
     text: string;
     window: TranscriptWindow;
 };
+/** What the prompt carries of the diff, and what it left out (#1023). */
+export interface DiffWindow {
+    total_bytes: number;
+    window_bytes: number;
+    truncated: boolean;
+}
 /**
  * Builds the static prompt contract — everything an agent session needs to know
  * about CommitLore's rules, vocabulary, and expected output format, without any
@@ -149,6 +155,7 @@ precomputed?: {
 }) => {
     prompt: string;
     window: TranscriptWindow;
+    diffWindow: DiffWindow;
 };
 /** The prompt alone, for the callers that only emit it. */
 export declare const buildHarvestPrompt: (input: HarvestInput) => string;

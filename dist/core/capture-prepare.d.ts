@@ -5,7 +5,7 @@
  * contract via `buildHarvestPrompt`, and persists the prepared transaction
  * through `createPending`.
  */
-import { type TranscriptWindow } from './harvest.js';
+import { type DiffWindow, type TranscriptWindow } from './harvest.js';
 import { type GuardAdvisory, type PendingRecord } from './pending.js';
 export interface PrepareCaptureOptions {
     cwd: string;
@@ -51,6 +51,8 @@ export interface PrepareResult {
      * no way to tell, so this says it.
      */
     transcript_window: TranscriptWindow;
+    /** What the prompt carries of the diff, and the size it did not (#1023). */
+    diff_window: DiffWindow;
     guard_advisory: GuardAdvisory | null;
     /**
      * A named reason when a policy file exists but could not be used (T-1110).

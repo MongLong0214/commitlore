@@ -41,6 +41,7 @@
  * `test/mcp.test.ts` asserts the absence rather than trusting it.
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { type Tool } from '@modelcontextprotocol/sdk/types.js';
 export declare const SERVER_NAME = "commitlore";
 /** The four consumer routes of SPEC §5, under the names the CLI uses. */
 export declare const QUERY_KINDS: readonly ["context", "limits", "ruled-out", "warnings"];
@@ -88,6 +89,12 @@ export declare const resolveRepoPath: (root: string, raw: string) => string;
  * the resource this server declares.
  */
 export declare const contextUriPath: (uri: string) => string;
+/**
+ * Exported so a test can read what a host is told about each tool (#1025).
+ * Two tools shipped the same description while their schemas differed in the
+ * way that decides which one to call, and nothing was checking.
+ */
+export declare const TOOLS: readonly Tool[];
 export declare const createServer: (opts?: McpServerOptions) => Server;
 /** Connects the server to this process's stdin/stdout. Resolves once listening. */
 export declare const startStdioServer: (opts?: McpServerOptions) => Promise<Server>;

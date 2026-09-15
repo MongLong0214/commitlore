@@ -47,7 +47,8 @@ import { execGit, hasShallowHistory, historyAvailability, newRepoFacts, readVant
 import { closeIndex, ensureIndex, filterTrailers, indexUnread, pinReadSnapshot, queryTrailers, releaseReadSnapshot, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeDeclarations, noteAuthorsOf, signerFingerprintsOf, } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
-import { foldLifecycle, hasAmbiguousIdCollision, } from './stale.js';
+import { redactSecretsIn } from './secret-guard.js';
+import { foldLifecycle, divergentIdKeys, hasAmbiguousIdCollision, } from './stale.js';
 import { SINGLE_VALUED, parseProvenance, } from './types.js';
 export const LIMIT_KEY = 'Limit';
 export const RULED_OUT_KEY = 'Ruled-out';
@@ -627,6 +628,9 @@ const mergeByIdentity = (records, states) => {
         const provenanceValue = trailerValue(trailers, PROVENANCE_KEY);
         const provenance = parseProvenance(provenanceValue);
         const identityCollision = hasAmbiguousIdCollision(ordered);
+        // Only a mirror divergence has a per-key answer; the other ambiguities
+        // return an empty set and keep the whole-record withholding (#1020).
+        const collisionKeys = identityCollision ? [...divergentIdKeys(ordered)].sort() : [];
         merged.push({
             trailers,
             sha: latest.sha,
@@ -648,6 +652,7 @@ const mergeByIdentity = (records, states) => {
             ...(provenance === undefined ? {} : { provenance }),
             ...(provenanceValue === undefined ? {} : { provenanceValue }),
             ...(identityCollision ? { identityCollision: true } : {}),
+            ...(identityCollision && collisionKeys.length > 0 ? { collisionKeys } : {}),
             ...(state?.supersededBy === undefined ? {} : { supersededBy: state.supersededBy }),
             ...(state?.expiresAt === undefined ? {} : { expiresAt: state.expiresAt }),
         });
@@ -715,11 +720,55 @@ export const runQuery = (opts = {}) => {
             .sort(compareRecords);
         // After the filters, so the one `git show` prices only the records that survive.
         gradeMerged(records, cwd, at, opts.trustedAuthors, opts.requireSignedDirective === true, opts.trustedSignerFingerprints);
+        /*
+         * A collision withholds the axes that diverged, not the whole record (#1020).
+         *
+         * The reporter lost every `Limit:`, `Ruled-out:` and `Warn:` on the only
+         * record covering the file they were about to edit -- and what had actually
+         * diverged was two metadata lines, a dropped `Undo: easy` and a folded
+         * repeat of `Certainty: firm`. The content axes were byte-identical in both
+         * declarations. They read the record with `git log` instead, and found a
+         * `Ruled-out:` for the alternative they were about to try again.
+         *
+         * Withholding an axis both declarations agree on protects nothing, and the
+         * rule this exists for survives the narrowing: notes are remote-reachable,
+         * so divergent note content must not inherit an identity a human approved.
+         * Where every declaration carries the same values under a key, the approved
+         * commit message says exactly that.
+         *
+         * An ambiguity that is not a mirror divergence -- two records sharing a
+         * commit, or declared in the same second -- is about *which record this
+         * identity names*, so no per-key answer exists and the whole record is still
+         * withheld. `divergentIdKeys` returns an empty set for those, which is what
+         * the fallback below reads.
+         */
+        let blockedWholeRecords = 0;
+        let blockedAxes = 0;
         for (const record of records) {
             if (record.identityCollision !== true)
                 continue;
-            record.trust = 'blocked';
-            record.matchedTrailerKeys = [RECORD_ID_KEY];
+            const diverged = record.collisionKeys ?? [];
+            if (diverged.length === 0) {
+                record.trust = 'blocked';
+                record.matchedTrailerKeys = [RECORD_ID_KEY];
+                blockedWholeRecords += 1;
+                continue;
+            }
+            const divergedKeys = new Set(diverged);
+            record.trailers = record.trailers.filter((trailer) => !divergedKeys.has(trailer.key));
+            blockedAxes += diverged.length;
+        }
+        if (blockedAxes > 0) {
+            diagnostics.push(`${String(blockedAxes)} trailer key(s) are withheld because a record's commit message and ` +
+                'its note on refs/notes/commitlore declare different values for them; the keys that ' +
+                'agree are served as usual. ' +
+                'fix: read both with git log -1 --format=%B <sha> and ' +
+                'git notes --ref=refs/notes/commitlore show <sha>, then make them agree');
+        }
+        if (blockedWholeRecords > 0) {
+            diagnostics.push(`${String(blockedWholeRecords)} record(s) are withheld entirely: their Record-Id names more ` +
+                'than one record, so there is no axis to serve. ' +
+                'fix: read the declarations with git log and git notes, and give one of them a new Record-Id');
         }
         // Config only — no network. Cheap enough to run on every answer, and the
         // answer it qualifies is the empty one, which is the answer nobody inspects.
@@ -755,6 +804,44 @@ export const runQuery = (opts = {}) => {
         const behindCaveat = vantageCaveat(vantage);
         if (behindCaveat !== null)
             diagnostics.push(behindCaveat);
+        /*
+         * Credentials come out masked, here and therefore everywhere (#1024).
+         *
+         * `validate` detects a secret in a trailer and reports it as `AKIA...`;
+         * every reader on this side printed the same value whole. `inject` is the
+         * worst of them -- it is the projection handed to a model before it edits a
+         * path, so one secret in one record was replayed into every agent context
+         * that asked about that file, for as long as the record stayed active.
+         *
+         * The commit-msg hook is the intended gate and it is not the only door: it
+         * is a `warn` when absent, `--no-verify` skips it, `backfill` reads commits
+         * that predate it, and the notes mirror carries records that only ever
+         * passed somebody else's gate. On each of those this is the first component
+         * to look at the value.
+         *
+         * Done at the one place every consumer reads through rather than in each
+         * renderer, which is the mistake this repairs: `validate` had the rule and
+         * the readers did not, and adding it to `inject` alone would leave
+         * `context`, `limits`, `ruled-out`, `warnings` and the MCP tools exactly as
+         * they were. The masking is `secret-guard`'s own, so what a reader sees
+         * matches what `validate` reported for the same commit.
+         */
+        let redactedValues = 0;
+        for (const record of records) {
+            for (const trailer of record.trailers) {
+                const masked = redactSecretsIn(trailer.value);
+                if (masked.text === trailer.value)
+                    continue;
+                trailer.value = masked.text;
+                redactedValues += 1;
+            }
+        }
+        if (redactedValues > 0) {
+            diagnostics.push(`${String(redactedValues)} trailer value(s) match a credential rule and are shown masked; ` +
+                'the record is unchanged in git. ' +
+                'fix: commitlore validate names the rule and the line, and a credential that reached a ' +
+                'commit has to be rotated -- rewriting history does not reach existing clones');
+        }
         return {
             records: opts.limit === undefined ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
             fromIndex: source.fromIndex,

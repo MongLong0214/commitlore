@@ -251,6 +251,11 @@ const contextJson = (root, kind, path) => {
     // at the day's final millisecond means the hook, query resource and
     // before-change tool share one lifecycle input and stable answer for that
     // day without hiding commits made later that day.
+    //
+    // `stale` reports its own `at` as the wall clock, so the two fields share a
+    // name and mean different instants (#1025). Neither can outvote the other:
+    // the expiry boundary is 00:00:00Z of the day after a date-form `Expires:`,
+    // so any two instants inside one UTC day are on the same side of it.
     const at = new Date(`${now.toISOString().slice(0, 10)}T23:59:59.999Z`);
     const result = withholdBlocked(runQuery({
         // The agent's query surface answers like `context`: an empty result must
@@ -283,7 +288,12 @@ const asText = (value) => ({
 // ---------------------------------------------------------------------------
 /** Every tool here reads; none of them touches anything outside the machine. */
 const READS_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
-const TOOLS = [
+/**
+ * Exported so a test can read what a host is told about each tool (#1025).
+ * Two tools shipped the same description while their schemas differed in the
+ * way that decides which one to call, and nothing was checking.
+ */
+export const TOOLS = [
     {
         name: RUNTIME_IDENTITY_TOOL,
         description: 'Report the exact CommitLore entrypoint, package root, version and index schema this MCP server executes.',
@@ -346,15 +356,30 @@ const TOOLS = [
     },
     {
         name: BEFORE_CHANGE_TOOL,
-        description: 'Check a proposal against the Ruled-out records for a path before acting on it. ' +
-            'Returns every record whose alternative matches, with the reason it was rejected. ' +
+        // Its own description, not `guard`'s (#1025). The two shipped the same
+        // sentence while their schemas differ in the way that matters -- `guard`
+        // requires a proposal and takes an optional path, this requires a path and
+        // takes an optional proposal -- and they return different shapes. A model
+        // choosing from descriptions alone read two identical strings, picked the
+        // one whose words matched, and never found that this is the tool that
+        // answers "what do I need to know before touching this file".
+        description: 'Everything recorded about a path, before editing it: the active decisions, ' +
+            'the gaps in what could be verified, and any ruled-out alternative a proposal ' +
+            'would revive. Returns `active_decisions`, `verification_gaps`, ' +
+            '`possible_revival_matches`, `guard_confidence` and `cache_key`. ' +
+            'Pass `path` alone for context. Pass `proposal` as well to also run the guard ' +
+            'against that path\'s Ruled-out records; without it `guard_confidence` is ' +
+            '"not-run" and `possible_revival_matches` is empty because nothing was checked, ' +
+            'not because nothing matched. ' +
             // The same disclosure `commitlore_guard` carries, because the two run the
-            // same matcher. This tool shipped the sentence ADR-0020 §3 ordered removed
-            // -- "a verdict, not an absence" -- which tells a model that silence here
-            // is a safety result. At 22% recall it is not: a miss is the common case,
-            // and this is the surface the model actually reads before it edits.
-            'Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. ' +
-            'An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.',
+            // same matcher when a proposal is supplied. This tool shipped the sentence
+            // ADR-0020 §3 ordered removed -- "a verdict, not an absence" -- which tells
+            // a model that silence here is a safety result. At 22% recall it is not: a
+            // miss is the common case, and this is the surface the model actually
+            // reads before it edits.
+            'The guard is an experimental advisory: precision 44.8%, recall 22.0% on the ' +
+            '417-decision corpus. An empty `possible_revival_matches` does not guarantee ' +
+            'the proposal avoids every ruled-out alternative.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -426,10 +451,12 @@ const TOOLS = [
                 },
                 diff: {
                     type: 'string',
-                    description: 'the staged diff (same content hashed at prepare time)',
+                    description: 'optional: the staged diff, if you have it. Omit it and the server reads the staged ' +
+                        'diff itself and checks it against the hash prepare stored — the same guarantee, ' +
+                        'without asking you to reproduce content the server produced.',
                 },
             },
-            required: ['nonce', 'draft', 'transcript', 'diff'],
+            required: ['nonce', 'draft', 'transcript'],
             additionalProperties: false,
         },
         annotations: {
@@ -738,10 +765,12 @@ export const createServer = (opts = {}) => {
             // Schema already required a string; do not substitute '' for an omission.
             // That substitution was #594: a malformed call looked like an empty
             // verification, which is the ordinary "nothing survived" outcome.
+            // Optional since #1023: omitted, `verifyCaptureRecords` reads the staged
+            // diff itself and checks it against the hash `prepare` stored. The
+            // substitution #594 forbade -- treating an omission as `''` -- is still
+            // forbidden: `undefined` means "you read it", `''` would mean "nothing is
+            // staged", and those are different claims.
             const diff = stringArg(args, 'diff');
-            if (diff === undefined) {
-                throw new Error('diff is required');
-            }
             // Parse draft JSON — malformed input is a caller error
             let draft;
             try {
@@ -784,9 +813,16 @@ export const createServer = (opts = {}) => {
                 nonce,
                 draft: draft,
                 transcript,
-                diff,
+                ...(diff === undefined ? {} : { diff }),
                 cwd: root,
             });
+            // A nonce that names no transaction is a caller error, not a verification
+            // that found nothing (#594's property, kept now that the required-`diff`
+            // check no longer covers it by accident -- #1023).
+            if (result.no_transaction === true) {
+                throw new Error(`no prepared transaction for nonce ${nonce}; call prepare_capture first, or check the ` +
+                    'nonce you were given');
+            }
             if (result.accepted.length > 0 && !result.incomplete)
                 unbound.delete(nonce);
             return asText({
@@ -795,6 +831,11 @@ export const createServer = (opts = {}) => {
                 rejected: result.rejected,
                 incomplete: result.incomplete,
                 overlap_check: result.overlap_check,
+                // Record-independent, so an empty draft cannot swallow it (#1022). A
+                // call that carries this verified nothing and bound nothing: the
+                // transaction is still `prepared` and the same nonce can be verified
+                // again with the sources `prepare` actually hashed.
+                ...(result.source_mismatch === undefined ? {} : { source_mismatch: result.source_mismatch }),
                 // Present only when this call's verification bound the transaction
                 // (#1005). A refused caller gets no receipt, which is the handle stage
                 // will require once the three-step migration finishes; today stage
