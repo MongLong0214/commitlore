@@ -80,6 +80,7 @@ import {
   type Grade,
 } from './grade.js';
 import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js';
+import { redactSecretsIn } from './secret-guard.js';
 import {
   foldLifecycle,
   hasAmbiguousIdCollision,
@@ -1107,6 +1108,46 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
     const vantage = readVantage(cwd, facts);
     const behindCaveat = vantageCaveat(vantage);
     if (behindCaveat !== null) diagnostics.push(behindCaveat);
+
+    /*
+     * Credentials come out masked, here and therefore everywhere (#1024).
+     *
+     * `validate` detects a secret in a trailer and reports it as `AKIA...`;
+     * every reader on this side printed the same value whole. `inject` is the
+     * worst of them -- it is the projection handed to a model before it edits a
+     * path, so one secret in one record was replayed into every agent context
+     * that asked about that file, for as long as the record stayed active.
+     *
+     * The commit-msg hook is the intended gate and it is not the only door: it
+     * is a `warn` when absent, `--no-verify` skips it, `backfill` reads commits
+     * that predate it, and the notes mirror carries records that only ever
+     * passed somebody else's gate. On each of those this is the first component
+     * to look at the value.
+     *
+     * Done at the one place every consumer reads through rather than in each
+     * renderer, which is the mistake this repairs: `validate` had the rule and
+     * the readers did not, and adding it to `inject` alone would leave
+     * `context`, `limits`, `ruled-out`, `warnings` and the MCP tools exactly as
+     * they were. The masking is `secret-guard`'s own, so what a reader sees
+     * matches what `validate` reported for the same commit.
+     */
+    let redactedValues = 0;
+    for (const record of records) {
+      for (const trailer of record.trailers) {
+        const masked = redactSecretsIn(trailer.value);
+        if (masked.text === trailer.value) continue;
+        trailer.value = masked.text;
+        redactedValues += 1;
+      }
+    }
+    if (redactedValues > 0) {
+      diagnostics.push(
+        `${String(redactedValues)} trailer value(s) match a credential rule and are shown masked; ` +
+          'the record is unchanged in git. ' +
+          'fix: commitlore validate names the rule and the line, and a credential that reached a ' +
+          'commit has to be rotated -- rewriting history does not reach existing clones',
+      );
+    }
 
     return {
       records:
