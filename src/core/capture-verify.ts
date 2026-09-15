@@ -82,6 +82,19 @@ export interface VerifyCaptureResult {
    * result: this reports who bound the transaction, not whose records passed.
    */
   receipt?: string;
+  /**
+   * Which source did not match what `prepare` hashed (#1022).
+   *
+   * Record-independent on purpose. The mismatch used to be reported only by
+   * rejecting each draft record, so a draft of `{"records": []}` -- which the
+   * harvest contract calls a correct and common answer -- produced an empty
+   * `rejected`, `incomplete: false`, and a receipt: the shape of a clean final
+   * verification, for a call whose transcript and diff were both substituted.
+   *
+   * Whether the sources match has nothing to do with how many records the draft
+   * holds, so it is answered here rather than per record.
+   */
+  source_mismatch?: 'transcript' | 'diff';
 }
 
 /** The duplicate-check view used by capture verification. */
@@ -479,42 +492,48 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
     const transcriptHash = sha256(transcript);
     const diffHash = sha256(diff);
 
-    if (pending.source_hashes.transcript !== transcriptHash) {
-      // Source mismatch — every record is rejected
+    /*
+     * A substituted source ends the call without binding the transaction (#1022).
+     *
+     * Two things were wrong. The mismatch was reported only by rejecting each
+     * draft record, so an empty draft produced an empty `rejected` and
+     * `incomplete: false` -- a clean, final-looking answer for a call whose
+     * sources were both wrong. And it went through `settle`, which persists the
+     * result and issues a receipt, moving the transaction out of `prepared`;
+     * from there `storeVerification` refuses every later call, so the nonce was
+     * locked holding a verification built from sources it never matched, and the
+     * recovery it named was a CLI command an agent on MCP cannot run.
+     *
+     * Returning without `settle` leaves the transaction `prepared`, which is
+     * what it still is: nothing was verified. That does not reopen what `settle`
+     * exists to prevent -- a refusal that is dropped while an earlier stored
+     * result stays stageable -- because this path accepts nothing and therefore
+     * has nothing that could be staged in its place.
+     *
+     * `rejected` is still filled per record for a caller that sent some, and
+     * `source_mismatch` carries the same fact where a caller sent none.
+     */
+    const mismatch = (which: 'transcript' | 'diff'): VerifyCaptureResult => {
       for (const record of draft) {
         rejected.push({
           record,
           reason: 'source-mismatch',
-          detail: 'transcript hash does not match the prepared transaction',
+          detail: `${which} hash does not match the prepared transaction`,
         });
       }
-      const result: VerifyCaptureResult = {
+      return {
         accepted: [],
         rejected,
         validation_result: 'empty',
-        incomplete: false,
+        // Nothing was verified, so nothing about this answer is complete.
+        incomplete: true,
         overlap_check: 'canonical_exact_only',
+        source_mismatch: which,
       };
-      return settle(result);
-    }
+    };
 
-    if (pending.source_hashes.diff !== diffHash) {
-      for (const record of draft) {
-        rejected.push({
-          record,
-          reason: 'source-mismatch',
-          detail: 'diff hash does not match the prepared transaction',
-        });
-      }
-      const result: VerifyCaptureResult = {
-        accepted: [],
-        rejected,
-        validation_result: 'empty',
-        incomplete: false,
-        overlap_check: 'canonical_exact_only',
-      };
-      return settle(result);
-    }
+    if (pending.source_hashes.transcript !== transcriptHash) return mismatch('transcript');
+    if (pending.source_hashes.diff !== diffHash) return mismatch('diff');
 
     // 2. Check notes availability — unfetched means incomplete
     const notes = notesAvailability({ cwd });

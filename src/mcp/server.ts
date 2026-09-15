@@ -887,6 +887,11 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         rejected: result.rejected,
         incomplete: result.incomplete,
         overlap_check: result.overlap_check,
+        // Record-independent, so an empty draft cannot swallow it (#1022). A
+        // call that carries this verified nothing and bound nothing: the
+        // transaction is still `prepared` and the same nonce can be verified
+        // again with the sources `prepare` actually hashed.
+        ...(result.source_mismatch === undefined ? {} : { source_mismatch: result.source_mismatch }),
         // Present only when this call's verification bound the transaction
         // (#1005). A refused caller gets no receipt, which is the handle stage
         // will require once the three-step migration finishes; today stage
