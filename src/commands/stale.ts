@@ -392,10 +392,36 @@ export const collectRecords = (opts: CollectOptions = {}): Scan => {
 export interface StaleReportRecord extends RecordState { source: RecordSource }
 
 export interface StaleReport {
+  /**
+   * The instant this report folded against: the wall clock, not the end of the
+   * UTC day the MCP delivery surfaces pin (#1025).
+   *
+   * They carry the same field name and mean different instants, which is worth
+   * saying. It cannot change a verdict: `Expires:` is a UTC *day* or a free-text
+   * condition that never auto-expires, and the boundary is 00:00:00Z of the day
+   * after, so two instants inside one UTC day always fall on the same side of
+   * every boundary. The difference is what each answer is *about* -- this report
+   * is about now, and the delivery surfaces pin the day's end so a hook, the
+   * query resource and `before_change` give one stable answer for that day.
+   */
   /** The evaluation instant, normalized to UTC. */
   at: string;
   commits: number;
   truncated: boolean;
+  /**
+   * The same fact as `truncated`, in the vocabulary the server instructions
+   * teach (#1025).
+   *
+   * Those instructions explain `coverage: "partial"` at length -- that absence
+   * of a record is not evidence the record does not exist -- and never mention
+   * `truncated`. So an agent taught to check `coverage` did not check this, and
+   * read `totalRecords: 0` from a scan that had also not looked at everything as
+   * "nothing is stale".
+   *
+   * `truncated` is kept beside it rather than replaced: it is the field this
+   * command has always reported, and a consumer reading it is not wrong.
+   */
+  coverage: 'complete' | 'partial';
   notes: NotesAvailability;
   /** Every record the scan saw, stale or not. */
   totalRecords: number;
@@ -584,6 +610,7 @@ export const buildReport = (
     at: at.toISOString(),
     commits: scan.commits,
     truncated: scan.truncated,
+    coverage: scan.truncated ? 'partial' : 'complete',
     notes: scan.notes,
     totalRecords: states.length,
     records: stale,

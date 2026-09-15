@@ -707,7 +707,17 @@ describe('stale filtering', () => {
 describe('notes merge and dedupe', () => {
   const { dir, identified, mirrored, inherited } = notesRepo();
 
-  it('blocks a divergent note that claims a commit message Record-Id', () => {
+  it('blocks the axis a divergent note added, and serves the one the commit approved', () => {
+    // The fixture's note repeats the commit's `Limit:` and adds a `Warn:` the
+    // commit never carried. Until #1020 the whole record was withheld on that,
+    // which cost the reader the `Limit:` a human had approved -- and the
+    // reporter lost every axis of the only record covering the file they were
+    // about to edit, over a metadata line.
+    //
+    // The property this test exists for is unchanged and is asserted below: a
+    // note that claims an approved identity does not get to say something the
+    // approved declaration never said. It is now enforced on the axis that
+    // diverged rather than on the record.
     const result = runQuery({ cwd: dir, path: 'src/queue/drain.ts' });
     expect(recordIds(result.records)).toEqual(['r-note11']);
 
@@ -715,13 +725,19 @@ describe('notes merge and dedupe', () => {
     expect(entry?.sha).toBe(identified);
     expect(entry?.sources.sort()).toEqual(['commit', 'notes']);
     expect(entry?.identityCollision).toBe(true);
-    expect(entry?.trust).toBe('blocked');
+    expect(entry?.collisionKeys).toEqual(['Warn']);
 
     const context = formatContext(result);
-    expect(context).not.toContain('only three workers may run concurrently');
-    expect(context).not.toContain('the drain order is load bearing');
-    expect(context).toContain('[blocked]');
-    expect(context).toContain('Record content was withheld because its Record-Id collides.');
+    expect(context, 'the note-only Warn must not be served').not.toContain(
+      'the drain order is load bearing',
+    );
+    expect(context, 'the approved Limit is not the divergence').toContain(
+      'only three workers may run concurrently',
+    );
+    expect(
+      result.diagnostics.join('\n'),
+      'the reader is not told which side to read',
+    ).toContain('refs/notes/commitlore');
 
     const injection = buildInjection({
       cwd: dir,
@@ -729,9 +745,8 @@ describe('notes merge and dedupe', () => {
       at: new Date('2100-01-01T00:00:00Z'),
       noIndex: true,
     });
-    expect(injection.text).not.toContain('only three workers may run concurrently');
     expect(injection.text).not.toContain('the drain order is load bearing');
-    expect(injection.text).toContain('Record-Id collision');
+    expect(injection.text).toContain('only three workers may run concurrently');
   });
 
   it('drops a mirror that only repeats the message, with no Record-Id to match on', () => {

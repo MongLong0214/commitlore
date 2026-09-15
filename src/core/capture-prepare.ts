@@ -10,7 +10,12 @@ import { createHash, randomBytes } from 'node:crypto';
 import { markCaptureError } from './capture-outcome.js';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch, type GuardResult } from './guard.js';
-import { windowTranscript, buildHarvestPromptWithWindow, type TranscriptWindow } from './harvest.js';
+import {
+  windowTranscript,
+  buildHarvestPromptWithWindow,
+  type DiffWindow,
+  type TranscriptWindow,
+} from './harvest.js';
 import { policySourceLabel, resolvePolicy } from './capture-policy.js';
 import {
   createPending,
@@ -162,6 +167,8 @@ export interface PrepareResult {
    * no way to tell, so this says it.
    */
   transcript_window: TranscriptWindow;
+  /** What the prompt carries of the diff, and the size it did not (#1023). */
+  diff_window: DiffWindow;
   guard_advisory: GuardAdvisory | null;
   /**
    * A named reason when a policy file exists but could not be used (T-1110).
@@ -185,6 +192,8 @@ interface PreparedValues {
   source_hashes: { transcript: string; diff: string };
   prompt: string;
   transcript_window: TranscriptWindow;
+  /** What the prompt carries of the diff, and the size it did not (#1023). */
+  diff_window: DiffWindow;
   guard_advisory: GuardAdvisory | null;
   policy_error: string | null;
 }
@@ -291,6 +300,7 @@ const prepareValues = (opts: {
     source_hashes: sourceHashes,
     prompt: harvest.prompt,
     transcript_window: harvest.window,
+    diff_window: harvest.diffWindow,
     guard_advisory: advisory,
     policy_error: policy.error,
   };
@@ -334,6 +344,7 @@ export const prepareCaptureContext = (opts: PrepareCaptureOptions): PrepareResul
     source_hashes: prepared.source_hashes,
     prompt: prepared.prompt,
     transcript_window: prepared.transcript_window,
+    diff_window: prepared.diff_window,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory,
   };
@@ -373,6 +384,7 @@ export const prepareCaptureContextReadOnly = (opts: PrepareCaptureOptions & {
     source_hashes: prepared.source_hashes,
     prompt: prepared.prompt,
     transcript_window: prepared.transcript_window,
+    diff_window: prepared.diff_window,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory,
     pending,

@@ -378,7 +378,29 @@ const numberLines = (text: string, firstLine = 1): string => {
  */
 const DEFAULT_TRANSCRIPT_BUDGET_BYTES = 256 * 1024;
 
+/**
+ * What the prompt will carry of the diff (#1023).
+ *
+ * The transcript was bounded and reported; the diff went in whole with no budget
+ * and no notice. On a 65-file feature branch that made the prompt 200,071
+ * characters of which the diff was 190,300 -- ninety-five per cent, and
+ * thirty-four times the size of the whole transcript beside it, which the
+ * windowing machinery had measured at forty-six times under its own budget and
+ * said so. The result overran the client's token limit and capture could not
+ * proceed at all.
+ *
+ * Smaller than the transcript budget on purpose. A transcript is where the
+ * decision was argued, which is what a record has to quote; the diff is what the
+ * record is *about*. Its tail is what was changed most recently.
+ */
+const DEFAULT_DIFF_BUDGET_BYTES = 64 * 1024;
+
 /** An override, for an operator whose model reads more, or less, than this. */
+const diffBudgetBytes = (): number => {
+  const raw = Number(process.env['COMMITLORE_DIFF_BUDGET_BYTES']);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_DIFF_BUDGET_BYTES;
+};
+
 const transcriptBudgetBytes = (): number => {
   const raw = Number(process.env['COMMITLORE_TRANSCRIPT_BUDGET_BYTES']);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_TRANSCRIPT_BUDGET_BYTES;
@@ -494,6 +516,68 @@ const windowNotice = (window: TranscriptWindow): string[] => {
   ];
 };
 
+/** What the prompt carries of the diff, and what it left out (#1023). */
+export interface DiffWindow {
+  total_bytes: number;
+  window_bytes: number;
+  truncated: boolean;
+}
+
+/**
+ * The tail of the diff that fits the budget, cut at a line boundary.
+ *
+ * The tail rather than the head: a diff is read for what changed, and the end of
+ * `git diff --cached` is the most recently staged hunks. Cut at a line so a hunk
+ * header is never shown half-written, which would read as a malformed diff
+ * rather than as a bounded one.
+ *
+ * Whole-diff bytes are reported even when nothing was cut, so the caller can see
+ * the size it did get as well as the one it did not -- the same shape
+ * `TranscriptWindow` already reports.
+ */
+const windowDiff = (
+  diff: string,
+  budget: number = diffBudgetBytes(),
+): { text: string; window: DiffWindow } => {
+  const totalBytes = Buffer.byteLength(diff, 'utf8');
+  if (totalBytes <= budget) {
+    return { text: diff, window: { total_bytes: totalBytes, window_bytes: totalBytes, truncated: false } };
+  }
+
+  const lines = diff.split('\n');
+  const kept: string[] = [];
+  let bytes = 0;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index] as string;
+    const cost = Buffer.byteLength(line, 'utf8') + 1;
+    if (bytes + cost > budget) break;
+    kept.unshift(line);
+    bytes += cost;
+  }
+
+  // One line longer than the whole budget: show its tail rather than nothing,
+  // which is what `windowTranscript` does for the same reason.
+  const text =
+    kept.length > 0
+      ? kept.join('\n')
+      : Buffer.from(lines[lines.length - 1] ?? '', 'utf8').subarray(-budget).toString('utf8');
+
+  return {
+    text,
+    window: { total_bytes: totalBytes, window_bytes: Buffer.byteLength(text, 'utf8'), truncated: true },
+  };
+};
+
+const diffNotice = (window: DiffWindow): string[] => {
+  if (!window.truncated) return [];
+  return [
+    `(This is the end of the diff: ${window.window_bytes} of ${window.total_bytes} bytes, ` +
+      'the earlier hunks omitted to bound this prompt. Cite only what you can see here — ' +
+      'a quote from a hunk that is not shown cannot be verified and the record will be dropped.)',
+    '',
+  ];
+};
+
 const outputBlock = (entries: VocabularyEntry[]): string[] => {
   const claims = entries.filter((entry) => entry.claim).map((entry) => entry.key);
   return [
@@ -582,7 +666,7 @@ export const buildHarvestPromptWithWindow = (
    * rather than paying for a second split of a session that can be tens of MB.
    */
   precomputed?: { text: string; window: TranscriptWindow },
-): { prompt: string; window: TranscriptWindow } => {
+): { prompt: string; window: TranscriptWindow; diffWindow: DiffWindow } => {
   const entries = loadVocabulary().filter((entry) => entry.key !== 'Verified');
   /*
    * #911: `(no diff)` alone was too quiet — rule 1 is "cite or omit", and with
@@ -597,7 +681,9 @@ export const buildHarvestPromptWithWindow = (
    * exactly that. A rule is present in every prompt, so it prices identically and
    * is read whether or not anything is staged.
    */
-  const diff = input.diff.trim() === '' ? '(no diff — nothing is staged)' : input.diff.replace(/\n+$/, '');
+  const staged = input.diff.replace(/\n+$/, '');
+  const { text: diffText, window: diffWindow } = windowDiff(staged);
+  const diff = input.diff.trim() === '' ? '(no diff — nothing is staged)' : diffText;
   const { text, window } = precomputed ?? windowTranscript(input.transcript);
 
   const prompt = [
@@ -626,11 +712,12 @@ export const buildHarvestPromptWithWindow = (
     '',
     '## DIFF',
     '',
+    ...diffNotice(diffWindow),
     diff,
     '',
   ].join('\n');
 
-  return { prompt, window };
+  return { prompt, window, diffWindow };
 };
 
 /** The prompt alone, for the callers that only emit it. */
