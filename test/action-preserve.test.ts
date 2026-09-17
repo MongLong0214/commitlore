@@ -370,6 +370,25 @@ describe('a squash merge', () => {
     expect(run.stdout).toContain('attached nothing');
   });
 
+  it('preserves collapsed blocks even when their IDs remain in the squash message', () => {
+    const scenario = squashScenario('collapsed-blocks', RECORDS, RECORDS.join('\n'));
+    const message = git(scenario.repo, ['show', '--no-patch', '--format=%B', scenario.mergeSha]);
+    const trailers = git(scenario.repo, ['interpret-trailers', '--parse'], message);
+    expect(message).toContain('Record-Id: r-000101');
+    expect(trailers).not.toContain('Record-Id: r-000101');
+    expect(trailers).toContain('Record-Id: r-000103');
+
+    const run = runPreserve(scenario);
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.outputs['action']).toBe('inherited');
+    expect(run.outputs['records']).toBe('2');
+    expect(run.outputs['pushed']).toBe('true');
+    const note = noteOn(scenario.origin, scenario.mergeSha);
+    expect(note).toContain('Record-Id: r-000101');
+    expect(note).toContain('Record-Id: r-000102');
+    expect(note).not.toContain('Record-Id: r-000103');
+  });
+
   it('attaches only records the merge message genuinely lost', () => {
     const scenario = squashScenario(
       'mixed-carried',

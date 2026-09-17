@@ -518,33 +518,12 @@ const preserve = (range, target, carriedIds) => {
   }
 };
 
-/**
- * The merge message is the first record channel. Parse it with the product's
- * own multi-record grammar rather than treating any `Record-Id:`-shaped prose
- * as a trailer. The IDs are passed to squash-preserve before it writes a note.
- */
 const carriedRecordIds = (target) => {
-  const message = gitOrDie(
-    ['show', '--no-patch', '--format=%B', '--end-of-options', target],
-    `cannot read the merge message for ${short(target)}`,
+  const ids = gitOrDie(
+    ['show', '--no-patch', '--format=%(trailers:key=Record-Id,valueonly,unfold)', '--end-of-options', target],
+    `cannot read the merge trailers for ${short(target)}`,
   );
-  const parsed = runCommitlore(['parse', '--json'], { input: message });
-  if (parsed.status !== 0) {
-    blocked(`cannot parse the merge message for ${short(target)}: ${firstLine(parsed.stderr)}`);
-  }
-  try {
-    const answer = JSON.parse(parsed.stdout);
-    const blocks = answer.blocks ?? [{ trailers: answer.trailers ?? [] }];
-    return [...new Set(
-      blocks.flatMap((block) =>
-        (block.trailers ?? [])
-          .filter((trailer) => trailer.key === 'Record-Id')
-          .map((trailer) => trailer.value),
-      ),
-    )];
-  } catch {
-    blocked(`commitlore parse did not emit JSON for ${short(target)}`, parsed.stdout.slice(0, 200));
-  }
+  return [...new Set(ids.split('\n').map((id) => id.trim()).filter((id) => id !== ''))];
 };
 
 const outputs = {};
