@@ -72,8 +72,13 @@ export declare const formatCaptureShadow: (result: CaptureShadowResult) => strin
  * conclusion, not a place exceptions fall into (#543).
  */
 export declare const runCapture: (opts: {
-    transcriptPath: string;
+    /** The transcript's bytes, for a caller that already holds them (MCP). */
+    transcript?: string;
+    /** The transcript's path, for a caller that does not (the CLI). */
+    transcriptPath?: string;
     diffPath?: string;
+    /** The draft's bytes. Same pair as the transcript, same reason. */
+    draft?: string;
     draftPath?: string;
     cwd: string;
     /** Authors whose guard-advisory records may render as directives. */

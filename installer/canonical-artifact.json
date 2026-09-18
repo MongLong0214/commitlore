@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "fcb9164a8c971cbcf573ccffdef50f34361c3346315ea81d079a4809daad6705"
+    "sha256": "7777eedee44c5afa715cbd63fadd94712a9eeba37c6cdf4f69bd07f1443a4c4a"
   },
   "artifact": {
-    "sha256": "2c75b45ccc179b36bae355191d6f1c126cbaa2f74a347ac304d268fe5337bd4d",
+    "sha256": "d93c89880d06ad468b4fdc2643555167eb1cf1ef4990ba226d42e6cc66f3d5d2",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -26,11 +26,11 @@
       },
       {
         "path": "dist/cli.js",
-        "sha256": "51541b1881dc2029d8d79105c850083c1f7e588e965c825634c8992f8e0db027"
+        "sha256": "f640c00b1c3de4e0e92361984044a8e681518b8df55c0f157ce8d3e1675323af"
       },
       {
         "path": "dist/cli.js.map",
-        "sha256": "0d40e4dcd4443fa09708fa5b36a7c83ebf52b41ee6d6d87930628ffb9974a54f"
+        "sha256": "0faa5a968125823c4090659e3dffe1361db6651d596553d9d5344debd81949c6"
       },
       {
         "path": "dist/commands/auto.d.ts",
@@ -58,15 +58,39 @@
       },
       {
         "path": "dist/commands/capture.d.ts",
-        "sha256": "13cf68e83d22ee0b81a1e44a409351786f2ebec6ddb75f5eb3dc355b9eaec341"
+        "sha256": "2cd9c609b4414be44e76feccbcdde0af4e66d354e1fd1508c8e231779549b076"
       },
       {
         "path": "dist/commands/capture.js",
-        "sha256": "b8d0a965e071cb8bbbdcf083012a9a451cf62b5443225bfeb4dd34d1755e30dd"
+        "sha256": "c41ce619775186c14929b92e4df6f0c88757deb387549eca436e4e4d1477ac98"
       },
       {
         "path": "dist/commands/capture.js.map",
-        "sha256": "d8b0c4c8741d30c5bacae2357e9f7ea59b35181cc5a89cad9165fa0d957666e5"
+        "sha256": "afa8e3d7a4e85f3fdd4b9c3559482c1a8f0e06c32e58e5d30928e6fa6142dd8b"
+      },
+      {
+        "path": "dist/commands/commit-guard.d.ts",
+        "sha256": "6c0c4528f38922952bdf8c300f3f74f74dc0ad18666e006f631313e8e707c6c9"
+      },
+      {
+        "path": "dist/commands/commit-guard.js",
+        "sha256": "ee23889e1cad488af2d874cd1ad76ba716a16eaaeaa72bbab76b5bcfc7588e90"
+      },
+      {
+        "path": "dist/commands/commit-guard.js.map",
+        "sha256": "a90f356eac2c010362760eb4b4aaff123e46edae6a1a5469e9738564d7632ac8"
+      },
+      {
+        "path": "dist/commands/commit.d.ts",
+        "sha256": "76940cc52f5b78273d9c9c07c8fca237cb34953814985420b4786d20539fd221"
+      },
+      {
+        "path": "dist/commands/commit.js",
+        "sha256": "79d13767a0842e8708fb3979deb3cb02b8f8241df48d5d94467e322bb690e135"
+      },
+      {
+        "path": "dist/commands/commit.js.map",
+        "sha256": "5d806cbaa8ec262ae6dc0c65adbc08febbf06968cf95d2d4494ea7667013a1c6"
       },
       {
         "path": "dist/commands/demo.d.ts",
@@ -646,7 +670,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "089b51bd12edfb83848dd261842f4ece2f20e65f2f4c0e73b9d4a342c084154e"
+        "sha256": "bb46851291b47ba7b779fd793f7b4463d6d27e870dd813d3a8ad800dfe6e05a6"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -750,11 +774,11 @@
       },
       {
         "path": "dist/core/capture-stage.js",
-        "sha256": "9e3ddb2b38bf8489b5127b82e47127e85c3d9e8ff5c6a1e78e592912b9cf91b9"
+        "sha256": "69303fa04da49e3e047d57730e44d3bc92c6430753ae1beae90f907fcfab20f3"
       },
       {
         "path": "dist/core/capture-stage.js.map",
-        "sha256": "806dd6e61a42e7a97c6483fca1eb259e1bac4e5c2bfd9b5a46f188a94af410a0"
+        "sha256": "b5bdf861547fe78d24880cc1c6b0e098ea84813d3a006430cd4677992d241bee"
       },
       {
         "path": "dist/core/capture-verify.d.ts",
@@ -762,11 +786,11 @@
       },
       {
         "path": "dist/core/capture-verify.js",
-        "sha256": "e7255d77811995e42a7a1393495ff3c717dfd3816808392234ac7bd5e71da5ac"
+        "sha256": "ca9f6cc81665ea7007dde4cde828de9d73786b3e6f83e4c2330e90b7bd2145fe"
       },
       {
         "path": "dist/core/capture-verify.js.map",
-        "sha256": "3e42dec7763d194fec263f5cee2ec665e4dc5af5c986cbdee30d48e4f41a4f84"
+        "sha256": "a4f2b0da1186fc5ee3b7f89013717dd4a58cd6b910b0ebca72e85a5b9ff50a74"
       },
       {
         "path": "dist/core/codex-plugin.d.ts",
@@ -779,6 +803,30 @@
       {
         "path": "dist/core/codex-plugin.js.map",
         "sha256": "2039f519f50297055fe861bd77274023c93333d8ffa2cbc6bc2218298a089fb4"
+      },
+      {
+        "path": "dist/core/commit-consideration.d.ts",
+        "sha256": "ba9a0faebdb71f47b2c8bc003c6435acad5f592144fb4ee16a965a998c0aeda8"
+      },
+      {
+        "path": "dist/core/commit-consideration.js",
+        "sha256": "6208d083a84bf2c5c1696bc3c421f1ee86c8ec561cccc126978582a4d41a546d"
+      },
+      {
+        "path": "dist/core/commit-consideration.js.map",
+        "sha256": "dd779c1c06114dbd95a7b7de3d0b1fd0d28c186c68dccc23dc5a13b859ea7ab9"
+      },
+      {
+        "path": "dist/core/commit-guard.d.ts",
+        "sha256": "a2d808c9a50b431652d3bd1524ac03ec7fdabac5b43073847659cc3c8a29cab8"
+      },
+      {
+        "path": "dist/core/commit-guard.js",
+        "sha256": "9f2a6031bf977ef8add5d6898c28dd7cce914f8224357e346ad0fcad30bfec10"
+      },
+      {
+        "path": "dist/core/commit-guard.js.map",
+        "sha256": "4df6de406277f3a4b786424c0a53e45f1d0b3f52cd1919bee935db064bd801e2"
       },
       {
         "path": "dist/core/git.d.ts",
