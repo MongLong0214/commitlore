@@ -10,6 +10,7 @@
   "homepage": "https://github.com/MongLong0214/commitlore#readme",
   "repository": "https://github.com/MongLong0214/commitlore",
   "license": "MIT",
+  "mcpServers": "./plugin-mcp.json",
   "keywords": [
     "git",
     "trailers",

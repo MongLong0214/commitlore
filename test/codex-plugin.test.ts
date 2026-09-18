@@ -252,7 +252,7 @@ describe('Codex plugin package', () => {
       skills: string;
       mcpServers: string;
     };
-    const mcp = JSON.parse(readFileSync(join(ROOT, '.mcp.json'), 'utf8')) as {
+    const mcp = JSON.parse(readFileSync(join(ROOT, manifest.mcpServers), 'utf8')) as {
       mcpServers: { commitlore: { command: string; args: string[] } };
     };
 
@@ -260,7 +260,10 @@ describe('Codex plugin package', () => {
       name: 'commitlore',
       version: JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version,
       skills: './skills/',
-      mcpServers: './.mcp.json',
+      // Not `.mcp.json`: that name is also Claude Code's project configuration
+      // for a session opened in this checkout, where `${CLAUDE_PLUGIN_ROOT}` is
+      // never set, so the plugin's own declaration cannot live there.
+      mcpServers: './plugin-mcp.json',
     });
     // #870: the entry point is bound to the plugin root. A relative path, or a
     // `cwd`, resolves against whatever directory the session was started in —

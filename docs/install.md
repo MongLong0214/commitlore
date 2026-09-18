@@ -29,9 +29,15 @@ detect Codex, so their normal one-liner remains one command for a new machine.
 Start a **new Codex session** after installation; that is the boundary at which
 Codex discovers the skill and starts the plugin's MCP server.
 
-The Codex plugin carries the MCP server in `.mcp.json`, declared by
+The Codex plugin carries the MCP server in `plugin-mcp.json`, declared by
 `.codex-plugin/plugin.json`, plus the Codex capture skill. It puts no new manual
 MCP block in `~/.codex/config.toml`.
+
+The declaration is deliberately not at the conventional `.mcp.json`. That name
+is read by a second loader — Claude Code's project configuration for a session
+opened in the checkout — which sets no `${CLAUDE_PLUGIN_ROOT}`, so a file that
+is correct for the plugin is unlaunchable for the session and the session
+reports a failed server. Both plugin manifests name the file instead.
 
 ## The Claude Code plugin
 

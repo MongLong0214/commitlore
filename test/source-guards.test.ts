@@ -160,12 +160,18 @@ describe('#395 nothing this repository ships installs from a public registry', (
  * expand one.
  */
 describe('the plugin entry point never falls back to the session directory', () => {
-  const SHIPPED = ['.mcp.json', 'hooks/hooks.json', 'docs/COMPATIBILITY.md'];
+  // `plugin-mcp.json`, not `.mcp.json`: the declaration moved off the root name
+  // because that name is also Claude Code's project configuration for a session
+  // opened in this checkout, and only a plugin loader sets the variable.
+  const SHIPPED = ['plugin-mcp.json', 'hooks/hooks.json', 'docs/COMPATIBILITY.md'];
 
   for (const file of SHIPPED) {
     it(`${file} declares no cwd-relative default for CLAUDE_PLUGIN_ROOT`, () => {
       const path = join(REPO_ROOT, file);
-      if (!existsSync(path)) return;
+      // Asserted, not skipped. This guard is a scan over a fixed list of names,
+      // so a renamed file used to leave the loop passing over nothing at all --
+      // green because there was no text to find the bad form in.
+      expect(existsSync(path), `${file} is in the scan list but not in the tree`).toBe(true);
       const text = readFileSync(path, 'utf8');
 
       expect(text).not.toContain('${CLAUDE_PLUGIN_ROOT:-.}');

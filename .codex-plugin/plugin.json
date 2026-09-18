@@ -18,7 +18,7 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./plugin-mcp.json",
   "interface": {
     "displayName": "CommitLore",
     "shortDescription": "Preserve verified engineering decisions in Git",
