@@ -76,13 +76,38 @@ the hook, not the CLI**. A plugin left behind grades every edit by an older
 build's rules while `commitlore --version` in your terminal reports something
 newer.
 
-`commitlore doctor` reports it, by asking the executable the hook actually
-resolves to for its version:
+`commitlore doctor` reports it, from a different row depending on how the hook
+reaches you.
+
+**If you installed the settings hook** (`commitlore inject install-claude-hook`),
+`PreToolUse hook version` asks that executable for its own version:
 
 ```
 warn    PreToolUse hook version — the agent's hook runs 0.4.0 but this CLI is 0.6.0
         — every edit is graded by 0.4.0's rules, not this one's
 ```
+
+**If the plugin delivers the hook** — the install above, and the common case —
+that row reads `skipped: no installed hook to compare against 0.6.0`. It is not
+being lazy: a plugin registers its hook through its own `hooks/hooks.json`, and a
+command run from a plugin-loaded session does not receive `CLAUDE_PLUGIN_ROOT`
+(#781), so this process cannot find the file it would have to ask. The version
+recorded in `installed_plugins.json` does not answer it either — one machine read
+`0.8.0` there while its cache held every build from `0.8.0` to `1.1.4`.
+
+What does answer is `live MCP runtime identity`, because the plugin's MCP server
+and its hooks launch from the same `${CLAUDE_PLUGIN_ROOT}`, so the server's path
+names the build the hooks run:
+
+```
+warn    live MCP runtime identity — the live CommitLore MCP runtime reports 0.4.0
+        and the CLI running this check is 0.6.0 — it answers, and writes records,
+        as 0.4.0 did
+```
+
+That row reads the process list, so it says this only while a session is running:
+`doctor` in a terminal with every agent closed sees nothing to compare, and
+reports that it found no live runtime rather than a clean machine.
 
 ## The install scripts
 
