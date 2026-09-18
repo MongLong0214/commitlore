@@ -4,6 +4,56 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.4.2
+
+Where the MCP server gets registered stopped being a decision this tool made for
+you, and the one place it made that decision wrongly for itself is fixed.
+
+**`commitlore init` asks which scope, and every scope the host has is
+available.** `--mcp-scope user|project|local|none`, or the question itself when
+there is a terminal to ask at. `user` is one registration covering every
+repository you open, `local` is this repository for you alone, `project` is the
+committed `.mcp.json` this command used to write unconditionally, and `none`
+writes nothing — the right answer when the Claude Code or Codex plugin already
+carries the server. The default is `user`, and it is the default in both
+directions: what a bare Enter takes, and what a run with no terminal uses, so a
+script and a person who pressed Enter end up in the same place.
+
+The two host-owned scopes are written by `claude`, not by this tool. That file
+belongs to the host and has already changed shape once; a second writer for it
+is a guess that goes stale without announcing itself. `project` is still written
+here, because this writer merges without disturbing servers somebody else put in
+the file, refuses to overwrite an entry a person chose, and works for a host
+that ships no CLI at all.
+
+One measurement shaped the result: `claude mcp add` exits 1 both when the name
+already exists and when it genuinely refuses, and the only difference between
+them is prose. Re-running `init` has to be a success, so the question is asked
+again in a form whose answer is an exit code — `claude mcp get` — and a real
+refusal still reaches you in the host's own words. That answer does not say
+*which* scope holds the name, so the report does not claim one.
+
+A `user` or `local` scope asked of a machine with no `claude` on `PATH` is not a
+failed install and no longer reports as one: the plugin paths carry the server
+themselves, so it reports clean and names the command for later.
+
+**The plugin's own MCP declaration moved off `.mcp.json`.** That name is read by
+two loaders — the plugin loader, which defines `${CLAUDE_PLUGIN_ROOT}`, and
+Claude Code's project configuration for any session opened in a checkout of this
+repository, which never does. One file cannot be correct for both, and for three
+iterations whichever form suited the plugin left every session in a commitlore
+checkout with a server that failed to connect: `./dist/...` with `"cwd": "."`
+(#870), then `${CLAUDE_PLUGIN_ROOT:-.}`, whose default reinstated #870 exactly,
+then a bare `${CLAUDE_PLUGIN_ROOT}` on the reasoning that a host refuses an
+unexpanded placeholder by naming the variable. It does name it — in a
+diagnostics footnote — and it also spawns the registration and reports
+`CONNECTION_CLOSED` in the session's server list.
+
+So the declaration is `plugin-mcp.json`, named by both plugin manifests and
+reached no other way, and the root name is left free. Nothing about the launch
+changed. Two checks that were reading a name rather than a requirement, and
+would have gone quietly green on the rename, now assert what they meant.
+
 ## 1.4.1
 
 One report, and it arrived from a session doing something entirely ordinary:

@@ -186,10 +186,10 @@ describe('commitlore init — the happy path', () => {
   it('is idempotent: a second run changes nothing and still reports 0/0/0', () => {
     const repo = repoWithRemote('idempotent');
 
-    const first = runInitAsCli({ cwd: repo });
+    const first = runInitAsCli({ cwd: repo, mcpScope: 'project' });
     const hookBytesAfterFirst = readFileSync(hookPathOf(repo), 'utf8');
     const mcpBytesAfterFirst = readFileSync(join(repo, '.mcp.json'), 'utf8');
-    const second = runInitAsCli({ cwd: repo });
+    const second = runInitAsCli({ cwd: repo, mcpScope: 'project' });
 
     expect(first.exitCode).toBe(0);
     expect(second.exitCode).toBe(0);
@@ -212,13 +212,13 @@ describe('commitlore init — the happy path', () => {
     expect(text).toContain('✓ Hooks');
     expect(text).toContain('✓ Index');
     expect(text).toContain('✓ Agent integration');
-    expect(text).toContain('✓ MCP registration');
+    expect(text).toContain('✓ MCP server');
     expect(text).toContain('✓ Final check');
     expect(text).toContain('init: ready');
   });
 });
 
-describe('commitlore init — repository MCP registration', () => {
+describe('commitlore init — MCP registration at scope project', () => {
   const initiatorStatus = (repo: string): string | undefined =>
     runDoctorAsCli({ cwd: repo }).checks.find((check) => check.id === 'unattended-initiator')?.status;
 
@@ -236,14 +236,14 @@ describe('commitlore init — repository MCP registration', () => {
     expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
     expect(initiatorStatus(repo)).toBe('warn');
 
-    const report = runInitAsCli({ cwd: repo });
+    const report = runInitAsCli({ cwd: repo, mcpScope: 'project' });
     const registration = report.steps.find((step) => step.step === 'mcp-registration');
     const config = JSON.parse(readFileSync(join(repo, '.mcp.json'), 'utf8')) as {
       mcpServers?: Record<string, { command?: unknown; args?: unknown }>;
     };
 
     expect(registration?.code).toBe(0);
-    expect(registration?.lines.join('\n')).toContain('registered the capture server for repository-scoped hosts');
+    expect(registration?.lines.join('\n')).toContain('registered the capture server for this repository');
     expect(registration?.lines.join('\n')).toContain('applies to everyone who clones');
     expect(registration?.lines.join('\n')).toContain('hosts that keep MCP configuration outside the repository are unchanged');
     expect(config.mcpServers?.commitlore).toEqual({ command: 'commitlore', args: ['mcp'] });
@@ -264,7 +264,7 @@ describe('commitlore init — repository MCP registration', () => {
     const original = ['{', '  "mcpServers": {', otherServer, '  },', unrelated, '}', ''].join('\n');
     writeFileSync(join(repo, '.mcp.json'), original);
 
-    const report = runInitAsCli({ cwd: repo });
+    const report = runInitAsCli({ cwd: repo, mcpScope: 'project' });
     const after = readFileSync(join(repo, '.mcp.json'), 'utf8');
     const parsed = JSON.parse(after) as {
       mcpServers: Record<string, unknown>;
@@ -289,7 +289,7 @@ describe('commitlore init — repository MCP registration', () => {
       '{"mcpServers":{"commitlore":{"command":"deliberate-wrapper","args":["custom-mcp"],"env":{"MODE":"operator-choice"}}},"host-owned":true}\n';
     writeFileSync(join(repo, '.mcp.json'), original);
 
-    const report = runInitAsCli({ cwd: repo });
+    const report = runInitAsCli({ cwd: repo, mcpScope: 'project' });
 
     expect(readFileSync(join(repo, '.mcp.json'), 'utf8')).toBe(original);
     const registration = report.steps.find((step) => step.step === 'mcp-registration');
@@ -311,13 +311,13 @@ describe('commitlore init — repository MCP registration', () => {
     const repo = repoWithRemote('mcp-registration-failure');
     mkdirSync(join(repo, '.mcp.json'));
 
-    const report = runInitAsCli({ cwd: repo });
+    const report = runInitAsCli({ cwd: repo, mcpScope: 'project' });
     const registration = report.steps.find((step) => step.step === 'mcp-registration');
     const lines = registration?.lines.join('\n') ?? '';
 
     expect(registration?.code).toBe(1);
-    expect(lines).toContain('could not register the capture server');
-    expect(lines).toContain('nothing in this repository can start a capture');
+    expect(lines).toContain('could not register the capture server in this repository');
+    expect(lines).toContain('nothing here can start a capture');
     // And what to do about it, because the repair is one file the operator owns.
     expect(lines).toContain('"mcpServers"');
     expect(lines).toContain('commitlore doctor');
@@ -329,7 +329,210 @@ describe('commitlore init — repository MCP registration', () => {
     expect(report.exitCode).toBe(1);
     const rendered = formatInitReport(report);
     expect(rendered).not.toContain('init: ready');
-    expect(rendered).toContain('MCP registration');
+    expect(rendered).toContain('MCP server');
+  });
+});
+
+/**
+ * The host-owned scopes (`user`, `local`) are written by the host's own CLI,
+ * so every case here puts a stub named `claude` in front of the PATH and reads
+ * back what it was actually asked. Two properties need that:
+ *
+ *  - the argv is a contract with a program this repository does not own, and a
+ *    test that mocked the function instead would keep passing after the flags
+ *    drifted;
+ *  - `claude mcp add` exits **1** both when the name already exists and when it
+ *    genuinely refuses, so the code that separates them has to be exercised
+ *    against a program that reproduces both.
+ *
+ * `withCliEnvironment` already narrows PATH to the injected CLI plus
+ * `/usr/bin:/bin`, so a real Claude Code install on the machine running these
+ * tests is out of reach — nothing here can register a server on a developer's
+ * own account.
+ */
+describe('commitlore init — MCP registration at the host-owned scopes', () => {
+  const hostCliStub = (label: string, body: string): { bin: string; log: string } => {
+    const bin = tempDir(label);
+    const log = join(bin, 'argv.log');
+    const stub = join(bin, 'claude');
+    writeFileSync(stub, `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(log)}\n${body}\n`, {
+      mode: 0o755,
+    });
+    chmodSync(stub, 0o755);
+    return { bin, log };
+  };
+
+  const withHostCli = <T>(bin: string, run: () => T): T => {
+    const originalArgv = process.argv[1];
+    const originalPath = process.env['PATH'];
+    process.argv[1] = CLI_JS;
+    process.env['PATH'] = `${bin}:${injectBin}:/usr/bin:/bin`;
+    try {
+      return run();
+    } finally {
+      process.argv[1] = originalArgv;
+      if (originalPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = originalPath;
+    }
+  };
+
+  const mcpStep = (report: InitReport) => report.steps.find((step) => step.step === 'mcp-registration');
+
+  it('asks the host to register, with the argv the host documents', () => {
+    const repo = repoWithRemote('mcp-user-ok');
+    const { bin, log } = hostCliStub('host-ok', 'exit 0');
+
+    const report = withHostCli(bin, () => runInit({ cwd: repo, mcpScope: 'user' }));
+    const step = mcpStep(report);
+
+    expect(readFileSync(log, 'utf8').trim()).toBe(
+      'mcp add --scope user commitlore -- commitlore mcp',
+    );
+    expect(step?.code).toBe(0);
+    expect(step?.lines.join('\n')).toContain('registered the capture server at scope "user"');
+    expect(step?.lines.join('\n')).toContain('every repository you open');
+    // The scope's whole point: nothing was written into the repository.
+    expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
+    expect(report.exitCode).toBe(0);
+  });
+
+  it('passes the local scope through rather than silently promoting it to user', () => {
+    const repo = repoWithRemote('mcp-local-ok');
+    const { bin, log } = hostCliStub('host-local', 'exit 0');
+
+    const report = withHostCli(bin, () => runInit({ cwd: repo, mcpScope: 'local' }));
+
+    expect(readFileSync(log, 'utf8').trim()).toBe(
+      'mcp add --scope local commitlore -- commitlore mcp',
+    );
+    expect(mcpStep(report)?.lines.join('\n')).toContain('for you only');
+    expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
+  });
+
+  /**
+   * Idempotence, and the reason this path cannot read the host's message: the
+   * stub refuses the add exactly as the real CLI does — exit 1, prose about the
+   * name existing — and answers `mcp get`. A re-run of `init` is a success.
+   */
+  it('treats a name the host already knows as registered, not as a failure', () => {
+    const repo = repoWithRemote('mcp-user-existing');
+    const { bin, log } = hostCliStub(
+      'host-existing',
+      [
+        'case "$1 $2" in',
+        '  "mcp get") exit 0 ;;',
+        'esac',
+        'echo "MCP server commitlore already exists in user config" >&2',
+        'exit 1',
+      ].join('\n'),
+    );
+
+    const report = withHostCli(bin, () => runInit({ cwd: repo, mcpScope: 'user' }));
+    const step = mcpStep(report);
+
+    expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual([
+      'mcp add --scope user commitlore -- commitlore mcp',
+      'mcp get commitlore',
+    ]);
+    expect(step?.code).toBe(0);
+    expect(step?.lines.join('\n')).toContain('the host already has an MCP server under this name');
+    // It must not claim the scope it could not observe.
+    expect(step?.lines.join('\n')).not.toContain('every repository you open');
+    expect(report.exitCode).toBe(0);
+  });
+
+  /**
+   * The control for the case above. Same exit code from `add`; what differs is
+   * that nothing answers to the name afterwards. A reader of only the first
+   * exit code cannot tell these two apart, which is why the second question is
+   * asked at all.
+   */
+  it('reports a genuine refusal in the host’s own words, and does not call the install ready', () => {
+    const repo = repoWithRemote('mcp-user-refused');
+    const { bin } = hostCliStub('host-refused', 'echo "config file is read-only" >&2\nexit 1');
+
+    const report = withHostCli(bin, () => runInit({ cwd: repo, mcpScope: 'user' }));
+    const step = mcpStep(report);
+    const lines = step?.lines.join('\n') ?? '';
+
+    expect(step?.code).toBe(1);
+    expect(lines).toContain('config file is read-only');
+    expect(lines).toContain('claude mcp add --scope user commitlore -- commitlore mcp');
+    expect(report.exitCode).toBe(1);
+    expect(formatInitReport(report)).not.toContain('init: ready');
+  });
+
+  /**
+   * A machine with no Claude Code is not a broken installation: the plugin path
+   * and the Codex path both carry the server themselves. Reporting this at 1
+   * would tell every Codex-only user that their install failed.
+   */
+  it('does not fail the install when the host CLI is absent', () => {
+    const repo = repoWithRemote('mcp-user-no-host');
+
+    // No stub: withCliEnvironment's PATH carries the injected commitlore and
+    // the system directories, and no `claude`.
+    const report = runInitAsCli({ cwd: repo, mcpScope: 'user' });
+    const step = mcpStep(report);
+    const lines = step?.lines.join('\n') ?? '';
+
+    expect(step?.code).toBe(0);
+    expect(lines).toContain('is not on PATH');
+    expect(lines).toContain('claude mcp add --scope user commitlore -- commitlore mcp');
+    expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
+    expect(report.exitCode).toBe(0);
+  });
+
+  it('writes nothing at all for scope none, and says which scopes exist', () => {
+    const repo = repoWithRemote('mcp-none');
+    const { bin, log } = hostCliStub('host-none', 'exit 0');
+
+    const report = withHostCli(bin, () => runInit({ cwd: repo, mcpScope: 'none' }));
+    const step = mcpStep(report);
+
+    expect(existsSync(log)).toBe(false);
+    expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
+    expect(step?.code).toBe(0);
+    expect(step?.lines.join('\n')).toContain('no MCP registration written');
+    expect(report.exitCode).toBe(0);
+  });
+
+  /**
+   * `runInit` is the programmatic entry point, and two of the four scopes write
+   * outside the repository it was handed. A caller that did not ask must not
+   * get that — including this suite, which would otherwise register a server on
+   * whichever machine runs it.
+   */
+  it('registers nothing when the caller named no scope', () => {
+    const repo = repoWithRemote('mcp-default-inert');
+    const { bin, log } = hostCliStub('host-default', 'exit 0');
+
+    const report = withHostCli(bin, () => runInit({ cwd: repo }));
+
+    expect(existsSync(log)).toBe(false);
+    expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
+    expect(mcpStep(report)?.code).toBe(0);
+  });
+
+  /**
+   * Spawned rather than called, because the scope is validated in the command
+   * action and the exit code is the contract (SPEC §10: 2 is usage). Falling
+   * back to the default on a misspelling would install something the operator
+   * did not choose while telling them nothing.
+   */
+  it('refuses an unknown scope at the usage exit code, before installing anything', () => {
+    const repo = repoWithRemote('mcp-bad-scope');
+
+    const run = spawnSync(process.execPath, [CLI_JS, 'init', '--mcp-scope', 'globally'], {
+      cwd: repo,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${injectBin}:/usr/bin:/bin` },
+    });
+
+    expect(run.status).toBe(2);
+    expect(run.stderr).toContain('--mcp-scope "globally" is not one of user, project, local, none');
+    expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
+    expect(existsSync(hookPathOf(repo))).toBe(false);
   });
 });
 
@@ -605,7 +808,7 @@ describe('commitlore init — the capture policy step', () => {
   it('authorises unattended capture where no policy file exists and registers its initiator', () => {
     const repo = repoWithRemote('policy-enable');
 
-    const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
+    const report = runInitAsCli({ cwd: repo, unattended: 'enable', mcpScope: 'project' });
 
     const policyStep = report.steps.find((s) => s.step === 'policy');
     expect(policyStep?.code).toBe(0);
@@ -621,7 +824,7 @@ describe('commitlore init — the capture policy step', () => {
 
     const text = formatInitReport(report);
     expect(text).toContain('unattended policy enabled — agent host must initiate capture');
-    expect(text).toContain('MCP registration — registered for repository-scoped hosts');
+    expect(text).toContain('MCP server — registered for this repository');
     expect(text).toContain('init: ready');
     expect(report.exitCode).toBe(0);
   });

@@ -1,17 +1,31 @@
 /**
- * Repository-scoped MCP registration.
+ * MCP registration, at whichever scope the operator chose.
  *
- * `.mcp.json` is deliberately a repository file, not an edit to a host's
- * private configuration. It lets a host that elects to load repository MCP
- * configuration discover CommitLore's capture tools after a clone, while
- * leaving hosts that keep their configuration elsewhere alone.
+ * A host keeps MCP configuration at more than one scope, and which one is
+ * right is a property of the situation rather than of this tool: a solo
+ * machine wants one registration covering every repository, a team wants one
+ * the repository carries, and a shared machine wants one private to the person
+ * sitting at it. `init` asks; this module writes whichever answer it gets.
  *
- * The command is the portable `commitlore mcp` pair. It is the same PATH-based
- * resolution route the installed Git hooks use after their per-machine pin,
- * rather than an absolute path to the machine that happened to run `init`.
- * Because this file is committed, such a path would break for the next clone.
+ * The two halves are written by different authors on purpose.
+ *
+ * **`project`** is `.mcp.json`, written here. It is a repository file, so the
+ * command is the portable `commitlore mcp` pair — the same PATH-based route
+ * the installed Git hooks use after their per-machine pin, never an absolute
+ * path to the machine that happened to run `init`, which would break for the
+ * next clone. Writing it here rather than through a host CLI is deliberate:
+ * this writer merges without disturbing other servers, refuses to overwrite an
+ * entry somebody chose, and works for a host that ships no CLI at all.
+ *
+ * **`user`** and **`local`** live in the host's own private configuration, and
+ * this module does not write that. The format belongs to the host and has
+ * already changed shape once; a second writer for it is a guess that goes
+ * stale without saying so. Those two shell out to the host's CLI — the one
+ * component contractually able to write its own file — and report exactly what
+ * it was asked and exactly what it answered.
  */
 
+import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
   existsSync,
@@ -502,4 +516,108 @@ export const registerCommitloreMcpServer = (cwd: string): McpRegistrationResult 
   } catch (error) {
     return { ok: false, path, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf(error)}` };
   }
+};
+
+// ---------------------------------------------------------------------------
+// Host-owned scopes (`user`, `local`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a registration is written.
+ *
+ * The three writable names are the host's own, not ours — `claude mcp add
+ * --scope` takes exactly `local`, `user` and `project` — so an operator who
+ * knows one vocabulary does not have to learn a second. `none` is this tool's
+ * addition and writes nothing.
+ */
+export type McpScope = 'user' | 'project' | 'local' | 'none';
+
+export const MCP_SCOPES: readonly McpScope[] = ['user', 'project', 'local', 'none'];
+
+/** The scopes the host's own CLI owns. `project` is written by this module. */
+export type HostOwnedScope = 'user' | 'local';
+
+export const isMcpScope = (value: string): value is McpScope =>
+  (MCP_SCOPES as readonly string[]).includes(value);
+
+/** The host CLI that owns `user` and `local` configuration. */
+export const MCP_HOST_CLI = 'claude';
+
+const hostRegistrationArgv = (scope: HostOwnedScope): string[] => [
+  'mcp',
+  'add',
+  '--scope',
+  scope,
+  MCP_SERVER_KEY,
+  '--',
+  MCP_SERVER_COMMAND,
+  ...MCP_SERVER_ARGS,
+];
+
+/**
+ * The exact command line a host-owned registration runs.
+ *
+ * Exposed because every report about this path prints it. A reader who is told
+ * a registration failed can only act on it if they can run the same thing by
+ * hand, and a paraphrase is not the same thing.
+ */
+export const hostRegistrationCommand = (scope: HostOwnedScope): string =>
+  [MCP_HOST_CLI, ...hostRegistrationArgv(scope)].join(' ');
+
+export interface HostRegistrationResult {
+  ok: boolean;
+  scope: HostOwnedScope;
+  state: 'registered' | 'already-registered' | 'host-missing' | 'host-failed';
+  /** The command line attempted, verbatim, so a reader can repeat it. */
+  command: string;
+  /** The host's own words when it refused. Never a paraphrase of them. */
+  error: string | null;
+}
+
+/**
+ * Register at a host-owned scope by asking the host to do it.
+ *
+ * Measured, because the exit codes do not separate what a caller needs to
+ * separate: `claude mcp add` exits 0 on a fresh add and **1** both when the
+ * name already exists and when it genuinely refuses. The only difference
+ * between those two is prose — "MCP server commitlore already exists in user
+ * config" — and matching a message is matching a rendering, which changes
+ * without notice.
+ *
+ * So the second question is asked separately, in a form whose answer is an
+ * exit code: `claude mcp get commitlore` succeeds when something answers to
+ * the name. A re-run of `init` is then `already-registered` rather than a
+ * failure, which is what idempotence requires, and a real refusal still
+ * carries the host's own output to the reader.
+ */
+export const registerWithHost = (scope: HostOwnedScope, cwd: string): HostRegistrationResult => {
+  const command = hostRegistrationCommand(scope);
+  const add = spawnSync(MCP_HOST_CLI, hostRegistrationArgv(scope), { cwd, encoding: 'utf8' });
+
+  if (add.error !== undefined) {
+    const missing = (add.error as NodeJS.ErrnoException).code === 'ENOENT';
+    return {
+      ok: false,
+      scope,
+      command,
+      state: missing ? 'host-missing' : 'host-failed',
+      error: missing ? `${MCP_HOST_CLI} is not on PATH` : messageOf(add.error),
+    };
+  }
+
+  if (add.status === 0) return { ok: true, scope, command, state: 'registered', error: null };
+
+  const present = spawnSync(MCP_HOST_CLI, ['mcp', 'get', MCP_SERVER_KEY], { cwd, encoding: 'utf8' });
+  if (present.error === undefined && present.status === 0) {
+    return { ok: true, scope, command, state: 'already-registered', error: null };
+  }
+
+  const said = (add.stderr ?? '').trim() || (add.stdout ?? '').trim();
+  return {
+    ok: false,
+    scope,
+    command,
+    state: 'host-failed',
+    error: said === '' ? `exited ${String(add.status)} with no output` : said,
+  };
 };
