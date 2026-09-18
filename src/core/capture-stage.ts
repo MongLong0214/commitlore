@@ -13,6 +13,7 @@
  * - Default maximum: one record per commit.
  */
 
+import { writeConsideration } from './commit-consideration.js';
 import { createHash } from 'node:crypto';
 import { markCaptureError } from './capture-outcome.js';
 import { readPending, stagePending, type PendingRecord } from './pending.js';
@@ -163,6 +164,24 @@ export const stageCaptureRecord = (opts: StageCaptureOptions): string | null => 
     expiryMinutes !== undefined ? { cwd, expiryMinutes } : { cwd };
   const success = stagePending(nonce, stageOpts);
   if (!success) return null;
+
+  /*
+   * The tree was considered and a record came out of it -- recorded here, in
+   * the one place both routes reach.
+   *
+   * The five-step flow and `commitlore commit` share this function, and until
+   * this line only the second wrote a consideration. So an agent following the
+   * plugin's own instructions -- prepare, verify, stage, then `git commit`, as
+   * the MCP instructions and the commit skill both say -- had its commit
+   * refused by the gate with "this staged tree has not been considered", and
+   * was told to pass `records: []`: to discard the record it had just verified.
+   * Reproduced before this line existed.
+   *
+   * Writing it here rather than in either caller is what keeps the two routes
+   * from disagreeing about what considering means. The pending transaction is
+   * untouched and stays the separate artifact #1021 made it.
+   */
+  writeConsideration({ cwd, outcome: 'recorded', records: 1 });
 
   return nonce;
 };

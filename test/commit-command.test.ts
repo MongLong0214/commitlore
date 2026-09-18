@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { runCapture } from '../src/commands/capture.js';
 import { recordLanded, runCommit } from '../src/commands/commit.js';
 import { installHook } from '../src/commands/hooks.js';
 import { readConsideration } from '../src/core/commit-consideration.js';
@@ -231,11 +232,19 @@ describe('what it refuses to attempt', () => {
     expect(outcome.lines.join('\n')).toContain('no transcript');
   });
 
-  it('when asked to stage without committing in a repository whose hook cannot apply it', () => {
-    const { cwd } = repo('no-hook', { hooks: false });
-    const outcome = runCommit({ cwd, message: 'x', commit: false });
+  it('when asked to stage a record in a repository whose hook cannot apply it', () => {
+    const { cwd, transcript, draft } = repo('no-hook', { hooks: false });
+    const outcome = runCommit({ cwd, message: 'x', transcript, draft, commit: false });
     expect(outcome.outcome).toBe('error');
     expect(outcome.lines.join('\n')).toContain('hooks install');
+  });
+
+  it('but not when there is no record for that hook to apply', () => {
+    // The control. Refusing a caller that is recording nothing and wants to run
+    // the commit itself refuses a correct call -- the over-refusal this whole
+    // feature exists to avoid, one layer in.
+    const { cwd } = repo('no-hook-no-draft', { hooks: false });
+    expect(runCommit({ cwd, message: 'x', commit: false }).outcome).toBe('staged');
   });
 });
 
@@ -378,10 +387,10 @@ describe('the defects an adversarial review found', () => {
     // git runs only executable hooks. Reading the file alone cannot tell an
     // installed hook from an inert one, and the inert one silently drops every
     // record it was supposed to apply.
-    const { cwd } = repo('inert-hook');
+    const { cwd, transcript, draft } = repo('inert-hook');
     chmodSync(join(cwd, '.git', 'hooks', 'prepare-commit-msg'), 0o644);
 
-    const outcome = runCommit({ cwd, message: 'chore: x', commit: false });
+    const outcome = runCommit({ cwd, message: 'chore: x', transcript, draft, commit: false });
 
     expect(outcome.outcome).toBe('error');
     expect(outcome.lines.join('\n')).toContain('hooks install');
@@ -402,5 +411,55 @@ describe('the defects an adversarial review found', () => {
     expect(outcome.outcome).toBe('refused');
     expect(outcome.lines.join('\n')).toContain('still staged');
     expect(git(cwd, ['status', '--porcelain']).trim().startsWith('M ')).toBe(true);
+  });
+});
+
+/**
+ * The five-step flow must satisfy the gate, because it is the flow this
+ * product's own instructions prescribe.
+ *
+ * Before the consideration was written in the shared core, it was not: an agent
+ * that ran prepare, verify and stage -- as the MCP `instructions` and the
+ * commit skill both tell it to -- had its commit refused with "this staged tree
+ * has not been considered", and was advised to pass `records: []`. That advice
+ * would have discarded the record it had just verified. A gate that destroys
+ * records by following its own instruction is worse than no gate.
+ *
+ * These drive `runCapture`, the same function the CLI and the MCP handler both
+ * reach, so the binding is asserted on the route rather than on the caller.
+ */
+describe('the five-step flow satisfies the gate', () => {
+  it('a staged record binds the tree it was staged for', () => {
+    const { cwd, transcript, draft } = repo('five-recorded');
+
+    const capture = runCapture({ cwd, transcript, draft });
+
+    expect(capture.outcome).toBe('staged');
+    expect(readConsideration(cwd)?.outcome).toBe('recorded');
+  });
+
+  it('a draft that submitted nothing binds too — that is a complete answer', () => {
+    const { cwd, transcript } = repo('five-empty');
+
+    const capture = runCapture({ cwd, transcript, draft: JSON.stringify({ records: [] }) });
+
+    expect(capture.outcome).toBe('empty');
+    expect(readConsideration(cwd)?.outcome).toBe('empty');
+  });
+
+  it('a draft whose every record was refused binds nothing', () => {
+    // The control that keeps the two apart. If a refusal bound the tree, a bad
+    // draft would reach the same state as a real consideration, and the gate
+    // would pass anything that failed verification.
+    const { cwd, transcript } = repo('five-refused');
+
+    const capture = runCapture({
+      cwd,
+      transcript,
+      draft: draftWith('nowhere in this transcript at all', 'r-fivestep99'),
+    });
+
+    expect(capture.outcome).toBe('rejected');
+    expect(readConsideration(cwd)).toBeNull();
   });
 });

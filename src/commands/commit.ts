@@ -255,6 +255,10 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
   }
   const stagedByAll = opts.all === true;
 
+  const hasDraft = opts.draft !== undefined || opts.draftPath !== undefined;
+  const hasTranscript = opts.transcript !== undefined || opts.transcriptPath !== undefined;
+
+
   // An amend with nothing staged is a message-only amend, which is legitimate.
   if (!somethingIsStaged(cwd) && opts.amend !== true) {
     return result('error', [
@@ -263,9 +267,6 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
     ]);
   }
 
-  const hasDraft = opts.draft !== undefined || opts.draftPath !== undefined;
-  const hasTranscript = opts.transcript !== undefined || opts.transcriptPath !== undefined;
-
   if (hasDraft && !hasTranscript) {
     return result('error', [
       'records were given with no transcript to verify them against',
@@ -273,7 +274,13 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
     ]);
   }
 
-  if (!commitIt && !recordsCanBeApplied(cwd)) {
+  /*
+   * Only when there is a record for the hook to apply. A caller that is
+   * recording nothing and wants to run the commit itself needs no hook at all,
+   * and refusing it was refusing a correct call -- the same over-refusal this
+   * whole feature exists to avoid, one layer in.
+   */
+  if (!commitIt && hasDraft && !recordsCanBeApplied(cwd)) {
     return result('error', [
       `this repository has no commitlore ${PREPARE_COMMIT_MSG_HOOK_NAME} hook, so a staged record would never reach a commit`,
       'run commitlore hooks install, or let this command make the commit itself',

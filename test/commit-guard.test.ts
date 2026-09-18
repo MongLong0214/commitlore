@@ -99,16 +99,42 @@ describe('a Bash call that is not a commit costs nothing', () => {
 });
 
 describe('an unconsidered commit is refused, and told exactly what to do', () => {
-  it('refuses, naming the one call and saying that recording nothing is complete', () => {
+  it('names a command that exists, in the directory it graded', () => {
     const answer = verdict('git commit -m "feat: x"');
     expect(answer.decision).toBe('deny');
     expect(answer.reason).toBe('not-considered');
-    expect(answer.lines.join('\n')).toContain('commitlore_commit');
-    expect(answer.lines.join('\n')).toContain('records: []');
+    expect(answer.lines.join('\n')).toContain('commitlore commit -m');
+    expect(answer.lines.join('\n')).toContain('/repo');
   });
 
-  it('offers the CLI too, because a session whose MCP failed to connect has no tool', () => {
-    expect(said('git commit -m "feat: x"')).toContain('commitlore commit -m');
+  it('says the remedy makes the commit, so the refused command is not run again', () => {
+    // Without this an agent runs the remedy and then retries what was refused,
+    // which either duplicates the commit or refuses again on a tree that has
+    // moved.
+    expect(said('git commit -m "feat: x"')).toContain('makes the commit itself');
+  });
+
+  it('never names an MCP tool, because there is none and the refused call was Bash', () => {
+    // The gate fires only where a Bash PreToolUse hook exists, so Bash is the
+    // tool that was just used; a remedy in another transport shares none of
+    // that precondition. Naming one that does not exist was worse still.
+    expect(said('git commit -m "feat: x"')).not.toContain('commitlore_commit');
+  });
+
+  it('carries --amend through, because the remedy without it makes a new commit', () => {
+    expect(said('git commit --amend -m "feat: x"')).toContain('commitlore commit --amend');
+  });
+
+  it('carries -a through, because the remedy without it drops the tracked changes', () => {
+    expect(said('git commit -am "feat: x"')).toContain('commitlore commit -a');
+  });
+
+  it('names the directory to move to when the refused command named another', () => {
+    expect(said('git -C /elsewhere commit -m "feat: x"')).toContain('cd /elsewhere && commitlore commit');
+  });
+
+  it('offers the escape for git flags it does not take', () => {
+    expect(said('git commit -m "feat: x"')).toContain('--no-commit');
   });
 
   it.each([

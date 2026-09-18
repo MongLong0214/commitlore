@@ -364,23 +364,28 @@ export interface GuardInput {
   readonly cwd: string;
 }
 
-const DENIAL = (tool: string) => [
-  'CommitLore: this staged tree has not been considered for decision records.',
-  `Do this instead: ${tool}`,
-  'records: [] is the complete answer when there is nothing worth recording — it is not a shortfall, and nothing checks that a record exists.',
-];
-
-export const MCP_INSTRUCTION = 'commitlore_commit { message: "<your message>", records: [] }';
-export const CLI_INSTRUCTION = 'commitlore commit -m "<your message>"';
-
 /**
- * Allow or refuse one Bash call.
+ * The command that clears the refusal, built from the one that was refused.
  *
- * The order is load-bearing: the cheap textual tests come first so the common
- * case — a Bash call that is not a commit at all — costs a substring search and
- * nothing else, and the questions that touch git are asked only once a commit
- * is known to be there.
+ * Four things were wrong with a fixed string. It named an MCP tool that does
+ * not exist. It dropped `--amend`, so an agent amending a commit was told to
+ * make a new one. It dropped `-a`, so the tracked changes the agent meant were
+ * silently left out. And it never said the remedy *makes the commit*, so an
+ * agent would run it and then run the refused command again.
+ *
+ * The directory is named because the payload knows it and the agent may not:
+ * the remedy runs in the same shell, so naming it is what makes the two
+ * commands describe one tree.
  */
+const remedyFor = (commit: CommitInvocation, cwd: string, sameDirectory: boolean): string =>
+  [
+    sameDirectory ? '' : `cd ${cwd} && `,
+    'commitlore commit',
+    commit.amend ? ' --amend' : '',
+    commit.all ? ' -a' : '',
+    ' -m "<your message>"',
+  ].join('');
+
 export const guardVerdict = (input: GuardInput, world: GuardWorld): GuardVerdict => {
   if (!input.command.includes('commit')) return allow('no-commit-in-command');
 
@@ -430,8 +435,13 @@ export const guardVerdict = (input: GuardInput, world: GuardWorld): GuardVerdict
     return allow('considered');
   }
 
+  const sameDirectory = commit.repository === null && directoryChangedBefore(segments, commit.at) === null;
   return deny('not-considered', [
-    ...DENIAL(MCP_INSTRUCTION),
-    `No commitlore_commit tool in this session? Run: ${CLI_INSTRUCTION}`,
+    `CommitLore: refused \u2014 the tree staged in ${cwd} was never considered for decision records.`,
+    'Run this instead. It makes the commit itself; do not run the refused command afterwards:',
+    `  ${remedyFor(commit, cwd, sameDirectory)}`,
+    'As written that is the complete answer when there is nothing worth recording \u2014 nothing checks that a record exists.',
+    'Something to record: add --transcript <path> --records <draft.json>.',
+    "Need git's own flags (-S, -F, --author): add --no-commit, then re-run your original command unchanged.",
   ]);
 };
