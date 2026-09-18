@@ -23769,6 +23769,8 @@ var pidsByIdentity = (runtimes) => {
   return grouped;
 };
 var withPids = (identity, pids) => `${identity} pid ${pids.join(", ")}`;
+var differingFrom = (installed, runtimes) => runtimes.filter((runtime) => typeof runtime.reportedVersion === "string" && runtime.reportedVersion !== installed);
+var versionsWithPids = (runtimes) => runtimes.map((runtime) => `${runtime.reportedVersion} pid ${runtime.pid}`).join(", ");
 var missingAssets = (runtime) => [
   ...runtime.bundlePresent ? [] : ["dist/commitlore.mjs"],
   ...runtime.specPresent ? [] : ["spec/SPEC.md"]
@@ -23814,6 +23816,8 @@ var checkMcpRuntimeIdentity = (ctx) => {
       }
     );
   }
+  const installed = runtimeIdentity().version;
+  const differing = differingFrom(installed, scan2.runtimes);
   const identities = [...new Map(scan2.runtimes.map((runtime) => [identityOf2(runtime), runtime])).values()];
   if (identities.length > 1) {
     const grouped = pidsByIdentity(scan2.runtimes);
@@ -23830,7 +23834,14 @@ var checkMcpRuntimeIdentity = (ctx) => {
       // which. Deliberately does not name one of them as the stale one:
       // r-liveruntime660 ruled that out, because a copied or stale install can
       // report the same version as a current one.
-      ". Each keeps writing records with the build it started on, so this repository can receive records from more than one of them",
+      ". Each keeps writing records with the build it started on, so this repository can receive records from more than one of them" + // Which of them is behind, not which is "the stale one" -- see
+      // `differingFrom`. The row named five runtimes on the day this was
+      // written and none of their versions, so an operator reading it could
+      // not tell that four of them were answering from 1.3.x.
+      // "processes", not "of them": the count above is distinct identities and
+      // this one is live processes, and on the machine that prompted it both
+      // happened to read 5 while meaning different things.
+      (differing.length === 0 ? "" : `. ${String(differing.length)} process(es) report a version other than the ${installed} running this check: ${versionsWithPids(differing)}`),
       `reconnect the commitlore MCP server in the hosts that own these pids \u2014 that respawns it through the wrapper the installer rewrote, and keeps the session (in Claude Code, /mcp). Restarting the session does the same thing more expensively (${allPids.join(", ")}) \u2014 a host resolves the launcher once at session start and holds that runtime until the session ends, so an upgrade does not reach a session already running`,
       false,
       // Machine state, not this repository's -- see the note above.
@@ -23841,7 +23852,54 @@ var checkMcpRuntimeIdentity = (ctx) => {
           runtime_count: String(scan2.runtimes.length),
           distinct_identities: String(identities.length),
           package_roots: identities.map((runtime) => runtime.packageRoot).join(", "),
-          pids: allPids.join(", ")
+          pids: allPids.join(", "),
+          installed_version: installed,
+          differing_versions: differing.length === 0 ? "none" : versionsWithPids(differing)
+        }
+      }
+    );
+  }
+  if (identities.length === 0) {
+    return check(
+      id2,
+      category2,
+      title2,
+      "ok",
+      "no live CommitLore MCP runtime was found",
+      null,
+      false,
+      void 0,
+      {
+        evidence: {
+          discovery: scan2.detail,
+          runtime_count: "0",
+          distinct_identities: "0",
+          installed_version: installed
+        }
+      }
+    );
+  }
+  const only = identities[0];
+  const behind = differing[0];
+  if (behind !== void 0) {
+    return check(
+      id2,
+      category2,
+      title2,
+      "warn",
+      `the live CommitLore MCP runtime reports ${behind.reportedVersion} and the CLI running this check is ${installed} \u2014 it answers, and writes records, as ${behind.reportedVersion} did`,
+      `reconnect the commitlore MCP server in the host that owns this pid \u2014 in Claude Code, /mcp, which is cheaper than restarting the session; a host resolves the launcher once at session start and holds that runtime until the session ends, so installing a newer CLI never reaches it (pid ${differing.map((runtime) => runtime.pid).join(", ")})`,
+      false,
+      // Machine state, not this repository's -- see the note at the top.
+      false,
+      {
+        evidence: {
+          discovery: scan2.detail,
+          runtime_count: String(scan2.runtimes.length),
+          distinct_identities: "1",
+          live_version: behind.reportedVersion ?? "unreported",
+          installed_version: installed,
+          pids: differing.map((runtime) => runtime.pid).join(", ")
         }
       }
     );
@@ -23851,7 +23909,13 @@ var checkMcpRuntimeIdentity = (ctx) => {
     category2,
     title2,
     "ok",
-    identities.length === 0 ? "no live CommitLore MCP runtime was found" : `one live CommitLore MCP runtime is answering from ${identityOf2(identities[0])}`,
+    `one live CommitLore MCP runtime is answering from ${identityOf2(only)}` + // An `ok` that does not say what it read is the shape this row just had.
+    // A matching version is not proof the build is current -- #660 again -- so
+    // this says what was observed and claims nothing beyond it.
+    // `typeof`, not `=== null`: an absent field and a null one are the same
+    // absence, and the first draft told a runtime that reported nothing that
+    // it was reporting the installed version.
+    (typeof only.reportedVersion === "string" ? `, reporting the ${installed} this check is running` : ", and it did not report a version, so this says nothing about which build it is"),
     null,
     false,
     void 0,
@@ -23859,7 +23923,9 @@ var checkMcpRuntimeIdentity = (ctx) => {
       evidence: {
         discovery: scan2.detail,
         runtime_count: String(scan2.runtimes.length),
-        distinct_identities: String(identities.length)
+        distinct_identities: "1",
+        live_version: only.reportedVersion ?? "unreported",
+        installed_version: installed
       }
     }
   );
