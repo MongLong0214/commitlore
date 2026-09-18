@@ -168,11 +168,18 @@ with a recorded interpreter. A `.mjs` under `current` keeps both properties.
 
 Two columns, because **required** and **checked** are not the same claim. Only
 the two install scripts check anything. The plugin path *enforces nothing*: its
-pre-edit hook runs `scripts/commitlore-run.sh`, which resolves a CLI — the
-installed `commitlore` wrapper if one is on `PATH`, otherwise
-`node ${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs` — and a machine that has neither
-gets a hook that fails open at exit 0 with no context injected, rather than a
-message naming what is missing. The MCP server runs the bundle directly.
+pre-edit hook runs `scripts/commitlore-run.sh`, which resolves a CLI —
+`node ${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs`, the plugin's own bundle, and
+the installed `commitlore` wrapper from `PATH` only when there is no plugin root
+at all — and a machine that has neither gets a hook that fails open at exit 0
+with no context injected, rather than a message naming what is missing. The MCP
+server runs the same bundle.
+
+This document had that precedence backwards. It matters in both directions: the
+script binds the plugin's bundle on purpose, because a newly installed plugin
+that silently ran an older CLI from `PATH` would present that CLI's context as
+the plugin's, and the two entry points a plugin ships — the pre-edit hook and
+the MCP server — would answer from different builds.
 
 | Prerequisite | Required by | Checked by `install.sh` | Checked by `install.ps1` |
 |---|---|---|---|
