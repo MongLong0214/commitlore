@@ -4,6 +4,43 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.4.1
+
+One report, and it arrived from a session doing something entirely ordinary:
+working on a branch in a linked worktree.
+
+**`prepare_capture` binds to the server's checkout, and now says so or refuses.**
+The MCP server is registered against one working tree and answers from it. A
+caller in a linked worktree of the same repository received a transaction bound
+to the *other* tree — `base_head` was the main checkout's HEAD, the staged diff
+was empty, and three files were staged in the caller's tree at that moment.
+Nothing in the response was wrong, and nothing in it looked wrong either:
+`staged_diff_empty: true` is also exactly what you see when you have staged
+nothing. The harvest prompt then said `(no diff — nothing is staged)` and its
+rule 8 told the agent to proceed on the transcript alone, so the flow continued
+and a record would have been bound to a tree its author never touched.
+
+The server cannot discover a caller's working directory — MCP carries no such
+field, and a guess from the process tree is wrong in precisely the multi-worktree
+case this exists for. So `prepare_capture` takes an optional `repository`: the
+caller states the tree it means and the server verifies the statement, the shape
+`--diff` already has on `capture`. It cannot change the binding, only assert it,
+and a mismatch is a refusal that names both trees, says whether they are
+worktrees of one repository, and leaves no pending transaction behind. Omitting
+it keeps the old behaviour.
+
+Where nothing is staged, the response now explains what that means instead of
+only flagging it: `staged_diff_empty_means` names the tree that was inspected and
+points at the assertion that would have refused. `repository` was already in the
+answer, which is how the reporter caught this — but it was one field among
+sixteen with nothing drawing attention to it.
+
+**Three README claims corrected.** The symbol-anchor paragraph described a
+command by a name this build does not ship; `commitlore coverage` is what it is
+called. A link pointed at a `docs/README.md` that does not exist. And the
+payload sample omitted the short-sha column every real answer carries, so the
+first thing a reader compared against their own output did not match.
+
 ## 1.4.0
 
 Six reports, and the first is the one to read: a credential in a trailer reached

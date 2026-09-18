@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.0/install.sh | sh -s v1.4.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh | sh -s v1.4.1
 ```
 
 <details>
 <summary>먼저 설치기를 읽어 보고 싶나요?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.0/install.sh
-sh install.sh v1.4.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh
+sh install.sh v1.4.1
 
 # 또는 스크립트를 건너뜁니다. 스크립트가 만드는 체크아웃은 직접 만들 수 있습니다.
-git clone --depth 1 --branch v1.4.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.4.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -107,13 +107,13 @@ CommitLore는 그 판단을 코드 곁에 보관합니다.
 macOS와 Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.0/install.sh | sh -s v1.4.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh | sh -s v1.4.1
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.0/install.ps1))) v1.4.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.ps1))) v1.4.1
 ```
 
 Node.js 22.23.2+와 Git이 필요합니다. 스크립트는 무엇이든 쓰기 전에 둘을 확인합니다.
@@ -163,11 +163,10 @@ record마다 확인하지 않고 승인된 record를 stage하고 싶다면 저�
 commitlore: active records for src/pricing.ts
 
 Limit
-  [claim] r-price01  calculatePrice owns final checkout pricing only
+  [claim]      r-price01  a1b2c3d4  calculatePrice owns final checkout pricing only
 
 Ruled-out
-  [claim] r-price01  Reuse it for admin quotes |
-                     eligibility and rounding semantics differ
+  [claim]      r-price01  a1b2c3d4  Reuse it for admin quotes | eligibility and rounding semantics differ
 ```
 
 `[claim]`은 "정보로서 평가하라"는 뜻입니다. 저장소는 더 강한 signed-authority mode를
@@ -293,11 +292,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MongLong0214/commitlore
-          ref: v1.4.0
+          ref: v1.4.1
           path: .commitlore-cli
           persist-credentials: false
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.4.0
+      - uses: MongLong0214/commitlore/action/preserve@v1.4.1
         with:
           cli-path: .commitlore-cli/dist/cli.js
 ```
@@ -399,9 +398,7 @@ agent 연구는 보편적인 model 효과를 증명하지 않습니다. delivery
   실행됩니다. 한 번 실행할 때 기본 800 token까지 payload를 사용하며 `--budget`으로 바꿉니다.
   record 없는 저장소는 아무것도 쓰지 않으므로, 이는 설치가 아니라 채택과 함께 생기는 비용입니다.
 - **답은 일부만 담을 수 있습니다.** coverage는 공개되며, 일부 결과에 없다고 record가 없다는 증거는
-  아닙니다. repository-wide coverage, symbol anchor, interactive record builder는 아직 열려 있습니다:
-  [#32](https://github.com/MongLong0214/commitlore/issues/32),
-  [#33](https://github.com/MongLong0214/commitlore/issues/33).
+  아닙니다. `commitlore coverage`가 스캔이 어디까지 닿았는지 보고합니다.
 - **commit trailer는 clone과 함께 오지만 notes는 그렇지 않습니다.** Git은 기본으로 `refs/notes/*`를
   fetch하지 않으므로 `refs/notes/commitlore`의 record는 `commitlore init`이 mirror를 구성하기 전까지
   ordinary clone에 없습니다.
@@ -481,7 +478,6 @@ compatibility를 정의합니다.
 - [보안 모델](SECURITY.md)
 - [근거와 한계](docs/evidence.md)
 - [운영 계약](docs/PRODUCTION-READINESS-SSOT.md)
-- [문서 색인](docs/README.md)
 
 ## 기여하기
 

@@ -47,18 +47,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.0/install.sh | sh -s v1.4.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh | sh -s v1.4.1
 ```
 
 <details>
 <summary>想先阅读安装器吗？</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.0/install.sh
-sh install.sh v1.4.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh
+sh install.sh v1.4.1
 
 # 或者跳过脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v1.4.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.4.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -105,13 +105,13 @@ CommitLore 把那份判断留在代码旁边。
 macOS 和 Linux：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.0/install.sh | sh -s v1.4.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh | sh -s v1.4.1
 ```
 
 Windows：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.0/install.ps1))) v1.4.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.ps1))) v1.4.1
 ```
 
 需要 Node.js 22.23.2+ 和 Git。脚本会在写入任何内容前检查两者。
@@ -159,11 +159,10 @@ commitlore context .
 commitlore: active records for src/pricing.ts
 
 Limit
-  [claim] r-price01  calculatePrice owns final checkout pricing only
+  [claim]      r-price01  a1b2c3d4  calculatePrice owns final checkout pricing only
 
 Ruled-out
-  [claim] r-price01  Reuse it for admin quotes |
-                     eligibility and rounding semantics differ
+  [claim]      r-price01  a1b2c3d4  Reuse it for admin quotes | eligibility and rounding semantics differ
 ```
 
 `[claim]` 表示“把它作为信息权衡”。仓库可以选择更强的 signed-authority mode。
@@ -287,11 +286,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MongLong0214/commitlore
-          ref: v1.4.0
+          ref: v1.4.1
           path: .commitlore-cli
           persist-credentials: false
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.4.0
+      - uses: MongLong0214/commitlore/action/preserve@v1.4.1
         with:
           cli-path: .commitlore-cli/dist/cli.js
 ```
@@ -385,9 +384,7 @@ agent study 并不证明普遍的 model 效果。delivery 不是 model 阅读或
   `Write`、`MultiEdit`、`NotebookEdit` 时运行，远多于 editing agent commit 的次数。每次最多使用默认
   800 token 的 payload，可用 `--budget` 修改。没有 record 的仓库不消耗任何内容，所以这项成本随采纳而非安装出现。
 - **答案可能不完整。** coverage 会被披露；部分结果没有某条 record，并不证明它不存在。
-  repository-wide coverage、symbol anchor 与 interactive record builder 仍未完成：
-  [#32](https://github.com/MongLong0214/commitlore/issues/32)、
-  [#33](https://github.com/MongLong0214/commitlore/issues/33)。
+  `commitlore coverage` 会报告扫描到达的范围。
 - **commit trailer 会随 clone 传递，notes 不会。** Git 默认不会 fetch `refs/notes/*`，
   所以 `refs/notes/commitlore` 中的 record 在 `commitlore init` 配置该 mirror 前不会出现在普通 clone 中。
 - **没有托管 backend。** 但 server 或 hook 返回上下文后，host 会按自己的政策处理它；CommitLore 不控制那条数据流。
@@ -462,7 +459,6 @@ record 是普通 Git trailer 或 notes。Protocol 2.0 定义 lifecycle、trust g
 - [安全模型](SECURITY.md)
 - [证据与限制](docs/evidence.md)
 - [生产契约](docs/PRODUCTION-READINESS-SSOT.md)
-- [文档索引](docs/README.md)
 
 ## 贡献
 
