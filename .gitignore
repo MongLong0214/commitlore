@@ -33,6 +33,13 @@ bench/results/*.local.jsonl
 !/skills/commitlore-*/
 skills-lock.json
 
+# This repository's own project-scope MCP registration, if someone runs
+# `commitlore init` here. It must never be committed again: `.mcp.json` at the
+# root is read both as the plugin's declaration and as the project config of any
+# session opened in this checkout, and only the first sets
+# `${CLAUDE_PLUGIN_ROOT}`. The plugin's copy lives in `plugin-mcp.json`.
+/.mcp.json
+
 # Staging copies `commitlore init` makes while installing dist into a
 # repository. Transient, and named with a random suffix -- one survived a test
 # run long enough for `git add -A` to commit 258 files of it.

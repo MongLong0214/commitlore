@@ -173,10 +173,10 @@ describe('Codex plugin documentation is backed by the Codex manifest', () => {
     const manifest = readJson(join(REPO_ROOT, '.codex-plugin', 'plugin.json')) as PluginManifest & {
       mcpServers?: unknown;
     };
-    const mcp = readJson(join(REPO_ROOT, '.mcp.json')) as McpManifest;
+    const mcp = readJson(join(REPO_ROOT, 'plugin-mcp.json')) as McpManifest;
     const valueOf = (name: string): string => rows().find(([capability]) => capability === name)?.[2] ?? '';
 
-    expect(manifest.mcpServers).toBe('./.mcp.json');
+    expect(manifest.mcpServers).toBe('./plugin-mcp.json');
     expect(valueOf('MCP server')).toContain(
       [mcp.mcpServers?.commitlore?.command, ...((mcp.mcpServers?.commitlore?.args as string[]) ?? [])].join(' '),
     );

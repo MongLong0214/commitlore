@@ -20,10 +20,10 @@
  * three steps that can each fail independently and are not allowed to hide
  * that from one another: doctor's own fail/warn distinction is preserved
  * verbatim, and a hook or index step that could not run is a step this
- * command marks failed, not a step it skips past. Repository MCP registration
- * is deliberately advisory: failure is visible in its own line but does not
- * make the installation fail, because doctor already reports its absence when
- * unattended capture makes an initiator necessary.
+ * command marks failed, not a step it skips past. The MCP step writes nothing
+ * and so cannot fail: it reports where this repository's MCP server comes
+ * from, and doctor still reports the absence of an initiator when unattended
+ * capture makes one necessary.
  *
  * Idempotent by construction, not by a special case: every step it calls is
  * already idempotent on its own (doctor's checks re-report `ok` once fixed,
@@ -50,8 +50,23 @@ import { installPrepareCommitMsgHook } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook } from '../hooks/post-commit.js';
 import { installPrePushHook } from '../hooks/pre-push.js';
 import { seedTrustedAuthor } from '../core/trusted-authors.js';
-import { MCP_REGISTRATION_FILE, registerCommitloreMcpServer, } from '../core/mcp-registration.js';
+import { MCP_HOST_CLI, MCP_REGISTRATION_FILE, MCP_SCOPES, hostRegistrationCommand, isMcpScope, registerCommitloreMcpServer, registerWithHost, registeredMcpCommand, registersCommitloreMcpServer, } from '../core/mcp-registration.js';
 import { installAgentsGuidance } from '../core/agents-guidance.js';
+/**
+ * Where the capture server is registered when nobody says otherwise.
+ *
+ * `user` rather than `project`: a registration is a statement about one
+ * person's machine far more often than about a repository's team, and the
+ * per-repository default is what produced 133 committed registrations on a
+ * single machine. It is also the answer that survives a fresh clone of
+ * anything, because it is not attached to any one of them.
+ *
+ * It is the default in both directions — the pre-selected answer at the
+ * prompt, and what a run with no terminal uses — so a script and a person who
+ * pressed Enter end up in the same state, which is the property that makes the
+ * prompt safe to add.
+ */
+export const DEFAULT_MCP_SCOPE = 'user';
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** `exactOptionalPropertyTypes` treats `{ cwd: undefined }` as distinct from omitting `cwd` entirely. */
 const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
@@ -246,56 +261,138 @@ const runAgentIntegrationStep = (opts) => {
     };
 };
 /**
- * Make this repository advertise the capture tools a repository-scoped MCP
- * host can load.
+ * Register the capture server at the scope the operator chose.
  *
- * A failure here used to be reported at code 0, so `init` printed a checkmark
- * and finished with `init: ready` over a repository where nothing can start a
- * capture. Capture is the product; a setup command that cannot wire it is not
- * ready, whatever else succeeded.
+ * The scope used to be fixed at `project`, and one committed `.mcp.json` per
+ * repository is the wrong default for most people: it multiplies across every
+ * clone and worktree (one machine here accumulated 133 of them, in three
+ * historical forms), and it answers a question — "who should see this server" —
+ * that only the operator can answer. So `init` asks, and every scope the host
+ * supports is available.
  *
- * It is still not fatal — the other steps run, the hooks work, delivery works —
- * so this raises init to 1, the code that already means "ran, and something
- * needs you", never 2. And it says what to do, because the repair is one file
- * and the operator is the only one who can decide what belongs in it.
+ * `none` is a real answer, not a failure: somebody whose host loads the plugin
+ * already has the server and needs no registration at all.
+ *
+ * A step that could not carry out the scope it was given raises `init` to 1 —
+ * the code that already means "ran, and something needs you" — never 2, because
+ * the hooks, the index and delivery are all installed regardless. The one
+ * exception is a missing host CLI, which is not a fault in this repository or
+ * in this install: it is a `user`/`local` registration asked of a machine that
+ * has no Claude Code on PATH. That reports at 0 and names the command, so a
+ * Codex-only or plugin-only machine is not told its installation is broken.
  */
 const runMcpRegistrationStep = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
-    const result = registerCommitloreMcpServer(cwd);
+    const scope = opts.mcpScope ?? 'none';
+    if (scope === 'none') {
+        const alreadyRegistered = registersCommitloreMcpServer(cwd);
+        const command = alreadyRegistered ? registeredMcpCommand(cwd) : null;
+        return {
+            step: 'mcp-registration',
+            title: 'MCP server',
+            code: 0,
+            lines: [
+                'no MCP registration written — asked for scope "none"',
+                ...(alreadyRegistered
+                    ? [`${MCP_REGISTRATION_FILE} already registers ${JSON.stringify(command)} under commitlore — left unchanged`]
+                    : [
+                        'the Claude Code and Codex plugins carry the server themselves, so a host that loads either needs nothing here',
+                        `to register it later, run init again with --mcp-scope user, or: ${hostRegistrationCommand('user')}`,
+                    ]),
+            ],
+            detail: { scope, alreadyRegistered, command },
+        };
+    }
+    if (scope === 'project') {
+        const result = registerCommitloreMcpServer(cwd);
+        if (!result.ok) {
+            return {
+                step: 'mcp-registration',
+                title: 'MCP server',
+                code: 1,
+                lines: [
+                    `could not register the capture server in this repository: ${result.error}`,
+                    'delivery and the hooks still work; nothing here can start a capture until a host can find the server',
+                    `to register it by hand, put this in ${MCP_REGISTRATION_FILE} at the repository root:`,
+                    '  { "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }',
+                    'then run commitlore doctor to confirm it',
+                    'or run init again with --mcp-scope user to register it for this machine instead',
+                ],
+                detail: { scope, result },
+            };
+        }
+        const headline = {
+            created: `registered the capture server for this repository: wrote ${MCP_REGISTRATION_FILE}`,
+            merged: `registered the capture server in ${MCP_REGISTRATION_FILE}, preserving its existing servers`,
+            'already-registered': `${MCP_REGISTRATION_FILE} already registers commitlore — left unchanged`,
+        }[result.state];
+        return {
+            step: 'mcp-registration',
+            title: 'MCP server',
+            code: 0,
+            lines: [
+                headline,
+                ...(result.changed
+                    ? [
+                        'the file is committed with the repository — it applies to everyone who clones it',
+                        'hosts that keep MCP configuration outside the repository are unchanged',
+                    ]
+                    : []),
+            ],
+            detail: { scope, result },
+        };
+    }
+    const result = registerWithHost(scope, cwd);
+    if (result.state === 'host-missing') {
+        return {
+            step: 'mcp-registration',
+            title: 'MCP server',
+            code: 0,
+            lines: [
+                `scope "${scope}" is written by the host, and ${result.error}`,
+                'nothing is wrong with this repository: the Claude Code and Codex plugins carry the server themselves',
+                `to register it once that CLI is available: ${result.command}`,
+                'or run init again with --mcp-scope project to keep the registration in the repository',
+            ],
+            detail: { scope, result },
+        };
+    }
     if (!result.ok) {
         return {
             step: 'mcp-registration',
-            title: 'MCP registration',
+            title: 'MCP server',
             code: 1,
             lines: [
-                `could not register the capture server: ${result.error}`,
-                'nothing in this repository can start a capture until it is registered — delivery and the hooks still work',
-                `to register it by hand, put this in ${MCP_REGISTRATION_FILE} at the repository root:`,
-                '  { "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }',
-                'then run commitlore doctor to confirm it',
+                `could not register at scope "${scope}": ${result.error ?? 'unknown'}`,
+                `the command was: ${result.command}`,
+                'delivery and the hooks still work; run that command by hand to see the host\'s own report',
             ],
-            detail: result,
+            detail: { scope, result },
         };
     }
-    const headline = {
-        created: `registered the capture server for repository-scoped hosts: wrote ${MCP_REGISTRATION_FILE}`,
-        merged: `registered the capture server for repository-scoped hosts in ${MCP_REGISTRATION_FILE}, preserving its existing servers`,
-        'already-registered': `${MCP_REGISTRATION_FILE} already registers commitlore — left unchanged`,
-    }[result.state];
     return {
         step: 'mcp-registration',
-        title: 'MCP registration',
+        title: 'MCP server',
         code: 0,
         lines: [
-            headline,
-            ...(result.changed
+            result.state === 'registered'
+                ? `registered the capture server at scope "${scope}" — ${result.command}`
+                : // Deliberately does not claim the scope. The host answers "is this
+                    // name registered" without saying where, so an entry made at another
+                    // scope reads the same as one made here. Plugin-provided servers are
+                    // namespaced (`plugin:<plugin>:<server>`) and do not answer to the
+                    // bare name, so this is never the plugin — it is a real registration
+                    // at one of the three scopes, and `claude mcp list` says which.
+                    'the host already has an MCP server under this name — left unchanged; run claude mcp list to see at which scope',
+            ...(result.state === 'registered'
                 ? [
-                    'the file is committed with the repository — it applies to everyone who clones it',
-                    'hosts that keep MCP configuration outside the repository are unchanged',
+                    scope === 'user'
+                        ? 'it applies to every repository you open in that host, and is not committed here'
+                        : 'it applies to this repository for you only, and is not committed here',
                 ]
                 : []),
         ],
-        detail: result,
+        detail: { scope, result },
     };
 };
 /**
@@ -490,7 +587,7 @@ const STEP_LABEL = {
     trust: 'Trust',
     index: 'Index',
     'claude-hook': 'Agent integration',
-    'mcp-registration': 'MCP registration',
+    'mcp-registration': 'MCP server',
     policy: 'Capture policy',
     doctor: 'Final check',
 };
@@ -501,7 +598,7 @@ export const STEP_HEADING = {
     hooks: '[1/4] hooks install',
     index: '[2/4] index --rebuild',
     'claude-hook': '[3/4] agent integration',
-    'mcp-registration': 'repository MCP registration',
+    'mcp-registration': 'MCP registration',
     // Unnumbered on purpose, the same way `trust` was added: the numbered four
     // are pinned by T-1013's tests, and renumbering them would move a frozen
     // contract for a step that does not need a number.
@@ -538,18 +635,37 @@ const policyOutcome = (step) => {
             return 'no repository';
     }
 };
-/** The repository-owned MCP step's outcome in the concise result report. */
+/** The MCP step's outcome in the concise result report, named by its scope. */
 const mcpRegistrationOutcome = (step) => {
     const detail = step.detail;
-    if (!detail.ok)
-        return 'not registered for repository-scoped hosts — doctor will report it when unattended capture needs an initiator';
-    switch (detail.state) {
-        case 'created':
-            return 'registered for repository-scoped hosts (committed — applies to the whole team)';
-        case 'merged':
-            return 'registered alongside existing servers for repository-scoped hosts (committed — applies to the whole team)';
+    if (detail.scope === 'none') {
+        return detail.alreadyRegistered
+            ? 'not written (scope "none") — an existing repository registration was left unchanged'
+            : 'not written (scope "none") — the plugins carry the server';
+    }
+    if (detail.scope === 'project') {
+        const { result } = detail;
+        if (!result.ok)
+            return 'could not be registered in this repository — doctor will report it when unattended capture needs an initiator';
+        switch (result.state) {
+            case 'created':
+                return 'registered for this repository (committed — applies to the whole team)';
+            case 'merged':
+                return 'registered alongside existing servers in this repository (committed — applies to the whole team)';
+            case 'already-registered':
+                return 'already registered in this repository — left unchanged';
+        }
+    }
+    const { result } = detail;
+    switch (result.state) {
+        case 'registered':
+            return `registered at scope "${detail.scope}" with the host`;
         case 'already-registered':
-            return 'already registered for repository-scoped hosts — left unchanged';
+            return `already registered with the host — left unchanged`;
+        case 'host-missing':
+            return `not registered — scope "${detail.scope}" needs the host CLI, which is not on PATH`;
+        case 'host-failed':
+            return `the host refused the registration at scope "${detail.scope}"`;
     }
 };
 const stepLabel = (step) => step.step === 'policy'
@@ -715,10 +831,74 @@ const resolveUnattendedChoice = async (options) => {
     }
     return 'no-tty';
 };
+/**
+ * Ask which scope on the controlling terminal. Resolves null when the input
+ * stream closes without an answer (EOF, Ctrl-D) — that is "nobody answered",
+ * which takes the default rather than inventing a choice.
+ */
+const askMcpScope = async () => {
+    for (;;) {
+        const answer = await new Promise((resolveAnswer) => {
+            const readlineInterface = createInterface({ input: process.stdin, output: process.stdout });
+            let settled = false;
+            const settle = (value) => {
+                if (settled)
+                    return;
+                settled = true;
+                readlineInterface.close();
+                resolveAnswer(value);
+            };
+            readlineInterface.question(`Register the MCP server at which scope? [${MCP_SCOPES.join('/')}] (${DEFAULT_MCP_SCOPE}) `, (line) => settle(line));
+            readlineInterface.on('close', () => settle(null));
+        });
+        if (answer === null)
+            return null;
+        const trimmed = answer.trim().toLowerCase();
+        if (trimmed === '')
+            return DEFAULT_MCP_SCOPE;
+        if (isMcpScope(trimmed))
+            return trimmed;
+        process.stdout.write(`Please answer one of ${MCP_SCOPES.join(', ')} — a bare Enter takes the default (${DEFAULT_MCP_SCOPE}).\n`);
+    }
+};
+/**
+ * Which MCP scope this invocation registers at, before any step runs.
+ *
+ * Same three-way shape as the unattended question: a flag answers without
+ * asking, a terminal gets the question, and anything else takes the default.
+ * What differs is that the default is the *same* in every branch, so a script
+ * and somebody who pressed Enter end in the same state — a prompt that can only
+ * confirm or redirect, never surprise.
+ *
+ * The listing names what each scope costs, because the one irreversible-feeling
+ * property is not the registration but who it speaks for: `project` is
+ * committed, so it answers for everyone who clones the repository.
+ */
+const resolveMcpScope = async (options) => {
+    if (options.mcpScope !== undefined)
+        return options.mcpScope;
+    if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
+        process.stdout.write('Where should the capture server be registered?\n' +
+            `  user     one registration covering every repository you open (${MCP_HOST_CLI} writes it; not committed)\n` +
+            `  project  ${MCP_REGISTRATION_FILE} in this repository — committed, so it applies to everyone who clones it\n` +
+            `  local    this repository, for you only (${MCP_HOST_CLI} writes it; not committed)\n` +
+            '  none     write nothing — the Claude Code and Codex plugins already carry the server\n');
+        let answer;
+        try {
+            answer = await askMcpScope();
+        }
+        catch {
+            answer = null;
+        }
+        return answer ?? DEFAULT_MCP_SCOPE;
+    }
+    return DEFAULT_MCP_SCOPE;
+};
 export const register = (program) => {
     program
         .command('init')
-        .description('one-command onboarding: hooks install, directive author string, index --rebuild, agent integration, repository MCP registration, capture policy, doctor --fix')
+        .description('one-command onboarding: hooks install, directive author string, index --rebuild, agent integration, MCP registration, capture policy, doctor --fix')
+        .option('--mcp-scope <scope>', `where to register the capture server: ${MCP_SCOPES.join(', ')} (skips the prompt; default ${DEFAULT_MCP_SCOPE})`)
         .option('--force', 'forward to hooks install — replace an already-preserved foreign hook')
         .option('--verbose', 'show step-by-step detail output instead of the result summary')
         .option('--json', 'emit the report as JSON')
@@ -727,7 +907,7 @@ export const register = (program) => {
         .option('--no-unattended', 'leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)')
         .option('--agents-md', 'also write the capture procedure into AGENTS.md (off by default; the MCP server already carries it)')
         .addHelpText('after', '\nRuns seven setup steps in sequence — hooks install, directive author string, index --rebuild, agent ' +
-        'integration, repository MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
+        'integration, MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
         'pass/fail. A step this command could not complete is named, never absorbed into a success message ' +
         '(see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so ' +
         're-running with nothing else changed changes nothing else.' +
@@ -739,20 +919,40 @@ export const register = (program) => {
         'already exists is reported and left unchanged, whatever the flags say. Without an interactive ' +
         'terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in ' +
         'explicitly.' +
-        '\n\nMCP registration writes the repository-scoped ' + MCP_REGISTRATION_FILE + ' only; it does not configure hosts that keep their ' +
-        'own MCP settings elsewhere. The file uses `commitlore mcp`, not a machine-local path, and is committed with the repository so it applies to everyone who clones it.' +
+        '\n\nMCP registration asks where the capture server should be registered, and every scope the host ' +
+        'supports is available. `user` is one registration covering every repository you open, `local` is this ' +
+        'repository for you only, and `project` writes ' + MCP_REGISTRATION_FILE + ' — which is committed, so it ' +
+        'applies to everyone who clones the repository. `none` writes nothing, which is the right answer when the ' +
+        'Claude Code or Codex plugin already carries the server. The default is ' + DEFAULT_MCP_SCOPE + ' in both ' +
+        'directions: it is what a bare Enter takes and what a run with no terminal uses, so a script and a person ' +
+        'end up in the same place. `user` and `local` are written by ' + MCP_HOST_CLI + ', because that file is the ' +
+        'host\'s own; `project` is written here, merging without disturbing servers somebody else put in the file. ' +
+        'A `project` registration uses `commitlore mcp`, not a machine-local path, so it survives the next clone.' +
         '\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` ' +
         'still exist on their own for anyone who wants one piece rather than all seven.' +
         '\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not ' +
         'fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
         'read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write ' +
         'could not run at all (SPEC §10). Agent integration writes or refreshes only CommitLore\'s marked section in ' +
-        'AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server\'s instructions, which every wired host receives on initialize, so the file is not how the procedure travels. A repository MCP registration that cannot be written leaves the ' +
-        'install degraded rather than broken; doctor reports it when unattended capture needs an initiator.')
+        'AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server\'s instructions, which every wired host receives on initialize, so the file is not how the procedure travels. An MCP registration that cannot be written leaves the ' +
+        'install degraded rather than broken; doctor reports it when unattended capture needs an initiator. A `user` or `local` scope asked of a machine with no ' + MCP_HOST_CLI + ' on PATH is not a failure at all: it reports at 0 and names the command to run later.')
         .action(async (options) => {
+        // Rejected before anything is installed. A misspelled scope that silently
+        // took the default would leave the operator believing they had chosen,
+        // and the choice is the whole point of the flag.
+        if (options.mcpScope !== undefined && !isMcpScope(options.mcpScope)) {
+            process.stderr.write(`commitlore init: --mcp-scope ${JSON.stringify(options.mcpScope)} is not one of ${MCP_SCOPES.join(', ')}\n`);
+            process.exitCode = 2;
+            return;
+        }
+        const scope = await resolveMcpScope({
+            ...(options.json === undefined ? {} : { json: options.json }),
+            ...(options.mcpScope === undefined ? {} : { mcpScope: options.mcpScope }),
+        });
         const choice = await resolveUnattendedChoice(options);
         const initOptions = options.force === undefined ? {} : { force: options.force };
         initOptions.unattended = choice;
+        initOptions.mcpScope = scope;
         if (options.agentsMd === true)
             initOptions.agentsGuidance = true;
         if (options.upgrade === true)

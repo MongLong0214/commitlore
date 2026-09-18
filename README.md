@@ -48,18 +48,18 @@
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh | sh -s v1.4.1
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.2/install.sh | sh -s v1.4.2
 ```
 
 <details>
 <summary>Prefer to read the installer first?</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh
-sh install.sh v1.4.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.2/install.sh
+sh install.sh v1.4.2
 
 # Or skip the script: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v1.4.1 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.4.2 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -109,13 +109,13 @@ preserve, not for narrating every change.
 macOS and Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.sh | sh -s v1.4.1
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.2/install.sh | sh -s v1.4.2
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.1/install.ps1))) v1.4.1
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.4.2/install.ps1))) v1.4.2
 ```
 
 Requires Node.js 22.23.2+ and Git. The script checks both before it writes anything.
@@ -304,11 +304,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: MongLong0214/commitlore
-          ref: v1.4.1
+          ref: v1.4.2
           path: .commitlore-cli
           persist-credentials: false
 
-      - uses: MongLong0214/commitlore/action/preserve@v1.4.1
+      - uses: MongLong0214/commitlore/action/preserve@v1.4.2
         with:
           cli-path: .commitlore-cli/dist/cli.js
 ```

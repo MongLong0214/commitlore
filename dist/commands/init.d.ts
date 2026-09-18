@@ -20,10 +20,10 @@
  * three steps that can each fail independently and are not allowed to hide
  * that from one another: doctor's own fail/warn distinction is preserved
  * verbatim, and a hook or index step that could not run is a step this
- * command marks failed, not a step it skips past. Repository MCP registration
- * is deliberately advisory: failure is visible in its own line but does not
- * make the installation fail, because doctor already reports its absence when
- * unattended capture makes an initiator necessary.
+ * command marks failed, not a step it skips past. The MCP step writes nothing
+ * and so cannot fail: it reports where this repository's MCP server comes
+ * from, and doctor still reports the absence of an initiator when unattended
+ * capture makes one necessary.
  *
  * Idempotent by construction, not by a special case: every step it calls is
  * already idempotent on its own (doctor's checks re-report `ok` once fixed,
@@ -42,8 +42,23 @@ import { type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js'
 import { type PostCommitHookResult } from '../hooks/post-commit.js';
 import { type PrePushHookResult } from '../hooks/pre-push.js';
 import { type TrustSeedResult } from '../core/trusted-authors.js';
-import { type McpRegistrationResult } from '../core/mcp-registration.js';
+import { type HostRegistrationResult, type McpRegistrationResult, type McpScope } from '../core/mcp-registration.js';
 import { type AgentsGuidanceResult } from '../core/agents-guidance.js';
+/**
+ * Where the capture server is registered when nobody says otherwise.
+ *
+ * `user` rather than `project`: a registration is a statement about one
+ * person's machine far more often than about a repository's team, and the
+ * per-repository default is what produced 133 committed registrations on a
+ * single machine. It is also the answer that survives a fresh clone of
+ * anything, because it is not attached to any one of them.
+ *
+ * It is the default in both directions — the pre-selected answer at the
+ * prompt, and what a run with no terminal uses — so a script and a person who
+ * pressed Enter end up in the same state, which is the property that makes the
+ * prompt safe to add.
+ */
+export declare const DEFAULT_MCP_SCOPE: McpScope;
 export interface InitOptions {
     cwd?: string;
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
@@ -61,6 +76,18 @@ export interface InitOptions {
      * does not honour MCP instructions.
      */
     agentsGuidance?: boolean;
+    /**
+     * Which MCP scope to register the capture server at.
+     *
+     * **Absent means `none`, not {@link DEFAULT_MCP_SCOPE}.** The default belongs
+     * to the command line, which fills this in from `--mcp-scope` or from the
+     * prompt; this is the programmatic entry point, and two of the scopes write
+     * to configuration outside the repository it was handed. A caller that did
+     * not ask for that must not get it — a test harness calling `runInit` on a
+     * scratch repository would otherwise register a server on the machine
+     * running it.
+     */
+    mcpScope?: McpScope;
     /**
      * What to do about unattended capture when the repository has **no** policy
      * file yet. An existing policy file is never changed regardless (#511's
@@ -87,7 +114,7 @@ export interface InitStep {
     code: 0 | 1 | 2;
     /** Human-readable lines this step contributes to the report. */
     lines: string[];
-    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | ReleaseStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpStepDetail | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | ReleaseStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 interface IndexStepDetail {
     ok: boolean;
@@ -124,12 +151,24 @@ export interface InitReport {
     /** Worst step code — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
     exitCode: 0 | 1 | 2;
 }
+/** What the MCP step did, per scope, for `--json` and the verbose report. */
+export type McpStepDetail = {
+    scope: 'project';
+    result: McpRegistrationResult;
+} | {
+    scope: 'user' | 'local';
+    result: HostRegistrationResult;
+} | {
+    scope: 'none';
+    alreadyRegistered: boolean;
+    command: string | null;
+};
 /**
  * Order of execution:
  * 1. Hooks install — sets up the commit-msg hook
  * 2. Index rebuild — builds the index of trailers
  * 3. Agent integration — refreshes AGENTS.md and wires the Claude PreToolUse hook
- * 4. Repository MCP registration — advertises the capture tools to a host that loads `.mcp.json`
+ * 4. MCP registration — advertises the capture tools at the scope the operator chose
  * 5. Capture policy — asks about unattended capture, once, where no policy exists yet
  * 6. Doctor (final check) — verifies everything is working
  *

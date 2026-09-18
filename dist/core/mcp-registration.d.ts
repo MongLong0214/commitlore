@@ -1,15 +1,28 @@
 /**
- * Repository-scoped MCP registration.
+ * MCP registration, at whichever scope the operator chose.
  *
- * `.mcp.json` is deliberately a repository file, not an edit to a host's
- * private configuration. It lets a host that elects to load repository MCP
- * configuration discover CommitLore's capture tools after a clone, while
- * leaving hosts that keep their configuration elsewhere alone.
+ * A host keeps MCP configuration at more than one scope, and which one is
+ * right is a property of the situation rather than of this tool: a solo
+ * machine wants one registration covering every repository, a team wants one
+ * the repository carries, and a shared machine wants one private to the person
+ * sitting at it. `init` asks; this module writes whichever answer it gets.
  *
- * The command is the portable `commitlore mcp` pair. It is the same PATH-based
- * resolution route the installed Git hooks use after their per-machine pin,
- * rather than an absolute path to the machine that happened to run `init`.
- * Because this file is committed, such a path would break for the next clone.
+ * The two halves are written by different authors on purpose.
+ *
+ * **`project`** is `.mcp.json`, written here. It is a repository file, so the
+ * command is the portable `commitlore mcp` pair — the same PATH-based route
+ * the installed Git hooks use after their per-machine pin, never an absolute
+ * path to the machine that happened to run `init`, which would break for the
+ * next clone. Writing it here rather than through a host CLI is deliberate:
+ * this writer merges without disturbing other servers, refuses to overwrite an
+ * entry somebody chose, and works for a host that ships no CLI at all.
+ *
+ * **`user`** and **`local`** live in the host's own private configuration, and
+ * this module does not write that. The format belongs to the host and has
+ * already changed shape once; a second writer for it is a guess that goes
+ * stale without saying so. Those two shell out to the host's CLI — the one
+ * component contractually able to write its own file — and report exactly what
+ * it was asked and exactly what it answered.
  */
 /** The conventional repository configuration a repository-scoped host reads. */
 export declare const MCP_REGISTRATION_FILE = ".mcp.json";
@@ -94,3 +107,52 @@ export type McpRegistrationResult = McpRegistrationSuccess | McpRegistrationFail
  * named failure for `init` to report without making the installation unusable.
  */
 export declare const registerCommitloreMcpServer: (cwd: string) => McpRegistrationResult;
+/**
+ * Where a registration is written.
+ *
+ * The three writable names are the host's own, not ours — `claude mcp add
+ * --scope` takes exactly `local`, `user` and `project` — so an operator who
+ * knows one vocabulary does not have to learn a second. `none` is this tool's
+ * addition and writes nothing.
+ */
+export type McpScope = 'user' | 'project' | 'local' | 'none';
+export declare const MCP_SCOPES: readonly McpScope[];
+/** The scopes the host's own CLI owns. `project` is written by this module. */
+export type HostOwnedScope = 'user' | 'local';
+export declare const isMcpScope: (value: string) => value is McpScope;
+/** The host CLI that owns `user` and `local` configuration. */
+export declare const MCP_HOST_CLI = "claude";
+/**
+ * The exact command line a host-owned registration runs.
+ *
+ * Exposed because every report about this path prints it. A reader who is told
+ * a registration failed can only act on it if they can run the same thing by
+ * hand, and a paraphrase is not the same thing.
+ */
+export declare const hostRegistrationCommand: (scope: HostOwnedScope) => string;
+export interface HostRegistrationResult {
+    ok: boolean;
+    scope: HostOwnedScope;
+    state: 'registered' | 'already-registered' | 'host-missing' | 'host-failed';
+    /** The command line attempted, verbatim, so a reader can repeat it. */
+    command: string;
+    /** The host's own words when it refused. Never a paraphrase of them. */
+    error: string | null;
+}
+/**
+ * Register at a host-owned scope by asking the host to do it.
+ *
+ * Measured, because the exit codes do not separate what a caller needs to
+ * separate: `claude mcp add` exits 0 on a fresh add and **1** both when the
+ * name already exists and when it genuinely refuses. The only difference
+ * between those two is prose — "MCP server commitlore already exists in user
+ * config" — and matching a message is matching a rendering, which changes
+ * without notice.
+ *
+ * So the second question is asked separately, in a form whose answer is an
+ * exit code: `claude mcp get commitlore` succeeds when something answers to
+ * the name. A re-run of `init` is then `already-registered` rather than a
+ * failure, which is what idempotence requires, and a real refusal still
+ * carries the host's own output to the reader.
+ */
+export declare const registerWithHost: (scope: HostOwnedScope, cwd: string) => HostRegistrationResult;

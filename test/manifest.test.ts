@@ -38,6 +38,17 @@
  * defect — a spurious, always-on plugin load error with no functional
  * benefit — and both keys were removed. The regression test below encodes
  * that finding directly, independent of anyone re-reading the loader.
+ *
+ * `mcpServers` has since come back deliberately, pointing somewhere else.
+ * `.mcp.json` at the repository root is read by *two* loaders, not one: the
+ * plugin loader above, and Claude Code's ordinary project configuration for
+ * any session opened in this repository. Only the first sets
+ * `${CLAUDE_PLUGIN_ROOT}`, so one file cannot serve both — for three
+ * iterations (#870, `0d47a6d2`, `0f597bdf`) whichever form suited the plugin
+ * left every session in this checkout with a server that fails to connect.
+ * The declaration therefore lives in `plugin-mcp.json`, which only a plugin
+ * loader reads, and the root name stays free. `no .mcp.json at the root` below
+ * is the guard, because the file reappears by hand and by `commitlore init`.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -92,7 +103,7 @@ describe('plugin manifest: every declared file parses in a clean clone', () => {
     '.claude-plugin/plugin.json',
     '.claude-plugin/marketplace.json',
     '.codex-plugin/plugin.json',
-    '.mcp.json',
+    'plugin-mcp.json',
     'hooks/hooks.json',
     'package.json',
   ])('%s is valid JSON', (relPath) => {
@@ -129,6 +140,41 @@ describe('plugin manifest: does not redeclare the auto-discovered hooks/mcpServe
   });
 });
 
+describe('plugin manifest: the repository ships no project-scope MCP registration', () => {
+  /*
+   * `.mcp.json` at the root is not a plugin file. Claude Code loads it a second
+   * way — as the project configuration of any session whose cwd is this
+   * checkout — and that loader sets no `${CLAUDE_PLUGIN_ROOT}`. A declaration
+   * that is correct for the plugin is therefore unlaunchable for the session,
+   * and the session shows a failed server for as long as the file exists.
+   *
+   * Every earlier attempt moved the failure rather than removing it: #870 used
+   * `./dist/...` with `"cwd": "."` (resolved against the session), `0d47a6d2`
+   * used `${CLAUDE_PLUGIN_ROOT:-.}` (the default reinstated #870 exactly), and
+   * `0f597bdf` used a bare `${CLAUDE_PLUGIN_ROOT}` on the reasoning that a host
+   * refuses an unexpanded placeholder by naming the variable. Measured: it does
+   * name the variable, in a diagnostics footnote, and it also spawns the
+   * registration and reports `CONNECTION_CLOSED` in the session's server list.
+   *
+   * The name is the whole fix, so the name is what this pins.
+   */
+  it('a clean clone has no .mcp.json at the root', () => {
+    expect(
+      existsSync(clonePath('.mcp.json')),
+      'a root .mcp.json is loaded as this repository\'s own project config, where ${CLAUDE_PLUGIN_ROOT} is never set',
+    ).toBe(false);
+  });
+
+  it('the plugin declaration is reachable only through a manifest, not by root auto-discovery', () => {
+    const claude = readJson(clonePath('.claude-plugin/plugin.json')) as PluginManifest;
+    const codex = readJson(clonePath('.codex-plugin/plugin.json')) as PluginManifest;
+    for (const declared of [claude.mcpServers, codex.mcpServers]) {
+      expect(typeof declared).toBe('string');
+      expect(existsSync(resolve(cloneDir, declared as string))).toBe(true);
+    }
+  });
+});
+
 describe('plugin manifest: declared and conventional paths exist in a clean clone', () => {
   it('every marketplace plugin entry source resolves to an existing directory', () => {
     const marketplace = readJson(
@@ -145,16 +191,15 @@ describe('plugin manifest: declared and conventional paths exist in a clean clon
     }
   });
 
-  // Auto-discovered regardless of what plugin.json declares (see file
-  // header) — these are the files Claude Code actually reads at install
-  // time, and the ones a `.gitignore` entry or an uncommitted file would
-  // silently remove from a real clone while staying invisible in the
-  // working tree.
+  // What a real install reads — auto-discovered (`hooks/hooks.json`) or named
+  // by a manifest (`plugin-mcp.json`). Either way these are the files a
+  // `.gitignore` entry or an uncommitted file would silently remove from a
+  // real clone while staying invisible in the working tree.
   it.each([
     '.codex-plugin/plugin.json',
     'skills/commitlore-codex/SKILL.md',
     'hooks/hooks.json',
-    '.mcp.json',
+    'plugin-mcp.json',
     'dist/commitlore.mjs',
     'scripts/commitlore-run.sh',
   ])('%s is committed and present in a clean clone', (relPath) => {
@@ -182,10 +227,18 @@ describe('plugin manifest: entry points are runnable from a clean clone', () => 
    *
    * Everything below therefore launches from a directory that is not a
    * checkout, with the placeholder expanded the way a host expands it before
-   * spawning. Reverting `.mcp.json` fails these and passes the old one.
+   * spawning. Reverting the declaration fails these and passes the old one.
+   *
+   * The file is read through `manifest.mcpServers` rather than by name, so
+   * moving the declaration again cannot leave this reading a file no loader
+   * does.
    */
   const pluginLaunch = (): { entry: string; args: string[] } => {
-    const mcp = readJson(clonePath('.mcp.json')) as {
+    const manifest = readJson(clonePath('.claude-plugin/plugin.json')) as PluginManifest;
+    expect(typeof manifest.mcpServers, 'the plugin must declare where its MCP file is').toBe(
+      'string',
+    );
+    const mcp = readJson(resolve(cloneDir, manifest.mcpServers as string)) as {
       mcpServers: { commitlore: { command: string; args: string[]; cwd?: string } };
     };
     const server = mcp.mcpServers.commitlore;
@@ -214,7 +267,7 @@ describe('plugin manifest: entry points are runnable from a clean clone', () => 
 
     expect(run.status, run.stderr).toBe(0);
     expect(run.stdout.trim()).toBe(manifest.version);
-    expect(codex.mcpServers).toBe('./.mcp.json');
+    expect(codex.mcpServers).toBe('./plugin-mcp.json');
   });
 
   it('that launch reaches an MCP initialize from a cwd that is not a checkout', async () => {
