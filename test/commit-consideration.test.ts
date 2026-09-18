@@ -14,7 +14,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -159,6 +159,47 @@ describe('a consideration stops covering the moment its tree does', () => {
     const after = considerationVerdict(repo, new Date(T0.getTime() + CONSIDERATION_EXPIRY_MINUTES * 60_000 + 1));
     expect(after.covered).toBe(false);
     expect(after.covered === false && after.gap).toBe('expired');
+  });
+});
+
+describe('the key is a function of the tree, not of the configuration', () => {
+  /*
+   * A bare `git diff --cached` is a function of both, and two ordinary settings
+   * collapse it to zero bytes -- which hashes the same for every tree, so one
+   * binding would cover every later one. A gate that opens itself on a config
+   * nobody thought was security-relevant.
+   *
+   * Measured before the repair: 103 bytes -> 0 under each setting.
+   */
+  it('survives diff.external, which makes a bare diff print nothing', () => {
+    const repo = repoWithStagedChange('diff-external');
+    git(repo, ['config', 'diff.external', '/usr/bin/true']);
+    writeConsideration({ cwd: repo, outcome: 'empty', records: 0, now: T0 });
+
+    expect(considerationVerdict(repo, T0).covered).toBe(true);
+
+    // And still notices a different tree, which is the half that was lost.
+    writeFileSync(join(repo, 'b.ts'), 'export const b = 1;\n');
+    git(repo, ['add', 'b.ts']);
+    const verdict = considerationVerdict(repo, T0);
+    expect(verdict.covered).toBe(false);
+    expect(verdict.covered === false && verdict.gap).toBe('staged-diff-changed');
+  });
+
+  it('survives diff.relative read from a subdirectory, which hides files outside it', () => {
+    const repo = repoWithStagedChange('diff-relative');
+    git(repo, ['config', 'diff.relative', 'true']);
+    mkdirSync(join(repo, 'sub'), { recursive: true });
+    writeFileSync(join(repo, 'sub', 'c.ts'), 'export const c = 1;\n');
+    git(repo, ['add', 'sub/c.ts']);
+
+    const fromSub = join(repo, 'sub');
+    writeConsideration({ cwd: fromSub, outcome: 'empty', records: 0, now: T0 });
+
+    // A file staged *outside* the subdirectory must still move the key.
+    writeFileSync(join(repo, 'd.ts'), 'export const d = 1;\n');
+    git(repo, ['add', 'd.ts']);
+    expect(considerationVerdict(fromSub, T0).covered).toBe(false);
   });
 });
 

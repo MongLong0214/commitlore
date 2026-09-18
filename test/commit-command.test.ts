@@ -20,7 +20,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -125,7 +125,20 @@ describe('recording nothing is a complete answer', () => {
     const stored = readConsideration(cwd);
     expect(stored?.outcome).toBe('empty');
     expect(stored?.records).toBe(0);
-    expect(head(cwd)).toBe(head(cwd)); // nothing was committed
+  });
+
+  it('commit: false really does not commit', () => {
+    // Its own case, against a HEAD read before the call. The assertion this
+    // replaces compared `head(cwd)` with `head(cwd)` and was true whatever the
+    // code did -- it would have passed with `commit: false` inverted.
+    const { cwd } = repo('no-commit');
+    const before = head(cwd);
+
+    const outcome = runCommit({ cwd, message: 'chore: tidy', commit: false });
+
+    expect(outcome.outcome).toBe('staged');
+    expect(outcome.commit).toBeNull();
+    expect(head(cwd)).toBe(before);
   });
 });
 
@@ -300,5 +313,94 @@ describe('the message that landed, not the transaction that was staged', () => {
 
   it('is anchored per line, so a trailer after a body still counts', () => {
     expect(recordLanded('subject\n\nbody\n\nBlast: module\nRecord-Id: r-xyz789\n')).toBe(true);
+  });
+});
+
+describe('the defects an adversarial review found', () => {
+  it('works from a linked worktree, where --git-path answers with an absolute path', () => {
+    // `join(cwd, absolutePath)` produced `<worktree>/<absolute path>`, so the
+    // hook check failed in exactly the repositories that have a hook: the
+    // command refused every call from a worktree, and a call carrying records
+    // staged a transaction and then abandoned it.
+    const { cwd } = repo('worktree-main');
+    const linked = join(cwd, '..', `linked-${String(Date.now())}`);
+    git(cwd, ['worktree', 'add', '--quiet', '-b', 'side', linked]);
+    try {
+      writeFileSync(join(linked, 'a.txt'), 'one\ntwo\nthree\n');
+      git(linked, ['add', '-A']);
+
+      const outcome = runCommit({ cwd: linked, message: 'chore: from a worktree', commit: false });
+
+      expect(outcome.outcome).toBe('staged');
+      expect(readConsideration(linked)?.outcome).toBe('empty');
+    } finally {
+      git(cwd, ['worktree', 'remove', '--force', linked]);
+    }
+  });
+
+  it('does not report `empty` when a record staged before the call lands anyway', () => {
+    // The five-step flow and this command share one hook, so a transaction
+    // staged by the old route is applied by a commit made through the new one.
+    // Reporting `empty` there describes a commit carrying `Record-Id:` as
+    // carrying nothing -- and writes a binding saying the same.
+    const { cwd, transcript, draft } = repo('pre-staged');
+    const staged = runCommit({ cwd, message: 'feat: staged first', transcript, draft, commit: false });
+    expect(staged.outcome).toBe('staged');
+
+    const outcome = runCommit({ cwd, message: 'feat: committed second' });
+
+    expect(headBody(cwd)).toContain('Record-Id:');
+    expect(outcome.outcome).toBe('recorded');
+    expect(outcome.records).toBe(1);
+  });
+
+  it('a commit that happened is not reported as failed, however loud a post-commit hook is', () => {
+    // Judged by HEAD rather than by exit status. With the 1 MiB default buffer
+    // a chatty `post-commit` made a real commit report `commit_failed` with
+    // `commit: null`, and cleared the binding under it.
+    const { cwd } = repo('loud-post-commit');
+    writeFileSync(
+      join(cwd, '.git', 'hooks', 'post-commit'),
+      '#!/bin/sh\nhead -c 2000000 /dev/zero | tr "\\0" "x"\nexit 0\n',
+      { mode: 0o755 },
+    );
+    const before = head(cwd);
+
+    const outcome = runCommit({ cwd, message: 'chore: noisy' });
+
+    expect(head(cwd)).not.toBe(before);
+    expect(outcome.outcome).toBe('empty');
+    expect(outcome.commit).toBe(head(cwd));
+    expect(readConsideration(cwd)).not.toBeNull();
+  });
+
+  it('a hook of ours that cannot run is "no hook", not "ours"', () => {
+    // git runs only executable hooks. Reading the file alone cannot tell an
+    // installed hook from an inert one, and the inert one silently drops every
+    // record it was supposed to apply.
+    const { cwd } = repo('inert-hook');
+    chmodSync(join(cwd, '.git', 'hooks', 'prepare-commit-msg'), 0o644);
+
+    const outcome = runCommit({ cwd, message: 'chore: x', commit: false });
+
+    expect(outcome.outcome).toBe('error');
+    expect(outcome.lines.join('\n')).toContain('hooks install');
+  });
+
+  it('--all says that a refusal leaves the index staged, which git commit -a does not', () => {
+    const { cwd, transcript } = repo('all-refused');
+    writeFileSync(join(cwd, 'a.txt'), 'one\ntwo\nthree\n');
+
+    const outcome = runCommit({
+      cwd,
+      message: 'feat: x',
+      all: true,
+      transcript,
+      draft: draftWith('nowhere in the transcript', 'r-commitcmd05'),
+    });
+
+    expect(outcome.outcome).toBe('refused');
+    expect(outcome.lines.join('\n')).toContain('still staged');
+    expect(git(cwd, ['status', '--porcelain']).trim().startsWith('M ')).toBe(true);
   });
 });

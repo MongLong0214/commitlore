@@ -110,10 +110,40 @@ export const considerationPath = (cwd: string): string | null => {
  * a repository is a commit like any other, and `rev-parse HEAD` failing there
  * is the normal case, not a broken one.
  */
+/**
+ * The staged diff, asked for in a way that makes it a function of the tree.
+ *
+ * A bare `git diff --cached` is a function of the tree *and the configuration*,
+ * and two ordinary settings collapse it to nothing. Measured here:
+ *
+ *     diff.external = /usr/bin/true            103 bytes -> 0
+ *     diff.relative = true, cwd in a subdir    103 bytes -> 0
+ *
+ * Zero bytes hash the same for every tree, so a binding made under either
+ * setting would cover every later tree too -- a gate that opens itself on a
+ * config nobody thought was security-relevant. `--no-ext-diff` and
+ * `--no-relative` restore both, and `--no-textconv` closes the same shape for a
+ * repository with a textconv filter.
+ *
+ * This is also the correction to why `git write-tree` was not used. The first
+ * argument was that the diff hash already answers the question; it does not,
+ * unless asked like this. The real reason to prefer the diff is that every
+ * content change appears in its `index <old>..<new>` header, so binary files
+ * and `-diff` attributes are covered without reading their contents -- and the
+ * reason not to reach for `write-tree` is that it is one more identity to keep
+ * in step, not that it is expensive.
+ *
+ * The staging gates in `capture-stage.ts`, `capture-prepare.ts` and
+ * `capture-verify.ts` ask the bare form and inherit the weakness. Changing them
+ * moves every hash in flight, so it is a separate decision with its own blast
+ * radius rather than something to slip in here.
+ */
+const STAGED_DIFF_ARGS = ['diff', '--cached', '--no-ext-diff', '--no-relative', '--no-textconv'] as const;
+
 export const currentBinding = (cwd: string): ConsiderationBinding => {
   const headResult = execGit(['rev-parse', 'HEAD'], { cwd });
   const head = headResult.code === 0 && headResult.stdout.trim() !== '' ? headResult.stdout.trim() : null;
-  const diff = execGitOrThrow(['diff', '--cached'], { cwd });
+  const diff = execGitOrThrow([...STAGED_DIFF_ARGS], { cwd });
   return {
     head,
     staged_diff_hash: sha256(diff),

@@ -27,16 +27,19 @@
  * the refusal invisible at exactly the moment it matters.
  */
 
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 import type { Command } from 'commander';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { clearConsideration, writeConsideration } from '../core/commit-consideration.js';
 import { execGit, execGitOrThrow } from '../core/git.js';
-import { PREPARE_COMMIT_MSG_HOOK_NAME } from '../hooks/prepare-commit-msg.js';
+import {
+  PREPARE_COMMIT_MSG_HOOK_MARKER,
+  PREPARE_COMMIT_MSG_HOOK_NAME,
+} from '../hooks/prepare-commit-msg.js';
 import { runCapture } from './capture.js';
 
 export type CommitOutcome =
@@ -90,14 +93,29 @@ const result = (
   over: Partial<CommitResult> = {},
 ): CommitResult => ({ outcome, commit: null, records: 0, rejected: [], lines, ...over });
 
-/** Whether this repository's `prepare-commit-msg` hook is ours, so records can land. */
+/**
+ * Whether this repository's `prepare-commit-msg` hook is ours *and will run*.
+ *
+ * `resolve`, not `join`: from a linked worktree `--git-path` answers with an
+ * absolute path into the common directory, and joining that onto cwd produces
+ * `<worktree>/<absolute path>` -- a path that never exists, so this reported
+ * "no hook" in exactly the repositories that have one. Measured against a real
+ * worktree. The installer resolves; this looked somewhere else.
+ *
+ * The marker rather than the word `commitlore`, because a foreign hook that
+ * mentions us in a comment is not ours. The execute bit because git runs only
+ * executable hooks, and one without it is installed and inert -- which reads
+ * identically to installed and working from a file read alone.
+ */
 const recordsCanBeApplied = (cwd: string): boolean => {
-  const resolved = execGit(['rev-parse', '--git-path', `hooks/${PREPARE_COMMIT_MSG_HOOK_NAME}`], { cwd });
-  if (resolved.code !== 0) return false;
-  const path = join(cwd, resolved.stdout.trim());
+  const reported = execGit(['rev-parse', '--git-path', `hooks/${PREPARE_COMMIT_MSG_HOOK_NAME}`], { cwd });
+  if (reported.code !== 0) return false;
+  const path = resolve(cwd, reported.stdout.trim());
   if (!existsSync(path)) return false;
   try {
-    return readFileSync(path, 'utf8').includes('commitlore');
+    if (!readFileSync(path, 'utf8').includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) return false;
+    accessSync(path, constants.X_OK);
+    return true;
   } catch {
     return false;
   }
@@ -134,24 +152,83 @@ export const recordLanded = (message: string): boolean => /^Record-Id:/m.test(me
  * flag skips, so bypassing it would drop exactly what this call exists to
  * carry. A failing hook of the user's own is reported with what it said.
  */
-const runGitCommit = (cwd: string, message: string, amend: boolean): { ok: boolean; stderr: string } => {
+const runGitCommit = (cwd: string, message: string, amend: boolean): { ok: boolean; said: string } => {
+  const before = execGit(['rev-parse', 'HEAD'], { cwd }).stdout.trim();
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-commit-'));
   const messagePath = join(dir, 'COMMIT_MSG');
   try {
     writeFileSync(messagePath, message.endsWith('\n') ? message : `${message}\n`);
-    execFileSync('git', ['commit', ...(amend ? ['--amend'] : []), '-F', messagePath], {
+    const run = spawnSync('git', ['commit', ...(amend ? ['--amend'] : []), '-F', messagePath], {
       cwd,
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
+      // The repository's own `execGit` uses 64 MiB, and the 1 MiB default is
+      // reachable: a `post-commit` hook printing 2 MiB made a commit that had
+      // already happened report as failed, with the binding cleared under it.
+      maxBuffer: 1 << 26,
     });
-    return { ok: true, stderr: '' };
+    const said = `${run.stderr ?? ''}${run.stdout ?? ''}`.trim();
+    const after = execGit(['rev-parse', 'HEAD'], { cwd }).stdout.trim();
+    /*
+     * Whether a commit happened, asked of HEAD rather than of an exit status.
+     * The two agree until something *after* the commit fails -- a `post-commit`
+     * hook, a buffer, a signal -- and then the status says "no commit" about a
+     * commit that exists. That is the one answer that must never be wrong here,
+     * because the caller's next move on a failure is to try again.
+     */
+    return { ok: after !== '' && after !== before, said };
   } catch (error) {
-    const spawned = error as { stderr?: string | Buffer; stdout?: string | Buffer };
-    const said = `${String(spawned.stderr ?? '')}${String(spawned.stdout ?? '')}`.trim();
-    return { ok: false, stderr: said };
+    return { ok: false, said: error instanceof Error ? error.message : String(error) };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+};
+
+/**
+ * Commit, then report what actually landed.
+ *
+ * Every path goes through here, and every one reads the message that exists
+ * rather than the transaction that was staged. The two agree until they do not:
+ * a capture staged by the older five-step flow is applied by the same hook, so
+ * a call carrying no records of its own would otherwise commit a record and
+ * report `empty` -- a true commit described by a false result and a false
+ * binding, which is the silence this product exists to remove.
+ */
+const commitAndReport = (cwd: string, opts: CommitOptions, staged: number): CommitResult => {
+  const committed = runGitCommit(cwd, opts.message, opts.amend === true);
+  if (!committed.ok) {
+    // The binding belongs to the attempt that failed. Leaving it would let the
+    // next commit inherit a consideration made for one that never happened.
+    clearConsideration(cwd);
+    return result('commit_failed', [
+      'git did not create a commit',
+      ...(committed.said === '' ? [] : [committed.said]),
+    ]);
+  }
+
+  const head = execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim();
+  const landed = recordLanded(headMessage(cwd));
+
+  if (staged > 0 && !landed) {
+    return result(
+      'stripped',
+      [
+        'the commit was created and carries no record, though one was staged for it',
+        ...(committed.said === '' ? [] : [committed.said]),
+        'commitlore doctor reports which hooks run here, and whether ours is one of them',
+      ],
+      { commit: head },
+    );
+  }
+  if (landed) {
+    return result(
+      'recorded',
+      [staged > 0 ? 'committed with its record' : 'committed, and it carries a record staged before this call'],
+      { commit: head, records: 1 },
+    );
+  }
+  return result('empty', ['committed with nothing recorded — a complete answer, not a gap'], {
+    commit: head,
+  });
 };
 
 export const runCommit = (opts: CommitOptions): CommitResult => {
@@ -162,10 +239,21 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
     return result('error', ['not inside a git repository']);
   }
 
+  /*
+   * `--all` has to stage before anything else, because the tree the records are
+   * verified against is the tree that will be committed -- and with `-a` that
+   * tree does not exist until something stages it.
+   *
+   * So this is *not* `git commit -a`, and the difference shows on a refusal:
+   * `git commit -a` that fails leaves the index untouched, while this leaves
+   * the tracked changes staged. That is stated in the help and in the refusal
+   * rather than left for somebody to find in `git status`.
+   */
   if (opts.all === true) {
     const staged = execGit(['add', '-u'], { cwd });
     if (staged.code !== 0) return result('error', [`git add -u failed: ${staged.stderr.trim()}`]);
   }
+  const stagedByAll = opts.all === true;
 
   // An amend with nothing staged is a message-only amend, which is legitimate.
   if (!somethingIsStaged(cwd) && opts.amend !== true) {
@@ -205,14 +293,7 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
     if (!commitIt) {
       return result('staged', ['considered, nothing to record — run git commit when ready']);
     }
-    const committed = runGitCommit(cwd, opts.message, opts.amend === true);
-    if (!committed.ok) {
-      clearConsideration(cwd);
-      return result('commit_failed', ['git refused the commit', committed.stderr]);
-    }
-    return result('empty', ['committed with nothing recorded — a complete answer, not a gap'], {
-      commit: execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim(),
-    });
+    return commitAndReport(cwd, opts, 0);
   }
 
   const capture = runCapture({
@@ -236,6 +317,9 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
       [
         `${String(rejected.length)} record(s) did not verify, so nothing was committed and nothing was bound`,
         'correct the quotes against the transcript, or commit with no records — both are normal',
+        ...(stagedByAll
+          ? ['--all already staged your tracked changes; they are still staged, unlike a failed git commit -a']
+          : []),
       ],
       { rejected },
     );
@@ -250,14 +334,7 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
       ...(opts.now === undefined ? {} : { now: opts.now }),
     });
     if (!commitIt) return result('staged', ['the draft held no records — run git commit when ready']);
-    const committed = runGitCommit(cwd, opts.message, opts.amend === true);
-    if (!committed.ok) {
-      clearConsideration(cwd);
-      return result('commit_failed', ['git refused the commit', committed.stderr]);
-    }
-    return result('empty', ['committed with nothing recorded — the draft held no records'], {
-      commit: execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim(),
-    });
+    return commitAndReport(cwd, opts, 0);
   }
 
   if (!recordsCanBeApplied(cwd)) {
@@ -280,31 +357,7 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
     ], { records: 1 });
   }
 
-  const committed = runGitCommit(cwd, opts.message, opts.amend === true);
-  if (!committed.ok) {
-    // The binding goes with the attempt that failed. Leaving it would let the
-    // next commit inherit a consideration made for a commit that never happened.
-    clearConsideration(cwd);
-    return result('commit_failed', ['git refused the commit', committed.stderr]);
-  }
-
-  const head = execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim();
-  const landed = headMessage(cwd);
-
-  /*
-   * Asked of the commit that exists, not of the transaction that was staged. A
-   * `prepare-commit-msg` of the user's own, running after ours, can rewrite the
-   * message — and the caller would otherwise be told "recorded" about a commit
-   * carrying nothing.
-   */
-  if (!recordLanded(landed)) {
-    return result('stripped', [
-      'the commit was created and carries no record — something rewrote the message after ours',
-      'commitlore doctor reports which hooks run here',
-    ], { commit: head });
-  }
-
-  return result('recorded', ['committed with its record'], { commit: head, records: 1 });
+  return commitAndReport(cwd, opts, 1);
 };
 
 const exitCodeFor = (outcome: CommitOutcome): 0 | 1 | 2 | 3 => {
@@ -333,7 +386,7 @@ export const register = (program: Command): void => {
     .option('--records <path>', 'a draft JSON file; omit it to commit with nothing recorded')
     .option('--none', 'state that there is nothing to record (the same as omitting --records)')
     .option('--amend', 'amend the previous commit rather than making a new one')
-    .option('-a, --all', 'stage tracked changes first, the way git commit -a does')
+    .option('-a, --all', 'stage tracked changes first — unlike git commit -a, they stay staged if the commit is refused')
     .option('--no-commit', 'verify and bind without committing, and run git commit yourself')
     .option('--json', 'emit the result as JSON')
     .addHelpText(
@@ -361,7 +414,7 @@ export const register = (program: Command): void => {
       commit?: boolean;
       json?: boolean;
     }) => {
-      const outcome = runCommit({
+      const attempt = (): CommitResult => runCommit({
         cwd: process.cwd(),
         message: options.message,
         ...(options.transcript === undefined ? {} : { transcriptPath: options.transcript }),
@@ -370,6 +423,19 @@ export const register = (program: Command): void => {
         ...(options.all === true ? { all: true } : {}),
         ...(options.commit === false ? { commit: false } : {}),
       });
+
+      /*
+       * `runCommit` reaches git through helpers that throw, and a `--json`
+       * caller that gets prose and exit 2 instead of an envelope has to parse
+       * the failure it was promised it could read. Everything becomes an
+       * `error` outcome with the message in `lines`.
+       */
+      let outcome: CommitResult;
+      try {
+        outcome = attempt();
+      } catch (error) {
+        outcome = result('error', [error instanceof Error ? error.message : String(error)]);
+      }
 
       if (options.json === true) {
         process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
