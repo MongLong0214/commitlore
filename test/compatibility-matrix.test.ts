@@ -199,6 +199,7 @@ describe('T-1122 every documented plugin capability is backed by its manifest (r
     expect(keysOf(rows())).toEqual([
       'MCP server',
       'pre-edit context hook',
+      'commit gate hook',
       'skills',
       'plugin identity',
       'marketplace',
@@ -219,11 +220,30 @@ describe('T-1122 every documented plugin capability is backed by its manifest (r
   });
 
   it('the pre-edit hook row matches hooks/hooks.json exactly, not as a prefix', () => {
-    const { path, value } = providedBy(/hook/i);
-    const entry = (readJson(path) as HooksManifest).hooks?.PreToolUse?.[0];
+    const { path, value } = providedBy(/pre-edit context hook/i);
+    const entries = (readJson(path) as HooksManifest).hooks?.PreToolUse ?? [];
+    const entry = entries.find((candidate) =>
+      (candidate.hooks ?? []).some((hook) => String(hook.command).includes('inject')),
+    );
     // Rendered form: `Edit|Write` is a substring of the real matcher, so a
     // narrowed manifest passed a bare toContain while the hook quietly stopped
     // firing on MultiEdit and NotebookEdit.
+    expect(value).toBe(`\`PreToolUse\` on \`${String(entry?.matcher)}\``);
+  });
+
+  /*
+   * A second row for a second hook, asserted separately rather than folded into
+   * the one above. `providedBy(/hook/i)` matched both and returned the first, so
+   * adding this row would otherwise have put a claim in the document that
+   * nothing read -- which is the drift this whole file exists to catch.
+   */
+  it('the commit gate row matches the Bash entry in hooks/hooks.json', () => {
+    const { path, value } = providedBy(/commit gate hook/i);
+    const entries = (readJson(path) as HooksManifest).hooks?.PreToolUse ?? [];
+    const entry = entries.find((candidate) =>
+      (candidate.hooks ?? []).some((hook) => String(hook.command).includes('commit-guard')),
+    );
+    expect(entry, 'hooks.json declares no commit-guard command').toBeDefined();
     expect(value).toBe(`\`PreToolUse\` on \`${String(entry?.matcher)}\``);
   });
 

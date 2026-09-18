@@ -220,6 +220,7 @@ named in the middle column rather than one it assumed.
 |---|---|---|
 | MCP server | `plugin-mcp.json` | `node ${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs mcp` |
 | pre-edit context hook | `hooks/hooks.json` | `PreToolUse` on `Read\|Edit\|Write\|MultiEdit\|NotebookEdit` |
+| commit gate hook | `hooks/hooks.json` | `PreToolUse` on `Bash` |
 | skills | `skills/` | `commitlore-commits`, `commitlore-codex`, `commitlore-query`, `commitlore-setup` |
 | plugin identity | `.claude-plugin/plugin.json` | `commitlore` at the `package.json` version |
 | marketplace | `.claude-plugin/marketplace.json` | `commitlore`, `source: "./"` |
