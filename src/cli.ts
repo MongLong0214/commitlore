@@ -41,6 +41,8 @@ import { register as registerUpgrade } from './commands/update.js';
 import { beginUpdateCheck, finishUpdateCheck } from './core/update-notice.js';
 import { register as registerSync } from './commands/sync.js';
 import { register as registerValidate } from './commands/validate.js';
+import { register as registerCommitMsg } from './commands/commit-msg.js';
+import { register as registerJevSession } from './commands/jev-session.js';
 import { registerUninstall } from './commands/uninstall.js';
 import { register as registerPostCommit } from './hooks/post-commit.js';
 import { register as registerPrepareCommitMsg } from './hooks/prepare-commit-msg.js';
@@ -204,6 +206,8 @@ program
 registerSync(program);
 registerPrePush(program);
 registerValidate(program);
+registerCommitMsg(program);
+registerJevSession(program);
 registerUninstall(program);
 registerHooks(program);
 registerIndex(program);

@@ -162,7 +162,26 @@ const UNRESOLVED_CAPTURE = [
  * silently rewrite any *future* `exit 1` added to the body above — which is the
  * shape of the defect being fixed here, not a fix for it.
  */
-const stubText = (unresolved: readonly string[]): string =>
+/**
+ * What the gate execs (#1048).
+ *
+ * `commit-msg --message-file` is `validate --message-file` plus the optional
+ * producer, and it is inert without a key. The *derived* hooks below keep
+ * `validate --message-file "$1"` in their shared body, because that is the
+ * string each of them renames into its own subcommand — so their bytes are
+ * unchanged by this, and only the gate's differ.
+ *
+ * `validate` stays a real command with its old behaviour. An old stub installed
+ * before this release execs it and keeps working: it gets native validation and
+ * no prototype, which is what makes a reinstall an opt-in rather than a
+ * migration.
+ */
+const GATE_COMMAND = 'commit-msg --message-file "$1"';
+
+/** What the derived capture hooks rename. Unchanged, deliberately. */
+const CAPTURE_COMMAND = 'validate --message-file "$1"';
+
+const stubText = (unresolved: readonly string[], command: string): string =>
   [
     '#!/bin/sh',
     HOOK_MARKER,
@@ -199,7 +218,7 @@ const stubText = (unresolved: readonly string[]): string =>
     '  case "$COMMITLORE_BIN" in',
     '    *.mjs|*.js)',
     '      if [ -x "$COMMITLORE_BIN" ]; then',
-    '        exec "$COMMITLORE_BIN" validate --message-file "$1"',
+    `        exec "$COMMITLORE_BIN" ${command}`,
     '      fi',
     '      ;;',
     '  esac',
@@ -257,7 +276,7 @@ const stubText = (unresolved: readonly string[]): string =>
     '        if [ -n "$recorded_dir" ] && [ -n "$root_dir" ]; then',
     '          case "$recorded_dir" in',
     '            "$root_dir"|"$root_dir"/*)',
-    '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
+    `              exec "$recorded_node" "$recorded" ${command}`,
     '              ;;',
     '            *)',
     '              # An upgrade and a repointed `commitlore.bin` both land here,',
@@ -296,7 +315,7 @@ const stubText = (unresolved: readonly string[]): string =>
     '                  ;;',
     '              esac',
     '              if [ -n "$commitlore_rebound" ]; then',
-    '                exec "$recorded_node" "$recorded" validate --message-file "$1"',
+    `                exec "$recorded_node" "$recorded" ${command}`,
     '              fi',
     '              commitlore_outside=$recorded_dir',
     '              commitlore_trusted=$root_dir',
@@ -321,7 +340,7 @@ const stubText = (unresolved: readonly string[]): string =>
     'fi',
     '',
     'if command -v commitlore >/dev/null 2>&1; then',
-    '  exec commitlore validate --message-file "$1"',
+    `  exec commitlore ${command}`,
     'fi',
     '',
     '# A local devDependency is not on PATH inside a hook, so resolve it the way',
@@ -335,7 +354,7 @@ const stubText = (unresolved: readonly string[]): string =>
     'dir=$PWD',
     'while [ -n "$dir" ]; do',
     '  if [ -x "$dir/node_modules/.bin/commitlore" ]; then',
-    '    exec "$dir/node_modules/.bin/commitlore" validate --message-file "$1"',
+    `    exec "$dir/node_modules/.bin/commitlore" ${command}`,
     '  fi',
     '  parent=${dir%/*}',
     '  if [ "$parent" = "$dir" ]; then',
@@ -349,11 +368,11 @@ const stubText = (unresolved: readonly string[]): string =>
   ].join('\n');
 
 /** The validation gate: it refuses when it cannot run. */
-export const commitMsgStub = (): string => stubText(UNRESOLVED_GATE);
+export const commitMsgStub = (): string => stubText(UNRESOLVED_GATE, GATE_COMMAND);
 
 /**
  * The body the capture hooks derive from — identical to the gate's except for
  * the ending, which lets the commit through. `prepare-commit-msg` and
  * `post-commit` rename it (marker, chained hook, invocation) from here.
  */
-export const captureHookStub = (): string => stubText(UNRESOLVED_CAPTURE);
+export const captureHookStub = (): string => stubText(UNRESOLVED_CAPTURE, CAPTURE_COMMAND);

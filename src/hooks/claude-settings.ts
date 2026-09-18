@@ -47,6 +47,35 @@ export const CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK
 export const claudeSettingsPath = (cwd: string): string => join(cwd, '.claude', 'settings.json');
 
 /**
+ * One entry this module knows how to install: its event, its identity and its
+ * default command (#1049).
+ *
+ * Added so the optional `SessionStart` registration reuses *this* merge
+ * discipline — the refusal to overwrite an unreadable file, the preservation of
+ * every foreign hook and unknown field, the marker-based idempotence — rather
+ * than a second implementation of it beside this one. Nothing about the
+ * injection entry changes: `INJECT_HOOK` restates the constants above, and it
+ * is the default everywhere a kind is optional, so every existing caller and
+ * every existing byte on disk is unaffected.
+ */
+export interface ClaudeHookKind {
+  readonly event: string;
+  readonly marker: string;
+  readonly command: string;
+  readonly matcher: string;
+  /** How the entry is named in the sentence an install prints. */
+  readonly label: string;
+}
+
+export const INJECT_HOOK: ClaudeHookKind = {
+  event: CLAUDE_HOOK_EVENT,
+  marker: CLAUDE_HOOK_MARKER,
+  command: CLAUDE_HOOK_COMMAND,
+  matcher: CLAUDE_HOOK_MATCHER,
+  label: 'injection',
+};
+
+/**
  * `installed` — our entry, current. `outdated` — our entry, different command
  * (an older build, or a `--command` override). `conflicting` — more than one of
  * ours, which only a hand-edit produces and which an install collapses back to
@@ -67,9 +96,11 @@ export interface ClaudeHookStatus {
 
 export interface ClaudeHookInput {
   settingsPath: string;
-  /** Overrides the installed command. Must carry `CLAUDE_HOOK_MARKER`. */
+  /** Overrides the installed command. Must carry the kind's marker. */
   command?: string;
   matcher?: string;
+  /** Which entry to install. Defaults to the injection hook. */
+  kind?: ClaudeHookKind;
 }
 
 export interface ClaudeHookResult {
@@ -136,7 +167,7 @@ interface Loaded {
  * file whose shape contradicts what an install would write, and the only safe
  * response is to stop with the path in the message.
  */
-const load = (settingsPath: string): Loaded => {
+const load = (settingsPath: string, kind: ClaudeHookKind = INJECT_HOOK): Loaded => {
   if (!existsSync(settingsPath)) return { settings: {}, existed: false };
 
   let raw: string;
@@ -167,10 +198,10 @@ const load = (settingsPath: string): Loaded => {
     throw new Error(`${settingsPath} has a "hooks" value that is not an object — refusing to edit it`);
   }
   if (isPlainObject(hooks)) {
-    const event = hooks[CLAUDE_HOOK_EVENT];
+    const event = hooks[kind.event];
     if (event !== undefined && !Array.isArray(event)) {
       throw new Error(
-        `${settingsPath} has a "hooks.${CLAUDE_HOOK_EVENT}" value that is not an array — refusing to edit it`,
+        `${settingsPath} has a "hooks.${kind.event}" value that is not an array — refusing to edit it`,
       );
     }
   }
@@ -178,23 +209,23 @@ const load = (settingsPath: string): Loaded => {
   return { settings: parsed, existed: true };
 };
 
-const eventGroups = (settings: Settings): HookGroup[] => {
+const eventGroups = (settings: Settings, kind: ClaudeHookKind): HookGroup[] => {
   const hooks = settings['hooks'];
   if (!isPlainObject(hooks)) return [];
-  const event = hooks[CLAUDE_HOOK_EVENT];
+  const event = hooks[kind.event];
   return Array.isArray(event) ? event.filter(isPlainObject) : [];
 };
 
-const isOurs = (entry: unknown): entry is HookEntry =>
+const isOurs = (entry: unknown, kind: ClaudeHookKind): entry is HookEntry =>
   isPlainObject(entry) &&
   typeof entry['command'] === 'string' &&
-  entry['command'].includes(CLAUDE_HOOK_MARKER);
+  entry['command'].includes(kind.marker);
 
-const ourCommands = (settings: Settings): string[] =>
-  eventGroups(settings).flatMap((group) =>
+const ourCommands = (settings: Settings, kind: ClaudeHookKind): string[] =>
+  eventGroups(settings, kind).flatMap((group) =>
     (Array.isArray(group.hooks) ? group.hooks : [])
-      .filter(isOurs)
-      .map((entry) => String(entry['command'])),
+      .filter((entry) => isOurs(entry, kind))
+      .map((entry) => String((entry as HookEntry)['command'])),
   );
 
 const stateOf = (commands: readonly string[], expected: string): ClaudeHookState => {
@@ -205,11 +236,13 @@ const stateOf = (commands: readonly string[], expected: string): ClaudeHookState
 
 export const readClaudeHookStatus = (
   settingsPath: string,
-  command: string = CLAUDE_HOOK_COMMAND,
+  command?: string,
+  kind: ClaudeHookKind = INJECT_HOOK,
 ): ClaudeHookStatus => {
+  const expected = command ?? kind.command;
   let loaded: Loaded;
   try {
-    loaded = load(settingsPath);
+    loaded = load(settingsPath, kind);
   } catch (error) {
     return {
       settingsPath,
@@ -220,10 +253,10 @@ export const readClaudeHookStatus = (
     };
   }
 
-  const commands = ourCommands(loaded.settings);
+  const commands = ourCommands(loaded.settings, kind);
   return {
     settingsPath,
-    state: stateOf(commands, command),
+    state: stateOf(commands, expected),
     entries: commands.length,
     commands,
   };
@@ -240,7 +273,10 @@ export const readClaudeHookStatus = (
  * it is noise the install added. A group that was already empty is left alone:
  * this module removes what it wrote, never what it found.
  */
-const withoutOurs = (groups: readonly HookGroup[]): { groups: HookGroup[]; removed: number } => {
+const withoutOurs = (
+  groups: readonly HookGroup[],
+  kind: ClaudeHookKind,
+): { groups: HookGroup[]; removed: number } => {
   let removed = 0;
   const kept: HookGroup[] = [];
 
@@ -249,7 +285,7 @@ const withoutOurs = (groups: readonly HookGroup[]): { groups: HookGroup[]; remov
       kept.push(group);
       continue;
     }
-    const entries = group.hooks.filter((entry) => !isOurs(entry));
+    const entries = group.hooks.filter((entry) => !isOurs(entry, kind));
     const dropped = group.hooks.length - entries.length;
     removed += dropped;
     if (dropped > 0 && entries.length === 0) continue;
@@ -259,11 +295,15 @@ const withoutOurs = (groups: readonly HookGroup[]): { groups: HookGroup[]; remov
   return { groups: kept, removed };
 };
 
-/** Rebuilds `hooks.PreToolUse` while leaving every other key exactly as found. */
-const withGroups = (settings: Settings, groups: readonly HookGroup[]): Settings => {
+/** Rebuilds one `hooks.<event>` while leaving every other key exactly as found. */
+const withGroups = (
+  settings: Settings,
+  groups: readonly HookGroup[],
+  kind: ClaudeHookKind,
+): Settings => {
   const hooks = isPlainObject(settings['hooks']) ? { ...settings['hooks'] } : {};
-  if (groups.length === 0) delete hooks[CLAUDE_HOOK_EVENT];
-  else hooks[CLAUDE_HOOK_EVENT] = groups;
+  if (groups.length === 0) delete hooks[kind.event];
+  else hooks[kind.event] = groups;
 
   const next = { ...settings };
   if (Object.keys(hooks).length === 0) delete next['hooks'];
@@ -301,10 +341,10 @@ const writeAtomic = (settingsPath: string, settings: Settings): void => {
   }
 };
 
-const validateCommand = (command: string): void => {
-  if (!command.includes(CLAUDE_HOOK_MARKER)) {
+const validateCommand = (command: string, kind: ClaudeHookKind): void => {
+  if (!command.includes(kind.marker)) {
     throw new Error(
-      `the hook command must contain the marker ${JSON.stringify(CLAUDE_HOOK_MARKER)}, ` +
+      `the hook command must contain the marker ${JSON.stringify(kind.marker)}, ` +
         'or uninstall would not be able to find it again',
     );
   }
@@ -312,23 +352,25 @@ const validateCommand = (command: string): void => {
 
 export const installClaudeHook = (input: ClaudeHookInput): ClaudeHookResult => {
   const { settingsPath } = input;
-  const command = input.command ?? CLAUDE_HOOK_COMMAND;
-  const matcher = input.matcher ?? CLAUDE_HOOK_MATCHER;
+  const kind = input.kind ?? INJECT_HOOK;
+  const command = input.command ?? kind.command;
+  const matcher = input.matcher ?? kind.matcher;
 
   let loaded: Loaded;
   try {
-    validateCommand(command);
-    loaded = load(settingsPath);
+    validateCommand(command, kind);
+    loaded = load(settingsPath, kind);
   } catch (error) {
     return failure(settingsPath, messageOf(error));
   }
 
-  const before = ourCommands(loaded.settings);
-  const { groups } = withoutOurs(eventGroups(loaded.settings));
-  const next = withGroups(loaded.settings, [
-    ...groups,
-    { matcher, hooks: [{ type: 'command', command }] },
-  ]);
+  const before = ourCommands(loaded.settings, kind);
+  const { groups } = withoutOurs(eventGroups(loaded.settings, kind), kind);
+  const next = withGroups(
+    loaded.settings,
+    [...groups, { matcher, hooks: [{ type: 'command', command }] }],
+    kind,
+  );
 
   const state = stateOf(before, command);
   const unchanged = state === 'installed' && JSON.stringify(next) === JSON.stringify(loaded.settings);
@@ -342,14 +384,14 @@ export const installClaudeHook = (input: ClaudeHookInput): ClaudeHookResult => {
   }
 
   const headline = {
-    absent: `installed the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
-    installed: `${CLAUDE_HOOK_EVENT} injection hook already installed: ${settingsPath} (unchanged)`,
-    outdated: `updated the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
-    conflicting: `collapsed ${before.length} duplicate injection hooks into one: ${settingsPath}`,
-    unreadable: `installed the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
+    absent: `installed the ${kind.event} ${kind.label} hook: ${settingsPath}`,
+    installed: `${kind.event} ${kind.label} hook already installed: ${settingsPath} (unchanged)`,
+    outdated: `updated the ${kind.event} ${kind.label} hook: ${settingsPath}`,
+    conflicting: `collapsed ${before.length} duplicate ${kind.label} hooks into one: ${settingsPath}`,
+    unreadable: `installed the ${kind.event} ${kind.label} hook: ${settingsPath}`,
   }[state];
 
-  return success(readClaudeHookStatus(settingsPath, command), [
+  return success(readClaudeHookStatus(settingsPath, command, kind), [
     headline,
     `  matcher: ${matcher}`,
     `  command: ${command}`,
@@ -358,36 +400,39 @@ export const installClaudeHook = (input: ClaudeHookInput): ClaudeHookResult => {
 
 export const uninstallClaudeHook = (input: ClaudeHookInput): ClaudeHookResult => {
   const { settingsPath } = input;
-  const command = input.command ?? CLAUDE_HOOK_COMMAND;
+  const kind = input.kind ?? INJECT_HOOK;
+  const command = input.command ?? kind.command;
 
   let loaded: Loaded;
   try {
-    loaded = load(settingsPath);
+    loaded = load(settingsPath, kind);
   } catch (error) {
     return failure(settingsPath, messageOf(error));
   }
 
   if (!loaded.existed) {
-    return success(readClaudeHookStatus(settingsPath, command), [
+    return success(readClaudeHookStatus(settingsPath, command, kind), [
       `no settings file to clean: ${settingsPath}`,
     ], false);
   }
 
-  const { groups, removed } = withoutOurs(eventGroups(loaded.settings));
+  // Only entries carrying *this* kind's marker. An uninstall of one must leave
+  // the other in place, and must leave every foreign hook alone in both cases.
+  const { groups, removed } = withoutOurs(eventGroups(loaded.settings, kind), kind);
   if (removed === 0) {
-    return success(readClaudeHookStatus(settingsPath, command), [
-      `no commitlore injection hook in ${settingsPath}`,
+    return success(readClaudeHookStatus(settingsPath, command, kind), [
+      `no commitlore ${kind.label} hook in ${settingsPath}`,
     ], false);
   }
 
   try {
-    writeAtomic(settingsPath, withGroups(loaded.settings, groups));
+    writeAtomic(settingsPath, withGroups(loaded.settings, groups, kind));
   } catch (error) {
     return failure(settingsPath, messageOf(error));
   }
 
-  return success(readClaudeHookStatus(settingsPath, command), [
-    `removed ${removed} injection hook entr${removed === 1 ? 'y' : 'ies'}: ${settingsPath}`,
+  return success(readClaudeHookStatus(settingsPath, command, kind), [
+    `removed ${removed} ${kind.label} hook entr${removed === 1 ? 'y' : 'ies'}: ${settingsPath}`,
   ], true);
 };
 
