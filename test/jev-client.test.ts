@@ -203,6 +203,29 @@ describe('#1046 the deadline and the bounds', () => {
     expect(outcome.status === 'unavailable' && outcome.failure).toBe('aborted');
   }, 300_000);
 
+  it('refuses a redirect rather than following it', async () => {
+    // A redirect moves a Bearer token to a host this code never named.
+    // `redirect: 'error'` surfaces as a TypeError like any other fetch failure,
+    // so the outcome is checked as well as the flag the request carried.
+    const send = (async () => {
+      throw new TypeError('fetch failed: unexpected redirect');
+    }) as unknown as typeof fetch;
+    const outcome = await askJev({ key: KEY, state: 'x', questions: [QUESTION], fetchImpl: send });
+    expect(outcome.status).toBe('unavailable');
+    expect(outcome.status === 'unavailable' && outcome.failure).toBe('redirect');
+  }, 300_000);
+
+  it('asks fetch not to follow one in the first place', async () => {
+    // The classification above only matters if the request said so. A
+    // `redirect: 'follow'` would have sent the key to the new host before any
+    // of this code saw an error.
+    const send = answered(goodAnswer);
+    await askJev({ key: KEY, state: 'x', questions: [QUESTION], fetchImpl: send });
+    const mock = send as unknown as ReturnType<typeof vi.fn>;
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(init.redirect).toBe('error');
+  }, 300_000);
+
   it('keeps the deadline off the local work', () => {
     // Stated as a constant rather than a promise about a commit: git reads,
     // native verification and validation all happen outside this.

@@ -23,12 +23,14 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import type { ConversationSource } from '../src/jev/source.js';
 import {
   CHILD_ENV,
   descriptorDir,
@@ -396,6 +398,86 @@ describe('#1049 what is not authored speech', () => {
     if (result.status !== 'available') return;
     expect(result.source.coverage.complete, 'the window should have been bounded').toBe(false);
     expect(result.source.coverage.bytesInspected).toBeLessThan(result.source.size);
+  }, 300_000);
+});
+
+describe('#1049 against the real container shape', () => {
+  /**
+   * `test/fixtures/claude-transcript-shape.jsonl` is twenty records taken from
+   * an actual Claude Code transcript (host 2.1.271, macOS 26.3) and sanitized
+   * before being committed — see `test/fixtures/README.md` for what was kept
+   * and what was removed.
+   *
+   * A hand-written fixture only tests the reader against what its author
+   * already believed the format was. This one is the format.
+   */
+  const FIXTURE = join(
+    dirname(fileURLToPath(import.meta.url)),
+    'fixtures',
+    'claude-transcript-shape.jsonl',
+  );
+
+  const realShape = (name: string): ConversationSource => {
+    const cwd = repo(`realshape-${name}`);
+    const host = temporary(`realshape-${name}-host`);
+    const transcript = transcriptIn(host, readFileSync(FIXTURE, 'utf8'));
+    expect(
+      registerClaudeSession({ cwd, sessionId: SESSION, transcriptPath: transcript }).status,
+    ).toBe('registered');
+    const result = readClaudeSource({ cwd, env: env() });
+    expect(result.status, JSON.stringify(result)).toBe('available');
+    if (result.status !== 'available') throw new Error('the fixture produced no source');
+    return result.source;
+  };
+
+  it('reads it, rather than calling twenty real record types unsupported', () => {
+    const source = realShape('reads');
+    expect(source.blocks.length).toBeGreaterThan(0);
+    // Most of the file is bookkeeping and injected context, and the reader knows
+    // it is bookkeeping rather than failing to parse it.
+    expect(source.coverage.recordsOmitted).toBeGreaterThan(0);
+    expect(
+      source.coverage.unknownForms,
+      'a record type this host actually writes was unrecognised',
+    ).toBe(0);
+  }, 300_000);
+
+  it('lets none of the four excluded kinds become authored speech', () => {
+    // The fixture carries a marker string in each: hidden reasoning, tool
+    // arguments, tool output and a host wrapper. Every one of them is a door a
+    // record could have come through.
+    const source = realShape('excludes');
+    for (const marker of [
+      'HIDDEN REASONING',
+      'TOOL ARGUMENT',
+      'TOOL OUTPUT',
+      'HOST WRAPPER CONTENT',
+    ]) {
+      expect(source.text, `${marker} reached the canonical source`).not.toContain(marker);
+    }
+    // And the real speech did survive, so the exclusions are not just deleting
+    // everything.
+    expect(source.text).toContain('three retries per minute');
+  }, 300_000);
+
+  it('keeps its offsets exact against the real shape', () => {
+    const source = realShape('offsets');
+    for (const block of source.blocks) {
+      const slice = source.text.slice(block.start, block.end);
+      expect(slice.length).toBeGreaterThan(0);
+      expect(slice.trim()).toBe(slice);
+      expect(source.text.slice(0, block.start).split('\n').length).toBe(block.startLine);
+    }
+  }, 300_000);
+
+  it('carries no trace of the session it was taken from', () => {
+    // The fixture is committed, so this is the assertion that keeps it
+    // committable. The sanitizer checks the same strings before writing; this
+    // checks the file that is actually in the repository.
+    const body = readFileSync(FIXTURE, 'utf8');
+    for (const needle of ['commitlore', 'Isaac', 'apikey', 'MongLong', '8db38ace']) {
+      expect(body, `the committed fixture contains ${needle}`).not.toContain(needle);
+    }
   }, 300_000);
 });
 
