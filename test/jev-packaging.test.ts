@@ -27,6 +27,17 @@ import { JEV_SESSION_HOOK, JEV_SESSION_HOOK_MARKER } from '../src/commands/jev-s
 import { commitMsgStub } from '../src/hooks/commit-msg.js';
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+
+/**
+ * The committed bundle, which these tests spawn the way a hook does.
+ *
+ * That makes them sensitive to a stale `dist/`: the file below compares a stub
+ * written by *this binary* against `commitMsgStub()` imported from `src`, so
+ * the two disagreeing is a real signal and not a flake. A failure here that
+ * reads "expected '#!/bin/sh…' to be '#!/bin/sh…'" means `npm run build` has
+ * not been run since the stub changed. CI rebuilds canonically before the
+ * suite, so it only bites locally.
+ */
 const CLI = join(REPO_ROOT, 'dist', 'commitlore.mjs');
 
 const scratch: string[] = [];
@@ -339,7 +350,15 @@ describe('#1051 §2 a prototype record is an ordinary record afterwards', () => 
     expect(committed.status, `${committed.stdout}${committed.stderr}`).toBe(0);
 
     const bare = join(temporary('bare'), 'origin.git');
-    execFileSync('git', ['init', '-q', '--bare', bare], { encoding: 'utf8' });
+    // `--initial-branch=main`, not the ambient default. The suite pins
+    // `GIT_CONFIG_GLOBAL` at a path that does not exist, so `init.defaultBranch`
+    // is whatever the git build ships — `main` on this machine and `master` on
+    // the CI image. A bare remote whose HEAD names a branch that was never
+    // pushed gives a clone with nothing checked out, and the record then reads
+    // as absent rather than as unfetched.
+    execFileSync('git', ['init', '-q', '--bare', '--initial-branch=main', bare], {
+      encoding: 'utf8',
+    });
     git(dir, ['remote', 'add', 'origin', bare]);
     const pushed = git(dir, ['push', '-q', 'origin', 'main']);
     expect(pushed.status, pushed.out).toBe(0);
@@ -349,6 +368,9 @@ describe('#1051 §2 a prototype record is an ordinary record afterwards', () => 
       encoding: 'utf8',
       env: { PATH: process.env['PATH'] ?? '', ...GIT_ENV },
     });
+    // The premise. Without it, "the record is absent" below could mean the
+    // clone checked out nothing at all.
+    expect(existsSync(join(clone, 'a.ts')), 'the clone checked out no working tree').toBe(true);
 
     // A fresh reader, no key anywhere, unchanged tooling.
     const read = cli(clone, ['limits', 'a.ts']);
@@ -390,7 +412,15 @@ describe('#1051 §2 a prototype record is an ordinary record afterwards', () => 
     expect(noted.status, noted.out).toBe(0);
 
     const bare = join(temporary('baremirror'), 'origin.git');
-    execFileSync('git', ['init', '-q', '--bare', bare], { encoding: 'utf8' });
+    // `--initial-branch=main`, not the ambient default. The suite pins
+    // `GIT_CONFIG_GLOBAL` at a path that does not exist, so `init.defaultBranch`
+    // is whatever the git build ships — `main` on this machine and `master` on
+    // the CI image. A bare remote whose HEAD names a branch that was never
+    // pushed gives a clone with nothing checked out, and the record then reads
+    // as absent rather than as unfetched.
+    execFileSync('git', ['init', '-q', '--bare', '--initial-branch=main', bare], {
+      encoding: 'utf8',
+    });
     git(dir, ['remote', 'add', 'origin', bare]);
     expect(git(dir, ['push', '-q', 'origin', 'main']).status).toBe(0);
 
@@ -408,6 +438,7 @@ describe('#1051 §2 a prototype record is an ordinary record afterwards', () => 
       encoding: 'utf8',
       env: { PATH: process.env['PATH'] ?? '', ...GIT_ENV },
     });
+    expect(existsSync(join(clone, 'a.ts')), 'the clone checked out no working tree').toBe(true);
     // The refspec `commitlore init` and `doctor --fix` write. Those commands
     // have their own tests; what this one is about is that a clone with the
     // mirror configured gets a complete answer rather than a caveated one.
