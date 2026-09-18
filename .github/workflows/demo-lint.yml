@@ -48,6 +48,19 @@ jobs:
           node-version: '22.23.2'
           cache: npm
 
+      # Before `npm ci`, because it needs neither the dependencies nor the build
+      # and a pull request whose issue link is wrong should hear so in seconds.
+      #
+      # A closing keyword is a promise made in prose and kept by a parser, and
+      # the two disagree quietly: `closes #a, #b` links only #a, a keyword on a
+      # pull request into anything but the default branch never fires, and
+      # "does not close #N" closes #N. Each of those has shipped here. The
+      # script's own header lists what it refuses and why.
+      - name: The issue link does what it appears to do
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-issue-links.mjs
+
       - run: npm ci
 
       # cli-path below points at this; without it the lint would be running the
