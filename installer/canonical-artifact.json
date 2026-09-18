@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "fe98de177ea3fc228dff5107568a5d61af2a105b175886f28db3fa003db507a3"
+    "sha256": "10d394c287f817942397e0fe7f01c0697b5eee3cd70067552066d453bae249fd"
   },
   "artifact": {
-    "sha256": "4dad1e37784ba3b782fc79e01fce9bacd883d8a2137c0a5c2f1144ca990c502d",
+    "sha256": "645d0b39ac991e7ea8c9732aa5c857269cd4b989686f8cbdf35cef19c5025987",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -26,11 +26,11 @@
       },
       {
         "path": "dist/cli.js",
-        "sha256": "51541b1881dc2029d8d79105c850083c1f7e588e965c825634c8992f8e0db027"
+        "sha256": "3600343b99b1a76d140f84c4af2fb298ff411d97fbdfba25c020dc944a3833c0"
       },
       {
         "path": "dist/cli.js.map",
-        "sha256": "0d40e4dcd4443fa09708fa5b36a7c83ebf52b41ee6d6d87930628ffb9974a54f"
+        "sha256": "9106264ff3a7b684037dac51ad0e37195cb82c1962c913c1c2ca76218892b953"
       },
       {
         "path": "dist/commands/auto.d.ts",
@@ -67,6 +67,18 @@
       {
         "path": "dist/commands/capture.js.map",
         "sha256": "d8b0c4c8741d30c5bacae2357e9f7ea59b35181cc5a89cad9165fa0d957666e5"
+      },
+      {
+        "path": "dist/commands/commit-msg.d.ts",
+        "sha256": "0fd162aa632ba27d4386dce023889b230991abb1cc171e5a8446512ec9052b9d"
+      },
+      {
+        "path": "dist/commands/commit-msg.js",
+        "sha256": "569b40b6941a49009a2d03a5d33571736e1db7f44ac59bcaa61a60c429223cf3"
+      },
+      {
+        "path": "dist/commands/commit-msg.js.map",
+        "sha256": "49b99a502c821f4a2daf17773fb51ac52e133922c9ec015157fb5d598d0e7854"
       },
       {
         "path": "dist/commands/demo.d.ts",
@@ -398,11 +410,11 @@
       },
       {
         "path": "dist/commands/doctor/report.js",
-        "sha256": "d349d3cb3714c51500d669ce6e9e56c0e5afc357750d11ee5b3a7121a154707c"
+        "sha256": "fdcd4b4442962a8aae948ab9f43ea146a7f5a3b0a9bc354eb4330096c3a8989b"
       },
       {
         "path": "dist/commands/doctor/report.js.map",
-        "sha256": "7903e925d790d65e779989eb51556d21840c4dc21326f03a67b1e89f8adfbdb2"
+        "sha256": "3d9f2525f975a39c6d1d345aa0af2cd5cf0866135c2a7d6a5a7072fdc4ac3f05"
       },
       {
         "path": "dist/commands/doctor/runner.d.ts",
@@ -494,11 +506,11 @@
       },
       {
         "path": "dist/commands/init.js",
-        "sha256": "ddff6743d474377baa25bc656ef5fd9db6535ec665bf63d9e8381a74cf045359"
+        "sha256": "32f7b03fb584eee3a6e0ff15a578d7fa85e1e47b0aa3295b0198da56854bcaab"
       },
       {
         "path": "dist/commands/init.js.map",
-        "sha256": "1343ad2bd204cb72ababe18d9a70c7ed39bfb56dcf8bcaa4a014661c8c33bb0c"
+        "sha256": "0ae9f9707ed2e4bd30b1073888f5629343f7a1deedf49bef0688990e8f141ec4"
       },
       {
         "path": "dist/commands/inject.d.ts",
@@ -506,11 +518,11 @@
       },
       {
         "path": "dist/commands/inject.js",
-        "sha256": "b967d40f9f4e2f5cf18e6efd6585d3c5cdfd6d41b6ff33199ee35f04f9867b6b"
+        "sha256": "74e0d580899c2d2c66fda0c6aef00c0ee7d05a831506e9c71c6068c745767aa0"
       },
       {
         "path": "dist/commands/inject.js.map",
-        "sha256": "4d0fb510d267a1716d746b2a507fef106e06fa10ca3a6645b425b83b11258847"
+        "sha256": "f0127c1d049f6ae2f077edbe2455107238bff1ed46e0b87127726c558b83f443"
       },
       {
         "path": "dist/commands/installer-hosts.d.ts",
@@ -523,6 +535,18 @@
       {
         "path": "dist/commands/installer-hosts.js.map",
         "sha256": "21923dfc1a865c024bd829c9395cbc7921e4d569bdb1cf08b03dac1abe96f98d"
+      },
+      {
+        "path": "dist/commands/jev-session.d.ts",
+        "sha256": "2ba1a57fe12604067310ec456a66b88d2c499eda223577903f04e3a589fe7a1f"
+      },
+      {
+        "path": "dist/commands/jev-session.js",
+        "sha256": "818c5b9ca00bde856046f55a9ea5b2a0d1be6d6e0a2c0d097c5a1e6c97aa0e74"
+      },
+      {
+        "path": "dist/commands/jev-session.js.map",
+        "sha256": "c28cc54c725ff0f8dfe87bacea6ed0e3ae10672b34da05b309ce51efd12996a8"
       },
       {
         "path": "dist/commands/mcp.d.ts",
@@ -646,7 +670,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "620c4f829862e31c9d75b117254ee117da65a9968f0988236ae305615261655a"
+        "sha256": "6c34bd335ed7886106f1ee32b9305c0d48e452f66c8a766fbb3d08d1eb62ffd8"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1046,15 +1070,15 @@
       },
       {
         "path": "dist/core/secret-guard.d.ts",
-        "sha256": "4d0d2915da2600db5135d66a9fdbc2375677cf346491a6321033c65496004ea9"
+        "sha256": "78cb63e823ffba812c14756220ef2e42bafbf5ce5935833843d56316ee51c8f5"
       },
       {
         "path": "dist/core/secret-guard.js",
-        "sha256": "e6f4307c7292f50a954082452fae5dbca3e1465d6d7e356e8728b03ba42d15c9"
+        "sha256": "278863708bf6e76f056da86c4d84790eeb12543b805a3306c78bdd181d97fc27"
       },
       {
         "path": "dist/core/secret-guard.js.map",
-        "sha256": "4a190ff6915255dd270c3d45a4081864f5448fbaf6e54c0dfbd1128094c20bc2"
+        "sha256": "f692660fb4218dc711dd2f763046ddea91da46515f8463eb08cea203838d3d5b"
       },
       {
         "path": "dist/core/squash.d.ts",
@@ -1178,15 +1202,15 @@
       },
       {
         "path": "dist/hooks/claude-settings.d.ts",
-        "sha256": "358a21892af306efb6165b30c558c7e5132b6f639e9da71691443e518c2ee9d7"
+        "sha256": "65840b77c6daf30fc5cf0f2763fb1de5fa615946a82d78d72ad093411edca277"
       },
       {
         "path": "dist/hooks/claude-settings.js",
-        "sha256": "7cfbbdf5e21989cf84e1dbeaeac031487e42b42c2f15d533c78a431ae7441352"
+        "sha256": "1c9b91e9f3a29e37d7fb8edcb0f849c92e0b3f2841db3ae3df347c52a4cc5ae5"
       },
       {
         "path": "dist/hooks/claude-settings.js.map",
-        "sha256": "0f44b5f2957c89389ca1570acf346b976df07dcfe78ea85b39d7be461cda215e"
+        "sha256": "b5c17342dea4dda09b814435368e98d8aa70d86d95d6c5810bcbd9d4fbccb8a1"
       },
       {
         "path": "dist/hooks/commit-msg.d.ts",
@@ -1194,11 +1218,11 @@
       },
       {
         "path": "dist/hooks/commit-msg.js",
-        "sha256": "b2260805e270db23bb0f7c886e41bcb5862ff0f44fea61f7d049a9d37dbcb36b"
+        "sha256": "670b47328fb86bdc64c682dedf2f6eb474b2f542bcf10ecd5f7279599de3dbf5"
       },
       {
         "path": "dist/hooks/commit-msg.js.map",
-        "sha256": "1a341e4f3d17e02498c662be004b4215c16ccd13a7aad574d800c466d2be4f36"
+        "sha256": "fb58d8bd05dc2f39c0f023c12a5d1585cc8b38d6362a6e314dd90165b3b1b930"
       },
       {
         "path": "dist/hooks/post-commit.d.ts",
@@ -1226,15 +1250,15 @@
       },
       {
         "path": "dist/hooks/prepare-commit-msg.d.ts",
-        "sha256": "ec99131d8b4bf6ce8111bbddabb37a2e7b2223e486874de4337aed80e7f997f4"
+        "sha256": "27fe2101a763a8fbff59d591e80ebd99715bb397adc3f77eb97f2af41a727686"
       },
       {
         "path": "dist/hooks/prepare-commit-msg.js",
-        "sha256": "59c19c1e10f18f26625485aa7244c6897aacd171ea0701b55c3fb9d7ba73d261"
+        "sha256": "fc05469dc91fd742f01a8b9dd9034a8613522684dd899c5bffff6f2414d5820a"
       },
       {
         "path": "dist/hooks/prepare-commit-msg.js.map",
-        "sha256": "f09c6c08f8d47120e94f1ba7445841ccaa6b1b3b5d5a2e029994453df9aaa666"
+        "sha256": "a89bc23de69041e8f1db63d28c56edf7b05670be0ae75b17fa78e6d0aa59f385"
       },
       {
         "path": "dist/hooks/secret-rules.d.ts",
@@ -1247,6 +1271,114 @@
       {
         "path": "dist/hooks/secret-rules.js.map",
         "sha256": "ff67f01065269147b0f33f2dd4318500aa5f9ae16a48fc56ab0f570720e60a31"
+      },
+      {
+        "path": "dist/jev/activation.d.ts",
+        "sha256": "ae1525794d496296d22dea1c0f6addba826265bfd9739a0bcab553f65825b3fe"
+      },
+      {
+        "path": "dist/jev/activation.js",
+        "sha256": "65a3d18878004c28cc9e01edfbc480652bc2efea20abba2ed3d504463617f162"
+      },
+      {
+        "path": "dist/jev/activation.js.map",
+        "sha256": "02bc3fbf96979c64624569144b70f574af128ab70a23c3d2d9b0de58c9d2c136"
+      },
+      {
+        "path": "dist/jev/client.d.ts",
+        "sha256": "dcfb9c1f44c7f93b11ee280a4fa30131eb934df063618900e63306577350db11"
+      },
+      {
+        "path": "dist/jev/client.js",
+        "sha256": "a78c1a33563119d8b14bed30ca182b6f0b264f16865e6ec5f3e271ad28d03b25"
+      },
+      {
+        "path": "dist/jev/client.js.map",
+        "sha256": "21b9b43a8ea9e15313043d07ec862d3127693f455da344977194cafd3e9eb733"
+      },
+      {
+        "path": "dist/jev/diagnostic.d.ts",
+        "sha256": "a52846cb27da6fe9327f5543437d0a898d68f9120cb5853434f79bafc1ea8687"
+      },
+      {
+        "path": "dist/jev/diagnostic.js",
+        "sha256": "28d583288b5c287e253fb105144595bc9b672da8ea08655fdc9deba2c8a0a076"
+      },
+      {
+        "path": "dist/jev/diagnostic.js.map",
+        "sha256": "d3f80d8494f8a064d4faa97ef733e460d1d950113fa5dfc506d0b64d1a861cf0"
+      },
+      {
+        "path": "dist/jev/discover.d.ts",
+        "sha256": "f007e6f4972b474b63bd54c07349d1e5a013597188f605c262b96feb213c7629"
+      },
+      {
+        "path": "dist/jev/discover.js",
+        "sha256": "a7a1a404dae6b79163f47193b5cf24ef12aaa474cf0c373e1ea2716326b3554a"
+      },
+      {
+        "path": "dist/jev/discover.js.map",
+        "sha256": "33546f18cffaf3d57ae8f54b871fa2afe0140c3a2190c6ea80bf61bc9232bbe9"
+      },
+      {
+        "path": "dist/jev/producer.d.ts",
+        "sha256": "e50ca343ffaa8ff93ed0130f1131b1227091ef2eec038e5b8f216b968d0f912b"
+      },
+      {
+        "path": "dist/jev/producer.js",
+        "sha256": "f55d9f9dd1d214ce176793ce4bce0ba2660af5220bbf2637cb5f7f3014319652"
+      },
+      {
+        "path": "dist/jev/producer.js.map",
+        "sha256": "e2594043896ff3b6e70023a1f505f4c3b2e9731eaf5f6bb321869766e19d1bad"
+      },
+      {
+        "path": "dist/jev/report.d.ts",
+        "sha256": "fb3c7a590f80aa07b76b73e8fd5c87cc8a64fba0f0ed3321e60c7ad369209591"
+      },
+      {
+        "path": "dist/jev/report.js",
+        "sha256": "ad9c1dad1c117949b58a2624bdb8a3c41b4991ddec87a8f1d4146cfb836345f6"
+      },
+      {
+        "path": "dist/jev/report.js.map",
+        "sha256": "fd904833401ea59bf7b544c584fa621fbd294446212121f1d6f601732ca87ab1"
+      },
+      {
+        "path": "dist/jev/screen.d.ts",
+        "sha256": "400285496cd18127765a07ed9536889dea16e107c100eecfe00553f5ebed9d8b"
+      },
+      {
+        "path": "dist/jev/screen.js",
+        "sha256": "629e35f4cc92dd7b19ad4d26d773171455c6b4ee33832942f745f1c264668316"
+      },
+      {
+        "path": "dist/jev/screen.js.map",
+        "sha256": "7907beb4744ea5f517178bd726d0c380d9e10396746b8eeebb24dc8a9c4b1f90"
+      },
+      {
+        "path": "dist/jev/source-claude.d.ts",
+        "sha256": "76cce77679150ca757f18daf9ddc2c780b5bb4671d14410e03cd52f3d9df3959"
+      },
+      {
+        "path": "dist/jev/source-claude.js",
+        "sha256": "5509979d4acc091666222e5dfaf7805d9e8faa8b37aa69c376ba2709449cf22c"
+      },
+      {
+        "path": "dist/jev/source-claude.js.map",
+        "sha256": "f22d6649ba4d912cd1a932ff0d5925723060ade5195ff9f6ea27374d84320a88"
+      },
+      {
+        "path": "dist/jev/source.d.ts",
+        "sha256": "7c929d6d8832b3496cb6394dddacc69bfbb1852d367c7b8e167bf7d386957a49"
+      },
+      {
+        "path": "dist/jev/source.js",
+        "sha256": "c65014228f9b12d037228161c33380656c797c0fef90f3fe0ec33f3d69b9a990"
+      },
+      {
+        "path": "dist/jev/source.js.map",
+        "sha256": "9c6dafef140648f1cd4f73b89f96bbadd0faf31e9bfbf2923be9a5ddf12ae0ef"
       },
       {
         "path": "dist/mcp/lifecycle.d.ts",

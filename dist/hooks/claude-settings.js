@@ -38,6 +38,13 @@ export const CLAUDE_HOOK_MARKER = '# commitlore-inject-hook';
 export const CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
 /** Where the command writes when the caller names no file. */
 export const claudeSettingsPath = (cwd) => join(cwd, '.claude', 'settings.json');
+export const INJECT_HOOK = {
+    event: CLAUDE_HOOK_EVENT,
+    marker: CLAUDE_HOOK_MARKER,
+    command: CLAUDE_HOOK_COMMAND,
+    matcher: CLAUDE_HOOK_MATCHER,
+    label: 'injection',
+};
 const messageOf = (error) => error instanceof Error ? error.message : String(error);
 const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const failure = (settingsPath, message) => ({
@@ -63,7 +70,7 @@ const success = (status, lines, changed) => ({
  * file whose shape contradicts what an install would write, and the only safe
  * response is to stop with the path in the message.
  */
-const load = (settingsPath) => {
+const load = (settingsPath, kind = INJECT_HOOK) => {
     if (!existsSync(settingsPath))
         return { settings: {}, existed: false };
     let raw;
@@ -91,25 +98,25 @@ const load = (settingsPath) => {
         throw new Error(`${settingsPath} has a "hooks" value that is not an object — refusing to edit it`);
     }
     if (isPlainObject(hooks)) {
-        const event = hooks[CLAUDE_HOOK_EVENT];
+        const event = hooks[kind.event];
         if (event !== undefined && !Array.isArray(event)) {
-            throw new Error(`${settingsPath} has a "hooks.${CLAUDE_HOOK_EVENT}" value that is not an array — refusing to edit it`);
+            throw new Error(`${settingsPath} has a "hooks.${kind.event}" value that is not an array — refusing to edit it`);
         }
     }
     return { settings: parsed, existed: true };
 };
-const eventGroups = (settings) => {
+const eventGroups = (settings, kind) => {
     const hooks = settings['hooks'];
     if (!isPlainObject(hooks))
         return [];
-    const event = hooks[CLAUDE_HOOK_EVENT];
+    const event = hooks[kind.event];
     return Array.isArray(event) ? event.filter(isPlainObject) : [];
 };
-const isOurs = (entry) => isPlainObject(entry) &&
+const isOurs = (entry, kind) => isPlainObject(entry) &&
     typeof entry['command'] === 'string' &&
-    entry['command'].includes(CLAUDE_HOOK_MARKER);
-const ourCommands = (settings) => eventGroups(settings).flatMap((group) => (Array.isArray(group.hooks) ? group.hooks : [])
-    .filter(isOurs)
+    entry['command'].includes(kind.marker);
+const ourCommands = (settings, kind) => eventGroups(settings, kind).flatMap((group) => (Array.isArray(group.hooks) ? group.hooks : [])
+    .filter((entry) => isOurs(entry, kind))
     .map((entry) => String(entry['command'])));
 const stateOf = (commands, expected) => {
     if (commands.length === 0)
@@ -118,10 +125,11 @@ const stateOf = (commands, expected) => {
         return 'conflicting';
     return commands[0] === expected ? 'installed' : 'outdated';
 };
-export const readClaudeHookStatus = (settingsPath, command = CLAUDE_HOOK_COMMAND) => {
+export const readClaudeHookStatus = (settingsPath, command, kind = INJECT_HOOK) => {
+    const expected = command ?? kind.command;
     let loaded;
     try {
-        loaded = load(settingsPath);
+        loaded = load(settingsPath, kind);
     }
     catch (error) {
         return {
@@ -132,10 +140,10 @@ export const readClaudeHookStatus = (settingsPath, command = CLAUDE_HOOK_COMMAND
             problem: messageOf(error),
         };
     }
-    const commands = ourCommands(loaded.settings);
+    const commands = ourCommands(loaded.settings, kind);
     return {
         settingsPath,
-        state: stateOf(commands, command),
+        state: stateOf(commands, expected),
         entries: commands.length,
         commands,
     };
@@ -150,7 +158,7 @@ export const readClaudeHookStatus = (settingsPath, command = CLAUDE_HOOK_COMMAND
  * it is noise the install added. A group that was already empty is left alone:
  * this module removes what it wrote, never what it found.
  */
-const withoutOurs = (groups) => {
+const withoutOurs = (groups, kind) => {
     let removed = 0;
     const kept = [];
     for (const group of groups) {
@@ -158,7 +166,7 @@ const withoutOurs = (groups) => {
             kept.push(group);
             continue;
         }
-        const entries = group.hooks.filter((entry) => !isOurs(entry));
+        const entries = group.hooks.filter((entry) => !isOurs(entry, kind));
         const dropped = group.hooks.length - entries.length;
         removed += dropped;
         if (dropped > 0 && entries.length === 0)
@@ -167,13 +175,13 @@ const withoutOurs = (groups) => {
     }
     return { groups: kept, removed };
 };
-/** Rebuilds `hooks.PreToolUse` while leaving every other key exactly as found. */
-const withGroups = (settings, groups) => {
+/** Rebuilds one `hooks.<event>` while leaving every other key exactly as found. */
+const withGroups = (settings, groups, kind) => {
     const hooks = isPlainObject(settings['hooks']) ? { ...settings['hooks'] } : {};
     if (groups.length === 0)
-        delete hooks[CLAUDE_HOOK_EVENT];
+        delete hooks[kind.event];
     else
-        hooks[CLAUDE_HOOK_EVENT] = groups;
+        hooks[kind.event] = groups;
     const next = { ...settings };
     if (Object.keys(hooks).length === 0)
         delete next['hooks'];
@@ -211,30 +219,28 @@ const writeAtomic = (settingsPath, settings) => {
         throw new Error(`cannot write ${settingsPath}: ${messageOf(error)}`);
     }
 };
-const validateCommand = (command) => {
-    if (!command.includes(CLAUDE_HOOK_MARKER)) {
-        throw new Error(`the hook command must contain the marker ${JSON.stringify(CLAUDE_HOOK_MARKER)}, ` +
+const validateCommand = (command, kind) => {
+    if (!command.includes(kind.marker)) {
+        throw new Error(`the hook command must contain the marker ${JSON.stringify(kind.marker)}, ` +
             'or uninstall would not be able to find it again');
     }
 };
 export const installClaudeHook = (input) => {
     const { settingsPath } = input;
-    const command = input.command ?? CLAUDE_HOOK_COMMAND;
-    const matcher = input.matcher ?? CLAUDE_HOOK_MATCHER;
+    const kind = input.kind ?? INJECT_HOOK;
+    const command = input.command ?? kind.command;
+    const matcher = input.matcher ?? kind.matcher;
     let loaded;
     try {
-        validateCommand(command);
-        loaded = load(settingsPath);
+        validateCommand(command, kind);
+        loaded = load(settingsPath, kind);
     }
     catch (error) {
         return failure(settingsPath, messageOf(error));
     }
-    const before = ourCommands(loaded.settings);
-    const { groups } = withoutOurs(eventGroups(loaded.settings));
-    const next = withGroups(loaded.settings, [
-        ...groups,
-        { matcher, hooks: [{ type: 'command', command }] },
-    ]);
+    const before = ourCommands(loaded.settings, kind);
+    const { groups } = withoutOurs(eventGroups(loaded.settings, kind), kind);
+    const next = withGroups(loaded.settings, [...groups, { matcher, hooks: [{ type: 'command', command }] }], kind);
     const state = stateOf(before, command);
     const unchanged = state === 'installed' && JSON.stringify(next) === JSON.stringify(loaded.settings);
     if (!unchanged) {
@@ -246,13 +252,13 @@ export const installClaudeHook = (input) => {
         }
     }
     const headline = {
-        absent: `installed the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
-        installed: `${CLAUDE_HOOK_EVENT} injection hook already installed: ${settingsPath} (unchanged)`,
-        outdated: `updated the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
-        conflicting: `collapsed ${before.length} duplicate injection hooks into one: ${settingsPath}`,
-        unreadable: `installed the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
+        absent: `installed the ${kind.event} ${kind.label} hook: ${settingsPath}`,
+        installed: `${kind.event} ${kind.label} hook already installed: ${settingsPath} (unchanged)`,
+        outdated: `updated the ${kind.event} ${kind.label} hook: ${settingsPath}`,
+        conflicting: `collapsed ${before.length} duplicate ${kind.label} hooks into one: ${settingsPath}`,
+        unreadable: `installed the ${kind.event} ${kind.label} hook: ${settingsPath}`,
     }[state];
-    return success(readClaudeHookStatus(settingsPath, command), [
+    return success(readClaudeHookStatus(settingsPath, command, kind), [
         headline,
         `  matcher: ${matcher}`,
         `  command: ${command}`,
@@ -260,33 +266,36 @@ export const installClaudeHook = (input) => {
 };
 export const uninstallClaudeHook = (input) => {
     const { settingsPath } = input;
-    const command = input.command ?? CLAUDE_HOOK_COMMAND;
+    const kind = input.kind ?? INJECT_HOOK;
+    const command = input.command ?? kind.command;
     let loaded;
     try {
-        loaded = load(settingsPath);
+        loaded = load(settingsPath, kind);
     }
     catch (error) {
         return failure(settingsPath, messageOf(error));
     }
     if (!loaded.existed) {
-        return success(readClaudeHookStatus(settingsPath, command), [
+        return success(readClaudeHookStatus(settingsPath, command, kind), [
             `no settings file to clean: ${settingsPath}`,
         ], false);
     }
-    const { groups, removed } = withoutOurs(eventGroups(loaded.settings));
+    // Only entries carrying *this* kind's marker. An uninstall of one must leave
+    // the other in place, and must leave every foreign hook alone in both cases.
+    const { groups, removed } = withoutOurs(eventGroups(loaded.settings, kind), kind);
     if (removed === 0) {
-        return success(readClaudeHookStatus(settingsPath, command), [
-            `no commitlore injection hook in ${settingsPath}`,
+        return success(readClaudeHookStatus(settingsPath, command, kind), [
+            `no commitlore ${kind.label} hook in ${settingsPath}`,
         ], false);
     }
     try {
-        writeAtomic(settingsPath, withGroups(loaded.settings, groups));
+        writeAtomic(settingsPath, withGroups(loaded.settings, groups, kind));
     }
     catch (error) {
         return failure(settingsPath, messageOf(error));
     }
-    return success(readClaudeHookStatus(settingsPath, command), [
-        `removed ${removed} injection hook entr${removed === 1 ? 'y' : 'ies'}: ${settingsPath}`,
+    return success(readClaudeHookStatus(settingsPath, command, kind), [
+        `removed ${removed} ${kind.label} hook entr${removed === 1 ? 'y' : 'ies'}: ${settingsPath}`,
     ], true);
 };
 export const claudeHookStatus = (input) => {

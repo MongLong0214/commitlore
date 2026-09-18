@@ -35,6 +35,27 @@ export declare const CLAUDE_HOOK_COMMAND = "commitlore inject --hook-input # com
 /** Where the command writes when the caller names no file. */
 export declare const claudeSettingsPath: (cwd: string) => string;
 /**
+ * One entry this module knows how to install: its event, its identity and its
+ * default command (#1049).
+ *
+ * Added so the optional `SessionStart` registration reuses *this* merge
+ * discipline — the refusal to overwrite an unreadable file, the preservation of
+ * every foreign hook and unknown field, the marker-based idempotence — rather
+ * than a second implementation of it beside this one. Nothing about the
+ * injection entry changes: `INJECT_HOOK` restates the constants above, and it
+ * is the default everywhere a kind is optional, so every existing caller and
+ * every existing byte on disk is unaffected.
+ */
+export interface ClaudeHookKind {
+    readonly event: string;
+    readonly marker: string;
+    readonly command: string;
+    readonly matcher: string;
+    /** How the entry is named in the sentence an install prints. */
+    readonly label: string;
+}
+export declare const INJECT_HOOK: ClaudeHookKind;
+/**
  * `installed` — our entry, current. `outdated` — our entry, different command
  * (an older build, or a `--command` override). `conflicting` — more than one of
  * ours, which only a hand-edit produces and which an install collapses back to
@@ -53,9 +74,11 @@ export interface ClaudeHookStatus {
 }
 export interface ClaudeHookInput {
     settingsPath: string;
-    /** Overrides the installed command. Must carry `CLAUDE_HOOK_MARKER`. */
+    /** Overrides the installed command. Must carry the kind's marker. */
     command?: string;
     matcher?: string;
+    /** Which entry to install. Defaults to the injection hook. */
+    kind?: ClaudeHookKind;
 }
 export interface ClaudeHookResult {
     code: 0 | 2;
@@ -65,7 +88,7 @@ export interface ClaudeHookResult {
     /** Whether the file on disk changed. */
     changed: boolean;
 }
-export declare const readClaudeHookStatus: (settingsPath: string, command?: string) => ClaudeHookStatus;
+export declare const readClaudeHookStatus: (settingsPath: string, command?: string, kind?: ClaudeHookKind) => ClaudeHookStatus;
 export declare const installClaudeHook: (input: ClaudeHookInput) => ClaudeHookResult;
 export declare const uninstallClaudeHook: (input: ClaudeHookInput) => ClaudeHookResult;
 export declare const claudeHookStatus: (input: ClaudeHookInput) => ClaudeHookResult;

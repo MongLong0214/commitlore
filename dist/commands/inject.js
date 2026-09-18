@@ -23,6 +23,7 @@ import { execGit } from '../core/git.js';
 import { buildInjection } from '../core/inject.js';
 import { PATH_TOOLS } from '../core/path-tools.js';
 import { CONSUMER_SCAN_BUDGET_MS } from '../core/query.js';
+import { JEV_SESSION_HOOK } from './jev-session.js';
 import { configuredSignedDirectivesRequired, configuredTrustedSignerFingerprints, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_EVENT, claudeHookStatus, claudeSettingsPath, installClaudeHook, uninstallClaudeHook, } from '../hooks/claude-settings.js';
 // ---------------------------------------------------------------------------
@@ -348,7 +349,29 @@ export const register = (program) => {
         .option('--settings <path>', 'the settings file to edit (default: .claude/settings.json)')
         .addHelpText('after', '\nExit codes: 0 removed (or nothing to remove), 2 the settings file could not be read or written (SPEC §10).')
         .action((options) => {
-        emitResult(uninstallClaudeHook(hookInput(options)));
+        const injection = uninstallClaudeHook(hookInput(options));
+        /*
+         * The optional prototype's `SessionStart` entry goes with it (#1050).
+         *
+         * `init` writes both, so the command documented as the way to undo that
+         * has to remove both — otherwise an uninstall leaves an entry behind that
+         * nothing else names, and the next reader finds a hook for a feature they
+         * were told they had removed.
+         *
+         * Each pass matches only its own marker, so a foreign hook, an unknown
+         * field and the *other* commitlore entry are all untouched by either one.
+         */
+        const session = uninstallClaudeHook({ ...hookInput(options), kind: JEV_SESSION_HOOK });
+        emitResult({
+            // A failure on either half is the command's failure: a partial
+            // uninstall reported as success is how the leftover entry above
+            // survives unnoticed.
+            code: injection.code === 0 && session.code === 0 ? 0 : 2,
+            stdout: `${injection.stdout}${session.stdout}`,
+            stderr: `${injection.stderr}${session.stderr}`,
+            changed: injection.changed || session.changed,
+            ...(injection.status === undefined ? {} : { status: injection.status }),
+        });
     });
     inject
         .command('claude-hook-status')

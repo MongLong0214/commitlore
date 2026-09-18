@@ -53,14 +53,16 @@ const redact = (text) => `${text.slice(0, Math.min(REDACT_PREFIX, Math.max(text.
  * The lines git will keep, with their original 1-based numbers so a reported
  * line still matches what the author sees in their editor.
  */
-const scannedLines = (message) => {
+const scannedLines = (message, includeIgnored = false) => {
     const kept = [];
     for (const [index, raw] of message.split('\n').entries()) {
         const text = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
-        if (SCISSORS.test(text))
-            break;
-        if (text.startsWith(COMMENT_CHAR))
-            continue;
+        if (!includeIgnored) {
+            if (SCISSORS.test(text))
+                break;
+            if (text.startsWith(COMMENT_CHAR))
+                continue;
+        }
         kept.push({ line: index + 1, text });
     }
     return kept;
@@ -135,7 +137,7 @@ export const redactSecretsIn = (value) => {
  */
 export const scanForSecrets = (message, opts) => {
     const floor = CONFIDENCE_RANK[opts?.minConfidence ?? 'medium'];
-    const hits = scannedLines(message).flatMap((source) => SECRET_RULES.flatMap((rule) => hitsFor(rule, source)));
+    const hits = scannedLines(message, opts?.includeIgnoredLines === true).flatMap((source) => SECRET_RULES.flatMap((rule) => hitsFor(rule, source)));
     return dropShadowed(hits)
         .filter((hit) => CONFIDENCE_RANK[hit.rule.confidence] >= floor)
         .sort((a, b) => a.line - b.line || a.start - b.start || a.rule.id.localeCompare(b.rule.id))

@@ -18,6 +18,25 @@ export interface PrepareCommitMsgHookResult {
 }
 export declare const installPrepareCommitMsgHook: (cwd?: string) => PrepareCommitMsgHookResult;
 /**
+ * Serialize the records array's trailers into a canonical trailer block string.
+ *
+ * Exported so the optional producer (#1048) composes its candidate with *this*
+ * function rather than a second copy of it. The bytes a record turns into are
+ * what `markApplied` hashes and what a reader later parses, so two
+ * serializations that agree today and drift tomorrow would show up as a record
+ * that validates and then fails its own applied-hash check.
+ */
+export declare const pendingTrailerBlock: (records: readonly unknown[]) => string;
+/**
+ * How a trailer block joins a message — the same separator rule the native
+ * application below uses, for the same reason (#1048).
+ *
+ * `git interpret-trailers` needs the block to be its own final paragraph, and
+ * getting that separator wrong is the failure mode where every check stays green
+ * and the whole record is silently dropped.
+ */
+export declare const composeWithTrailerBlock: (message: string, trailerBlock: string) => string;
+/**
  * Newer eligible capture first. `created_at` is the recorded instant, not the
  * nonce filename — the filename is `randomBytes(16)` hex, so lexicographic
  * order is a coin flip (#591).

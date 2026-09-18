@@ -38,6 +38,18 @@ export interface SecretFinding {
 export interface ScanOptions {
     /** Findings below this bar are dropped. Defaults to `medium`, i.e. report everything. */
     minConfidence?: 'high' | 'medium';
+    /**
+     * Scan the lines a commit message would have dropped: `#` comments and
+     * everything below `commit -v` scissors. Defaults to false, which is the
+     * behaviour every existing caller has.
+     *
+     * The two omissions are correct for a commit message and wrong for anything
+     * being sent somewhere. Git strips those lines, so a finding there describes
+     * text that will never exist in the repository — but an outbound request
+     * carries the string as given, and a credential in a comment line leaves the
+     * machine exactly like one anywhere else (#1046).
+     */
+    includeIgnoredLines?: boolean;
 }
 /**
  * Replaces every credential in one line of text with its redacted form.

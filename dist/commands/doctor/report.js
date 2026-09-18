@@ -34,6 +34,7 @@ import { PACKAGE_ROOT, installedPath, packageVersion } from '../../core/paths.js
 import { SKIP_CLASS } from './model.js';
 import { formatReport } from './render.js';
 import { runDoctor } from './runner.js';
+import { jevReport } from '../../jev/report.js';
 /**
  * The actionable root causes, in the order a user should address them.
  *
@@ -157,6 +158,7 @@ export const register = (program) => {
         .option('--verbose', 'include diagnostic evidence, skip reasons, and durations for each check')
         .option('--only <ids>', 'run only these comma-separated check ids')
         .option('--category <name>', 'run only checks in this category')
+        .option('--jev', 'also report the optional Jev prototype (makes no provider call)')
         .addHelpText('after', '\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC §10).')
         .action((options) => {
         const doctorOptions = { fix: options.fix === true };
@@ -169,6 +171,18 @@ export const register = (program) => {
         process.stdout.write(options.json === true
             ? `${JSON.stringify(report, null, 2)}\n`
             : formatReport(report, { verbose: options.verbose === true }));
+        /*
+         * Appended, and only when asked (#1050).
+         *
+         * Default output is byte-identical to before: a default installation has
+         * no prototype to diagnose, and a section about a feature nobody enabled
+         * is noise in the command people run when something is already wrong. It
+         * also cannot change the exit code — a prototype that is merely not set
+         * up is not a repository failure.
+         */
+        if (options.jev === true) {
+            process.stdout.write(`\n${jevReport({ cwd: process.cwd(), env: process.env }).join('\n')}\n`);
+        }
         process.exitCode = report.exitCode;
     });
 };

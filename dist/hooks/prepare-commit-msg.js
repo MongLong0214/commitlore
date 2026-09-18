@@ -139,7 +139,26 @@ const readPendingFile = (filePath) => {
 };
 /**
  * Serialize the records array's trailers into a canonical trailer block string.
+ *
+ * Exported so the optional producer (#1048) composes its candidate with *this*
+ * function rather than a second copy of it. The bytes a record turns into are
+ * what `markApplied` hashes and what a reader later parses, so two
+ * serializations that agree today and drift tomorrow would show up as a record
+ * that validates and then fails its own applied-hash check.
  */
+export const pendingTrailerBlock = (records) => buildTrailerBlock([...records]);
+/**
+ * How a trailer block joins a message — the same separator rule the native
+ * application below uses, for the same reason (#1048).
+ *
+ * `git interpret-trailers` needs the block to be its own final paragraph, and
+ * getting that separator wrong is the failure mode where every check stays green
+ * and the whole record is silently dropped.
+ */
+export const composeWithTrailerBlock = (message, trailerBlock) => {
+    const separator = message.endsWith('\n\n') ? '' : message.endsWith('\n') ? '\n' : '\n\n';
+    return `${message}${separator}${trailerBlock}`;
+};
 const buildTrailerBlock = (records) => {
     const blocks = [];
     for (const rec of records) {
@@ -344,12 +363,7 @@ const applyCaptureRecord = (messageFile, cwd) => {
     const trailerBlock = buildTrailerBlock(pending.records);
     if (!trailerBlock)
         return;
-    const separator = currentMessage.endsWith('\n\n')
-        ? ''
-        : currentMessage.endsWith('\n')
-            ? '\n'
-            : '\n\n';
-    writeFileSync(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+    writeFileSync(messageFile, composeWithTrailerBlock(currentMessage, trailerBlock));
     // Mark applied — hash the canonical trailer block, not the full message
     const recordHash = createHash('sha256').update(trailerBlock).digest('hex');
     try {
