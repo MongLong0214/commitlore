@@ -61,6 +61,16 @@ serves. The parts where that matters:
   files and register an MCP server. Anything that makes them write outside their
   documented targets, execute a downloaded payload, or hand a host a command
   other than the CommitLore binary is a vulnerability.
+- **The optional Jev prototype exporting anything without a key.** It is off
+  unless `COMMITLORE_JEV_API_KEY` is set (or `COMMITLORE_JEV=on` with
+  `TYPESAFE_API_KEY`), and `COMMITLORE_JEV=off` overrides both. With it
+  disabled, any transcript read, file write or outbound request is a
+  vulnerability — as is an enabled run that sends a unit the credential screen
+  flagged, or that puts the key into argv, a log, a diagnostic, a pending record
+  or a settings file. The screen itself is best effort over eleven rules: a
+  credential shape it misses is worth reporting, and so is any path that sends
+  text the screen never saw. What an enabled prototype sends is documented in
+  the README, and that export is the feature rather than a defect.
 
 ## What is not
 

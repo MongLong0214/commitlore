@@ -152,12 +152,17 @@ beforeAll(() => {
       "import { register as registerValidate } from './dist/commands/validate.js';",
       "import { register as registerHooks } from './dist/commands/hooks.js';",
       "import { register as registerPrepareCommitMsg } from './dist/hooks/prepare-commit-msg.js';",
+      // The installed gate execs `commit-msg`, not `validate`, since #1048. It
+      // is the dispatcher: with no key it calls `runValidate` with the same
+      // arguments, which is what every assertion in this file exercises.
+      "import { register as registerCommitMsg } from './dist/commands/commit-msg.js';",
       '',
       'const program = new Command();',
       "program.name('commitlore');",
       'registerValidate(program);',
       'registerHooks(program);',
       'registerPrepareCommitMsg(program);',
+      'registerCommitMsg(program);',
       'program.parse(process.argv);',
       '',
     ].join('\n'),
@@ -564,7 +569,7 @@ describe('hooks — a real commit', () => {
     const blocked = commitThroughHooks(repo, 'a.txt', 'Bad\n\nBlast: wide\n', env);
     expect(blocked.status).not.toBe(0);
     expect(blocked.output).toContain('enum Blast');
-    expect(readFileSync(witness, 'utf8')).toContain('validate --message-file');
+    expect(readFileSync(witness, 'utf8')).toContain('commit-msg --message-file');
   });
 
   it('runs a CLI found on PATH when COMMITLORE_BIN is unset', () => {
@@ -588,7 +593,7 @@ describe('hooks — a real commit', () => {
     const blocked = commitThroughHooks(repo, 'a.txt', 'Bad\n\nCertainty: high\n', env);
     expect(blocked.status).not.toBe(0);
     expect(blocked.output).toContain('enum Certainty');
-    expect(readFileSync(witness, 'utf8')).toContain('validate --message-file');
+    expect(readFileSync(witness, 'utf8')).toContain('commit-msg --message-file');
   });
 
   /**
@@ -716,7 +721,7 @@ describe('hooks — a real commit', () => {
       COMMITLORE_BIN: spy,
     });
     expect(blocked.status).not.toBe(0);
-    expect(readFileSync(witness, 'utf8')).toContain('validate --message-file');
+    expect(readFileSync(witness, 'utf8')).toContain('commit-msg --message-file');
   });
 
   /**
