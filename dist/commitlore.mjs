@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve24.call(this, root, ref);
+      let _sch = resolve25.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve24(root, ref) {
+    function resolve25(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3841,7 +3841,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve24(baseURI, relativeURI, options) {
+    function resolve25(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -3862,17 +3862,17 @@ var require_fast_uri = __commonJS({
       if (baseMalformed || relativeMalformed || baseMalformedPercentEncoding || relativeMalformedPercentEncoding || baseMalformedSchemeSpecific || relativeMalformedSchemeSpecific || baseMalformedHost || relativeMalformedHost || baseMalformedScheme || relativeMalformedScheme) {
         throw new Error(baseParsed.error || relativeParsed.error || "URI is malformed.");
       }
-      const resolved = resolveComponent(baseParsed, relativeParsed, schemelessOptions, true);
-      const resolvedSchemeHandler = getSchemeHandler(options && options.scheme || resolved.scheme);
-      const resolvedHost = resolved.host;
+      const resolved2 = resolveComponent(baseParsed, relativeParsed, schemelessOptions, true);
+      const resolvedSchemeHandler = getSchemeHandler(options && options.scheme || resolved2.scheme);
+      const resolvedHost = resolved2.host;
       const resolvedHostIsIP = resolvedHost !== void 0 && resolvedHost !== "" && (isIPv4(resolvedHost) || normalizeIPv6(resolvedHost).isIPV6);
-      canonicalizeHost(resolved, options || {}, resolvedSchemeHandler, resolvedHostIsIP);
+      canonicalizeHost(resolved2, options || {}, resolvedSchemeHandler, resolvedHostIsIP);
       const encodedASCIIHost = resolvedHost && resolvedHost.indexOf("%") !== -1 && !new RegExp("\\P{ASCII}", "u").test(resolvedHost);
-      if (resolved.error && !encodedASCIIHost) {
-        throw new Error(resolved.error);
+      if (resolved2.error && !encodedASCIIHost) {
+        throw new Error(resolved2.error);
       }
       schemelessOptions.skipEscape = true;
-      return serialize(resolved, schemelessOptions);
+      return serialize(resolved2, schemelessOptions);
     }
     function resolveComponent(base, relative5, options, skipNormalization) {
       const target = {};
@@ -4209,7 +4209,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve24,
+      resolve: resolve25,
       resolveComponent,
       equal,
       serialize,
@@ -11578,8 +11578,8 @@ var resolveRevision = (cwd, revision) => {
     { cwd }
   );
   if (result.code !== 0) return null;
-  const resolved = result.stdout.trim();
-  return isFullObjectId(resolved) ? resolved : null;
+  const resolved2 = result.stdout.trim();
+  return isFullObjectId(resolved2) ? resolved2 : null;
 };
 var GIT_NO_SUCH_REF = 1;
 var historyAvailability = (cwd, facts) => {
@@ -11682,9 +11682,9 @@ var isolateBlocks = (messages) => {
     const all = [...wanted];
     for (let at = 0; at < all.length; at += PROBE_BATCH) {
       const chunk = all.slice(at, at + PROBE_BATCH);
-      const resolved = probeChunk(scratch, chunk);
-      if (resolved === null) return EMPTY_ISOLATED;
-      for (const [paragraph, trailers] of resolved) answers.set(paragraph, trailers);
+      const resolved2 = probeChunk(scratch, chunk);
+      if (resolved2 === null) return EMPTY_ISOLATED;
+      for (const [paragraph, trailers] of resolved2) answers.set(paragraph, trailers);
     }
   } catch {
     return EMPTY_ISOLATED;
@@ -11707,9 +11707,9 @@ var parseMessagesBatched = (messages) => {
     const answers = /* @__PURE__ */ new Map();
     for (let at = 0; at < wanted.length; at += PROBE_BATCH) {
       const chunk = wanted.slice(at, at + PROBE_BATCH);
-      const resolved = parseChunkOfMessages(scratch, chunk, at);
-      if (resolved === null) return null;
-      for (const [message, trailers] of resolved) answers.set(message, trailers);
+      const resolved2 = parseChunkOfMessages(scratch, chunk, at);
+      if (resolved2 === null) return null;
+      for (const [message, trailers] of resolved2) answers.set(message, trailers);
     }
     return answers;
   } catch {
@@ -14314,8 +14314,8 @@ var resolveCommit = (cwd, sha) => {
     gitOpts(cwd)
   );
   if (result.code !== 0) return null;
-  const resolved = result.stdout.trim();
-  return resolved === "" ? null : resolved;
+  const resolved2 = result.stdout.trim();
+  return resolved2 === "" ? null : resolved2;
 };
 var GH_MAX_BUFFER = 8 * 1024 * 1024;
 var runGh = (args, cwd) => spawnSync3("gh", args, {
@@ -16964,7 +16964,7 @@ var gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective, trus
   const noteAuthors = merged.some((record2) => record2.sources.includes("notes")) ? noteAuthorsOf(cwd) : /* @__PURE__ */ new Map();
   for (const record2 of merged) {
     const shas = record2.shas.length > 0 ? record2.shas : [record2.sha];
-    const resolved = gradeDeclarations(
+    const resolved2 = gradeDeclarations(
       { trailers: record2.trailers },
       {
         shas,
@@ -16981,9 +16981,9 @@ var gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective, trus
         ...trustedSignerFingerprints === void 0 ? {} : { trustedSignerFingerprints }
       }
     );
-    record2.trust = resolved.trust;
-    if (resolved.matchedTrailerKeys !== void 0) {
-      record2.matchedTrailerKeys = resolved.matchedTrailerKeys;
+    record2.trust = resolved2.trust;
+    if (resolved2.matchedTrailerKeys !== void 0) {
+      record2.matchedTrailerKeys = resolved2.matchedTrailerKeys;
     }
   }
 };
@@ -17668,9 +17668,9 @@ var pendingDir = (cwd) => {
   const memo = pendingDirCache.get(cwd);
   if (memo !== void 0) return memo;
   const reported = execGitOrThrow(["rev-parse", "--git-path", "commitlore/pending"], { cwd }).trim();
-  const resolved = resolve3(cwd, reported);
-  pendingDirCache.set(cwd, resolved);
-  return resolved;
+  const resolved2 = resolve3(cwd, reported);
+  pendingDirCache.set(cwd, resolved2);
+  return resolved2;
 };
 var pendingFilePath = (nonce, cwd) => {
   validateNonce(nonce);
@@ -18642,11 +18642,11 @@ var truncateDiff2 = (diff) => {
 `;
 };
 var historicalCommits = (cwd, since) => {
-  const resolved = resolveRevision(cwd, since);
-  if (resolved === null) {
+  const resolved2 = resolveRevision(cwd, since);
+  if (resolved2 === null) {
     throw new Error(`--since does not name a commit: ${JSON.stringify(since)}`);
   }
-  const range = `${resolved}..HEAD`;
+  const range = `${resolved2}..HEAD`;
   const metadata = gitOutput(
     [
       "log",
@@ -19685,12 +19685,12 @@ var initializeTimeoutMs = () => {
   const raw = Number(process.env["COMMITLORE_MCP_PROBE_TIMEOUT_MS"]);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_INITIALIZE_TIMEOUT_MS;
 };
-var wait = (milliseconds) => new Promise((resolve24) => setTimeout(resolve24, milliseconds));
+var wait = (milliseconds) => new Promise((resolve25) => setTimeout(resolve25, milliseconds));
 var stopProbeChild = async (child) => {
   if (child.exitCode !== null || child.signalCode !== null) return "not-needed";
   let exitedResolve;
-  const exited = new Promise((resolve24) => {
-    exitedResolve = resolve24;
+  const exited = new Promise((resolve25) => {
+    exitedResolve = resolve25;
   });
   child.once("exit", () => exitedResolve?.());
   if (process.platform === "win32") {
@@ -19808,9 +19808,9 @@ var commandPath = (command) => {
 };
 var needsWindowsCommandShell = (command) => process.platform === "win32" && /\.(?:cmd|bat)$/i.test(command);
 var probeMcp = async (command, args) => {
-  const resolved = commandPath(command);
-  if (typeof resolved !== "string") return resolved;
-  return new Promise((resolve24) => {
+  const resolved2 = commandPath(command);
+  if (typeof resolved2 !== "string") return resolved2;
+  return new Promise((resolve25) => {
     let settled2 = false;
     let child;
     let timer;
@@ -19821,19 +19821,19 @@ var probeMcp = async (command, args) => {
       void (async () => {
         const cleanup = child === void 0 ? "not-needed" : await stopProbeChild(child);
         if (cleanup === "could-not-reclaim") {
-          resolve24(failure2("probe-unavailable", "MCP verification completed but could not reclaim its child process tree", cleanup));
+          resolve25(failure2("probe-unavailable", "MCP verification completed but could not reclaim its child process tree", cleanup));
           return;
         }
-        resolve24({ ...problem, cleanup });
+        resolve25({ ...problem, cleanup });
       })();
     };
     try {
       const childEnv = { ...process.env };
       delete childEnv["COMMITLORE_MCP_PROBE"];
       childEnv["COMMITLORE_MCP_PROBE_CHILD"] = "1";
-      child = spawn(resolved, args, {
+      child = spawn(resolved2, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: needsWindowsCommandShell(resolved),
+        shell: needsWindowsCommandShell(resolved2),
         env: childEnv,
         detached: process.platform !== "win32"
       });
@@ -22680,18 +22680,18 @@ var checkMcpRegistrationRuntime = (ctx) => {
         { evidence: { registered_command: command, entry_point: rawEntry, entry_resolves: "unexpanded" } }
       );
     }
-    const resolved = isAbsolute3(entry) ? entry : join12(cwd, entry);
-    if (!existsSync13(resolved)) {
+    const resolved2 = isAbsolute3(entry) ? entry : join12(cwd, entry);
+    if (!existsSync13(resolved2)) {
       return check(
         id2,
         "delivery",
         title2,
         "warn",
-        `${MCP_REGISTRATION_FILE} launches ${resolved}, which does not exist. The host spawns ${command}, node fails to find the module, and the server exits before any of this tool runs \u2014 so it writes no lifecycle entry and the only symptom is the host's own connection error. A path that resolves against the session directory rather than the install directory fails exactly this way`,
+        `${MCP_REGISTRATION_FILE} launches ${resolved2}, which does not exist. The host spawns ${command}, node fails to find the module, and the server exits before any of this tool runs \u2014 so it writes no lifecycle entry and the only symptom is the host's own connection error. A path that resolves against the session directory rather than the install directory fails exactly this way`,
         `register the entry point by a path that does not depend on the session's working directory`,
         false,
         void 0,
-        { evidence: { registered_command: command, entry_point: resolved, entry_resolves: "false" } }
+        { evidence: { registered_command: command, entry_point: resolved2, entry_resolves: "false" } }
       );
     }
   }
@@ -24123,14 +24123,14 @@ var fetchTags = async (url, opts = {}) => {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimer = opts.clearTimer ?? ((handle) => clearTimeout(handle));
-  return await new Promise((resolve24) => {
+  return await new Promise((resolve25) => {
     let settled2 = false;
     const finish = (outcome) => {
       if (settled2) return;
       settled2 = true;
       clearTimer(killTimer);
       clearTimer(graceTimer);
-      resolve24(outcome);
+      resolve25(outcome);
     };
     let child;
     try {
@@ -24145,7 +24145,7 @@ var fetchTags = async (url, opts = {}) => {
         }
       });
     } catch (error2) {
-      resolve24({ kind: "unreachable", detail: `git could not be started: ${String(error2)}` });
+      resolve25({ kind: "unreachable", detail: `git could not be started: ${String(error2)}` });
       return;
     }
     const signalGroup = (signal) => {
@@ -25943,9 +25943,9 @@ var resolvedCurrent = (root, platform = process.platform) => {
   }
 };
 var pointsAtTarget = (root, tag, platform) => {
-  const resolved = resolvedCurrent(root, platform);
-  if (resolved === null) return false;
-  return resolved.split(/[/\\]/).pop() === tag;
+  const resolved2 = resolvedCurrent(root, platform);
+  if (resolved2 === null) return false;
+  return resolved2.split(/[/\\]/).pop() === tag;
 };
 var performUpgrade = (tag, deps) => {
   const root = dataRoot(deps.env);
@@ -28417,9 +28417,9 @@ ${result.stdout}`.split(/\r?\n/).map((line2) => line2.trim()).find(Boolean);
 };
 var failureMessage = (message, detail) => detail === void 0 ? message : `${message}: ${detail}`;
 var commandResult = (command, args) => {
-  const resolved = resolveCommand(command);
-  if (resolved === null) return { ok: false, stdout: "", detail: `${command} was not found` };
-  const result = spawnResolved(resolved, args);
+  const resolved2 = resolveCommand(command);
+  if (resolved2 === null) return { ok: false, stdout: "", detail: `${command} was not found` };
+  const result = spawnResolved(resolved2, args);
   const detail = commandFailureDetail(result);
   return {
     ok: result.status === 0 && result.error === void 0,
@@ -28428,9 +28428,9 @@ var commandResult = (command, args) => {
   };
 };
 var commandStatus = (command, args, timeout) => {
-  const resolved = resolveCommand(command);
-  if (resolved === null) return { status: null, detail: `${command} was not found` };
-  const result = spawnResolved(resolved, args, timeout);
+  const resolved2 = resolveCommand(command);
+  if (resolved2 === null) return { status: null, detail: `${command} was not found` };
+  const result = spawnResolved(resolved2, args, timeout);
   const detail = commandFailureDetail(result);
   return { status: result.status, ...detail === void 0 ? {} : { detail } };
 };
@@ -28519,7 +28519,7 @@ var register20 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute6, relative as relative4, resolve as resolve22, sep as sep5 } from "node:path";
+import { isAbsolute as isAbsolute6, relative as relative4, resolve as resolve23, sep as sep5 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -35839,7 +35839,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve24) => setTimeout(resolve24, pollInterval));
+        await new Promise((resolve25) => setTimeout(resolve25, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -35856,7 +35856,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve24, reject2) => {
+    return new Promise((resolve25, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -35934,7 +35934,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve24(parseResult.data);
+            resolve25(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -36195,12 +36195,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve24, reject2) => {
+    return new Promise((resolve25, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve24, interval);
+      const timeoutId = setTimeout(resolve25, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -37076,12 +37076,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve24) => {
+    return new Promise((resolve25) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve24();
+        resolve25();
       } else {
-        this._stdout.once("drain", resolve24);
+        this._stdout.once("drain", resolve25);
       }
     });
   }
@@ -37527,6 +37527,58 @@ var beforeChange = (opts) => {
   };
 };
 
+// src/core/repository-assertion.ts
+import { realpathSync as realpathSync7 } from "node:fs";
+import { resolve as resolve22 } from "node:path";
+var gitValue = (cwd, args) => {
+  const result = execGit([...args], { cwd });
+  if (result.code !== 0) return null;
+  const value = result.stdout.trim();
+  return value === "" ? null : value;
+};
+var resolved = (path2) => {
+  try {
+    return realpathSync7(path2);
+  } catch {
+    return path2;
+  }
+};
+var treeFacts = (cwd) => {
+  const root = gitValue(cwd, ["rev-parse", "--show-toplevel"]);
+  if (root === null) return null;
+  const commonDir = gitValue(cwd, ["rev-parse", "--git-common-dir"]);
+  return {
+    root: resolved(root),
+    commonDir: commonDir === null ? null : resolved(resolve22(cwd, commonDir)),
+    head: gitValue(cwd, ["rev-parse", "HEAD"]),
+    branch: gitValue(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])
+  };
+};
+var describe4 = (label, facts) => `${label} ${facts.root}` + (facts.branch === null ? "" : ` (branch ${facts.branch}`) + (facts.branch === null || facts.head === null ? "" : `, HEAD ${facts.head.slice(0, 12)}`) + (facts.branch === null ? "" : ")");
+var assertRepositoryBinding = (asserted, root) => {
+  const mine = treeFacts(root);
+  const theirs = treeFacts(asserted);
+  if (theirs === null) {
+    throw new Error(
+      `repository "${asserted}" is not a git working tree. This server is bound to ${mine === null ? root : mine.root}. Pass the working tree you are capturing from, or omit \`repository\` to accept this server's.`
+    );
+  }
+  if (mine === null) {
+    throw new Error(
+      `this server's directory ${root} is not a git working tree, so the assertion "${asserted}" cannot be checked.`
+    );
+  }
+  if (theirs.root === mine.root) return;
+  const sameRepository = mine.commonDir !== null && theirs.commonDir !== null && mine.commonDir === theirs.commonDir;
+  throw new Error(
+    `capture would bind to a different working tree than the one you named.
+${describe4("  you asked for ", theirs)}
+${describe4("  this server is", mine)}
+` + (sameRepository ? "Both are worktrees of the same repository, so the transaction would have bound to the other branch's HEAD and staged diff, and nothing in the response would have looked wrong.\n" : "These are separate repositories.\n") + "Register the CommitLore MCP server against the tree you are working in, or run `commitlore capture` there \u2014 the CLI binds to its own working directory."
+  );
+};
+var emptyStagedDiffNote = (root) => `nothing is staged in ${root}, which is the tree this server is bound to. If you are working somewhere else \u2014 a linked worktree, another checkout \u2014 this transaction is bound to that tree's HEAD and not yours. Pass \`repository\` with your working directory and this call will refuse rather than prepare against another tree.`;
+
 // src/mcp/validate-args.ts
 var isPlainObject5 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 var typeOf = (value) => {
@@ -37638,11 +37690,11 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute6(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve22(root, raw);
-  if (resolved !== root && !resolved.startsWith(`${root}${sep5}`)) {
+  const resolved2 = resolve23(root, raw);
+  if (resolved2 !== root && !resolved2.startsWith(`${root}${sep5}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
-  return relative4(root, resolved);
+  return relative4(root, resolved2);
 };
 var contextUriPath = (uri) => {
   const bare = uri === CONTEXT_URI_PREFIX.slice(0, -1);
@@ -37773,7 +37825,7 @@ var TOOLS = [
   },
   {
     name: PREPARE_CAPTURE_TOOL,
-    description: 'Prepare a capture transaction: computes binding conditions (HEAD, staged diff, tree, policy hash), generates the prompt contract for the agent to use, and persists a phase:"prepared" pending transaction. Returns the nonce needed for verify and stage. The prompt carries the end of the transcript rather than all of it; transcript_window says which lines, numbered as the whole transcript numbers them. Verification still reads the whole transcript, so quote only what the prompt shows you.',
+    description: 'Prepare a capture transaction: computes binding conditions (HEAD, staged diff, tree, policy hash), generates the prompt contract for the agent to use, and persists a phase:"prepared" pending transaction. Returns the nonce needed for verify and stage. The prompt carries the end of the transcript rather than all of it; transcript_window says which lines, numbered as the whole transcript numbers them. Verification still reads the whole transcript, so quote only what the prompt shows you. The transaction binds to THIS server\'s checkout, returned as `repository`; if your working directory is a linked worktree or another clone, pass `repository` to assert it and this refuses rather than binding to the wrong HEAD.',
     inputSchema: {
       type: "object",
       properties: {
@@ -37784,6 +37836,10 @@ var TOOLS = [
         unattended: {
           type: "boolean",
           description: 'declare this capture unattended: nobody was asked before staging. Refused unless the repository opted in (.commitlore-policy.json: "unattended": true, mode "auto")'
+        },
+        repository: {
+          type: "string",
+          description: "your own working directory, asserted. This server is registered against one checkout and binds every transaction to it; if you are in a linked worktree or another clone, pass this and the call refuses instead of binding to a tree you never touched. It cannot change the binding, only assert it. Omit to accept this server's repository, which is returned as `repository`"
         }
       },
       required: ["transcript"],
@@ -37901,7 +37957,7 @@ var stagedRecordIds = (nonce, cwd) => {
 };
 var createServer = (opts = {}) => {
   const unbound = /* @__PURE__ */ new Set();
-  const root = resolve22(opts.cwd ?? process.cwd());
+  const root = resolve23(opts.cwd ?? process.cwd());
   const captureAssets = preflightCaptureAssets();
   const captureReady = captureAssets.ready;
   const captureDiagnostic = captureUnavailableMessage(captureAssets);
@@ -37981,6 +38037,8 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
     [PREPARE_CAPTURE_TOOL]: (args) => {
       const transcript = requiredString(args, "transcript");
       const unattended = booleanArg(args, "unattended");
+      const asserted = stringArg(args, "repository");
+      if (asserted !== void 0) assertRepositoryBinding(asserted, root);
       const trustedAuthors = configuredTrustedAuthors(root);
       const trustedSignerFingerprints = configuredTrustedSignerFingerprints(root);
       const result = prepareCaptureContext({
@@ -38031,6 +38089,16 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
          * it against the tree they meant in one glance.
          */
         staged_diff_empty: result.staged_diff_hash === EMPTY_SHA256,
+        /*
+         * #1030: `staged_diff_empty: true` is also what a caller sees when they
+         * have staged nothing, so on its own it cannot distinguish that from "I
+         * looked at another repository". The reporter caught the mismatch by
+         * reading `repository`, one field among sixteen with nothing drawing
+         * attention to it; this puts the same fact where the empty diff is
+         * already being explained, and names the assertion that turns the next
+         * occurrence into a refusal.
+         */
+        staged_diff_empty_means: result.staged_diff_hash === EMPTY_SHA256 ? emptyStagedDiffNote(root) : null,
         repository: root,
         // #924: the build that is about to write, and whether the machine has a
         // newer one that this session never picked up.
@@ -38568,10 +38636,10 @@ var runSquashPreserve = (input = {}) => {
         `the range ${JSON.stringify(range)} holds no commits \u2014 nothing was squashed`
       );
     }
-    const resolved = planSquash(
+    const resolved2 = planSquash(
       collectRange(range, input.cwd === void 0 ? {} : { cwd: input.cwd })
     );
-    ({ plan, skippedRecordIds } = withoutRecordIds(resolved, input.excludeRecordIds ?? []));
+    ({ plan, skippedRecordIds } = withoutRecordIds(resolved2, input.excludeRecordIds ?? []));
   } catch (error2) {
     return usageError(messageOf8(error2));
   }
@@ -38744,7 +38812,7 @@ var register25 = (program3) => {
 
 // src/commands/validate.ts
 import { readFileSync as readFileSync33, rmSync as rmSync9 } from "node:fs";
-import { resolve as resolve23 } from "node:path";
+import { resolve as resolve24 } from "node:path";
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
   messageFile: "--message-file",
@@ -39068,7 +39136,7 @@ var recordsFor = (source, cwd, input = {}, cache) => {
 var consumeAmendMarker = (cwd) => {
   const located = execGit(["rev-parse", "--git-path", "commitlore-amend"], { cwd });
   if (located.code !== 0) return null;
-  const path2 = resolve23(cwd, located.stdout.trim());
+  const path2 = resolve24(cwd, located.stdout.trim());
   try {
     const recorded = readFileSync33(path2, "utf8").trim();
     rmSync9(path2, { force: true });
@@ -39571,7 +39639,7 @@ var internalMcpProbe = async (command, rawArgs) => {
   } catch {
   }
   const result = command === void 0 || args === void 0 ? { kind: "failure", reason: "probe-unavailable", detail: "could not read MCP verification arguments" } : await probeMcp(command, args);
-  await new Promise((resolve24) => process.stdout.write(JSON.stringify(result), () => resolve24()));
+  await new Promise((resolve25) => process.stdout.write(JSON.stringify(result), () => resolve25()));
 };
 var internalArguments = process.argv.slice(2);
 if (internalArguments[0] === "internal" && internalArguments[1] === "mcp-probe") {

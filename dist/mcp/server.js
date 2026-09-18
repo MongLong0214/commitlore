@@ -55,6 +55,7 @@ import { buildReport, collectRecords } from '../commands/stale.js';
 import { beforeChange } from '../core/before-change.js';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
+import { assertRepositoryBinding, emptyStagedDiffNote, } from '../core/repository-assertion.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
 import { readPending } from '../core/pending.js';
@@ -405,7 +406,10 @@ export const TOOLS = [
             'phase:"prepared" pending transaction. Returns the nonce needed for verify and stage. ' +
             'The prompt carries the end of the transcript rather than all of it; transcript_window ' +
             'says which lines, numbered as the whole transcript numbers them. Verification still ' +
-            'reads the whole transcript, so quote only what the prompt shows you.',
+            'reads the whole transcript, so quote only what the prompt shows you. The transaction ' +
+            'binds to THIS server\'s checkout, returned as `repository`; if your working directory ' +
+            'is a linked worktree or another clone, pass `repository` to assert it and this refuses ' +
+            'rather than binding to the wrong HEAD.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -417,6 +421,14 @@ export const TOOLS = [
                     type: 'boolean',
                     description: 'declare this capture unattended: nobody was asked before staging. Refused unless the ' +
                         'repository opted in (.commitlore-policy.json: "unattended": true, mode "auto")',
+                },
+                repository: {
+                    type: 'string',
+                    description: 'your own working directory, asserted. This server is registered against one ' +
+                        'checkout and binds every transaction to it; if you are in a linked worktree or ' +
+                        'another clone, pass this and the call refuses instead of binding to a tree you ' +
+                        'never touched. It cannot change the binding, only assert it. Omit to accept this ' +
+                        "server's repository, which is returned as `repository`",
                 },
             },
             required: ['transcript'],
@@ -697,6 +709,14 @@ export const createServer = (opts = {}) => {
         [PREPARE_CAPTURE_TOOL]: (args) => {
             const transcript = requiredString(args, 'transcript');
             const unattended = booleanArg(args, 'unattended');
+            /*
+             * #1030: before anything is prepared, so a refusal leaves no pending
+             * transaction behind — the placement #877 settled for `--diff`, and for the
+             * same reason: a doomed run should not cost `capture gc` a file.
+             */
+            const asserted = stringArg(args, 'repository');
+            if (asserted !== undefined)
+                assertRepositoryBinding(asserted, root);
             const trustedAuthors = configuredTrustedAuthors(root);
             const trustedSignerFingerprints = configuredTrustedSignerFingerprints(root);
             const result = prepareCaptureContext({
@@ -747,6 +767,16 @@ export const createServer = (opts = {}) => {
                  * it against the tree they meant in one glance.
                  */
                 staged_diff_empty: result.staged_diff_hash === EMPTY_SHA256,
+                /*
+                 * #1030: `staged_diff_empty: true` is also what a caller sees when they
+                 * have staged nothing, so on its own it cannot distinguish that from "I
+                 * looked at another repository". The reporter caught the mismatch by
+                 * reading `repository`, one field among sixteen with nothing drawing
+                 * attention to it; this puts the same fact where the empty diff is
+                 * already being explained, and names the assertion that turns the next
+                 * occurrence into a refusal.
+                 */
+                staged_diff_empty_means: result.staged_diff_hash === EMPTY_SHA256 ? emptyStagedDiffNote(root) : null,
                 repository: root,
                 // #924: the build that is about to write, and whether the machine has a
                 // newer one that this session never picked up.

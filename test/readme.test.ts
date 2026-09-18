@@ -159,13 +159,16 @@ describe('T-1021 mutation oracles', () => {
     // A mutation to an unrelated bullet must NOT break the guard assertions.
     //
     // This anchored on `Windows is unsupported` until v0.5.0 made that false and
-    // it was removed. A `replace` whose needle is gone is a no-op, so the oracle
-    // would have kept passing while testing nothing -- the exact false green
-    // this file exists to catch. The needle is asserted present first.
+    // it was removed, then on `symbol anchors` until #33 shipped and the bullet
+    // stopped naming it. A `replace` whose needle is gone is a no-op, so the
+    // oracle would keep passing while testing nothing -- the exact false green
+    // this file exists to catch, and `r-readmefinal` recorded as the reason the
+    // needle is asserted present first. That assertion has now caught both
+    // retirements.
     expect(knownLimSection, 'the oracle needle is gone; pick one that exists').toContain(
-      'symbol anchors',
+      'commitlore coverage',
     );
-    const mutated = knownLimSection.replace('symbol anchors', 'symbol anchoring');
+    const mutated = knownLimSection.replace('commitlore coverage', 'commitlore cover');
     expect(mutated).toMatch(/precision 44\.8%/i);
     expect(mutated).toMatch(/recall 22\.0%/i);
     expect(mutated).toMatch(/32\.7%/);

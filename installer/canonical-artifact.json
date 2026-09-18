@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "243809242afc59ac84870de5ce09dbd54d8e157a321b56c9f05e5b497bf56090"
+    "sha256": "fe98de177ea3fc228dff5107568a5d61af2a105b175886f28db3fa003db507a3"
   },
   "artifact": {
-    "sha256": "c29a00c8751b6bad10812810d9b6d712a214dfdd3f79ec59fb9426ab438c1cb7",
+    "sha256": "4dad1e37784ba3b782fc79e01fce9bacd883d8a2137c0a5c2f1144ca990c502d",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "c3fcfb60dd76e3463b864433817c6231f7ad13f351772072e6e0f2f932886cc2"
+        "sha256": "620c4f829862e31c9d75b117254ee117da65a9968f0988236ae305615261655a"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1009,6 +1009,18 @@
         "sha256": "aa710721bdaec21facdfcc7855474be562649d0d4df7ba294e8e406800de4cc4"
       },
       {
+        "path": "dist/core/repository-assertion.d.ts",
+        "sha256": "978c4e5d980391dd068418075d37eddd56a5a652ad2e5d800f788afe03cb736e"
+      },
+      {
+        "path": "dist/core/repository-assertion.js",
+        "sha256": "89671275068082e8903bdb168d046f9733cf51afaeb28de637e3c9b923a26d55"
+      },
+      {
+        "path": "dist/core/repository-assertion.js.map",
+        "sha256": "cc2014384fa5544fcb510ed05ccb1ec4562bbf5a67150049fc19746b77373aaa"
+      },
+      {
         "path": "dist/core/runtime-identity.d.ts",
         "sha256": "9be94e1e657daaed30b4c22812d6be9e5623f5753f6918d04f6965ad17235f12"
       },
@@ -1266,11 +1278,11 @@
       },
       {
         "path": "dist/mcp/server.js",
-        "sha256": "22503064d3d3e6e0de6e54138d634511a077d042969f36c6686e5f204960d4ee"
+        "sha256": "ce1b9a3e0e534c477c616bbaa0241e08631c7a1572c556a4f8c3863a9bc4c3b5"
       },
       {
         "path": "dist/mcp/server.js.map",
-        "sha256": "3a1881b4913bc8bc28e9ff0b2213646896a48b4aa17ffb6f993511a7bd461f54"
+        "sha256": "f6a62660f4319b561f8d5b711aadbafda03c8d64c694f0b43ea0e8542ef82e44"
       },
       {
         "path": "dist/mcp/validate-args.d.ts",
