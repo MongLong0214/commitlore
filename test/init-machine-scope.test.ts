@@ -25,13 +25,18 @@ import { describe, expect, it } from 'vitest';
 import { checkMcpRuntimeIdentity } from '../src/commands/doctor/checks/delivery-mcp-runtime-identity.js';
 import type { DoctorContext } from '../src/commands/doctor/model.js';
 import type { LiveMcpRuntime, LiveMcpScan } from '../src/core/mcp-probe.js';
+import { runtimeIdentity } from '../src/core/runtime-identity.js';
 
-const runtime = (root: string): LiveMcpRuntime => ({
+const runtime = (root: string, reportedVersion?: string): LiveMcpRuntime => ({
   pid: 1,
   entrypointRealpath: `${root}/dist/commitlore.mjs`,
   packageRoot: root,
   bundlePresent: true,
   specPresent: true,
+  // Absent unless a case is about the version: `test/` is outside `tsconfig`'s
+  // `include`, so an omitted field is `undefined` at runtime, and it stands in
+  // for the runtime whose package.json could not be read.
+  ...(reportedVersion === undefined ? {} : { reportedVersion }),
 });
 
 const contextWith = (scan: LiveMcpScan): DoctorContext =>
@@ -82,6 +87,94 @@ describe('#750 a finding about the machine does not fail a repository command', 
       contextWith({ available: true, detail: 'process list', runtimes: [runtime('/data/v1.1.2')] }),
     );
     expect(row.status).toBe('ok');
+    expect(row.needsAttention).toBe(false);
+  });
+});
+
+/**
+ * One live runtime was `ok` whatever build it was serving.
+ *
+ * The row groups by path, so a single runtime had nothing to disagree with. That
+ * made the ordinary upgrade invisible: the session you left open keeps answering
+ * from the build it started on, every record it writes is written by that build's
+ * rules, and doctor reported no finding. The machine this was written on tripped
+ * the multi-runtime warning only because it happened to have five.
+ *
+ * `runtime-identity` does compare versions, but against the last server to log a
+ * start here, which need not be alive -- that day it reported "all observed
+ * runtimes match CLI: v1.5.0" about a process that had already exited.
+ */
+describe('a live runtime that is not the installed build', () => {
+  const installed = runtimeIdentity().version;
+
+  it('warns, names both versions, and tells the reader how to reconnect', () => {
+    const row = checkMcpRuntimeIdentity(
+      contextWith({
+        available: true,
+        detail: 'process list',
+        runtimes: [runtime('/data/v1.3.14', '1.3.14')],
+      }),
+    );
+
+    expect(row.status).toBe('warn');
+    expect(row.detail).toContain('1.3.14');
+    expect(row.detail).toContain(installed);
+    expect(row.fix).toMatch(/\/mcp/);
+    expect(row.evidence['live_version']).toBe('1.3.14');
+    expect(row.evidence['installed_version']).toBe(installed);
+    // #750 again: a process on the developer's machine must not fail `init`.
+    expect(row.needsAttention).toBe(false);
+  });
+
+  it('stays ok when the live runtime reports the installed version', () => {
+    // The control. Without it this file would pass just as well against a check
+    // that warned on every single runtime, which is the row #924 ruled out --
+    // one that fires on every healthy repository.
+    const row = checkMcpRuntimeIdentity(
+      contextWith({
+        available: true,
+        detail: 'process list',
+        runtimes: [runtime('/data/current', installed)],
+      }),
+    );
+
+    expect(row.status).toBe('ok');
+    expect(row.detail).toContain(installed);
+    expect(row.evidence['live_version']).toBe(installed);
+  });
+
+  it('stays ok when the runtime did not report a version at all', () => {
+    // An unread package.json is not evidence of staleness. The `ok` says so
+    // rather than implying the build was checked.
+    const row = checkMcpRuntimeIdentity(
+      contextWith({ available: true, detail: 'process list', runtimes: [runtime('/data/silent')] }),
+    );
+
+    expect(row.status).toBe('ok');
+    expect(row.detail).toMatch(/did not report a version/);
+    expect(row.evidence['live_version']).toBe('unreported');
+  });
+
+  it('names which of several runtimes are behind, without calling any of them current', () => {
+    const row = checkMcpRuntimeIdentity(
+      contextWith({
+        available: true,
+        detail: 'process list',
+        runtimes: [
+          { ...runtime('/data/v1.3.14', '1.3.14'), pid: 11 },
+          { ...runtime('/data/v1.3.17', '1.3.17'), pid: 22 },
+          { ...runtime('/data/matching', installed), pid: 33 },
+        ],
+      }),
+    );
+
+    expect(row.status).toBe('warn');
+    expect(row.evidence['differing_versions']).toBe('1.3.14 pid 11, 1.3.17 pid 22');
+    // #660: equal versions do not make two runtimes the same install, so pid 33
+    // is never described as the current one -- only the other two as not this
+    // build. The first draft of this assertion matched the fixture's own path
+    // (`/data/current`) rather than any claim the row made.
+    expect(row.detail).not.toMatch(/is (the )?(current|up to date)/i);
     expect(row.needsAttention).toBe(false);
   });
 });
