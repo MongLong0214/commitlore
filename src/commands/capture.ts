@@ -176,8 +176,13 @@ const failureResult = (error: unknown): CaptureResult => ({
  * conclusion, not a place exceptions fall into (#543).
  */
 export const runCapture = (opts: {
-  transcriptPath: string;
+  /** The transcript's bytes, for a caller that already holds them (MCP). */
+  transcript?: string;
+  /** The transcript's path, for a caller that does not (the CLI). */
+  transcriptPath?: string;
   diffPath?: string;
+  /** The draft's bytes. Same pair as the transcript, same reason. */
+  draft?: string;
   draftPath?: string;
   cwd: string;
   /** Authors whose guard-advisory records may render as directives. */
@@ -198,8 +203,10 @@ export const runCapture = (opts: {
 };
 
 const runCapturePipeline = (opts: {
-  transcriptPath: string;
+  transcript?: string;
+  transcriptPath?: string;
   diffPath?: string;
+  draft?: string;
   draftPath?: string;
   cwd: string;
   trustedAuthors?: readonly string[];
@@ -207,9 +214,23 @@ const runCapturePipeline = (opts: {
   trustedSignerFingerprints?: readonly string[];
   unattended?: boolean;
 }): CaptureResult => {
-  const { transcriptPath, diffPath, draftPath, cwd } = opts;
+  const { diffPath, cwd } = opts;
 
-  const transcript = readCallerFile(transcriptPath);
+  /*
+   * Two callers, one pipeline. The CLI names files; a caller that already holds
+   * the bytes has nowhere to put a file. Resolving both forms here is what keeps
+   * that from becoming two pipelines -- the hashing, the policy resolution and
+   * the staging gates are the part that must not exist twice, and every one of
+   * them is downstream of this line (r-stagegates989 records what it cost when
+   * one route had gates the other did not).
+   */
+  const transcript = opts.transcript ?? (opts.transcriptPath === undefined ? undefined : readCallerFile(opts.transcriptPath));
+  if (transcript === undefined) {
+    throw markCaptureError(
+      new Error('a transcript is required: pass its bytes, or a path to read them from'),
+      'usage',
+    );
+  }
   // The transaction binds to the staged diff and only to that: prepare hashes
   // `git diff --cached` itself, and stage recomputes it a third time before
   // writing, because every binding is computed server-side and never from the
@@ -269,7 +290,8 @@ const runCapturePipeline = (opts: {
   // here made `if (options.out && result.nonce)` false on exactly that run, so
   // --out wrote nothing and said nothing, and a scripted caller had no handle on
   // which transaction it was completing until verify failed several steps later.
-  if (!draftPath) {
+  const rawDraft = opts.draft ?? (opts.draftPath === undefined ? undefined : readCallerFile(opts.draftPath));
+  if (rawDraft === undefined) {
     return {
       outcome: 'empty',
       nonce: prepareResult.nonce,
@@ -281,7 +303,6 @@ const runCapturePipeline = (opts: {
   }
 
   // 3. Parse and verify the draft
-  const rawDraft = readCallerFile(draftPath);
   let draftRecords;
   // Rejections from the draft parser. Keeping them is the whole of #309: they
   // were computed here and dropped, so the caller saw "no record staged" with no

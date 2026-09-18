@@ -16,6 +16,7 @@
  *   empty one.
  * - Default maximum is one record per commit.
  */
+import { writeConsideration } from './commit-consideration.js';
 import { createHash } from 'node:crypto';
 import { verifyDraft } from './harvest-verify.js';
 import { resolvePolicy } from './capture-policy.js';
@@ -317,8 +318,30 @@ const runVerifyCaptureRecords = (opts) => {
          * nothing that could be staged, and `stageCaptureRecord` refuses an empty
          * or non-`verified` transaction either way.
          */
-        if (result.accepted.length === 0)
+        if (result.accepted.length === 0) {
+            /*
+             * "Considered, nothing found" is a complete answer, and until it was
+             * written down nothing downstream could tell it from "never considered".
+             * A caller that submitted no records at all has said exactly that, so the
+             * consideration is bound here -- the transaction still stays `prepared`,
+             * which is the #1021 repair and is untouched.
+             *
+             * Deliberately not on a refusal. A draft whose records were all rejected
+             * is not a statement that there was nothing to record, and binding it
+             * would let a bad draft reach the same state as a real consideration.
+             * `runCommit` makes the same distinction, and the two have to agree.
+             *
+             * And nothing at all when the check is read-only. `capture --shadow`
+             * measures history without touching the worktree or `.git`, and its suite
+             * compares `.git` byte for byte on purpose -- r-shadowsnapshotlock ruled
+             * out filtering that snapshot precisely so a stray file written by the
+             * command could not hide behind the filter. This was that file.
+             */
+            if (opts.readOnly !== true && opts.draft.length === 0 && result.rejected.length === 0) {
+                writeConsideration({ cwd, outcome: 'empty', records: 0 });
+            }
             return result;
+        }
         const stored = persist(result);
         if (stored.bound) {
             return stored.receipt === null ? result : { ...result, receipt: stored.receipt };
