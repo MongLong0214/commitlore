@@ -202,6 +202,7 @@ describe('plugin manifest: declared and conventional paths exist in a clean clon
     'plugin-mcp.json',
     'dist/commitlore.mjs',
     'scripts/commitlore-run.sh',
+    'scripts/commitlore-guard.sh',
   ])('%s is committed and present in a clean clone', (relPath) => {
     expect(existsSync(clonePath(relPath))).toBe(true);
   });
@@ -309,8 +310,17 @@ describe('plugin manifest: entry points are runnable from a clean clone', () => 
 });
 
 /**
- * hooks/hooks.json's whole content is one PreToolUse command:
- *   "${CLAUDE_PLUGIN_ROOT}"/scripts/commitlore-run.sh inject --hook-input
+ * hooks/hooks.json declares two PreToolUse commands, and they deliberately run
+ * through different wrappers:
+ *
+ *   Read|Edit|Write|...  commitlore-run.sh   inject --hook-input
+ *   Bash                 commitlore-guard.sh commit-guard --hook-input
+ *
+ * `commitlore-run.sh` exits 0 on every path, because a pre-edit hook must never
+ * block an edit. `commitlore-guard.sh` forwards exit 2, because blocking is the
+ * whole purpose of the gate. Routing the gate through the first script would
+ * turn every refusal into an allow while looking like it worked, which is why
+ * the pairing is asserted below rather than left to whoever edits the manifest.
  *
  * This runs that exact command, from the exact files a clean clone ships,
  * against a valid payload — the shape of `checkInjectRuntime` in
@@ -326,14 +336,33 @@ describe("plugin manifest: hooks/hooks.json's command resolves and produces outp
       hooks: { PreToolUse: { matcher: string; hooks: { type: string; command: string }[] }[] };
     };
 
-  it('declares one PreToolUse command using CLAUDE_PLUGIN_ROOT', () => {
+  it('declares both PreToolUse commands, each bound to the plugin root', () => {
     const config = hooksConfig();
     const commands = config.hooks.PreToolUse.flatMap((entry) =>
       entry.hooks.map((hook) => hook.command),
     );
     expect(commands).toEqual([
       '"${CLAUDE_PLUGIN_ROOT}"/scripts/commitlore-run.sh inject --hook-input',
+      '"${CLAUDE_PLUGIN_ROOT}"/scripts/commitlore-guard.sh commit-guard --hook-input',
     ]);
+  });
+
+  it('the gate runs through the wrapper that can refuse, and injection through the one that cannot', () => {
+    // The pairing, not the presence. Swapping the two scripts leaves both
+    // commands correct-looking and silently disarms the gate: commitlore-run.sh
+    // ends in an unconditional `exit 0`, so a refusal would be reported as an
+    // allow. This is the assertion that fails on that swap.
+    const byMatcher = new Map(
+      hooksConfig().hooks.PreToolUse.map((entry) => [entry.matcher, entry.hooks.map((h) => h.command).join(' ')]),
+    );
+    expect(byMatcher.get('Bash')).toContain('commitlore-guard.sh');
+    expect(byMatcher.get('Bash')).not.toContain('commitlore-run.sh');
+    const edits = [...byMatcher.entries()].find(([matcher]) => matcher.includes('Edit'))?.[1];
+    expect(edits).toContain('commitlore-run.sh');
+    expect(edits).not.toContain('commitlore-guard.sh');
+
+    expect(readFileSync(clonePath('scripts/commitlore-run.sh'), 'utf8')).toContain('exit 0');
+    expect(readFileSync(clonePath('scripts/commitlore-guard.sh'), 'utf8')).toContain('exit 2');
   });
 
   it('running that command against a valid payload injects context', () => {

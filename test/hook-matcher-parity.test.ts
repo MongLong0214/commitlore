@@ -23,19 +23,39 @@ import { PATH_TOOLS, PATH_TOOL_MATCHER } from '../src/core/path-tools.js';
 import { CLAUDE_HOOK_EVENT, CLAUDE_HOOK_MATCHER } from '../src/hooks/claude-settings.js';
 
 const pluginHooks = (): {
-  hooks: Record<string, Array<{ matcher?: string }>>;
+  hooks: Record<string, Array<{ matcher?: string; hooks?: Array<{ command?: string }> }>>;
 } => JSON.parse(readFileSync(join(process.cwd(), 'hooks/hooks.json'), 'utf8'));
+
+/**
+ * The entry that runs the injector, chosen by what it runs.
+ *
+ * The manifest carries a second `PreToolUse` entry now -- the commit gate, on
+ * `Bash` -- and selecting by position would silently start grading whichever
+ * one happened to be first. What this file is about is the injector's matcher,
+ * so the injector is what it looks for.
+ */
+const injectorEntry = (): { matcher?: string } | undefined =>
+  (pluginHooks().hooks[CLAUDE_HOOK_EVENT] ?? []).find((entry) =>
+    (entry.hooks ?? []).some((hook) => String(hook.command).includes('inject')),
+  );
 
 describe('hook matcher parity', () => {
   it('the plugin matches on exactly the tools the injector honours', () => {
-    const entries = pluginHooks().hooks[CLAUDE_HOOK_EVENT] ?? [];
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.matcher).toBe(PATH_TOOL_MATCHER);
+    expect(injectorEntry()?.matcher).toBe(PATH_TOOL_MATCHER);
+  });
+
+  it('exactly one entry claims the path tools, so no second hook fires on an edit', () => {
+    // What `toHaveLength(1)` used to say before a second entry existed. The
+    // property was never "one hook" -- it was "one hook on these tools", and
+    // r-hookmatcherunify records what a double fire on an edit costs.
+    const claiming = (pluginHooks().hooks[CLAUDE_HOOK_EVENT] ?? []).filter((entry) =>
+      PATH_TOOLS.some((tool) => String(entry.matcher ?? '').includes(tool)),
+    );
+    expect(claiming).toHaveLength(1);
   });
 
   it('the CLI installer writes the same matcher as the plugin', () => {
-    const entries = pluginHooks().hooks[CLAUDE_HOOK_EVENT] ?? [];
-    expect(CLAUDE_HOOK_MATCHER).toBe(entries[0]?.matcher);
+    expect(CLAUDE_HOOK_MATCHER).toBe(injectorEntry()?.matcher);
   });
 
   it('covers reading, because delivery after the decision is not delivery', () => {
@@ -62,7 +82,16 @@ describe('hook matcher parity', () => {
     (doc) => {
       const escaped = PATH_TOOL_MATCHER.split('|').join(String.raw`\|`);
       const text = readFileSync(join(process.cwd(), doc), 'utf8');
-      const rows = text.split('\n').filter((line) => line.includes('PreToolUse'));
+      /*
+       * Rows about the *path-tool* hook, not every row that says PreToolUse:
+       * the commit gate is a second `PreToolUse` row and matches on `Bash`,
+       * which names no path tool. The teeth are unchanged -- a row that drifted
+       * to `Edit\|Write` still mentions a path tool, is still selected, and
+       * still fails for missing the rest of the set.
+       */
+      const rows = text
+        .split('\n')
+        .filter((line) => line.includes('PreToolUse') && PATH_TOOLS.some((tool) => line.includes(tool)));
 
       expect(rows.length).toBeGreaterThan(0);
       for (const row of rows) expect(row).toContain(escaped);

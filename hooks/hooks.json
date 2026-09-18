@@ -9,6 +9,15 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/commitlore-run.sh inject --hook-input"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/commitlore-guard.sh commit-guard --hook-input"
+          }
+        ]
       }
     ]
   }
