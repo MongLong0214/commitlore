@@ -84,6 +84,20 @@ export declare const mcpRegistrationPath: (cwd: string) => string | null;
  * interpretation from drifting apart.
  */
 export declare const registersCommitloreMcpServer: (cwd: string) => boolean;
+/** Where Claude Code keeps a user-scope MCP registration. */
+export declare const hostConfigPath: (home: string) => string;
+/**
+ * Whether this user's host config registers the server at user scope (#1079).
+ *
+ * A file read rather than `claude mcp list`, because doctor answers locally and
+ * offline and shelling out to the host CLI would make a row's verdict depend on
+ * that CLI being installed and healthy -- which is a different question from the
+ * one being asked.
+ *
+ * Absence is reported as `false` and never as an error: a machine with no host
+ * config has no user-scope registration, which is a complete answer.
+ */
+export declare const hostRegistersCommitlore: (home: string) => boolean;
 export interface McpRegistrationSuccess {
     ok: true;
     /** Absolute path that was inspected or written. */

@@ -14,6 +14,7 @@ import { checkInjectRuntime } from './checks/delivery-inject-runtime.js';
 import { checkInjectVersion } from './checks/delivery-inject-version.js';
 import { checkDirectiveTrustMode } from './checks/delivery-directive-trust-mode.js';
 import { checkMcpLifecycle } from './checks/delivery-mcp-lifecycle.js';
+import { checkMcpDeliveryRoutes } from './checks/delivery-mcp-delivery-routes.js';
 import { checkMcpRegistrationRuntime } from './checks/delivery-mcp-registration-runtime.js';
 import { checkMcpRuntimeIdentity } from './checks/delivery-mcp-runtime-identity.js';
 import { checkHistoryDepth } from './checks/history-history-depth.js';
@@ -67,6 +68,7 @@ export const CHECK_REGISTRY = [
     { id: 'directive-trust-mode', title: 'directive trust mode', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkDirectiveTrustMode(ctx) },
     { id: 'mcp-lifecycle', title: 'MCP server sessions', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx) },
     { id: 'mcp-registration-runtime', title: 'MCP registration runtime', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpRegistrationRuntime(ctx) },
+    { id: 'mcp-delivery-routes', title: 'MCP delivery routes', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpDeliveryRoutes(ctx) },
     { id: 'mcp-runtime-identity', title: 'live MCP runtime identity', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpRuntimeIdentity(ctx) },
     { id: 'unattended-initiator', title: 'unattended capture initiator', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkUnattendedCaptureInitiator(ctx) },
     { id: 'policy-overlay', title: 'capture policy overlay', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkPolicyOverlay(ctx) },

@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "43341327c9c0f44fde114869e0cc60eb14fdde5fb12b1bcf52f0822dfd9442cd"
+    "sha256": "f80eb77d1e71aeee7ac50c448977633a16fb7cc33ffc39c92f5019d1e78c49a8"
   },
   "artifact": {
-    "sha256": "dd0c9f5e65111d39f29fc831f8a3ca8c1154160e45836179b0ad25a3d35cef09",
+    "sha256": "0025e1f123daddedcbe52d120de38b13a89ff01f9ed37108d7c775a01f4716a5",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -213,6 +213,18 @@
         "sha256": "05ad8cabb3f07b8d58f8dd1f12fb3b94f5e73c6320b4b022cf9539ef47ac8467"
       },
       {
+        "path": "dist/commands/doctor/checks/delivery-mcp-delivery-routes.d.ts",
+        "sha256": "79e9c454620def8c45784f5338062b11cc54aa197ad44ac58b5cd7047928fb94"
+      },
+      {
+        "path": "dist/commands/doctor/checks/delivery-mcp-delivery-routes.js",
+        "sha256": "6cb26db9fcd37498a5bb00987bd99639da42d5f83f7d7b3186513710ec0ce864"
+      },
+      {
+        "path": "dist/commands/doctor/checks/delivery-mcp-delivery-routes.js.map",
+        "sha256": "7cd7d85c586cffeef92b243b0f2f507e80e6ca2c37a0284def747ce4e1e54cb6"
+      },
+      {
         "path": "dist/commands/doctor/checks/delivery-mcp-lifecycle.d.ts",
         "sha256": "2032adac7544b2445a750a0af4f4b6d453786a7ad747bd34d1d65d569a4f7c54"
       },
@@ -398,11 +410,11 @@
       },
       {
         "path": "dist/commands/doctor/registry.js",
-        "sha256": "52923e2f4579108f1723b17a4026860dabc225992b87010c2bf24301e3813fec"
+        "sha256": "933fde427dc2a5deea28d9b6617b3c84f1af525d4962f802cb6c22b20792f441"
       },
       {
         "path": "dist/commands/doctor/registry.js.map",
-        "sha256": "cf951801eb114a0c0f8e0c7546ca37630746ec8758ca190a4306217afc3be737"
+        "sha256": "5f0e5ffc92df2fac31bacc67865d47c18d228dd1d1aea056ee23db1859845cc6"
       },
       {
         "path": "dist/commands/doctor/render.d.ts",
@@ -514,15 +526,15 @@
       },
       {
         "path": "dist/commands/init.d.ts",
-        "sha256": "4b7cc1f24212185afa3104a9c3aaf277ae9dbeb21ed4d10e2745d98ccef99cd4"
+        "sha256": "c1ff7aad52f4dd80463628381dfe25eb7ffc0cd5c0f3e982de6cefa14b25e946"
       },
       {
         "path": "dist/commands/init.js",
-        "sha256": "4f03458c174736152e85e81154b57e963632c6d0bb24d706e4f2f5fccd7a3b3f"
+        "sha256": "6d8ee9c785d28b1c9326a092a07d92158b4eabf0148721ff58430522155862b9"
       },
       {
         "path": "dist/commands/init.js.map",
-        "sha256": "2ddd925f5bb7ad5d8f8b1ed716a593958e6e6c66ef0e76ffe2baca0932ff1df1"
+        "sha256": "0a82d26980170607d4061bce82488f76e4edf2c8a138a56a657ef1a90ed9255d"
       },
       {
         "path": "dist/commands/inject.d.ts",
@@ -670,7 +682,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "8de52defc9f0b810f45e984c954c80fadd0c324069cc2121759029a2224010f3"
+        "sha256": "e16fbd993b98ce90cab48d493ca97fc77fe758014f9a166a23d547f945d0bb62"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -962,15 +974,15 @@
       },
       {
         "path": "dist/core/mcp-registration.d.ts",
-        "sha256": "c4a9b8ad5af3659b24ca2c3f7b29e0d4025143d0207dfad4cd847c45d3ca4f2a"
+        "sha256": "95b3f54827939b324b7a836fc88db6feb2985223a3e7b9d3cf58add896a11da4"
       },
       {
         "path": "dist/core/mcp-registration.js",
-        "sha256": "d1f4930e1c199a541ede912f842648ee8214f42d86d97eb25c616782fffc462b"
+        "sha256": "a762a0d0f770c59bede24dfd59462b0491803f2035249609b903132437c78453"
       },
       {
         "path": "dist/core/mcp-registration.js.map",
-        "sha256": "3669ece6fb0234870ebaf4c4d9b67d9d3081305e084ddb4fe40af3c1109a9eb9"
+        "sha256": "2e4ea21355b1441a86a5ff3b1275eb25ac236ddad7e5103ae1fb4e63d95fb585"
       },
       {
         "path": "dist/core/notes.d.ts",
