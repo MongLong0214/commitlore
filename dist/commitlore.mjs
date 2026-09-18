@@ -22829,6 +22829,18 @@ var registersCommitloreMcpServer = (cwd) => {
   const servers = parsed["mcpServers"];
   return holdsLaunchableRegistration(servers);
 };
+var hostConfigPath = (home) => join11(home, ".claude.json");
+var hostRegistersCommitlore = (home) => {
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync17(hostConfigPath(home), "utf8"));
+  } catch {
+    return false;
+  }
+  if (!isJsonObject(parsed)) return false;
+  const servers = parsed["mcpServers"];
+  return isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY);
+};
 var skipJsonWhitespace = (source, index) => {
   let next = index;
   while (next < source.length && (source[next] === " " || source[next] === "\n" || source[next] === "\r" || source[next] === "	")) {
@@ -23599,6 +23611,55 @@ var checkMcpLifecycle = (ctx) => {
         last_at: last?.at ?? "unknown"
       }
     }
+  );
+};
+
+// src/commands/doctor/checks/delivery-mcp-delivery-routes.ts
+var checkMcpDeliveryRoutes = (ctx) => {
+  const id2 = "mcp-delivery-routes";
+  const title2 = "MCP delivery routes";
+  const category2 = "delivery";
+  const cwd = ctx.opts.cwd ?? process.cwd();
+  const home = ctx.env["HOME"] ?? "";
+  const plugin = pluginDeliveryProof(cwd, home);
+  const user = home === "" ? false : hostRegistersCommitlore(home);
+  const project2 = registersCommitloreMcpServer(cwd);
+  const routes = [
+    ...plugin.willFire ? ["the Claude Code plugin, from its own versioned cache"] : [],
+    ...user ? [`a user-scope registration in ${hostConfigPath(home)}`] : [],
+    ...project2 ? [`a project-scope registration in ${MCP_REGISTRATION_FILE}`] : []
+  ];
+  const evidence = {
+    plugin_will_fire: String(plugin.willFire),
+    plugin_reason: plugin.reason,
+    user_scope: String(user),
+    project_scope: String(project2),
+    route_count: String(routes.length)
+  };
+  if (routes.length > 1) {
+    return check(
+      id2,
+      category2,
+      title2,
+      "warn",
+      `${routes.length} routes deliver this MCP server to one host \u2014 ${routes.join("; ")}. Each starts its own process from its own installation, so the agent sees the same tools twice and the two can serve different builds: a plugin resolves its launcher once at session start, so reconnecting does not bring it forward`,
+      "keep one. The plugin carries hooks and skills as well, so disabling only its server keeps those: in Claude Code, /mcp disable plugin:commitlore:commitlore. To drop the host registration instead, claude mcp remove commitlore. A session already running keeps both until it restarts",
+      false,
+      // The user's host configuration, not this repository's -- see the note above.
+      false,
+      { evidence }
+    );
+  }
+  return check(
+    id2,
+    category2,
+    title2,
+    "ok",
+    routes.length === 1 ? `one route delivers this MCP server: ${routes[0]}` : "no route delivers this MCP server to this host, so a host here starts no CommitLore server",
+    null,
+    false,
+    void 0,
+    { evidence }
   );
 };
 
@@ -25720,6 +25781,7 @@ var CHECK_REGISTRY = [
   { id: "directive-trust-mode", title: "directive trust mode", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkDirectiveTrustMode(ctx) },
   { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx) },
   { id: "mcp-registration-runtime", title: "MCP registration runtime", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpRegistrationRuntime(ctx) },
+  { id: "mcp-delivery-routes", title: "MCP delivery routes", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpDeliveryRoutes(ctx) },
   { id: "mcp-runtime-identity", title: "live MCP runtime identity", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpRuntimeIdentity(ctx) },
   { id: "unattended-initiator", title: "unattended capture initiator", category: "capture", dependencies: [], optional: false, run: (ctx) => checkUnattendedCaptureInitiator(ctx) },
   { id: "policy-overlay", title: "capture policy overlay", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPolicyOverlay(ctx) },
@@ -27046,6 +27108,24 @@ var runMcpRegistrationStep = (opts) => {
       detail: { scope, result: result3 }
     };
   }
+  const plugin = pluginDeliveryProof(cwd);
+  if (plugin.willFire) {
+    return {
+      step: "mcp-registration",
+      title: "MCP server",
+      code: 0,
+      lines: [
+        // Not `plugin.reason` verbatim: that sentence is the hook step's and
+        // ends "registers this hook itself", which is the wrong noun here and
+        // reads as though the MCP server were a hook. The reason stays in
+        // `detail` for `--json`.
+        `no MCP registration written at scope "${scope}" \u2014 the Claude Code plugin is installed and enabled, and carries this server itself`,
+        "a second one would put two copies of the same server in front of the agent, and they drift: a plugin resolves its launcher once at session start, so the two can serve different builds",
+        `to register it anyway: ${hostRegistrationCommand(scope)}`
+      ],
+      detail: { scope, skipped: "plugin-delivers", reason: plugin.reason }
+    };
+  }
   const result2 = registerWithHost(scope, cwd);
   if (result2.state === "host-missing") {
     return {
@@ -27278,6 +27358,9 @@ var mcpRegistrationOutcome = (step) => {
       case "already-registered":
         return "already registered in this repository \u2014 left unchanged";
     }
+  }
+  if ("skipped" in detail) {
+    return `not written at scope "${detail.scope}" \u2014 the plugin already delivers this server`;
   }
   const { result: result2 } = detail;
   switch (result2.state) {

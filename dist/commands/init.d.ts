@@ -158,6 +158,18 @@ export type McpStepDetail = {
 } | {
     scope: 'user' | 'local';
     result: HostRegistrationResult;
+}
+/**
+ * A host scope that was asked for and deliberately not written, because the
+ * plugin already delivers the server (#1079). Its own variant rather than a
+ * `HostRegistrationResult` state: nothing was attempted, so there is no host
+ * outcome to report, and a consumer branching on `result.ok` must not read
+ * this as a failed registration.
+ */
+ | {
+    scope: 'user' | 'local';
+    skipped: 'plugin-delivers';
+    reason: string;
 } | {
     scope: 'none';
     alreadyRegistered: boolean;

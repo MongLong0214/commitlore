@@ -176,6 +176,32 @@ export const registersCommitloreMcpServer = (cwd) => {
     const servers = parsed['mcpServers'];
     return holdsLaunchableRegistration(servers);
 };
+/** Where Claude Code keeps a user-scope MCP registration. */
+export const hostConfigPath = (home) => join(home, '.claude.json');
+/**
+ * Whether this user's host config registers the server at user scope (#1079).
+ *
+ * A file read rather than `claude mcp list`, because doctor answers locally and
+ * offline and shelling out to the host CLI would make a row's verdict depend on
+ * that CLI being installed and healthy -- which is a different question from the
+ * one being asked.
+ *
+ * Absence is reported as `false` and never as an error: a machine with no host
+ * config has no user-scope registration, which is a complete answer.
+ */
+export const hostRegistersCommitlore = (home) => {
+    let parsed;
+    try {
+        parsed = JSON.parse(readFileSync(hostConfigPath(home), 'utf8'));
+    }
+    catch {
+        return false;
+    }
+    if (!isJsonObject(parsed))
+        return false;
+    const servers = parsed['mcpServers'];
+    return isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY);
+};
 // ---------------------------------------------------------------------------
 // Text-preserving JSON insertion
 // ---------------------------------------------------------------------------
