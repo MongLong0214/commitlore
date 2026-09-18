@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "fe98de177ea3fc228dff5107568a5d61af2a105b175886f28db3fa003db507a3"
+    "sha256": "fcb9164a8c971cbcf573ccffdef50f34361c3346315ea81d079a4809daad6705"
   },
   "artifact": {
-    "sha256": "4dad1e37784ba3b782fc79e01fce9bacd883d8a2137c0a5c2f1144ca990c502d",
+    "sha256": "2c75b45ccc179b36bae355191d6f1c126cbaa2f74a347ac304d268fe5337bd4d",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -490,15 +490,15 @@
       },
       {
         "path": "dist/commands/init.d.ts",
-        "sha256": "dfdc595d98ddb6487df8fbdaf7cde6c3a1cd2e5719cb2a4c5b1e1c65a53298e4"
+        "sha256": "4b7cc1f24212185afa3104a9c3aaf277ae9dbeb21ed4d10e2745d98ccef99cd4"
       },
       {
         "path": "dist/commands/init.js",
-        "sha256": "ddff6743d474377baa25bc656ef5fd9db6535ec665bf63d9e8381a74cf045359"
+        "sha256": "4f03458c174736152e85e81154b57e963632c6d0bb24d706e4f2f5fccd7a3b3f"
       },
       {
         "path": "dist/commands/init.js.map",
-        "sha256": "1343ad2bd204cb72ababe18d9a70c7ed39bfb56dcf8bcaa4a014661c8c33bb0c"
+        "sha256": "2ddd925f5bb7ad5d8f8b1ed716a593958e6e6c66ef0e76ffe2baca0932ff1df1"
       },
       {
         "path": "dist/commands/inject.d.ts",
@@ -646,7 +646,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "620c4f829862e31c9d75b117254ee117da65a9968f0988236ae305615261655a"
+        "sha256": "089b51bd12edfb83848dd261842f4ece2f20e65f2f4c0e73b9d4a342c084154e"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -914,15 +914,15 @@
       },
       {
         "path": "dist/core/mcp-registration.d.ts",
-        "sha256": "4ce0ccecf6b7933ea74222e17c01f155e6adb106582532d463d8e5177f544aaf"
+        "sha256": "c4a9b8ad5af3659b24ca2c3f7b29e0d4025143d0207dfad4cd847c45d3ca4f2a"
       },
       {
         "path": "dist/core/mcp-registration.js",
-        "sha256": "f466c0b53efa7e22021aa709ec270ae00df4e1d1e5114189a616c67afd49acf1"
+        "sha256": "d1f4930e1c199a541ede912f842648ee8214f42d86d97eb25c616782fffc462b"
       },
       {
         "path": "dist/core/mcp-registration.js.map",
-        "sha256": "57e59ed00a722c7573cad3e24d6ee07d76a266a8ecf71e15df7a94a512fabf22"
+        "sha256": "3669ece6fb0234870ebaf4c4d9b67d9d3081305e084ddb4fe40af3c1109a9eb9"
       },
       {
         "path": "dist/core/notes.d.ts",

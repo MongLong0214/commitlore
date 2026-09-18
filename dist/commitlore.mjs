@@ -21797,6 +21797,7 @@ var checkPolicyOverlay = (ctx) => {
 };
 
 // src/core/mcp-registration.ts
+import { spawnSync as spawnSync6 } from "node:child_process";
 import { randomBytes as randomBytes5 } from "node:crypto";
 import {
   existsSync as existsSync12,
@@ -22098,6 +22099,47 @@ var registerCommitloreMcpServer = (cwd) => {
   } catch (error2) {
     return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf4(error2)}` };
   }
+};
+var MCP_SCOPES = ["user", "project", "local", "none"];
+var isMcpScope = (value) => MCP_SCOPES.includes(value);
+var MCP_HOST_CLI = "claude";
+var hostRegistrationArgv = (scope) => [
+  "mcp",
+  "add",
+  "--scope",
+  scope,
+  MCP_SERVER_KEY,
+  "--",
+  MCP_SERVER_COMMAND,
+  ...MCP_SERVER_ARGS
+];
+var hostRegistrationCommand = (scope) => [MCP_HOST_CLI, ...hostRegistrationArgv(scope)].join(" ");
+var registerWithHost = (scope, cwd) => {
+  const command = hostRegistrationCommand(scope);
+  const add = spawnSync6(MCP_HOST_CLI, hostRegistrationArgv(scope), { cwd, encoding: "utf8" });
+  if (add.error !== void 0) {
+    const missing = add.error.code === "ENOENT";
+    return {
+      ok: false,
+      scope,
+      command,
+      state: missing ? "host-missing" : "host-failed",
+      error: missing ? `${MCP_HOST_CLI} is not on PATH` : messageOf4(add.error)
+    };
+  }
+  if (add.status === 0) return { ok: true, scope, command, state: "registered", error: null };
+  const present2 = spawnSync6(MCP_HOST_CLI, ["mcp", "get", MCP_SERVER_KEY], { cwd, encoding: "utf8" });
+  if (present2.error === void 0 && present2.status === 0) {
+    return { ok: true, scope, command, state: "already-registered", error: null };
+  }
+  const said = (add.stderr ?? "").trim() || (add.stdout ?? "").trim();
+  return {
+    ok: false,
+    scope,
+    command,
+    state: "host-failed",
+    error: said === "" ? `exited ${String(add.status)} with no output` : said
+  };
 };
 
 // src/commands/doctor/checks/capture-unattended-initiator.ts
@@ -22604,7 +22646,7 @@ var checkMcpLifecycle = (ctx) => {
 };
 
 // src/commands/doctor/checks/delivery-mcp-registration-runtime.ts
-import { spawnSync as spawnSync6 } from "node:child_process";
+import { spawnSync as spawnSync7 } from "node:child_process";
 import { existsSync as existsSync13, readFileSync as readFileSync15 } from "node:fs";
 import { isAbsolute as isAbsolute3, join as join12 } from "node:path";
 var HOST_PATH = "/usr/bin:/bin";
@@ -22630,14 +22672,14 @@ var registeredLaunch = (cwd) => {
 };
 var entryPoint = (args) => args.find((arg) => /\.(mjs|js|cjs)$/.test(arg)) ?? null;
 var resolvesHere = (command, cwd) => {
-  const probe = spawnSync6("sh", ["-c", 'command -v "$1" >/dev/null 2>&1', "sh", command], {
+  const probe = spawnSync7("sh", ["-c", 'command -v "$1" >/dev/null 2>&1', "sh", command], {
     shell: false,
     cwd
   });
   return probe.error === void 0 && probe.status === 0;
 };
 var resolvesOnHostPath = (command, cwd) => {
-  const probe = spawnSync6("sh", ["-c", 'command -v "$1" >/dev/null 2>&1', "sh", command], {
+  const probe = spawnSync7("sh", ["-c", 'command -v "$1" >/dev/null 2>&1', "sh", command], {
     shell: false,
     cwd,
     env: { PATH: HOST_PATH }
@@ -23536,7 +23578,7 @@ var checkSquashConservation = (ctx) => {
 };
 
 // src/commands/doctor/checks/history-squash-inheritance.ts
-import { spawnSync as spawnSync7 } from "node:child_process";
+import { spawnSync as spawnSync8 } from "node:child_process";
 import { existsSync as existsSync14, readFileSync as readFileSync16, readdirSync as readdirSync3 } from "node:fs";
 import { join as join13 } from "node:path";
 var WORKFLOW_DIR = join13(".github", "workflows");
@@ -23582,7 +23624,7 @@ var githubSlug = (remote) => {
   return owner === void 0 || repo === void 0 ? null : `${owner}/${repo}`;
 };
 var squashButtonEnabled = (cwd, slug) => {
-  const probe = spawnSync7(
+  const probe = spawnSync8(
     "gh",
     ["api", `repos/${slug}`, "--jq", ".allow_squash_merge"],
     { shell: false, encoding: "utf8", cwd }
@@ -24012,7 +24054,7 @@ var checkInstallationIntegrity = (_ctx) => {
 };
 
 // src/core/latest-release.ts
-import { spawn as spawn2, spawnSync as spawnSync8 } from "node:child_process";
+import { spawn as spawn2, spawnSync as spawnSync9 } from "node:child_process";
 import { mkdirSync as mkdirSync5, readFileSync as readFileSync17, renameSync as renameSync4, rmSync as rmSync4, writeFileSync as writeFileSync9 } from "node:fs";
 import { homedir as homedir2, tmpdir as tmpdir2 } from "node:os";
 import { dirname as dirname9, join as join15 } from "node:path";
@@ -24222,7 +24264,7 @@ var latestReleaseSync = (opts = {}) => {
   }
   let outcome;
   try {
-    const run = spawnSync8("git", ["ls-remote", "--tags", "--refs", sourceUrl(env)], {
+    const run = spawnSync9("git", ["ls-remote", "--tags", "--refs", sourceUrl(env)], {
       encoding: "utf8",
       timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       killSignal: "SIGKILL",
@@ -25807,10 +25849,10 @@ var register10 = (program3) => {
 };
 
 // src/commands/init.ts
-import { spawnSync as spawnSync10 } from "node:child_process";
+import { spawnSync as spawnSync11 } from "node:child_process";
 
 // src/commands/update.ts
-import { spawnSync as spawnSync9 } from "node:child_process";
+import { spawnSync as spawnSync10 } from "node:child_process";
 import { readFileSync as readFileSync23, realpathSync as realpathSync5 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join18 } from "node:path";
@@ -25914,7 +25956,7 @@ COMMITLORE_NO_AUTO_UPDATE is set, so nothing was changed. This would have run:
     const outcome = performUpgrade(report.latest, {
       env: process.env,
       platform: process.platform,
-      runInstaller: (script, tag) => spawnSync9(process.platform === "win32" ? "powershell" : "sh", [script, tag], {
+      runInstaller: (script, tag) => spawnSync10(process.platform === "win32" ? "powershell" : "sh", [script, tag], {
         stdio: "inherit"
       })
     });
@@ -26070,6 +26112,7 @@ var installAgentsGuidance = (cwd) => {
 };
 
 // src/commands/init.ts
+var DEFAULT_MCP_SCOPE = "user";
 var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var runDoctorStep = (opts) => {
@@ -26203,39 +26246,108 @@ var runAgentIntegrationStep = (opts) => {
 };
 var runMcpRegistrationStep = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
-  const result = registerCommitloreMcpServer(cwd);
+  const scope = opts.mcpScope ?? "none";
+  if (scope === "none") {
+    const alreadyRegistered = registersCommitloreMcpServer(cwd);
+    const command = alreadyRegistered ? registeredMcpCommand(cwd) : null;
+    return {
+      step: "mcp-registration",
+      title: "MCP server",
+      code: 0,
+      lines: [
+        'no MCP registration written \u2014 asked for scope "none"',
+        ...alreadyRegistered ? [`${MCP_REGISTRATION_FILE} already registers ${JSON.stringify(command)} under commitlore \u2014 left unchanged`] : [
+          "the Claude Code and Codex plugins carry the server themselves, so a host that loads either needs nothing here",
+          `to register it later, run init again with --mcp-scope user, or: ${hostRegistrationCommand("user")}`
+        ]
+      ],
+      detail: { scope, alreadyRegistered, command }
+    };
+  }
+  if (scope === "project") {
+    const result2 = registerCommitloreMcpServer(cwd);
+    if (!result2.ok) {
+      return {
+        step: "mcp-registration",
+        title: "MCP server",
+        code: 1,
+        lines: [
+          `could not register the capture server in this repository: ${result2.error}`,
+          "delivery and the hooks still work; nothing here can start a capture until a host can find the server",
+          `to register it by hand, put this in ${MCP_REGISTRATION_FILE} at the repository root:`,
+          '  { "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }',
+          "then run commitlore doctor to confirm it",
+          "or run init again with --mcp-scope user to register it for this machine instead"
+        ],
+        detail: { scope, result: result2 }
+      };
+    }
+    const headline = {
+      created: `registered the capture server for this repository: wrote ${MCP_REGISTRATION_FILE}`,
+      merged: `registered the capture server in ${MCP_REGISTRATION_FILE}, preserving its existing servers`,
+      "already-registered": `${MCP_REGISTRATION_FILE} already registers commitlore \u2014 left unchanged`
+    }[result2.state];
+    return {
+      step: "mcp-registration",
+      title: "MCP server",
+      code: 0,
+      lines: [
+        headline,
+        ...result2.changed ? [
+          "the file is committed with the repository \u2014 it applies to everyone who clones it",
+          "hosts that keep MCP configuration outside the repository are unchanged"
+        ] : []
+      ],
+      detail: { scope, result: result2 }
+    };
+  }
+  const result = registerWithHost(scope, cwd);
+  if (result.state === "host-missing") {
+    return {
+      step: "mcp-registration",
+      title: "MCP server",
+      code: 0,
+      lines: [
+        `scope "${scope}" is written by the host, and ${result.error}`,
+        "nothing is wrong with this repository: the Claude Code and Codex plugins carry the server themselves",
+        `to register it once that CLI is available: ${result.command}`,
+        "or run init again with --mcp-scope project to keep the registration in the repository"
+      ],
+      detail: { scope, result }
+    };
+  }
   if (!result.ok) {
     return {
       step: "mcp-registration",
-      title: "MCP registration",
+      title: "MCP server",
       code: 1,
       lines: [
-        `could not register the capture server: ${result.error}`,
-        "nothing in this repository can start a capture until it is registered \u2014 delivery and the hooks still work",
-        `to register it by hand, put this in ${MCP_REGISTRATION_FILE} at the repository root:`,
-        '  { "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }',
-        "then run commitlore doctor to confirm it"
+        `could not register at scope "${scope}": ${result.error ?? "unknown"}`,
+        `the command was: ${result.command}`,
+        "delivery and the hooks still work; run that command by hand to see the host's own report"
       ],
-      detail: result
+      detail: { scope, result }
     };
   }
-  const headline = {
-    created: `registered the capture server for repository-scoped hosts: wrote ${MCP_REGISTRATION_FILE}`,
-    merged: `registered the capture server for repository-scoped hosts in ${MCP_REGISTRATION_FILE}, preserving its existing servers`,
-    "already-registered": `${MCP_REGISTRATION_FILE} already registers commitlore \u2014 left unchanged`
-  }[result.state];
   return {
     step: "mcp-registration",
-    title: "MCP registration",
+    title: "MCP server",
     code: 0,
     lines: [
-      headline,
-      ...result.changed ? [
-        "the file is committed with the repository \u2014 it applies to everyone who clones it",
-        "hosts that keep MCP configuration outside the repository are unchanged"
+      result.state === "registered" ? `registered the capture server at scope "${scope}" \u2014 ${result.command}` : (
+        // Deliberately does not claim the scope. The host answers "is this
+        // name registered" without saying where, so an entry made at another
+        // scope reads the same as one made here. Plugin-provided servers are
+        // namespaced (`plugin:<plugin>:<server>`) and do not answer to the
+        // bare name, so this is never the plugin — it is a real registration
+        // at one of the three scopes, and `claude mcp list` says which.
+        "the host already has an MCP server under this name \u2014 left unchanged; run claude mcp list to see at which scope"
+      ),
+      ...result.state === "registered" ? [
+        scope === "user" ? "it applies to every repository you open in that host, and is not committed here" : "it applies to this repository for you only, and is not committed here"
       ] : []
     ],
-    detail: result
+    detail: { scope, result }
   };
 };
 var runPolicyStep = (opts) => {
@@ -26347,7 +26459,7 @@ var runReleaseStep = (opts) => {
     const result = performUpgrade(String(latest2), {
       env,
       platform: process.platform,
-      runInstaller: (script, tag) => spawnSync10(process.platform === "win32" ? "powershell" : "sh", [script, tag], { stdio: "inherit" })
+      runInstaller: (script, tag) => spawnSync11(process.platform === "win32" ? "powershell" : "sh", [script, tag], { stdio: "inherit" })
     });
     lines.push(...result.lines);
     if (result.code !== 0) code = 2;
@@ -26366,7 +26478,7 @@ var STEP_LABEL = {
   trust: "Trust",
   index: "Index",
   "claude-hook": "Agent integration",
-  "mcp-registration": "MCP registration",
+  "mcp-registration": "MCP server",
   policy: "Capture policy",
   doctor: "Final check"
 };
@@ -26376,7 +26488,7 @@ var STEP_HEADING = {
   hooks: "[1/4] hooks install",
   index: "[2/4] index --rebuild",
   "claude-hook": "[3/4] agent integration",
-  "mcp-registration": "repository MCP registration",
+  "mcp-registration": "MCP registration",
   // Unnumbered on purpose, the same way `trust` was added: the numbered four
   // are pinned by T-1013's tests, and renumbering them would move a frozen
   // contract for a step that does not need a number.
@@ -26407,14 +26519,31 @@ var policyOutcome = (step) => {
 };
 var mcpRegistrationOutcome = (step) => {
   const detail = step.detail;
-  if (!detail.ok) return "not registered for repository-scoped hosts \u2014 doctor will report it when unattended capture needs an initiator";
-  switch (detail.state) {
-    case "created":
-      return "registered for repository-scoped hosts (committed \u2014 applies to the whole team)";
-    case "merged":
-      return "registered alongside existing servers for repository-scoped hosts (committed \u2014 applies to the whole team)";
+  if (detail.scope === "none") {
+    return detail.alreadyRegistered ? 'not written (scope "none") \u2014 an existing repository registration was left unchanged' : 'not written (scope "none") \u2014 the plugins carry the server';
+  }
+  if (detail.scope === "project") {
+    const { result: result2 } = detail;
+    if (!result2.ok) return "could not be registered in this repository \u2014 doctor will report it when unattended capture needs an initiator";
+    switch (result2.state) {
+      case "created":
+        return "registered for this repository (committed \u2014 applies to the whole team)";
+      case "merged":
+        return "registered alongside existing servers in this repository (committed \u2014 applies to the whole team)";
+      case "already-registered":
+        return "already registered in this repository \u2014 left unchanged";
+    }
+  }
+  const { result } = detail;
+  switch (result.state) {
+    case "registered":
+      return `registered at scope "${detail.scope}" with the host`;
     case "already-registered":
-      return "already registered for repository-scoped hosts \u2014 left unchanged";
+      return `already registered with the host \u2014 left unchanged`;
+    case "host-missing":
+      return `not registered \u2014 scope "${detail.scope}" needs the host CLI, which is not on PATH`;
+    case "host-failed":
+      return `the host refused the registration at scope "${detail.scope}"`;
   }
 };
 var stepLabel = (step) => step.step === "policy" ? `${STEP_LABEL.policy} \u2014 ${policyOutcome(step)}` : step.step === "mcp-registration" ? `${STEP_LABEL["mcp-registration"]} \u2014 ${mcpRegistrationOutcome(step)}` : (
@@ -26526,9 +26655,60 @@ The answer is written to ${POLICY_FILE_NAME} and committed \u2014 enabling it ap
   }
   return "no-tty";
 };
+var askMcpScope = async () => {
+  for (; ; ) {
+    const answer = await new Promise((resolveAnswer) => {
+      const readlineInterface = createInterface({ input: process.stdin, output: process.stdout });
+      let settled2 = false;
+      const settle = (value) => {
+        if (settled2) return;
+        settled2 = true;
+        readlineInterface.close();
+        resolveAnswer(value);
+      };
+      readlineInterface.question(
+        `Register the MCP server at which scope? [${MCP_SCOPES.join("/")}] (${DEFAULT_MCP_SCOPE}) `,
+        (line2) => settle(line2)
+      );
+      readlineInterface.on("close", () => settle(null));
+    });
+    if (answer === null) return null;
+    const trimmed = answer.trim().toLowerCase();
+    if (trimmed === "") return DEFAULT_MCP_SCOPE;
+    if (isMcpScope(trimmed)) return trimmed;
+    process.stdout.write(
+      `Please answer one of ${MCP_SCOPES.join(", ")} \u2014 a bare Enter takes the default (${DEFAULT_MCP_SCOPE}).
+`
+    );
+  }
+};
+var resolveMcpScope = async (options) => {
+  if (options.mcpScope !== void 0) return options.mcpScope;
+  if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
+    process.stdout.write(
+      `Where should the capture server be registered?
+  user     one registration covering every repository you open (${MCP_HOST_CLI} writes it; not committed)
+  project  ${MCP_REGISTRATION_FILE} in this repository \u2014 committed, so it applies to everyone who clones it
+  local    this repository, for you only (${MCP_HOST_CLI} writes it; not committed)
+  none     write nothing \u2014 the Claude Code and Codex plugins already carry the server
+`
+    );
+    let answer;
+    try {
+      answer = await askMcpScope();
+    } catch {
+      answer = null;
+    }
+    return answer ?? DEFAULT_MCP_SCOPE;
+  }
+  return DEFAULT_MCP_SCOPE;
+};
 var register12 = (program3) => {
   program3.command("init").description(
-    "one-command onboarding: hooks install, directive author string, index --rebuild, agent integration, repository MCP registration, capture policy, doctor --fix"
+    "one-command onboarding: hooks install, directive author string, index --rebuild, agent integration, MCP registration, capture policy, doctor --fix"
+  ).option(
+    "--mcp-scope <scope>",
+    `where to register the capture server: ${MCP_SCOPES.join(", ")} (skips the prompt; default ${DEFAULT_MCP_SCOPE})`
   ).option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--verbose", "show step-by-step detail output instead of the result summary").option("--json", "emit the report as JSON").option("--upgrade", "upgrade to the newest release before wiring this repository").option(
     "--unattended",
     "enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)"
@@ -26540,11 +26720,24 @@ var register12 = (program3) => {
     "also write the capture procedure into AGENTS.md (off by default; the MCP server already carries it)"
   ).addHelpText(
     "after",
-    "\nRuns seven setup steps in sequence \u2014 hooks install, directive author string, index --rebuild, agent integration, repository MCP registration, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to authorise it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. The policy does not install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session transcript before commit, because ordinary git commits cannot start capture. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\nMCP registration writes the repository-scoped " + MCP_REGISTRATION_FILE + " only; it does not configure hosts that keep their own MCP settings elsewhere. The file uses `commitlore mcp`, not a machine-local path, and is committed with the repository so it applies to everyone who clones it.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all seven.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write could not run at all (SPEC \xA710). Agent integration writes or refreshes only CommitLore's marked section in AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server's instructions, which every wired host receives on initialize, so the file is not how the procedure travels. A repository MCP registration that cannot be written leaves the install degraded rather than broken; doctor reports it when unattended capture needs an initiator."
+    "\nRuns seven setup steps in sequence \u2014 hooks install, directive author string, index --rebuild, agent integration, MCP registration, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to authorise it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. The policy does not install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session transcript before commit, because ordinary git commits cannot start capture. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\nMCP registration asks where the capture server should be registered, and every scope the host supports is available. `user` is one registration covering every repository you open, `local` is this repository for you only, and `project` writes " + MCP_REGISTRATION_FILE + " \u2014 which is committed, so it applies to everyone who clones the repository. `none` writes nothing, which is the right answer when the Claude Code or Codex plugin already carries the server. The default is " + DEFAULT_MCP_SCOPE + " in both directions: it is what a bare Enter takes and what a run with no terminal uses, so a script and a person end up in the same place. `user` and `local` are written by " + MCP_HOST_CLI + ", because that file is the host's own; `project` is written here, merging without disturbing servers somebody else put in the file. A `project` registration uses `commitlore mcp`, not a machine-local path, so it survives the next clone.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all seven.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write could not run at all (SPEC \xA710). Agent integration writes or refreshes only CommitLore's marked section in AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server's instructions, which every wired host receives on initialize, so the file is not how the procedure travels. An MCP registration that cannot be written leaves the install degraded rather than broken; doctor reports it when unattended capture needs an initiator. A `user` or `local` scope asked of a machine with no " + MCP_HOST_CLI + " on PATH is not a failure at all: it reports at 0 and names the command to run later."
   ).action(async (options) => {
+    if (options.mcpScope !== void 0 && !isMcpScope(options.mcpScope)) {
+      process.stderr.write(
+        `commitlore init: --mcp-scope ${JSON.stringify(options.mcpScope)} is not one of ${MCP_SCOPES.join(", ")}
+`
+      );
+      process.exitCode = 2;
+      return;
+    }
+    const scope = await resolveMcpScope({
+      ...options.json === void 0 ? {} : { json: options.json },
+      ...options.mcpScope === void 0 ? {} : { mcpScope: options.mcpScope }
+    });
     const choice = await resolveUnattendedChoice(options);
     const initOptions = options.force === void 0 ? {} : { force: options.force };
     initOptions.unattended = choice;
+    initOptions.mcpScope = scope;
     if (options.agentsMd === true) initOptions.agentsGuidance = true;
     if (options.upgrade === true) initOptions.upgrade = true;
     const report = runInit(initOptions);
@@ -27079,7 +27272,7 @@ var register16 = (program3) => {
 };
 
 // src/commands/hermes.ts
-import { spawnSync as spawnSync11 } from "node:child_process";
+import { spawnSync as spawnSync12 } from "node:child_process";
 import { copyFileSync, existsSync as existsSync25, mkdirSync as mkdirSync11, readFileSync as readFileSync28, renameSync as renameSync10, statSync as statSync9, writeFileSync as writeFileSync18 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
 import { basename as basename4, dirname as dirname13, join as join21, resolve as resolve20 } from "node:path";
@@ -27351,7 +27544,7 @@ var removeHermesConfig = (contents, options) => {
 
 // src/commands/hermes.ts
 var commandExists = (command) => {
-  const result = spawnSync11(command, ["--version"], { encoding: "utf8", timeout: 5e3, stdio: "ignore" });
+  const result = spawnSync12(command, ["--version"], { encoding: "utf8", timeout: 5e3, stdio: "ignore" });
   return result.error === void 0;
 };
 var backupPathFor = (configPath) => {
@@ -27377,7 +27570,7 @@ var runVerification = (report, verified) => {
     report.push("unverified: Hermes is not on PATH, so start a fresh session to load the configured profile");
     return;
   }
-  const skills = spawnSync11("hermes", ["skills", "list", "--source", "all"], {
+  const skills = spawnSync12("hermes", ["skills", "list", "--source", "all"], {
     encoding: "utf8",
     timeout: 15e3
   });
@@ -27389,7 +27582,7 @@ var runVerification = (report, verified) => {
   } else {
     report.push("unverified: Hermes did not list every CommitLore skill; start a fresh session and run `hermes skills list --source all`");
   }
-  const mcp = spawnSync11("hermes", ["mcp", "test", "commitlore"], {
+  const mcp = spawnSync12("hermes", ["mcp", "test", "commitlore"], {
     encoding: "utf8",
     timeout: 15e3
   });
@@ -28212,7 +28405,7 @@ var register19 = (program3) => {
 import { accessSync as accessSync3, constants as constants2, existsSync as existsSync26, mkdirSync as mkdirSync12, renameSync as renameSync11, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync19, readFileSync as readFileSync30 } from "node:fs";
 import { delimiter as delimiter2, dirname as dirname15, extname, isAbsolute as isAbsolute5, join as join23 } from "node:path";
 import { randomUUID } from "node:crypto";
-import { spawnSync as spawnSync12 } from "node:child_process";
+import { spawnSync as spawnSync13 } from "node:child_process";
 var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
 var isObject3 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var ownEntry = (format, entry, wrapper) => {
@@ -28401,7 +28594,7 @@ var spawnResolved = (command, args, timeout) => {
   if (command.usesCommandInterpreter && invocation === null) {
     return { status: null, error: new Error("batch command contains a quote, line break, or NUL byte"), stdout: "", stderr: "" };
   }
-  const result = command.usesCommandInterpreter ? spawnSync12(commandInterpreter(), invocation?.args ?? [], { encoding: "utf8", env: invocation?.env, shell: false, timeout, windowsVerbatimArguments: true }) : spawnSync12(command.path, args, { encoding: "utf8", shell: false, timeout });
+  const result = command.usesCommandInterpreter ? spawnSync13(commandInterpreter(), invocation?.args ?? [], { encoding: "utf8", env: invocation?.env, shell: false, timeout, windowsVerbatimArguments: true }) : spawnSync13(command.path, args, { encoding: "utf8", shell: false, timeout });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -38288,7 +38481,7 @@ var register22 = (program3) => {
 };
 
 // src/core/codex-plugin.ts
-import { spawnSync as spawnSync13 } from "node:child_process";
+import { spawnSync as spawnSync14 } from "node:child_process";
 import { existsSync as existsSync27, mkdirSync as mkdirSync13, readFileSync as readFileSync31, rmSync as rmSync8, writeFileSync as writeFileSync20 } from "node:fs";
 import { homedir as homedir5 } from "node:os";
 import { join as join24 } from "node:path";
@@ -38373,7 +38566,7 @@ var codexSaid = (result) => {
   return [`codex said: ${said}`];
 };
 var runCodexCommand = (args) => {
-  const result = spawnSync13("codex", args, { encoding: "utf8", timeout: 3e4 });
+  const result = spawnSync14("codex", args, { encoding: "utf8", timeout: 3e4 });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -39398,7 +39591,7 @@ var register26 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { spawnSync as spawnSync14 } from "node:child_process";
+import { spawnSync as spawnSync15 } from "node:child_process";
 import { existsSync as existsSync28, readFileSync as readFileSync34, rmSync as rmSync10, writeFileSync as writeFileSync22 } from "node:fs";
 import { homedir as homedir6 } from "node:os";
 import { join as join25 } from "node:path";
@@ -39429,7 +39622,7 @@ var withoutTomlBlock = (contents, wrapper) => {
   return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 };
 var listCodexMcp = (command) => {
-  const listed = spawnSync14(command, ["mcp", "list", "--json"], { encoding: "utf8" });
+  const listed = spawnSync15(command, ["mcp", "list", "--json"], { encoding: "utf8" });
   if (listed.error?.code === "ENOENT") {
     return { state: "absent", servers: [] };
   }
@@ -39543,7 +39736,7 @@ var runUninstall = async (options = {}) => {
           removed.push(`${path2} (${SERVER_KEY} entry)`);
           report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
         } else {
-          const removedByCli = spawnSync14(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
+          const removedByCli = spawnSync15(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
           if (removedByCli.error === void 0 && removedByCli.status === 0) {
             removed.push(`${path2} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
