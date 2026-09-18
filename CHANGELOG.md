@@ -4,6 +4,54 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.5.0
+
+Something now starts the capture.
+
+`commitlore auto status` has said the gap plainly for a long time: *"an agent
+host must initiate capture; init installs no initiator"*. On this repository's
+own history, 204 of 249 substantive commits carry a record. The missing 18% was
+never a capability gap — it was a product that required five things to be
+remembered in order.
+
+**`commitlore commit` is one call in place of five.** Give it a message; add
+`--transcript` and `--records` when there is something to record, and nothing
+when there is not. It composes no commit message of its own — the records reach
+the commit through the `prepare-commit-msg` hook, the same path a person uses
+after staging a capture by hand. A draft with any refused record commits nothing
+and binds nothing, and says both legal next moves: correct the quotes, or record
+nothing.
+
+**Recording nothing is a complete answer, and nothing anywhere checks that a
+record exists.** That is the whole design rather than a gap in it. An agent that
+must produce a record will produce one, and a false record is permanent — so
+what can be enforced honestly is that the flow *ran*, never what came out of it.
+
+**The Claude Code plugin now refuses a `git commit` on a tree that was never put
+through the flow.** A `PreToolUse` hook on `Bash` answers one question — was
+this tree considered — and names the command that clears it, in the directory it
+graded, carrying `--amend` and `-a` through from the command it refused. It
+steps aside for a merge, for a rebase, for `--dry-run`, for anything it cannot
+parse, for a repository whose policy is not `auto`, and for a mechanically
+trivial change: one file and five lines, documentation only, `fixup!`, or a
+`release:` commit touching only release paths.
+
+Everything it cannot answer is an allow. A gate that blocks on its own confusion
+is one people disable.
+
+### If you already use the five-step flow, nothing changes for you
+
+`prepare_capture` → `verify_capture` → `stage_capture` → `git commit` satisfies
+the gate. It writes the same consideration `commitlore commit` does, from the
+shared code both routes pass through.
+
+### What this does not promise
+
+Not 100% recorded — 100% *considered*, and only where a Bash `PreToolUse` hook
+exists. A person at a terminal, CI, a script, and any host without that hook are
+unchanged: they get a simpler command and no enforcement. The ceiling on records
+is still the agent's judgement.
+
 ## 1.4.2
 
 Where the MCP server gets registered stopped being a decision this tool made for
