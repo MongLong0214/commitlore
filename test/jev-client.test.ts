@@ -22,7 +22,7 @@ import {
   RESPONSE_BYTE_LIMIT,
   STATE_BYTE_LIMIT,
   type JevChoiceQuestion,
-} from '../src/jev/client.js';
+} from '../bench/jev/client.js';
 
 const KEY = 'apikey_test_client_00000000000000000000';
 

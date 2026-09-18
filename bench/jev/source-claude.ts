@@ -41,7 +41,7 @@ import { closeSync, mkdirSync, openSync, readSync, readFileSync, renameSync, rmS
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 
-import { execGit } from '../core/git.js';
+import { spawnSync } from 'node:child_process';
 import {
   unavailable,
   type ConversationSource,
@@ -106,10 +106,18 @@ export interface SessionDescriptor {
   readonly registeredAt: string;
 }
 
+/**
+ * `git`, locally.
+ *
+ * `src/core/execGit` would be the natural thing to reuse, and `bench/` sets
+ * `rootDir` to itself so it cannot import across that boundary. Everything this
+ * module asks git is a `rev-parse`, so a six-line spawn is the whole dependency
+ * rather than a reason to widen a compiler setting.
+ */
 const gitValue = (cwd: string, args: readonly string[]): string | null => {
-  const result = execGit([...args], { cwd });
-  if (result.code !== 0) return null;
-  const value = result.stdout.trim();
+  const result = spawnSync('git', [...args], { cwd, encoding: 'utf8', shell: false });
+  if (result.status !== 0) return null;
+  const value = (result.stdout ?? '').trim();
   return value === '' ? null : value;
 };
 

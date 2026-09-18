@@ -28,7 +28,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/commitlore.mjs",
     "bench:m5": "node --experimental-strip-types bench/m5-analysis.ts",
-    "test:local": "npm run build && vitest run --maxWorkers=4"
+    "test:local": "npm run build && vitest run --maxWorkers=4",
+    "bench:jev-ceiling": "node --experimental-strip-types bench/jev-ceiling.ts",
+    "bench:jev-relevance": "node --experimental-strip-types bench/jev-relevance.ts"
   },
   "keywords": [
     "git",

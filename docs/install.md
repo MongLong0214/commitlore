@@ -125,48 +125,6 @@ the local MCP server where it can do so safely. When the Codex CLI is present,
 that registration uses its MCP commands; the config-file path is only the
 CLI-absent fallback and the installer reports which path it used.
 
-## Experimental: the optional Jev auto-capture prototype
-
-Nothing here is required, and a default installation is unaffected by all of it.
-
-`init` writes one extra Claude Code entry — a `SessionStart` hook running
-`commitlore jev-session` — beside the pre-edit injection hook, and only where it
-writes that one: if the Claude Code plugin is providing the integration, the
-plugin carries both entries and `init` writes no `settings.json` at all. The
-entry is inert without a key: it checks activation before it parses its payload,
-so with no `COMMITLORE_JEV_API_KEY` it writes nothing, reads no transcript and
-prints nothing.
-
-Turning the prototype on takes two explicit things:
-
-```bash
-export COMMITLORE_JEV_API_KEY=...   # or COMMITLORE_JEV=on with TYPESAFE_API_KEY
-commitlore auto on --local          # the existing one-time unattended consent
-```
-
-`COMMITLORE_JEV=off` overrides any key. A host inherits its launch environment,
-so a session that was already running when you exported the key will not see it
-— restart it. A session that started before the `SessionStart` entry existed is
-not registered either, and needs the same restart rather than a background
-refresh.
-
-`commitlore doctor --jev` reports activation, consent, the installed entry and
-the last result without calling the provider. To remove just this part:
-
-```bash
-commitlore inject uninstall-claude-hook   # removes both commitlore entries
-```
-
-That leaves every foreign hook and every unrelated setting in place, and removes
-nothing else. Removing the key rewrites no Git data and cancels no capture that
-was already authorized — a record the prototype produced is an ordinary record
-and stays one.
-
-Reinstalling hooks is what exposes the prototype to a repository at all: the
-`commit-msg` gate installed by an earlier release execs `validate` and keeps
-working, without it. `hooks status` names that state and the one command that
-changes it.
-
 ## Uninstall
 
 ```bash

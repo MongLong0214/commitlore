@@ -10,17 +10,6 @@
           }
         ]
       }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "startup|resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/commitlore-run.sh jev-session --hook-input"
-          }
-        ]
-      }
     ]
   }
 }

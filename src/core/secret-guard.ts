@@ -42,18 +42,6 @@ export interface SecretFinding {
 export interface ScanOptions {
   /** Findings below this bar are dropped. Defaults to `medium`, i.e. report everything. */
   minConfidence?: 'high' | 'medium';
-  /**
-   * Scan the lines a commit message would have dropped: `#` comments and
-   * everything below `commit -v` scissors. Defaults to false, which is the
-   * behaviour every existing caller has.
-   *
-   * The two omissions are correct for a commit message and wrong for anything
-   * being sent somewhere. Git strips those lines, so a finding there describes
-   * text that will never exist in the repository — but an outbound request
-   * carries the string as given, and a credential in a comment line leaves the
-   * machine exactly like one anywhere else (#1046).
-   */
-  includeIgnoredLines?: boolean;
 }
 
 const CONFIDENCE_RANK: Readonly<Record<'high' | 'medium', number>> = { high: 2, medium: 1 };
@@ -103,15 +91,13 @@ const redact = (text: string): string =>
  * The lines git will keep, with their original 1-based numbers so a reported
  * line still matches what the author sees in their editor.
  */
-const scannedLines = (message: string, includeIgnored = false): ScannedLine[] => {
+const scannedLines = (message: string): ScannedLine[] => {
   const kept: ScannedLine[] = [];
 
   for (const [index, raw] of message.split('\n').entries()) {
     const text = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
-    if (!includeIgnored) {
-      if (SCISSORS.test(text)) break;
-      if (text.startsWith(COMMENT_CHAR)) continue;
-    }
+    if (SCISSORS.test(text)) break;
+    if (text.startsWith(COMMENT_CHAR)) continue;
     kept.push({ line: index + 1, text });
   }
 
@@ -204,7 +190,7 @@ export const redactSecretsIn = (value: string): { text: string; findings: Secret
 export const scanForSecrets = (message: string, opts?: ScanOptions): SecretFinding[] => {
   const floor = CONFIDENCE_RANK[opts?.minConfidence ?? 'medium'];
 
-  const hits = scannedLines(message, opts?.includeIgnoredLines === true).flatMap((source) =>
+  const hits = scannedLines(message).flatMap((source) =>
     SECRET_RULES.flatMap((rule) => hitsFor(rule, source)),
   );
 

@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import type { ConversationSource } from '../src/jev/source.js';
+import type { ConversationSource } from '../bench/jev/source.js';
 import {
   CHILD_ENV,
   descriptorDir,
@@ -39,7 +39,7 @@ import {
   registerClaudeSession,
   SESSION_ENV,
   sourceStillCurrent,
-} from '../src/jev/source-claude.js';
+} from '../bench/jev/source-claude.js';
 
 const scratch: string[] = [];
 afterAll(() => {

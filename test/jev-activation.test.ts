@@ -1,7 +1,7 @@
 /**
  * #1046: the gate between a default installation and the optional prototype.
  *
- * Everything in `src/jev/` is unreachable unless this function says so, which
+ * Everything in `bench/jev/` is unreachable unless this function says so, which
  * makes it the one place a no-key guarantee can be established rather than
  * asserted. The tests below are in three groups: what enables, what does not,
  * and what the enabled value refuses to leak.
@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { describeActivation, resolveJevActivation } from '../src/jev/activation.js';
+import { describeActivation, resolveJevActivation } from '../bench/jev/activation.js';
 
 /** Long enough to pass the length floor, and obviously not a credential. */
 const DEDICATED = 'apikey_test_dedicated_000000000000000000';

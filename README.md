@@ -491,63 +491,6 @@ and the cases where the original benchmark or diagnosis was wrong.
 
 <hr>
 
-## Experimental: optional Jev auto-capture
-
-**CommitLore without this is the complete product.** It is an optional prototype
-input, not a dependency, not a tier, and not something a default installation
-needs to know about. With no key, nothing below runs: no transcript is read, no
-file is written, no request is made, and every command, record and schema is
-exactly what it was.
-
-With a key, ordinary commits may record a decision without anyone selecting a
-record. Turning it on takes two things, both explicit:
-
-```sh
-export COMMITLORE_JEV_API_KEY=...   # or COMMITLORE_JEV=on with TYPESAFE_API_KEY
-commitlore auto on --local          # the existing one-time unattended consent
-```
-
-`COMMITLORE_JEV=off` wins over any key. Hosts inherit their launch environment,
-so a running session does not pick up a key you just exported — restart it.
-
-**What it does.** At a supported commit it reads a bounded window of the current
-conversation, asks [TypeSafe](https://docs.typesafe.ai/) once which passages are
-a `Limit:`, a `Warn:` or a `Ruled-out:` and whether they apply to the staged
-change, and copies the chosen passages **verbatim** into a draft. Nothing is
-written by the model. That draft then goes through the same verification,
-receipt, staging and validation every other record goes through, and a refusal
-there is a refusal.
-
-**What it sends.** The passages it assessed and a bounded excerpt of the staged
-diff leave your machine. They are screened against CommitLore's credential rules
-first — including the comment and scissors lines a commit-message scan skips —
-and a unit that trips a rule is withheld rather than masked, so nothing claims to
-have assessed text it did not send. **Screening is best effort**: it is eleven
-rules, and source text can be private with no credential in it at all. A selected
-passage becomes ordinary Git data and travels wherever your commits travel.
-
-**What is supported.** Claude Code root sessions in the registered worktree, on
-ordinary staged commits. Codex and every other host keep all their native
-functionality; Jev adapters for them are deferred. The prototype skips — leaving
-native behaviour untouched — when a record is already present, another capture is
-eligible, a foreign `commit-msg` hook is chained, the source is unknown, or the
-operation is an amend, rebase, merge, path-limited commit or unborn HEAD.
-`--no-verify` skips the hook entirely, so nothing is assessed there.
-
-**What it does not promise.** It is a prototype to evaluate. It misses
-decisions, it can select a passage that is not one, and the `.90` confidence
-floor is an uncalibrated policy rather than a truth rate. Literal extraction
-cannot record a decision nobody stated in a single passage. There are no
-accuracy or savings figures here because none have been measured.
-
-**When it fails**, there is no new automatic record and nothing else changes:
-no fallback model, no second attempt, no agent invocation. Source unavailable and
-"nothing useful found" are reported as different outcomes, because they are.
-`commitlore doctor --jev` shows activation, consent, the installed entry and the
-last result without making a provider call — that last result is best effort and
-does not prove the newest commit was inspected. Removing the key rewrites no Git
-data and cancels no already-authorized capture.
-
 <!-- README:DOCS -->
 ## Documentation
 

@@ -2,7 +2,7 @@
  * Whether the optional Jev producer runs at all — #1046, ADR #1045 D2.
  *
  * This is the only gate between a default installation and everything else in
- * `src/jev/`. It is pure, it reads environment variables and nothing else, and
+ * `bench/jev/`. It is pure, it reads environment variables and nothing else, and
  * it is the first thing the commit-msg dispatcher calls: without a key, or with
  * `COMMITLORE_JEV=off`, the answer arrives before any optional module is
  * imported for execution, any transcript is read, any file is written or any

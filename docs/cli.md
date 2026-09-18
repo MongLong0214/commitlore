@@ -85,38 +85,14 @@ is in [protocol.md](protocol.md).
 | `commitlore sync` | publishes and collects the notes mirror — the `pre-push` hook runs it for you |
 | `commitlore squash-preserve <range>` | carries the records of a squashed branch onto the merge commit (ADR-0004) |
 | `commitlore demo` | runs a self-contained lifecycle demo in a temporary repository (no network, no model) |
-| `commitlore doctor --jev` | experimental: reports the optional Jev prototype's activation, consent, installed entry and last result, without calling the provider |
 | `commitlore uninstall` | removes what `install.sh` or `install.ps1` wrote — see [install.md](install.md) |
 
 `hooks install` preserves and chains any existing `commit-msg` hook.
 `hooks uninstall` removes every CommitLore hook — `commit-msg`,
 `prepare-commit-msg`, `post-commit`, `pre-push` — and restores any they replaced.
 
-`commit-msg`, `prepare-commit-msg`, `post-commit` and `pre-push` are internal
-hook commands. Git invokes them; you do not. `commit-msg --message-file` is what
-the installed gate execs: it is `validate --message-file` plus the optional Jev
-producer, and with no `COMMITLORE_JEV_API_KEY` it is the same call with the same
-arguments, the same scan budget and the same exit codes. `jev-session` is the
-same kind of thing for a Claude Code `SessionStart` hook, and is equally inert
-without a key.
-
-A stub installed before the gate's exec line changed still runs `validate` and
-still works. `hooks status` reports it as out of date and names the reinstall;
-until that reinstall the repository simply has no prototype.
-
-### Experimental: `doctor --jev`
-
-`commitlore doctor --jev` appends a report on the optional prototype — whether
-it is activated and from which variable, whether this repository has given the
-native unattended consent, whether the `SessionStart` entry is installed,
-whether *this* session is registered, and the last recorded result. It makes no
-provider call.
-
-Ordinary `doctor` output is unchanged without the flag, and the flag cannot
-change the exit code: a prototype that is merely not set up is not a repository
-failure. The last result is best effort — it describes one earlier invocation
-and does not establish that the newest commit was inspected or that any commit
-carries a record. Read git and `commitlore pending` for that.
+`prepare-commit-msg`, `post-commit` and `pre-push` are internal hook commands.
+Git invokes them; you do not.
 
 ### `doctor --json` envelope
 

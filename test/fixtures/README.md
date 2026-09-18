@@ -17,7 +17,7 @@ transcript and sanitized before being committed (#1049).
 The **shape**: every record `type` observed, the keys each type carries, the
 block types inside `message.content`, and the host wrappers that make a record
 something other than authored speech. That is what
-`src/jev/source-claude.ts` makes decisions about, so that is what a format
+`bench/jev/source-claude.ts` makes decisions about, so that is what a format
 fixture has to preserve.
 
 The twenty shapes, which is the list the reader is written against:

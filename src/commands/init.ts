@@ -50,7 +50,6 @@ import {
   setUnattendedCapture,
 } from '../core/capture-policy.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
-import { JEV_SESSION_HOOK } from './jev-session.js';
 import { pluginDeliveryProof } from '../hooks/claude-plugin.js';
 import { spawnSync } from 'node:child_process';
 
@@ -316,30 +315,6 @@ const runAgentIntegrationStep = (opts: InitOptions): InitStep => {
     ? skippedClaudeHook(settingsPath, plugin.reason)
     : installClaudeHook({ settingsPath });
 
-  /*
-   * The optional prototype's source registration (#1049/#1050).
-   *
-   * Behind the *same* predicate as the injection hook, and that is the point.
-   * The plugin now carries a `SessionStart` entry of its own
-   * (`hooks/hooks.json`), so where the plugin is the Claude integration this
-   * must not write a second one — and, more visibly, must not create a
-   * `.claude/settings.json` in a repository whose Claude wiring deliberately
-   * lives in the plugin. A default installation acquiring a settings file it
-   * did not have is exactly the "new required setup" a no-key user is promised
-   * they will not get.
-   *
-   * The entry itself is inert without a key: `jev-session` checks activation
-   * before it parses its payload, so it writes nothing, reads no transcript and
-   * prints nothing. Wiring it now rather than at key time means a user who
-   * later sets one needs a host restart and not a reconfiguration.
-   *
-   * Its outcome is reported and never fatal. Failing `init` for the optional
-   * half would make an experimental producer a precondition for native setup.
-   */
-  const session = plugin.willFire
-    ? skippedClaudeHook(settingsPath, plugin.reason)
-    : installClaudeHook({ settingsPath, kind: JEV_SESSION_HOOK });
-
   // `AGENTS.md` is a convention, not a requirement, and this step writes into a
   // file the repository owns -- 105 lines into an existing one, or a new file
   // where the repository had none. Capture works without it: an end-to-end run
@@ -351,13 +326,9 @@ const runAgentIntegrationStep = (opts: InitOptions): InitStep => {
     const lines = [
       'AGENTS.md left alone — the capture procedure ships in the MCP server every host receives (--agents-md writes it into the repository as well)',
       ...result.stdout.trimEnd().split('\n').filter((line) => line.length > 0),
-      ...session.stdout.trimEnd().split('\n').filter((line) => line.length > 0),
     ];
     if (result.stderr) {
       lines.push(...result.stderr.trimEnd().split('\n').filter((line) => line.length > 0));
-    }
-    if (session.stderr) {
-      lines.push(...session.stderr.trimEnd().split('\n').filter((line) => line.length > 0));
     }
     return {
       step: 'claude-hook',
