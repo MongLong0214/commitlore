@@ -415,6 +415,14 @@ const runAgentIntegrationStep = (opts: InitOptions): InitStep => {
 export type McpStepDetail =
   | { scope: 'project'; result: McpRegistrationResult }
   | { scope: 'user' | 'local'; result: HostRegistrationResult }
+  /**
+   * A host scope that was asked for and deliberately not written, because the
+   * plugin already delivers the server (#1079). Its own variant rather than a
+   * `HostRegistrationResult` state: nothing was attempted, so there is no host
+   * outcome to report, and a consumer branching on `result.ok` must not read
+   * this as a failed registration.
+   */
+  | { scope: 'user' | 'local'; skipped: 'plugin-delivers'; reason: string }
   | { scope: 'none'; alreadyRegistered: boolean; command: string | null };
 
 /**
@@ -499,6 +507,50 @@ const runMcpRegistrationStep = (opts: InitOptions): InitStep => {
           : []),
       ],
       detail: { scope, result },
+    };
+  }
+
+  /*
+   * Two installers, one server (#1079). This is #781 one surface over: the
+   * plugin declares its own server in `plugin-mcp.json` and this step registers
+   * a second one under the same name, so a machine carrying both runs two copies
+   * of the product -- two processes, and two sets of the same tools in front of
+   * the agent.
+   *
+   * They are separate installations, so they drift. Measured on one machine: a
+   * session whose plugin server was 1.3.17 while its host registration served
+   * 1.5.0, which meant the hooks graded every edit by one build's rules while
+   * the tools answered as another's. A plugin launcher is resolved once at
+   * session start, so that session could not be repaired with `/mcp` either.
+   *
+   * Only a *host* registration is the duplicate, which is why this sits below
+   * the project branch rather than above it: a project-scope `.mcp.json` is
+   * committed and applies to everyone who clones, and this user's plugin says
+   * nothing about them.
+   *
+   * Skips only on an affirmative answer, exactly as the hook step does. An
+   * unparseable registry, a plugin nobody enabled or a shape that changed under
+   * us all register, because a duplicate is a cost somebody notices and silence
+   * is one nobody does.
+   */
+  const plugin = pluginDeliveryProof(cwd);
+  if (plugin.willFire) {
+    return {
+      step: 'mcp-registration',
+      title: 'MCP server',
+      code: 0,
+      lines: [
+        // Not `plugin.reason` verbatim: that sentence is the hook step's and
+        // ends "registers this hook itself", which is the wrong noun here and
+        // reads as though the MCP server were a hook. The reason stays in
+        // `detail` for `--json`.
+        `no MCP registration written at scope "${scope}" — the Claude Code plugin is installed and enabled, ` +
+          'and carries this server itself',
+        'a second one would put two copies of the same server in front of the agent, and they drift: ' +
+          'a plugin resolves its launcher once at session start, so the two can serve different builds',
+        `to register it anyway: ${hostRegistrationCommand(scope)}`,
+      ],
+      detail: { scope, skipped: 'plugin-delivers', reason: plugin.reason },
     };
   }
 
@@ -855,6 +907,10 @@ const mcpRegistrationOutcome = (step: InitStep): string => {
       case 'already-registered':
         return 'already registered in this repository — left unchanged';
     }
+  }
+  // Nothing was attempted, so there is no host outcome to name (#1079).
+  if ('skipped' in detail) {
+    return `not written at scope "${detail.scope}" — the plugin already delivers this server`;
   }
   const { result } = detail;
   switch (result.state) {

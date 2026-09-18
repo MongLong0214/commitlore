@@ -15,6 +15,7 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
   "directive-trust-mode",
   "mcp-lifecycle",
   "mcp-registration-runtime",
+  "mcp-delivery-routes",
   "mcp-runtime-identity",
   "unattended-initiator",
   "policy-overlay",
@@ -49,6 +50,7 @@ skipped PreToolUse hook version — no installed hook to compare against <versio
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      MCP registration runtime — no .mcp.json registers commitlore here — nothing to launch, so nothing to check
+ok      MCP delivery routes — no route delivers this MCP server to this host, so a host here starts no CommitLore server
 ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
@@ -82,6 +84,7 @@ skipped PreToolUse hook version — no installed hook to compare against <versio
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      MCP registration runtime — no .mcp.json registers commitlore here — nothing to launch, so nothing to check
+ok      MCP delivery routes — no route delivers this MCP server to this host, so a host here starts no CommitLore server
 ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
@@ -111,6 +114,7 @@ skipped PreToolUse hook version — no installed hook to compare against <versio
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      MCP registration runtime — no .mcp.json registers commitlore here — nothing to launch, so nothing to check
+ok      MCP delivery routes — no route delivers this MCP server to this host, so a host here starts no CommitLore server
 ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
@@ -136,6 +140,7 @@ skipped PreToolUse hook version — no installed hook to compare against <versio
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      MCP registration runtime — no .mcp.json registers commitlore here — nothing to launch, so nothing to check
+ok      MCP delivery routes — no route delivers this MCP server to this host, so a host here starts no CommitLore server
 ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
