@@ -115,6 +115,43 @@ describe('GitHub reads the keyword, not the sentence', () => {
     expect(problems).toEqual([]);
   });
 
+  /*
+   * Six bodies an adversarial review found being refused, every one of which
+   * closes its issue and should. The rule read a whole clause for any of `not`,
+   * `without`, `stops`, `avoids`, `no longer`, `instead of` -- so `Notably`
+   * matched `not` as a substring, and the other five describe what the change
+   * does rather than negating the keyword.
+   *
+   * r-issuelinkgate carried this as a Limit -- "an unusual one that does not
+   * mean it may be refused" -- and it was a claim to check rather than a
+   * disclosure that settles anything. Checked, it was six.
+   */
+  it.each([
+    'Notably, fixes #12',
+    'Adds an annotation and closes #12',
+    'Stops the double write and fixes #12',
+    'Avoids the race and closes #12',
+    'Uses a Map instead of an array, closes #12',
+    'The hook no longer crashes, fixes #12',
+    'Works without a network and fixes #12',
+    'Removes the retry and fixes #12',
+  ])('allows %s — it describes the change, it does not negate the keyword', (body) => {
+    expect(issueLinkProblems(withBody(body), lookupAll(openIssue))).toEqual([]);
+  });
+
+  it('a number on the next line is a mention, not a second item in a list', () => {
+    // `Closes #12\n#13 is the follow-up` was refused because the trailing
+    // pattern's \s crossed the newline. A list has to be on one line.
+    expect(
+      issueLinkProblems(withBody('Closes #12\n#13 is the follow-up'), lookupAll(openIssue)),
+    ).toEqual([]);
+  });
+
+  it('ignores a tilde fence as well as a backtick one', () => {
+    const body = ['~~~', 'Closes #12, #13', '~~~', '', 'No-Issue: documentation only'].join('\n');
+    expect(closingLinks(body)).toEqual([]);
+  });
+
   it('does not see a negation belonging to an earlier sentence', () => {
     // The window is one clause. A paragraph-wide search would fire on this,
     // which is the false positive that would teach people to ignore the gate.

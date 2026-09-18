@@ -48,44 +48,47 @@ export const CLOSING_KEYWORDS = [
 ];
 
 /**
- * Words that make a sentence mean the opposite of what the parser will do.
- * Kept short and literal: this is a refusal to accept ambiguity, not an attempt
- * to understand English.
+ * Words that negate the keyword they sit in front of.
+ *
+ * The first version of this scanned a whole clause for any of `not`, `without`,
+ * `stops`, `avoids`, `no longer`, `instead of`, `rather than` -- and refused
+ * six ordinary pull request bodies for it:
+ *
+ *     Notably, fixes #12                          `not` inside `Notably`
+ *     Stops the double write and fixes #12        describes the change
+ *     Avoids the race and closes #12              describes the change
+ *     Works without a network and fixes #12       describes the change
+ *     The hook no longer crashes, fixes #12       describes the change
+ *     Uses a Map instead of an array, closes #12  describes the change
+ *
+ * Every one of those closes its issue and should. The mistake was reading the
+ * clause instead of the phrase: what makes a keyword inert is a negation
+ * *attached* to it -- "does not close", "doesn't fix", "never resolves" -- and
+ * nothing further away. So only the word or two immediately before the keyword
+ * is examined, and a word is a word rather than a substring.
  */
-const NEGATIONS = [
-  'not',
-  "n't",
-  'never',
-  'without',
-  'no longer',
-  'stops',
-  'avoid',
-  'avoids',
-  'instead of',
-  'rather than',
+const NEGATING_WORDS = new Set(['not', 'never', 'neither', 'nor']);
+const NEGATING_PAIRS = [
+  ['rather', 'than'],
+  ['instead', 'of'],
 ];
 
-/** How far back a negation is looked for, before the clause cut below. */
-const NEGATION_WINDOW = 60;
-
-/**
- * A negation belongs to the clause it is in.
- *
- * "The old behaviour did not apply the record. Closes #12" is two statements
- * and the first does not negate the second, but a window measured only in
- * characters reaches back into it. Cutting at a sentence terminator or a blank
- * line stops that, while a single newline is deliberately not a cut: "this does
- * not\nclose #12" is one wrapped sentence and must still be caught.
- */
-const currentClause = (before) => {
-  const cut = Math.max(
-    before.lastIndexOf('.'),
-    before.lastIndexOf('!'),
-    before.lastIndexOf('?'),
-    before.lastIndexOf(';'),
-    before.lastIndexOf('\n\n'),
-  );
-  return cut === -1 ? before : before.slice(cut + 1);
+/** Whether the text immediately before a keyword negates it. */
+const negatedBy = (before) => {
+  const words = before
+    .toLowerCase()
+    .replace(/[^a-z'\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const last = words.at(-1);
+  if (last === undefined) return null;
+  if (NEGATING_WORDS.has(last)) return last;
+  if (last.endsWith("n't")) return last;
+  const pair = words.slice(-2).join(' ');
+  for (const [first, second] of NEGATING_PAIRS) {
+    if (pair === `${first} ${second}`) return pair;
+  }
+  return null;
 };
 
 const KEYWORD_LINK = new RegExp(
@@ -104,6 +107,7 @@ const KEYWORD_LINK = new RegExp(
 const withoutCode = (body) =>
   body
     .replace(/```[\s\S]*?```/g, (block) => block.replace(/[^\n]/g, ' '))
+    .replace(/~~~[\s\S]*?~~~/g, (block) => block.replace(/[^\n]/g, ' '))
     .replace(/`[^`\n]*`/g, (span) => ' '.repeat(span.length));
 
 /** Every closing link in the body, with enough context to grade it. */
@@ -112,18 +116,18 @@ export const closingLinks = (body) => {
   const found = [];
   for (const match of scannable.matchAll(KEYWORD_LINK)) {
     const at = match.index ?? 0;
-    const before = currentClause(scannable.slice(Math.max(0, at - NEGATION_WINDOW), at).toLowerCase());
+    const before = scannable.slice(Math.max(0, at - 40), at);
     const after = scannable.slice(at + match[0].length);
     found.push({
       keyword: match[1],
       issue: Number(match[2]),
       text: match[0],
-      negatedBy: NEGATIONS.find((word) => before.includes(word)) ?? null,
+      negatedBy: negatedBy(before),
       /**
        * A second number the reader will think is linked. Only a keyword binds,
        * so `closes #1, #2` links #1 and leaves #2 looking handled.
        */
-      trailing: /^\s*(?:,|and|&|\+)?\s*#(\d+)/.exec(after)?.[1] ?? null,
+      trailing: /^[ \t]*(?:,|and|&|\+)?[ \t]*#(\d+)/.exec(after)?.[1] ?? null,
     });
   }
   return found;
