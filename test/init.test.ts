@@ -362,17 +362,31 @@ describe('commitlore init — MCP registration at the host-owned scopes', () => 
     return { bin, log };
   };
 
+  /*
+   * `HOME` is pinned here as well as PATH, because #1079 made it decide the
+   * verdict: the step now asks whether the plugin already delivers this server,
+   * and skips the host registration when it does.
+   *
+   * Left ambient, every test in this block asserts whatever the developer
+   * happens to have installed. Measured when the check was added: all five
+   * failed on a machine with the plugin enabled and would have passed on CI,
+   * which is exactly the shape #781's own tests were written to remove.
+   */
   const withHostCli = <T>(bin: string, run: () => T): T => {
     const originalArgv = process.argv[1];
     const originalPath = process.env['PATH'];
+    const originalHome = process.env['HOME'];
     process.argv[1] = CLI_JS;
     process.env['PATH'] = `${bin}:${injectBin}:/usr/bin:/bin`;
+    process.env['HOME'] = tempDir('host-cli-no-plugin-home');
     try {
       return run();
     } finally {
       process.argv[1] = originalArgv;
       if (originalPath === undefined) delete process.env['PATH'];
       else process.env['PATH'] = originalPath;
+      if (originalHome === undefined) delete process.env['HOME'];
+      else process.env['HOME'] = originalHome;
     }
   };
 
@@ -472,7 +486,19 @@ describe('commitlore init — MCP registration at the host-owned scopes', () => 
 
     // No stub: withCliEnvironment's PATH carries the injected commitlore and
     // the system directories, and no `claude`.
-    const report = runInitAsCli({ cwd: repo, mcpScope: 'user' });
+    //
+    // `HOME` is pinned for the same reason `withHostCli` pins it (#1079): with
+    // the plugin enabled ambiently the step skips registration entirely and
+    // never reaches the host-missing branch this case is about.
+    const previousHome = process.env['HOME'];
+    process.env['HOME'] = tempDir('mcp-host-missing-no-plugin-home');
+    let report;
+    try {
+      report = runInitAsCli({ cwd: repo, mcpScope: 'user' });
+    } finally {
+      if (previousHome === undefined) delete process.env['HOME'];
+      else process.env['HOME'] = previousHome;
+    }
     const step = mcpStep(report);
     const lines = step?.lines.join('\n') ?? '';
 
@@ -624,6 +650,76 @@ describe('commitlore init --agents-md — repository-owned agent guidance', () =
     withHome(pluginHome('claude-hook-plugin-off-home', false), () => {
       runInit({ cwd: repo });
       expect(existsSync(claudeSettingsPath(repo))).toBe(true);
+    });
+  });
+
+  /*
+   * #1079: the same two installers, one surface over.
+   *
+   * The plugin declares its own MCP server and this step registered a second
+   * one under the same name, so a machine carrying both ran two copies of the
+   * product. They are separate installations and drift: one measured session's
+   * plugin server was 1.3.17 while its host registration served 1.5.0.
+   *
+   * A stub `claude` on PATH records every invocation, so the assertion is that
+   * the host CLI was never called rather than that the report says something.
+   */
+  const claudeStub = (label: string): { path: string; marker: string } => {
+    const dir = tempDir(label);
+    const marker = join(dir, 'invoked.log');
+    const stub = join(dir, 'claude');
+    writeFileSync(stub, `#!/bin/sh\necho "$@" >> ${JSON.stringify(marker)}\nexit 0\n`);
+    chmodSync(stub, 0o755);
+    return { path: dir, marker };
+  };
+
+  const withPath = (dir: string, run: () => void): void => {
+    const previous = process.env['PATH'];
+    process.env['PATH'] = `${dir}:${previous ?? ''}`;
+    try {
+      run();
+    } finally {
+      if (previous === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previous;
+    }
+  };
+
+  it('does not register a host MCP server when the plugin already delivers one', () => {
+    const repo = initRepo('mcp-plugin-delivers');
+    const stub = claudeStub('mcp-plugin-delivers-stub');
+    withHome(pluginHome('mcp-plugin-delivers-home', true), () => {
+      withPath(stub.path, () => {
+        const report = runInit({ cwd: repo, mcpScope: 'user' });
+        const step = report.steps.find((entry) => entry.step === 'mcp-registration');
+
+        expect(step?.lines.join('\n')).toContain('no MCP registration written at scope "user"');
+        // The control: nothing was attempted, so the host CLI was never run.
+        expect(existsSync(stub.marker)).toBe(false);
+      });
+    });
+  });
+
+  it('registers a host MCP server when the plugin is installed but disabled', () => {
+    // Same failure direction as the hook: a duplicate is a cost somebody
+    // notices and silence is one nobody does, so anything short of an
+    // affirmative answer registers.
+    const repo = initRepo('mcp-plugin-off');
+    const stub = claudeStub('mcp-plugin-off-stub');
+    withHome(pluginHome('mcp-plugin-off-home', false), () => {
+      withPath(stub.path, () => {
+        runInit({ cwd: repo, mcpScope: 'user' });
+        expect(existsSync(stub.marker)).toBe(true);
+      });
+    });
+  });
+
+  it('still writes a project-scope registration when the plugin delivers', () => {
+    // A committed `.mcp.json` applies to everyone who clones, and this user's
+    // plugin says nothing about them -- so the skip is host scopes only.
+    const repo = initRepo('mcp-plugin-project');
+    withHome(pluginHome('mcp-plugin-project-home', true), () => {
+      runInit({ cwd: repo, mcpScope: 'project' });
+      expect(existsSync(join(repo, '.mcp.json'))).toBe(true);
     });
   });
 
