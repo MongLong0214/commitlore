@@ -75,7 +75,7 @@ is in [protocol.md](protocol.md).
 
 | Command | What it does |
 |---|---|
-| `commitlore init` | one-command onboarding: `hooks install`, directive author string, `index --rebuild`, agent integration, repository MCP registration, capture policy, `doctor --fix`. `--agents-md` also writes the capture procedure into `AGENTS.md`; the MCP server states it either way |
+| `commitlore init` | one-command onboarding: `hooks install`, directive author string, `index --rebuild`, agent integration, MCP registration, capture policy, `doctor --fix`. `--mcp-scope user\|project\|local\|none` chooses where the capture server is registered — it asks when there is a terminal, and defaults to `user`. `--agents-md` also writes the capture procedure into `AGENTS.md`; the MCP server states it either way |
 | `commitlore auto` | read and write the unattended-capture setting (`.commitlore-policy.json`, or `.commitlore-policy.local.json` with `--local`): `status`, `on`, `off` |
 | `commitlore doctor` | checks that this repository can carry and share records |
 | `commitlore hooks` | `install`, `uninstall`, `status` for the Git hooks |

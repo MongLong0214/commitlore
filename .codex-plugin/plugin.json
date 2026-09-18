@@ -1,6 +1,6 @@
 {
   "name": "commitlore",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Decision memory from Git history, with verified capture for coding sessions.",
   "author": {
     "name": "MongLong0214",
@@ -18,7 +18,7 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./plugin-mcp.json",
   "interface": {
     "displayName": "CommitLore",
     "shortDescription": "Preserve verified engineering decisions in Git",
