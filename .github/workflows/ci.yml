@@ -200,7 +200,24 @@ jobs:
           test -x "$clone_dir/scripts/commitlore-run.sh" || { echo "run script not executable"; exit 1; }
           CLAUDE_PLUGIN_ROOT="$clone_dir" "$clone_dir/scripts/commitlore-run.sh" --version
           # Every plugin manifest must parse, or the plugin silently does nothing.
-          for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json .mcp.json hooks/hooks.json; do
+          # The MCP declaration's path is read out of the manifest, never named
+          # here. This list used to hard-code `.mcp.json`, which is a second
+          # source of truth for a fact the manifest already states -- and it goes
+          # stale exactly when the declaration moves, which is the one moment the
+          # check matters.
+          #
+          # An empty answer falls back to `.mcp.json` because that is the loader's
+          # own contract, not a guess: Claude Code auto-loads `.mcp.json` at the
+          # plugin root when the manifest declares nothing, and `manifest.mcpServers`
+          # names additional files. The fallback is what keeps this correct for a
+          # tree that declares no path.
+          #
+          # It emits "" rather than String(undefined) for an absent key: that is
+          # the seven-character string "undefined", which is non-empty and would
+          # send the loop looking for a file of that name.
+          mcp_decl="$(node -e 'const v=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).mcpServers;process.stdout.write(typeof v==="string"?v:"")' "$clone_dir/.claude-plugin/plugin.json")"
+          : "${mcp_decl:=.mcp.json}"
+          for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json "$mcp_decl" hooks/hooks.json; do
             node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$clone_dir/$f"
           done
 
