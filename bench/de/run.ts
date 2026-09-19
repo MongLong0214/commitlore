@@ -25,6 +25,7 @@ import { readFileSync } from "node:fs";
 import { Command } from "commander";
 
 import { executePlan, type ExecutableCase } from "./execute.ts";
+import { renderScreen, screenCases } from "./screen.ts";
 import {
   planSchedule,
   reservePair,
@@ -164,6 +165,7 @@ interface Options {
   readonly actorArg?: string[];
   readonly offArg?: string[];
   readonly nativeArg?: string[];
+  readonly screen?: string;
   readonly maxTotalTokens?: string;
   readonly timeoutMs: string;
   readonly checkerRevision: string;
@@ -228,6 +230,13 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
       collect,
       [] as string[],
     )
+    .option(
+      "--screen <trials>",
+      "with --execute, run N unaided controls per case instead of the study (#1038 §1, §3): no " +
+        "discussion, no record, no intervention. It labels a case with a stratum and never " +
+        "selects one -- the issue forbids choosing cases by outcome. Exits 1 when any control " +
+        "passed, meaning that case needs the label, not that it should be dropped",
+    )
     .option("--max-total-tokens <n>", "authorised token ceiling for the whole run")
     .option("--timeout-ms <n>", "wall clock for one actor session", "600000")
     .option("--checker-revision <s>", "the frozen checker revision to require", "checker@r6.1")
@@ -254,6 +263,44 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
     write("de/run: --execute needs --run-dir and --actor. Nothing was run.\n");
     return 2;
   }
+  /*
+   * The trial count is validated before the manifest is made runnable.
+   *
+   * A bad flag should fail on the flag. Left below `executableCases`, a
+   * `--screen 0` against a plan-only manifest came back complaining about a
+   * missing discussion, which sends the reader to the wrong file.
+   */
+  const trials = options.screen === undefined ? null : Number(options.screen);
+  if (trials !== null && (!Number.isSafeInteger(trials) || trials < 1)) {
+    write(`de/run: --screen needs a positive whole number of trials, got "${String(options.screen)}". Nothing was run.\n`);
+    return 2;
+  }
+
+  const runnable = executableCases(manifest, options.cases);
+
+  if (trials !== null) {
+    /*
+     * The baseline runs instead of the study, never beside it.
+     *
+     * Its answer is a label rather than a gate (#1038 §1, §3 forbid choosing
+     * cases by outcome), and a label is prepared once per case rather than
+     * recomputed on every run. Folding it into `--execute` would also pay for
+     * controls on every repetition of a case whose stratum is already known.
+     */
+    const screened = await screenCases([...runnable.values()], {
+      runDir: options.runDir,
+      actor: { command: options.actor, args: options.actorArg ?? [] },
+      trials,
+      timeoutMs: Number(options.timeoutMs),
+      checkerRevision: options.checkerRevision,
+    });
+    write(`${renderScreen(screened)}\n`);
+    // Exit 1 when any control passed, so a pipeline can record the label. It is
+    // not a rejection: #1038 §1 says "never select only native failures or
+    // successes", and a case whose control passes stays in the declared sample.
+    return screened.some((result) => result.passed_unaided > 0) ? 1 : 0;
+  }
+
   // An absent ceiling is unknown, not unlimited: `reservePair` then refuses the
   // first pair rather than spending whatever happens to be authorised.
   const budget = options.maxTotalTokens === undefined ? null : Number(options.maxTotalTokens);
