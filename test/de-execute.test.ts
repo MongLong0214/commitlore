@@ -237,6 +237,71 @@ describe('#1038 §3 the prior discussion never reaches the workspace', () => {
   });
 });
 
+describe('#1035 a provider stop is a bound, not the actor failing', () => {
+  /*
+   * From the eight-pair measured run. Its last pair exhausted the provider's
+   * session quota, and the host reported that as `subtype: "success"` with the
+   * explanation only in the human-readable result text. The prefix match on
+   * `error_` saw no bound, so two rows that were an outage were recorded as the
+   * actor failing to produce a handoff -- and a run's denominator is exactly
+   * where that kind of mistake does its damage.
+   *
+   * `terminal_reason` is the code. Fourteen captures in that run said
+   * `completed`; the two that stopped said `api_error`, at zero cost and zero
+   * tokens. Matching the message instead would be matching a rendering.
+   *
+   * This drives the real path: a fake actor that reports the stop the way the
+   * host did, through `executePlan`, with the verdict read off the saved
+   * episode.
+   */
+
+  /** Reports a provider stop exactly as the host did: success, no commit. */
+  const QUOTA_ACTOR = `
+process.stdin.resume();
+process.stdin.on('end', () => {
+  process.stdout.write(JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    terminal_reason: 'api_error',
+    total_cost_usd: 0,
+    result: "You've hit your session limit",
+  }) + '\\n');
+});
+`;
+
+  it('records the provider reason on the capture outcome', async () => {
+    const { root, entry } = setup('quota');
+    const actor = join(root, 'quota.cjs');
+    writeFileSync(actor, QUOTA_ACTOR);
+    const plan = planSchedule({ cases: [entry], repeat: 1, seed: 'exec' });
+
+    const executed = await executePlan(plan, new Map([[entry.id, entry]]), options(root, actor));
+
+    const episode = executed[0]!.episode!;
+    for (const arm of episode.arms) {
+      // The handoff verdict is unchanged -- no commit was produced, and #1033 §3
+      // makes that a terminal failure. What is added is whose bound it was.
+      expect(arm.capture.handoff).toBe('terminal_failure');
+      expect(arm.capture.stoppedOnBound).toBe('api_error');
+    }
+  }, 120_000);
+
+  it('leaves an ordinary completed session carrying no bound', async () => {
+    // The control, and it has to be a real one: a field read that returned
+    // something for every session would mark every row an instrument fault and
+    // this test would still be green.
+    const { root, actor, entry } = setup('noquota');
+    const plan = planSchedule({ cases: [entry], repeat: 1, seed: 'exec' });
+
+    const executed = await executePlan(plan, new Map([[entry.id, entry]]), options(root, actor));
+
+    for (const arm of executed[0]!.episode!.arms) {
+      expect(arm.capture.handoff).toBe('valid');
+      expect(arm.capture.stoppedOnBound).toBeNull();
+    }
+  }, 120_000);
+});
+
 describe('#1036 the budget stops the run rather than half-funding a pair', () => {
   it('records the refusal and runs nothing further', async () => {
     const { root, actor, entry } = setup('budget');

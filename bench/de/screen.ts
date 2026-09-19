@@ -98,6 +98,19 @@ const boundThatStopped = (result: {
   for (let index = result.events.length - 1; index >= 0; index -= 1) {
     const event = result.events[index];
     if (typeof event !== "object" || event === null) continue;
+    /*
+     * `terminal_reason` first, because it is a code rather than a rendering.
+     *
+     * The eight-pair run's last pair exhausted the provider's session quota.
+     * The host reported that as `subtype: "success"` with the explanation only
+     * in the human-readable result text -- so the prefix match below saw no
+     * bound, and two rows that were a provider outage were recorded as the
+     * actor failing to produce a handoff. Fourteen captures in that run said
+     * `completed`; the two that stopped said `api_error`, with zero cost and
+     * zero tokens.
+     */
+    const reason = (event as { terminal_reason?: unknown }).terminal_reason;
+    if (typeof reason === "string" && reason !== "completed") return reason;
     const subtype = (event as { subtype?: unknown }).subtype;
     if (typeof subtype === "string" && subtype.startsWith("error_")) return subtype;
   }
