@@ -41,6 +41,25 @@ export interface CaptureOutcome {
   readonly handoff: HandoffStatus;
   /** Whatever the runner needs to start a solve from this arm's own state. */
   readonly committed: unknown;
+  /**
+   * Why the session ended, when it ended on a bound the harness itself set.
+   *
+   * The verdict above stays as #1033 §3 defines it -- "failure to produce the
+   * required handoff within the declared bound is false when observed" -- so a
+   * truncated session is still a `terminal_failure`. This says *whose* bound
+   * stopped it, which the verdict cannot.
+   *
+   * That is the difference between data and an instrument fault. In the first
+   * measured run both arms ended on `error_max_turns`, at different phases, and
+   * the report said only "terminal handoff failures: 1": a reader could not
+   * tell an actor that failed from a bound too tight to finish in, and the pair
+   * was not a comparison at all (#1035, "record supported hard/soft limits and
+   * in-flight overshoot").
+   *
+   * Optional because a test recorder has no bound to report, and inventing one
+   * for it would put a fact in the evidence that nothing observed.
+   */
+  readonly stoppedOnBound?: string | null;
 }
 
 export interface SolveOutcome {
