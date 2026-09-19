@@ -219,6 +219,39 @@ describe('#1033 §2 each purpose is normalised against its own expected check ID
   });
 });
 
+describe('#1039 §3 a purpose with nothing required contributes nothing', () => {
+  // Found the first time the modules were wired together, not by these cases:
+  // scoring the feedback purpose alone still recorded a missing *audit*
+  // envelope as untrusted, and `chooseRepair` refuses any verdict carrying an
+  // audit observation. The caller could not build a feedback-only verdict at
+  // all, which made that guard unsatisfiable rather than protective.
+
+  it('does not report an unrequired purpose as untrusted', () => {
+    const verdict = scoreArtifact(contract({ feedback: ['c1'], audit: [] }), {
+      feedback: ran([{ id: 'c1', passed: true }]),
+      audit: missing,
+    });
+
+    expect(verdict.untrusted).toEqual([]);
+    expect(verdict.unobserved).toEqual([]);
+    expect(verdict.score).toBe(true);
+    expect(verdict.coverage).toBe('complete');
+  });
+
+  it('still reports a missing envelope as untrusted when that purpose was required', () => {
+    // The row of the table above is untouched: an envelope nobody asked for is
+    // irrelevant, one that was asked for and did not arrive is not.
+    const verdict = scoreArtifact(contract({ feedback: ['c1'], audit: ['c1'] }), {
+      feedback: ran([{ id: 'c1', passed: true }]),
+      audit: missing,
+    });
+
+    expect(verdict.untrusted).toEqual([{ purpose: 'audit', reason: 'missing' }]);
+    expect(verdict.score).toBeNull();
+    expect(verdict.coverage).toBe('partial');
+  });
+});
+
 describe('#1033 §2 the first workflow score', () => {
   it('is false for a definitively failed handoff even though solve never ran', () => {
     expect(andThreeValued(false, null)).toBe(false);

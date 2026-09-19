@@ -153,6 +153,24 @@ export const scoreArtifact = (
     const required = contract.required_checks[purpose] ?? [];
     const reason = trustOf(contract, envelope);
 
+    /*
+     * A purpose with nothing required of it contributes nothing, including its
+     * own untrustworthiness.
+     *
+     * Found the first time the modules were wired together (#1039 §3): scoring
+     * the feedback purpose alone still recorded a missing *audit* envelope as
+     * untrusted, and `chooseRepair` -- which refuses any verdict carrying an
+     * audit observation, because the hidden audit is never an input to repair
+     * selection -- then had no feedback-only verdict it could accept. The
+     * caller could not build one, which made that guard unsatisfiable rather
+     * than protective.
+     *
+     * An envelope nobody asked for is irrelevant, not untrusted. When the audit
+     * *is* required, a missing one is still untrusted and still makes coverage
+     * partial: that row of the table above is untouched.
+     */
+    if (required.length === 0) continue;
+
     if (reason !== null) {
       const saw = claimOf(envelope, reason);
       untrusted.push(saw === undefined ? { purpose, reason } : { purpose, reason, saw });
