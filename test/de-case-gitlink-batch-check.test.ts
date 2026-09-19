@@ -19,7 +19,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -36,6 +36,7 @@ afterAll(() => {
 interface Check {
   readonly id: string;
   readonly pass: boolean | null;
+  readonly evidence: string;
   readonly public_feedback: string | null;
 }
 
@@ -69,6 +70,52 @@ const requestOf = (verdict: Verdict): Check =>
   verdict.checks.find((entry) => entry.id === 'batches-the-lookups')!;
 
 const STAGED = gitlinkBatchCheck(CHECKER).staged['classify.js']!;
+
+/**
+ * Whether this machine can pose the decision at all.
+ *
+ * The case rests on one environmental fact: asking the superproject's object
+ * store for a gitlink's target answers `missing`. It holds on the machine the
+ * decision was made on and on mine; it did not hold on the CI runner, where the
+ * rejected implementation classified the pointer bump correctly and the test
+ * pinning its failure failed instead.
+ *
+ * Rather than assert a `false` that some runners cannot produce, the checker
+ * answers `null` there and these tests ask for `null` there. A test that
+ * demanded `false` everywhere would be asserting a property of one git
+ * installation.
+ */
+const premiseHolds = ((): boolean => {
+  const probeRepo = mkdtempSync(join(tmpdir(), 'de-gitlink-premise-'));
+  roots.push(probeRepo);
+  const git = (cwd: string, args: readonly string[]): string =>
+    execFileSync('git', args, { cwd, encoding: 'utf8' });
+  try {
+    const inner = join(probeRepo, 'inner');
+    const outer = join(probeRepo, 'outer');
+    for (const dir of [inner, outer]) {
+      mkdirSync(dir, { recursive: true });
+      git(dir, ['init', '--quiet', '--initial-branch=main']);
+      git(dir, ['config', 'user.name', 'DE Study']);
+      git(dir, ['config', 'user.email', 'de@example.invalid']);
+      git(dir, ['config', 'commit.gpgsign', 'false']);
+    }
+    writeFileSync(join(inner, 'a.txt'), 'one\n');
+    git(inner, ['add', '.']);
+    git(inner, ['commit', '--quiet', '-m', 'one']);
+    git(outer, ['-c', 'protocol.file.allow=always', 'submodule', '--quiet', 'add', inner, 'sub']);
+    git(outer, ['commit', '--quiet', '-m', 'add submodule']);
+    return execFileSync('git', ['cat-file', '--batch-check'], {
+      cwd: outer,
+      input: 'HEAD:sub\n',
+      encoding: 'utf8',
+    }).includes('missing');
+  } catch {
+    // An environment that cannot build the fixture cannot pose the question
+    // either, which is the same answer.
+    return false;
+  }
+})();
 const HEAD = `const { execFileSync } = require('node:child_process');\n`;
 
 describe('#1038 §3 the ruled-out alternative is what fails', () => {
@@ -97,6 +144,13 @@ module.exports = { reachedTarget };
     // It satisfies the request — one spawn for ten paths — and violates the
     // decision. That combination is what makes the case measure anything.
     expect(requestOf(verdict).pass).toBe(true);
+    if (!premiseHolds) {
+      // This machine's git does not report the gitlink missing, so the rejected
+      // approach is not wrong here and the checker says so rather than passing it.
+      expect(decisionOf(verdict).pass).toBeNull();
+      expect(decisionOf(verdict).evidence).toMatch(/cannot pose the decision/);
+      return;
+    }
     expect(decisionOf(verdict).pass).toBe(false);
     expect(verdict.exit_code).toBe(1);
     expect(decisionOf(verdict).public_feedback).toMatch(/submodule pointer has to stay classifiable/);

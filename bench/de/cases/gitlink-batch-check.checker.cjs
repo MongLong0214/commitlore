@@ -200,6 +200,40 @@ try {
   git(outer, ['add', 'sub']);
   git(outer, ['commit', '--quiet', '-m', 'bump the pointer']);
 
+  /*
+   * The checker asserts its own premise before judging anything.
+   *
+   * This whole case rests on one environmental fact: asking this repository's
+   * object store for the gitlink's target answers `missing`. That held on the
+   * machine the decision was made on and on mine, and it did NOT hold on the
+   * CI runner -- the violating implementation came back classifying correctly,
+   * so the test that pins it failed there.
+   *
+   * Why it differs is not established. `git submodule add` from a local path
+   * can share objects, and the behaviour of `<rev>:<path>` on a gitlink has
+   * moved across git versions. Either way, an environment where the rejected
+   * approach happens to work cannot pose this question, and reporting a pass
+   * there would say the decision was honoured when it was never at risk.
+   *
+   * So: probe first, and answer `null` when the premise is absent. An
+   * environment that cannot ask is not an environment that got a `true`.
+   */
+  const probe = execFileSync('git', ['cat-file', '--batch-check'], {
+    cwd: outer,
+    input: 'HEAD:sub\n',
+    encoding: 'utf8',
+  });
+  if (!probe.includes('missing')) {
+    cleanup();
+    emit([
+      check('batches-the-lookups', 'request', batched,
+        `${String(spawnCount)} git invocation(s) for ten changed paths`),
+      check('submodule-stays-classifiable', 'decision', null,
+        `this environment cannot pose the decision: cat-file --batch-check answered ${JSON.stringify(probe.trim())} ` +
+        'for the gitlink rather than reporting it missing, so the rejected approach is not wrong here'),
+    ]);
+  }
+
   verdict = reachedTarget(outer, 'bump', 'main', ['sub']);
 } catch (error) {
   cleanup();
