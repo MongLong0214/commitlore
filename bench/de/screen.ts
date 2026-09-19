@@ -1,5 +1,23 @@
 /**
- * The screen a case must pass before it is worth measuring — #1038 §3.
+ * The unaided-control baseline, which labels a case rather than selecting it —
+ * #1038 §1 and §3.
+ *
+ * **Read this before reaching for it as a gate.** The first version of this
+ * module was written as one, and #1038 forbids that in two places. §3: "This is
+ * checker/data preparation, not a new arm or an OFF-model screening run… Don't
+ * hide inconvenient evidence or choose cases based on which model loses." §1:
+ * "Select by source availability and requirement testability before outcomes;
+ * never select only native failures or successes."
+ *
+ * The reason is not procedural. Dropping the cases whose control passes removes
+ * exactly the cases where the record cannot help, and a corpus filtered that way
+ * reports an effect inflated by its own selection. The null result this module
+ * was built to explain is not a defect to be filtered out of the sample — it is
+ * a finding about where a record does and does not earn its cost.
+ *
+ * So what this produces is a **stratum**, carried beside the case and reported
+ * with it, the way §3 asks for `evidence_location`: "Keep it in the declared
+ * sample with its real stratum; don't rewrite requests after seeing results."
  *
  * Three measured runs of the first real case produced no effect, and the reason
  * was not the product. The instrument worked: complete coverage, four rows
@@ -19,10 +37,14 @@
  * its capture session saw the discussion and carried nothing forward — so
  * skipping capture screens the same control at half the sessions.
  *
- * **What it decides.** Nothing. It reports how many controls passed. A case
- * where the control passes cannot separate the arms and a run of it will spend
- * money to report a zero, but calling that "reject" here would let a screen
- * with its own bug silently shrink the corpus. The reading is the caller's.
+ * **What it decides.** Nothing, and that is the point rather than a hedge. It
+ * counts how many controls satisfied the decision unaided, and that count is a
+ * label the case carries into the run and into the report — never a reason to
+ * drop it. A case whose control passes cannot attribute a pass to the record,
+ * and the honest way to say so is to measure it and report it under its
+ * stratum, not to remove it and quote a mean computed over what is left.
+ *
+ * A nonzero exit means "this case needs the label", not "do not run this case".
  */
 
 import { execFileSync } from "node:child_process";
@@ -200,9 +222,12 @@ export const screenCases = async (
 
 export const renderScreen = (results: readonly ScreenResult[]): string => {
   const lines = [
-    "unaided control screen — #1038 §3",
+    "unaided control baseline — #1038 §1, §3",
     "",
-    "a case the control passes cannot attribute a pass to the record.",
+    "this labels cases; it does not select them. #1038 forbids choosing cases by",
+    "outcome, and dropping the ones whose control passes would inflate the effect",
+    "by removing exactly where the record cannot help. Keep every case in the",
+    "declared sample and report it under the stratum below.",
     "",
   ];
   for (const result of results) {
@@ -215,10 +240,11 @@ export const renderScreen = (results: readonly ScreenResult[]): string => {
         ? [`    stopped by our own bounds: ${String(bounds)} — those trials screen the bound, not the case`]
         : []),
       result.passed_unaided > 0
-        ? "    -> the decision is reachable without the record; measuring this case reports a zero it already knows"
+        ? "    -> stratum: control_reaches_it_unaided. Run it, and report its rows under this label — " +
+          "a pass here is not evidence for the record, and removing the case is not allowed"
         : result.unresolved === result.trials.length
-          ? "    -> nothing was established; this is not a verdict on the case"
-          : "    -> the control failed; the case can separate the arms on this run's evidence",
+          ? "    -> stratum: unknown. Nothing was established, which is not a verdict on the case"
+          : "    -> stratum: control_fails. The record has room to matter here, on this baseline's evidence",
     );
   }
   return lines.join("\n");

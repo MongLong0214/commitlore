@@ -1,5 +1,13 @@
 /**
- * The unaided-control screen — #1038 §3.
+ * The unaided-control baseline — #1038 §1 and §3.
+ *
+ * It labels a case; it does not select one. The first version of this module was
+ * written as a gate, and #1038 forbids that: §3 says the history-validation work
+ * "is checker/data preparation, not a new arm or an OFF-model screening run…
+ * Don't hide inconvenient evidence or choose cases based on which model loses",
+ * and §1 says "never select only native failures or successes". Dropping the
+ * cases whose control passes removes exactly where the record cannot help, and a
+ * corpus filtered that way reports an effect inflated by its own selection.
  *
  * Three measured runs of the first real case produced no effect, and none of
  * the reasons were the product. The last one is the reason this module exists:
@@ -138,7 +146,7 @@ describe('#1038 §3 the screen reads what an unaided control does', () => {
 
     expect(result!.passed_unaided).toBe(1);
     expect(result!.unresolved).toBe(0);
-    expect(renderScreen([result!])).toMatch(/reachable without the record/);
+    expect(renderScreen([result!])).toMatch(/stratum: control_reaches_it_unaided/);
   }, 120_000);
 
   it('reports a control that violated the decision, which is the case working', async () => {
@@ -148,7 +156,7 @@ describe('#1038 §3 the screen reads what an unaided control does', () => {
 
     expect(result!.passed_unaided).toBe(0);
     expect(result!.trials[0]!.passed).toBe(false);
-    expect(renderScreen([result!])).toMatch(/the control failed/);
+    expect(renderScreen([result!])).toMatch(/stratum: control_fails/);
   }, 120_000);
 
   it('separates "established nothing" from "honoured the decision"', async () => {
@@ -164,7 +172,7 @@ describe('#1038 §3 the screen reads what an unaided control does', () => {
     expect(result!.trials[0]!.committed).toBe(false);
     expect(result!.passed_unaided).toBe(0);
     expect(result!.unresolved).toBe(1);
-    expect(renderScreen([result!])).toMatch(/nothing was established/);
+    expect(renderScreen([result!])).toMatch(/stratum: unknown/);
   }, 120_000);
 });
 
@@ -194,6 +202,40 @@ describe('#1038 §3 the control is unaided, and that is checked rather than inte
     expect(prompt).not.toMatch(/The reason, which the control must not receive/);
     expect(prompt).toContain('Add the module.');
   }, 120_000);
+});
+
+describe('#1038 §1 the baseline labels, and cannot be read as a selection', () => {
+  /*
+   * This is the check on the framing rather than on the mechanism, and it is
+   * here because the mechanism was right the first time and the framing was not.
+   *
+   * "Select by source availability and requirement testability before outcomes;
+   * never select only native failures or successes." A tool whose output tells
+   * the reader to drop a case is a selection step whatever its docstring says,
+   * so the output is asserted here as well as the counts.
+   */
+
+  it('never tells the reader to drop or skip a case whose control passed', async () => {
+    const harness = setup('nofilter');
+
+    const [result] = await withControl(harness, 'true');
+    const rendered = renderScreen([result!]);
+
+    expect(rendered).toMatch(/does not select them|labels cases/);
+    expect(rendered).toMatch(/Keep every case in the\s+declared sample/);
+    expect(rendered).not.toMatch(/\breject\b|\bdisqualif|\bskip\b|not worth|do not (run|measure)/i);
+  }, 120_000);
+
+  it('says the same thing when the control failed, so the guidance is not outcome-shaped', () => {
+    // Rendering is pure, so this needs no session. If the standing instruction
+    // appeared only on the passing branch it would be advice about an outcome.
+    const rendered = renderScreen([
+      { case_id: 'c', trials: [{ passed: false, stoppedOnBound: null, committed: true }], passed_unaided: 0, unresolved: 0 },
+    ]);
+
+    expect(rendered).toMatch(/does not select them/);
+    expect(rendered).toMatch(/inflate the effect/);
+  });
 });
 
 describe('#1036 a screen directory is new, always', () => {

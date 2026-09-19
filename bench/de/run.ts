@@ -232,9 +232,10 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
     )
     .option(
       "--screen <trials>",
-      "with --execute, run N unaided controls per case instead of the study (#1038 §3): no " +
-        "discussion, no record, no intervention. A case the control passes cannot attribute a " +
-        "pass to the record. Exits 1 when any control passed",
+      "with --execute, run N unaided controls per case instead of the study (#1038 §1, §3): no " +
+        "discussion, no record, no intervention. It labels a case with a stratum and never " +
+        "selects one -- the issue forbids choosing cases by outcome. Exits 1 when any control " +
+        "passed, meaning that case needs the label, not that it should be dropped",
     )
     .option("--max-total-tokens <n>", "authorised token ceiling for the whole run")
     .option("--timeout-ms <n>", "wall clock for one actor session", "600000")
@@ -279,12 +280,12 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
 
   if (trials !== null) {
     /*
-     * The screen runs instead of the study, never beside it.
+     * The baseline runs instead of the study, never beside it.
      *
-     * Its whole value is that it costs a fraction of a measured run and answers
-     * the one question that decides whether the measured run is worth making.
-     * Folding it into `--execute` would make it a tax on every run rather than
-     * a gate before one.
+     * Its answer is a label rather than a gate (#1038 §1, §3 forbid choosing
+     * cases by outcome), and a label is prepared once per case rather than
+     * recomputed on every run. Folding it into `--execute` would also pay for
+     * controls on every repetition of a case whose stratum is already known.
      */
     const screened = await screenCases([...runnable.values()], {
       runDir: options.runDir,
@@ -294,8 +295,9 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
       checkerRevision: options.checkerRevision,
     });
     write(`${renderScreen(screened)}\n`);
-    // Exit 1 when any control passed: a case that cannot separate the arms is a
-    // finding, and a CI step that ran this should be able to notice.
+    // Exit 1 when any control passed, so a pipeline can record the label. It is
+    // not a rejection: #1038 §1 says "never select only native failures or
+    // successes", and a case whose control passes stays in the declared sample.
     return screened.some((result) => result.passed_unaided > 0) ? 1 : 0;
   }
 

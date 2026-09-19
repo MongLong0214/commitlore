@@ -188,7 +188,7 @@ describe('#1038 §3 the screen exits on what it found, so CI can read it', () =>
 
     expect(result.status).toBe(1);
     expect(result.stdout).toMatch(/control passed unaided: 1 of 1/);
-    expect(result.stdout).toMatch(/reachable without the record/);
+    expect(result.stdout).toMatch(/stratum: control_reaches_it_unaided/);
   }, 60_000);
 
   it('refuses a trial count that is not a positive whole number, before spending anything', () => {
