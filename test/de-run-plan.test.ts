@@ -93,7 +93,7 @@ describe('#1036 planning writes nothing and calls nothing', () => {
 });
 
 describe('#1036 --execute refuses rather than quietly planning', () => {
-  it('exits 2 and names what it will not do', () => {
+  it('exits 2 when it was not told where to run or what to run', () => {
     // "Retired Jev modes/budgets fail clearly before inference, not silently
     // map to native." A flag that planned instead of running is the same defect
     // wearing the opposite label.
@@ -102,7 +102,7 @@ describe('#1036 --execute refuses rather than quietly planning', () => {
     const result = run(['--cases', cases, '--execute'], dir);
 
     expect(result.status).toBe(2);
-    expect(result.stdout).toMatch(/--execute is not wired yet/);
+    expect(result.stdout).toMatch(/--execute needs --run-dir and --actor/);
   });
 
   it('still writes nothing when refused', () => {
