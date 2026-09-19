@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -112,6 +112,93 @@ describe('#1036 --execute refuses rather than quietly planning', () => {
     run(['--cases', cases, '--execute'], dir);
 
     expect(tree(dir)).toEqual(before);
+  });
+});
+
+describe('#1038 §3 the screen exits on what it found, so CI can read it', () => {
+  /*
+   * The exit code is the only part of a screen a pipeline sees, and the first
+   * real screen's was invisible: the run was piped through `tail`, which
+   * returns its own status, so "3 of 3 controls passed unaided" came back as 0.
+   * The finding was in the text and nowhere a machine could act on it.
+   */
+
+  /** A runnable case whose control always honours the decision. */
+  const screenable = (dir: string): unknown => {
+    const checker = join(dir, 'checker.cjs');
+    writeFileSync(
+      checker,
+      `const { writeFileSync } = require('node:fs');
+       writeFileSync(process.env.CHECK_OUT, JSON.stringify({
+         purpose: process.env.CHECK_PURPOSE,
+         artifact_id: process.env.CHECK_ARTIFACT,
+         checker_revision: process.env.CHECK_REVISION,
+         environment_error: null,
+         exit_code: 0,
+         checks: [{ id: 'k', category: 'decision', pass: true, evidence: 'always', public_feedback: null }],
+       }));`,
+    );
+    const actor = join(dir, 'actor.cjs');
+    writeFileSync(
+      actor,
+      `const { execFileSync } = require('node:child_process');
+       const { writeFileSync } = require('node:fs');
+       process.stdin.resume();
+       process.stdin.on('end', () => {
+         writeFileSync(process.env.DE_REPO + '/done.js', 'module.exports = 1;\\n');
+         execFileSync('git', ['add', '.'], { cwd: process.env.DE_REPO });
+         execFileSync('git', ['commit', '-m', 'control'], { cwd: process.env.DE_REPO });
+         process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\\n');
+       });`,
+    );
+    return {
+      cases: [
+        {
+          id: 'c1',
+          cluster_id: 'r',
+          source_group: 'g',
+          discussion: 'why\n',
+          staged: { 'seed.js': 'module.exports = 0;\n' },
+          next_request: 'do the thing',
+          checker,
+          described: [{ id: 'k', category: 'decision', purpose: 'feedback', requirement_ids: ['r1'] }],
+        },
+      ],
+    };
+  };
+
+  it('exits 1 when a control passed unaided, and says so in the text too', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'de-screen-exit-'));
+    roots.push(dir);
+    const cases = join(dir, 'cases.json');
+    writeFileSync(cases, JSON.stringify(screenable(dir)));
+
+    const result = run(
+      [
+        '--cases', cases,
+        '--execute',
+        '--run-dir', join(dir, 'out'),
+        '--screen', '1',
+        '--actor', process.execPath,
+        '--actor-arg', join(dir, 'actor.cjs'),
+        '--timeout-ms', '30000',
+      ],
+      dir,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toMatch(/control passed unaided: 1 of 1/);
+    expect(result.stdout).toMatch(/stratum: control_reaches_it_unaided/);
+  }, 60_000);
+
+  it('refuses a trial count that is not a positive whole number, before spending anything', () => {
+    const { dir, cases } = workspace('screen-bad', manifest);
+
+    const result = run(['--cases', cases, '--execute', '--run-dir', join(dir, 'out'), '--screen', '0', '--actor', 'x'], dir);
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toMatch(/positive whole number/);
+    expect(existsSync(join(dir, 'out'))).toBe(false);
   });
 });
 
