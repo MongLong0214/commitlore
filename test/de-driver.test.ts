@@ -227,6 +227,23 @@ process.stdout.write(JSON.stringify({ type: 'result' }) + '\\n');
     expect(readFileSync(result.stderrPath, 'utf8')).toBe('a diagnostic line\n');
   });
 
+  /*
+   * There is no regression test for the flush race, and that is deliberate.
+   *
+   * `end()` queues the remaining bytes and returns, so resolving straight after
+   * it handed callers paths whose files were still being written. The driver now
+   * waits for `finish` on both logs.
+   *
+   * Two attempts at pinning it failed: two hundred thousand bytes in many
+   * writes, and six megabytes in one burst just before the child exits. Both
+   * passed with the fix reverted, because the parent writes each chunk as the
+   * pipe delivers it, so by `close` almost nothing is still queued. The real
+   * failure needed CPU contention -- it appeared once in a full suite of 4838
+   * and never in five runs of this file alone.
+   *
+   * A test that passes with the fix reverted proves nothing, so it is not kept
+   * here pretending to guard something.
+   */
   it('refuses before any child exists when the output directory is unwritable', async () => {
     // "A pre-spawn storage failure prevents inference." Spawning first and
     // finding out afterwards spends the money and keeps none of the evidence.

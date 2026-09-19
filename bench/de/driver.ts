@@ -70,6 +70,20 @@ export const childEnv = (base: Readonly<Record<string, string | undefined>>): Re
 
 export type StdinDelivery = "complete" | "epipe" | "closed-early";
 
+/**
+ * End a log stream and wait for its bytes to reach the file.
+ *
+ * `end(cb)` calls back on `finish`, which is after the last write has been
+ * handed to the filesystem -- enough for a caller that reads the path, which is
+ * the only promise this driver makes about its logs.
+ */
+const flushed = (stream: WriteStream): Promise<void> =>
+  new Promise((done) => {
+    stream.end(() => {
+      done();
+    });
+  });
+
 export interface MeasuredRequest {
   readonly executable: string;
   /** Never carries the prompt. Checked, not assumed. */
@@ -242,8 +256,25 @@ export const runMeasured = async (request: MeasuredRequest): Promise<MeasuredRes
           incompleteTrailing = pending;
         }
       }
-      out.end();
-      err.end();
+      /*
+       * Resolve only once both logs are actually on disk.
+       *
+       * `end()` is asynchronous: it queues the remaining bytes and returns. so
+       * resolving straight after handed the caller paths whose files were still
+       * being written, and a caller that read one immediately could get a short
+       * file or an empty one. It usually worked, which is the worst property a
+       * bug like this can have — it surfaced as a single flaky failure in the
+       * full suite, passed five times out of five in isolation, and the first
+       * time it appeared the output had been piped through `tail`, so the
+       * failing test could not even be named.
+       *
+       * This is the mirror of the rule already kept at the other end. Not
+       * spawning before the logs are open, then resolving before they are
+       * closed, leaves the same hole at the far side of the run: #1035 asks for
+       * raw logs that are complete, and every later reading of a run's evidence
+       * rests on that.
+       */
+      void Promise.all([flushed(out), flushed(err)]).then(() => {
       resolve({
         events,
         incompleteTrailing,
@@ -258,6 +289,7 @@ export const runMeasured = async (request: MeasuredRequest): Promise<MeasuredRes
         timedOut,
         startedAt,
         endedAt: new Date().toISOString(),
+      });
       });
     });
   });
