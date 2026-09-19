@@ -36,11 +36,21 @@ import {
 } from "./aggregate.ts";
 import type { EpisodeRecord } from "./episode.ts";
 import type { ScheduledPair } from "./schedule.ts";
+import type { ControlStratum } from "./screen.ts";
 
 export interface RunInputs {
   readonly plan: readonly ScheduledPair[];
   readonly sourceGroupOf: (caseId: string) => string;
   readonly runDir: string;
+  /**
+   * The unaided-control stratum for a case, when a baseline has established
+   * one. Absent means no baseline was run, which is not the same as `unknown`:
+   * `unknown` is a baseline that answered nothing.
+   *
+   * Optional because a report over evidence predating the baseline is still a
+   * report, and demanding a stratum would make old runs unreadable.
+   */
+  readonly stratumOf?: (caseId: string) => ControlStratum | null;
 }
 
 const episodePath = (runDir: string, pair: ScheduledPair): string =>
@@ -132,8 +142,60 @@ export interface Report {
    * turn cap being compared against itself.
    */
   readonly stopped_on_bound: readonly ArmObservation[];
+  /**
+   * H1 again, split by the unaided-control stratum — #1038 §1, §3.
+   *
+   * Reported *beside* `h1`, never instead of it. The whole point of keeping a
+   * case whose control passes in the sample is that it stays in the headline
+   * mean; the split is what makes that mean interpretable rather than what
+   * replaces it. Reading only the `control_fails` row would be the selection
+   * the issue forbids, arrived at by a different route.
+   *
+   * Empty when no stratum was supplied, which is honest about a run made
+   * before any baseline existed.
+   */
+  readonly h1_by_stratum: readonly { readonly stratum: ControlStratum; readonly pairs: number; readonly effect: PairedEffect }[];
   readonly observations: readonly ArmObservation[];
 }
+
+/**
+ * Split the planned rows by stratum and run the same effect over each subset.
+ *
+ * Rows whose case has no stratum are left out of the split rather than bucketed
+ * into `unknown`: no baseline ran, and inventing one would make a run that
+ * predates the baseline look as though it had been screened.
+ *
+ * Every stratum present gets a row, including one with no resolvable mean. A
+ * stratum that vanished when its cases were all unresolved is a stratum the
+ * reader would assume had no cases.
+ */
+const stratify = (
+  rows: readonly JoinedRow[],
+  stratumOf: ((caseId: string) => ControlStratum | null) | undefined,
+): Report["h1_by_stratum"] => {
+  if (stratumOf === undefined) return [];
+  const buckets = new Map<ControlStratum, JoinedRow[]>();
+  for (const row of rows) {
+    const stratum = stratumOf(row.case_id);
+    if (stratum === null) continue;
+    const bucket = buckets.get(stratum) ?? [];
+    bucket.push(row);
+    buckets.set(stratum, bucket);
+  }
+  // A fixed order, so two reports of the same run read the same way.
+  const order: readonly ControlStratum[] = ["control_fails", "control_reaches_it_unaided", "unknown"];
+  return order
+    .filter((stratum) => buckets.has(stratum))
+    .map((stratum) => {
+      const bucket = buckets.get(stratum)!;
+      return {
+        stratum,
+        // Pairs, not rows: each pair contributes one row per arm.
+        pairs: new Set(bucket.map((row) => `${row.case_id}#${String(row.repetition)}`)).size,
+        effect: pairedEffect(bucket),
+      };
+    });
+};
 
 export const buildReport = (inputs: RunInputs): Report => {
   const observations = observationsFrom(inputs.plan, inputs.runDir);
@@ -147,6 +209,7 @@ export const buildReport = (inputs: RunInputs): Report => {
     episodes_present: inputs.plan.filter((pair) => readEpisode(inputs.runDir, pair) !== null).length,
     rows,
     h1: pairedEffect(rows),
+    h1_by_stratum: stratify(rows, inputs.stratumOf),
     // "Show feedback-pass/audit-fail with zero repair as a detector miss, not
     // avoided rework." Counting it as a success is how a study congratulates
     // itself for a failure nobody caught.
@@ -170,6 +233,29 @@ const pct = (value: number | null): string => (value === null ? "unavailable" : 
  * failures: 1" and nothing else, and that line was read as an outcome for
  * several minutes before the session logs said `error_max_turns`.
  */
+/**
+ * The split, printed under the headline mean it qualifies rather than in place
+ * of it.
+ *
+ * The standing note prints whenever any split exists, not only when a
+ * `control_reaches_it_unaided` row is present: a reader who sees the split only
+ * on the runs where it is inconvenient has been told about that run rather than
+ * about the method.
+ */
+const stratumLines = (split: Report["h1_by_stratum"]): string[] => {
+  if (split.length === 0) return [];
+  return [
+    "",
+    "  by unaided-control stratum (#1038 §1, §3) — this qualifies the mean above, it does not replace it:",
+    ...split.map((entry) => {
+      const off = pct(entry.effect.off.value);
+      const native = pct(entry.effect.native.value);
+      return `    ${entry.stratum.padEnd(28)} ${String(entry.pairs)} pair(s)  OFF ${off}  NATIVE ${native}  diff ${points(entry.effect.differencePoints)}`;
+    }),
+    "    reading only the control_fails row is the case selection #1038 forbids, reached another way.",
+  ];
+};
+
 const boundLines = (stopped: readonly ArmObservation[]): string[] => {
   if (stopped.length === 0) return [];
   const byBound = new Map<string, number>();
@@ -207,6 +293,7 @@ export const renderReport = (report: Report): string => {
         : report.h1.relativeReduction.toFixed(3)
     }`,
     "",
+    ...stratumLines(report.h1_by_stratum),
     `detector misses (feedback passed, audit failed, no repair): ${String(report.detector_misses.length)}`,
     `terminal handoff failures: ${String(report.terminal_handoffs.length)}`,
     ...boundLines(report.stopped_on_bound),

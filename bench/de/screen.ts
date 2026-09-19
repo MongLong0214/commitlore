@@ -220,6 +220,39 @@ export const screenCases = async (
   return results;
 };
 
+/**
+ * The three strata a baseline can establish.
+ *
+ * Named rather than inferred from counts at each call site, because the report
+ * and the renderer must agree and a second reading of `passed_unaided > 0`
+ * somewhere else is how they stop agreeing.
+ */
+export type ControlStratum = "control_reaches_it_unaided" | "control_fails" | "unknown";
+
+/**
+ * Read one baseline as a stratum.
+ *
+ * A single passing control is enough for `control_reaches_it_unaided`: the
+ * claim is that the decision is reachable without the record, and one actor
+ * reaching it demonstrates that. Everything unresolved is `unknown`, which is
+ * not `control_fails` — a baseline that established nothing has not shown the
+ * record has room to matter.
+ */
+export const stratumOf = (result: ScreenResult): ControlStratum => {
+  if (result.passed_unaided > 0) return "control_reaches_it_unaided";
+  if (result.unresolved === result.trials.length) return "unknown";
+  return "control_fails";
+};
+
+/** One sentence per stratum, so the renderer and the report say the same thing. */
+const EXPLAIN: Readonly<Record<ControlStratum, string>> = {
+  control_reaches_it_unaided:
+    "Run it, and report its rows under this label — a pass here is not evidence for the record, " +
+    "and removing the case is not allowed",
+  control_fails: "The record has room to matter here, on this baseline's evidence",
+  unknown: "Nothing was established, which is not a verdict on the case",
+};
+
 export const renderScreen = (results: readonly ScreenResult[]): string => {
   const lines = [
     "unaided control baseline — #1038 §1, §3",
@@ -239,12 +272,7 @@ export const renderScreen = (results: readonly ScreenResult[]): string => {
       ...(bounds > 0
         ? [`    stopped by our own bounds: ${String(bounds)} — those trials screen the bound, not the case`]
         : []),
-      result.passed_unaided > 0
-        ? "    -> stratum: control_reaches_it_unaided. Run it, and report its rows under this label — " +
-          "a pass here is not evidence for the record, and removing the case is not allowed"
-        : result.unresolved === result.trials.length
-          ? "    -> stratum: unknown. Nothing was established, which is not a verdict on the case"
-          : "    -> stratum: control_fails. The record has room to matter here, on this baseline's evidence",
+      `    -> stratum: ${stratumOf(result)}. ${EXPLAIN[stratumOf(result)]}`,
     );
   }
   return lines.join("\n");
