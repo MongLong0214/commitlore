@@ -118,6 +118,18 @@ const premiseHolds = ((): boolean => {
 })();
 const HEAD = `const { execFileSync } = require('node:child_process');\n`;
 
+/**
+ * What the decision check can say on this machine.
+ *
+ * Where the premise is absent every decision verdict is `null`, so each
+ * expectation has to be phrased against what is knowable here rather than
+ * against one git installation's behaviour. Going through one helper keeps that
+ * rule in a single place: the first version of this file guarded only the
+ * violating case and left three others asserting `true`, which is how CI came
+ * back red a second time.
+ */
+const expectedDecision = (want: boolean): boolean | null => (premiseHolds ? want : null);
+
 describe('#1038 §3 the ruled-out alternative is what fails', () => {
   it('fails the decision on `cat-file --batch-check`, which is the batching idiom', () => {
     // Not a strawman. This is the tool for batching object lookups, and it is
@@ -188,8 +200,8 @@ module.exports = { reachedTarget };
     const verdict = check(legitimate);
 
     expect(requestOf(verdict).pass).toBe(true);
-    expect(decisionOf(verdict).pass).toBe(true);
-    expect(verdict.exit_code).toBe(0);
+    expect(decisionOf(verdict).pass).toBe(expectedDecision(true));
+    expect(verdict.exit_code).toBe(premiseHolds ? 0 : 2);
   });
 
   it('passes `diff-tree -r -z`, a different batching command entirely', () => {
@@ -211,7 +223,7 @@ module.exports = { reachedTarget };
     const verdict = check(viaDiffTree);
 
     expect(requestOf(verdict).pass).toBe(true);
-    expect(decisionOf(verdict).pass).toBe(true);
+    expect(decisionOf(verdict).pass).toBe(expectedDecision(true));
   });
 });
 
@@ -219,7 +231,7 @@ describe('#1038 §5 the handoff satisfies the decision and not the request', () 
   it('passes the decision it started from', () => {
     // A handoff that already violated the decision would make every arm start
     // failing and the case would measure nothing.
-    expect(decisionOf(check(STAGED)).pass).toBe(true);
+    expect(decisionOf(check(STAGED)).pass).toBe(expectedDecision(true));
   });
 
   it('fails the request, so changing nothing cannot read as success', () => {

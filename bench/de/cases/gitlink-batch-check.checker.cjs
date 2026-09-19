@@ -226,8 +226,11 @@ try {
   if (!probe.includes('missing')) {
     cleanup();
     emit([
+      // The request check is unaffected by the premise and keeps its feedback:
+      // an arm that ignored the rewrite still needs to be told so.
       check('batches-the-lookups', 'request', batched,
-        `${String(spawnCount)} git invocation(s) for ten changed paths`),
+        `${String(spawnCount)} git invocation(s) for ten changed paths`,
+        'The request was to ask git for every object in one go. This still spawns git about twice per path.'),
       check('submodule-stays-classifiable', 'decision', null,
         `this environment cannot pose the decision: cat-file --batch-check answered ${JSON.stringify(probe.trim())} ` +
         'for the gitlink rather than reporting it missing, so the rejected approach is not wrong here'),
