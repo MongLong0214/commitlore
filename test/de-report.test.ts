@@ -235,6 +235,36 @@ describe('#1035 a bound the harness set is reported as an instrument fault, not 
     expect(renderReport(report)).not.toMatch(/harness's own bounds/);
   });
 
+  it('treats a provider stop reported as success as a bound, not an actor failure', () => {
+    /*
+     * From the eight-pair run. Its last pair exhausted the provider's session
+     * quota; the host reported `subtype: "success"` with the explanation only
+     * in the human-readable result text, so the prefix match saw no bound and
+     * two rows that were an outage were recorded as the actor failing to hand
+     * off. Fourteen captures in that run said `terminal_reason: "completed"`;
+     * the two that stopped said `"api_error"`, at zero cost and zero tokens.
+     *
+     * The code is what distinguishes them. Matching the message would be
+     * matching a rendering.
+     */
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [
+      {
+        ...arm('off'),
+        capture: { handoff: 'terminal_failure', committed: null, stoppedOnBound: 'api_error' },
+        solve: null,
+        audit: null,
+      },
+      arm('native'),
+    ]);
+
+    const report = buildReport(inputs(dir));
+
+    expect(report.stopped_on_bound).toHaveLength(1);
+    expect(report.stopped_on_bound[0]!.stopped_on_bound).toBe('api_error');
+    expect(renderReport(report)).toMatch(/api_error x1/);
+  });
+
   it('counts a bound that stopped a session which still produced a valid handoff', () => {
     // The two sets overlap without being the same one: a session can hit the
     // cap after committing, which is a valid handoff and still an instrument
