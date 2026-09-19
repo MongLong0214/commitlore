@@ -16,10 +16,13 @@
  *      locations and staged-change context. It does not receive arm name,
  *      target decision labels, next task, checks, reference solution or desired
  *      savings." The type has three fields.
- *   2. **The built prompt is searched for them anyway.** `bench/` is outside
- *      `tsconfig`'s `include`, so the type is checked by nothing at runtime, and
- *      a caller can always interpolate a string into `discussion`. The guard
- *      takes the secrets it must not contain and refuses if any of them appear.
+ *   2. **The built prompt is searched for them anyway.** A caller can always
+ *      interpolate a secret into `discussion`, and no type can see inside a
+ *      string. The guard takes the secrets the prompt must not contain and
+ *      refuses if any of them appear. (An earlier version of this note argued
+ *      from `bench/` being outside `tsconfig`'s `include`. That was wrong -- CI
+ *      typechecks this project separately with `bench/tsconfig.json` -- and the
+ *      reason above is the one that holds.)
  *
  * The instruction itself is quoted from #1040 and identical in both arms. It is
  * a constant rather than a template: an instruction that varied per arm would

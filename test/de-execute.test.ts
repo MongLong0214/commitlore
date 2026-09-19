@@ -115,7 +115,13 @@ const setup = (name: string) => {
 
 const options = (root: string, actor: string, over: Record<string, unknown> = {}) => ({
   runDir: join(root, 'run'),
-  actor: { command: process.execPath, args: [actor] },
+  actor: {
+    command: process.execPath,
+    args: [actor],
+    // No intervention by default: these cases are about the loop, not about
+    // what distinguishes the arms.
+    perArm: { off: [] as string[], native: [] as string[] },
+  },
   limits: { capture: 1_000, solve: 10_000, repair: 5_000 },
   timeoutMs: 30_000,
   budget: 10_000_000,
