@@ -25,6 +25,7 @@ import { readFileSync } from "node:fs";
 import { Command } from "commander";
 
 import { executePlan, type ExecutableCase } from "./execute.ts";
+import { renderScreen, screenCases } from "./screen.ts";
 import {
   planSchedule,
   reservePair,
@@ -164,6 +165,7 @@ interface Options {
   readonly actorArg?: string[];
   readonly offArg?: string[];
   readonly nativeArg?: string[];
+  readonly screen?: string;
   readonly maxTotalTokens?: string;
   readonly timeoutMs: string;
   readonly checkerRevision: string;
@@ -228,6 +230,12 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
       collect,
       [] as string[],
     )
+    .option(
+      "--screen <trials>",
+      "with --execute, run N unaided controls per case instead of the study (#1038 §3): no " +
+        "discussion, no record, no intervention. A case the control passes cannot attribute a " +
+        "pass to the record. Exits 1 when any control passed",
+    )
     .option("--max-total-tokens <n>", "authorised token ceiling for the whole run")
     .option("--timeout-ms <n>", "wall clock for one actor session", "600000")
     .option("--checker-revision <s>", "the frozen checker revision to require", "checker@r6.1")
@@ -254,6 +262,43 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
     write("de/run: --execute needs --run-dir and --actor. Nothing was run.\n");
     return 2;
   }
+  /*
+   * The trial count is validated before the manifest is made runnable.
+   *
+   * A bad flag should fail on the flag. Left below `executableCases`, a
+   * `--screen 0` against a plan-only manifest came back complaining about a
+   * missing discussion, which sends the reader to the wrong file.
+   */
+  const trials = options.screen === undefined ? null : Number(options.screen);
+  if (trials !== null && (!Number.isSafeInteger(trials) || trials < 1)) {
+    write(`de/run: --screen needs a positive whole number of trials, got "${String(options.screen)}". Nothing was run.\n`);
+    return 2;
+  }
+
+  const runnable = executableCases(manifest, options.cases);
+
+  if (trials !== null) {
+    /*
+     * The screen runs instead of the study, never beside it.
+     *
+     * Its whole value is that it costs a fraction of a measured run and answers
+     * the one question that decides whether the measured run is worth making.
+     * Folding it into `--execute` would make it a tax on every run rather than
+     * a gate before one.
+     */
+    const screened = await screenCases([...runnable.values()], {
+      runDir: options.runDir,
+      actor: { command: options.actor, args: options.actorArg ?? [] },
+      trials,
+      timeoutMs: Number(options.timeoutMs),
+      checkerRevision: options.checkerRevision,
+    });
+    write(`${renderScreen(screened)}\n`);
+    // Exit 1 when any control passed: a case that cannot separate the arms is a
+    // finding, and a CI step that ran this should be able to notice.
+    return screened.some((result) => result.passed_unaided > 0) ? 1 : 0;
+  }
+
   // An absent ceiling is unknown, not unlimited: `reservePair` then refuses the
   // first pair rather than spending whatever happens to be authorised.
   const budget = options.maxTotalTokens === undefined ? null : Number(options.maxTotalTokens);
