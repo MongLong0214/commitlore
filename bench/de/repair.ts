@@ -12,8 +12,14 @@
  * `chooseRepair` never sees the hidden audit, the combined first-pass score, the
  * reference labels or the other arm's result (#1042). That is not a promise in a
  * comment: the verdict handed in is rejected at runtime if it carries an audit
- * observation, because `bench/` is outside `tsconfig`'s `include` and a types-only
- * guarantee here is not checked by anything.
+ * observation.
+ *
+ * A type could not have caught this anyway. A feedback-only verdict and a
+ * combined one are the same `ArtifactVerdict`, so the difference is in the value
+ * rather than in the shape, and only a value check sees it. (An earlier version
+ * of this note said the runtime check was needed because `bench/` is outside
+ * `tsconfig`'s `include`. That was wrong -- CI typechecks this project
+ * separately with `bench/tsconfig.json`.)
  *
  * And a recommendation is not a launch. The runner still owns the preconditions
  * — an open model-execution stage, no already-launched repair for this episode,
