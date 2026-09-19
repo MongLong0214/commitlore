@@ -162,6 +162,8 @@ interface Options {
   readonly runDir?: string;
   readonly actor?: string;
   readonly actorArg?: string[];
+  readonly offArg?: string[];
+  readonly nativeArg?: string[];
   readonly maxTotalTokens?: string;
   readonly timeoutMs: string;
   readonly checkerRevision: string;
@@ -218,7 +220,14 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
     .option("--execute", "run the study; requires --run-dir and --actor")
     .option("--run-dir <path>", "a NEW directory for this run's evidence")
     .option("--actor <command>", "the command that starts one actor session")
-    .option("--actor-arg <value>", "an argument for the actor, repeatable", collect, [] as string[])
+    .option("--actor-arg <value>", "an argument both arms receive, repeatable", collect, [] as string[])
+    .option("--off-arg <value>", "an argument only the OFF arm receives, repeatable", collect, [] as string[])
+    .option(
+      "--native-arg <value>",
+      "an argument only the NATIVE arm receives -- this is the intervention (#1040), repeatable",
+      collect,
+      [] as string[],
+    )
     .option("--max-total-tokens <n>", "authorised token ceiling for the whole run")
     .option("--timeout-ms <n>", "wall clock for one actor session", "600000")
     .option("--checker-revision <s>", "the frozen checker revision to require", "checker@r6.1")
@@ -251,7 +260,13 @@ export const main = async (argv: readonly string[], write: (text: string) => voi
 
   const executed = await executePlan(summary.plan, executableCases(manifest, options.cases), {
     runDir: options.runDir,
-    actor: { command: options.actor, args: options.actorArg ?? [] },
+    actor: {
+      command: options.actor,
+      args: options.actorArg ?? [],
+      // The intervention. Empty on both sides means one identical invocation
+      // twice, which is not two arms -- the state the first pilot ran in.
+      perArm: { off: options.offArg ?? [], native: options.nativeArg ?? [] },
+    },
     limits,
     timeoutMs: Number(options.timeoutMs),
     budget,
