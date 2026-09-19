@@ -252,6 +252,94 @@ describe('#1035 a bound the harness set is reported as an instrument fault, not 
   });
 });
 
+describe('#1038 §1 the stratum qualifies the mean and never replaces it', () => {
+  /*
+   * The half that makes keeping a `control_reaches_it_unaided` case in the
+   * sample useful rather than merely honest. Without this the label goes
+   * nowhere and the headline mean is a number nobody can interpret — which is
+   * exactly the position the first three measured runs left the study in.
+   */
+
+  const split = (dir: string, strata: Record<string, 'control_fails' | 'control_reaches_it_unaided' | 'unknown'>) => ({
+    ...inputs(dir),
+    stratumOf: (caseId: string) => strata[caseId] ?? null,
+  });
+
+  it('leaves the headline mean identical to the unstratified one', () => {
+    // The control on the whole design. If splitting changed `h1`, the split
+    // would be a filter wearing a different name.
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [arm('off', { score: false }), arm('native', { score: true })]);
+    writeEpisode(dir, plan[1]!, [arm('off', { score: true }), arm('native', { score: true })]);
+
+    const plain = buildReport(inputs(dir));
+    const stratified = buildReport(split(dir, { c1: 'control_fails', c2: 'control_reaches_it_unaided' }));
+
+    expect(stratified.h1).toEqual(plain.h1);
+    expect(stratified.rows).toHaveLength(plain.rows.length);
+  });
+
+  it('reports each stratum with its own pair count and effect', () => {
+    // The strata are keyed off the plan rather than off `c1`/`c2`: the schedule
+    // shuffles, so hardcoding which id lands at `plan[0]` pins an assumption
+    // about `planSchedule` inside a test about the report. It was wrong here.
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [arm('off', { score: false }), arm('native', { score: true })]);
+    writeEpisode(dir, plan[1]!, [arm('off', { score: true }), arm('native', { score: true })]);
+
+    const report = buildReport(
+      split(dir, {
+        [plan[0]!.case_id]: 'control_fails',
+        [plan[1]!.case_id]: 'control_reaches_it_unaided',
+      }),
+    );
+
+    expect(report.h1_by_stratum.map((entry) => entry.stratum)).toEqual([
+      'control_fails',
+      'control_reaches_it_unaided',
+    ]);
+    expect(report.h1_by_stratum[0]!.pairs).toBe(1);
+    expect(report.h1_by_stratum[0]!.effect.differencePoints).toBe(100);
+    expect(report.h1_by_stratum[1]!.effect.differencePoints).toBe(0);
+  });
+
+  it('prints the standing note whenever a split exists, not only when one stratum is inconvenient', () => {
+    // A reader shown the caveat only on runs where it hurts has been told about
+    // that run rather than about the method.
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [arm('off', { score: false }), arm('native', { score: true })]);
+
+    const rendered = renderReport(buildReport(split(dir, { [plan[0]!.case_id]: 'control_fails' })));
+
+    expect(rendered).toMatch(/control_fails/);
+    expect(rendered).toMatch(/is the case selection #1038 forbids/);
+    expect(rendered).toMatch(/qualifies the mean above, it does not replace it/);
+  });
+
+  it('omits a case with no stratum instead of bucketing it as unknown', () => {
+    // No baseline ran. Calling that `unknown` would make a run that predates
+    // the baseline look as though it had been screened and answered nothing.
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [arm('off'), arm('native')]);
+    writeEpisode(dir, plan[1]!, [arm('off'), arm('native')]);
+
+    const report = buildReport(split(dir, { [plan[0]!.case_id]: 'control_fails' }));
+
+    expect(report.h1_by_stratum).toHaveLength(1);
+    expect(report.h1_by_stratum[0]!.pairs).toBe(1);
+  });
+
+  it('says nothing about strata when no baseline was supplied at all', () => {
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [arm('off'), arm('native')]);
+
+    const report = buildReport(inputs(dir));
+
+    expect(report.h1_by_stratum).toEqual([]);
+    expect(renderReport(report)).not.toMatch(/by unaided-control stratum/);
+  });
+});
+
 describe('#1037 the report calls nothing', () => {
   it('says so, and reads only what is on disk', () => {
     const dir = runDir();
