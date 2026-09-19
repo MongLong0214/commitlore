@@ -61,7 +61,23 @@ export interface ExecuteOptions {
    * script the node binary runs. One shape covers both, which is what keeps the
    * zero-cost proof on the same code path as the measured run.
    */
-  readonly actor: { readonly command: string; readonly args: readonly string[] };
+  readonly actor: {
+    readonly command: string;
+    /** Common to both arms. Anything here is not the intervention. */
+    readonly args: readonly string[];
+    /**
+     * **The intervention itself** (#1040). Everything else is held equal --
+     * same model, same permissions, same isolation, same prompts -- and the
+     * only difference between the arms is what these arguments give the actor:
+     * the owned CommitLore integration, present for NATIVE and absent for OFF.
+     *
+     * A per-arm argv rather than a boolean, because #1040 warns that NATIVE
+     * "must actually have the intended tools/skills/hooks enabled, not an
+     * empty-MCP approximation", and a boolean would have to guess what enabling
+     * means for a host this module does not own.
+     */
+    readonly perArm: Readonly<Record<Arm, readonly string[]>>;
+  };
   readonly limits: PhaseLimits;
   readonly timeoutMs: number;
   /** Authorised tokens. `null` means unknown, which stops before any pair. */
@@ -98,6 +114,30 @@ const seedWorkspace = (dir: string, entry: ExecutableCase): string => {
 };
 
 /** Runs the case's checker against a restored clone and validates what it wrote. */
+/**
+ * The public explanations attached to failing feedback rows.
+ *
+ * Carried separately from the envelope because #1042 grounds the repair prompt
+ * in them: "Feedback false rows require nonempty public explanations grounded in
+ * the stated accessible requirements." A repair told only that something failed
+ * is being asked to guess, and what it guesses is not what the study measures.
+ */
+const explanationsIn = (raw: unknown): string[] => {
+  if (typeof raw !== "object" || raw === null) return [];
+  const rows = (raw as { checks?: unknown }).checks;
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter(
+      (row): row is { pass: boolean; public_feedback: string } =>
+        typeof row === "object" &&
+        row !== null &&
+        (row as { pass?: unknown }).pass === false &&
+        typeof (row as { public_feedback?: unknown }).public_feedback === "string" &&
+        (row as { public_feedback: string }).public_feedback.trim() !== "",
+    )
+    .map((row) => row.public_feedback);
+};
+
 const checkIn = (
   entry: ExecutableCase,
   checkpoint: Checkpoint,
@@ -123,14 +163,14 @@ const checkIn = (
   } catch {
     // A checker that could not run leaves no envelope, which the validator
     // reports as unparsable rather than as a failing artifact.
-    return unparsableEnvelope();
+    return { envelope: unparsableEnvelope(), explanations: [] as string[] };
   }
-  if (!existsSync(envelopePath)) return unparsableEnvelope();
+  if (!existsSync(envelopePath)) return { envelope: unparsableEnvelope(), explanations: [] as string[] };
   let raw: unknown;
   try {
     raw = JSON.parse(readFileSync(envelopePath, "utf8"));
   } catch {
-    return unparsableEnvelope();
+    return { envelope: unparsableEnvelope(), explanations: [] as string[] };
   }
   const verdict = validateEnvelope({
     purpose,
@@ -139,7 +179,10 @@ const checkIn = (
     described: entry.described.filter((definition) => definition.purpose === purpose),
     raw,
   });
-  return verdict.valid ? verdict.envelope : unparsableEnvelope();
+  return {
+    envelope: verdict.valid ? verdict.envelope : unparsableEnvelope(),
+    explanations: explanationsIn(raw),
+  };
 };
 
 const requiredFor = (entry: ExecutableCase, purpose: Purpose): string[] =>
@@ -161,9 +204,11 @@ const effectsFor = (
   const checkpoints = new Map<Arm, Checkpoint>();
   let ticks = 0;
 
+  const explanations = new Map<Arm, string[]>();
+
   const feedbackVerdict = (arm: Arm, stage: string) => {
     const artifactId = checkpoints.get(arm)!.head;
-    const envelope = checkIn(
+    const { envelope, explanations: said } = checkIn(
       entry,
       checkpoints.get(arm)!,
       join(pairDir, `${arm}-${stage}-feedback`),
@@ -171,6 +216,7 @@ const effectsFor = (
       artifactId,
       options.checkerRevision,
     );
+    explanations.set(arm, said);
     // Feedback purpose ALONE: the audit is never an input to repair selection.
     return scoreArtifact(
       {
@@ -198,7 +244,7 @@ const effectsFor = (
       );
       const result = await runMeasured({
         executable: options.actor.command,
-        args: options.actor.args,
+        args: [...options.actor.args, ...options.actor.perArm[arm]],
         prompt,
         cwd: dir,
         outDir: pairDir,
@@ -220,7 +266,7 @@ const effectsFor = (
       const dir = workspaces.get(arm)!;
       const result = await runMeasured({
         executable: options.actor.command,
-        args: options.actor.args,
+        args: [...options.actor.args, ...options.actor.perArm[arm]],
         prompt: `${entry.next_request}\n\n(read instant ${input.readInstant})`,
         cwd: dir,
         outDir: pairDir,
@@ -248,8 +294,13 @@ const effectsFor = (
       restoreCheckpoint(checkpoints.get(input.checkpointOf)!, repairDir);
       const result = await runMeasured({
         executable: options.actor.command,
-        args: options.actor.args,
-        prompt: `A required check failed. Repair it.\n\n(read instant ${input.readInstant})`,
+        args: [...options.actor.args, ...options.actor.perArm[arm]],
+        // Grounded in what the feedback actually said (#1042). A repair told
+        // only that something failed is being asked to guess.
+        prompt: `A required check failed. Repair it.\n\n${
+          (explanations.get(arm) ?? []).map((line) => `- ${line}`).join("\n") ||
+          "- the checker reported a failure with no public explanation"
+        }\n\n(read instant ${input.readInstant})`,
         cwd: repairDir,
         outDir: pairDir,
         env: { ...process.env, DE_REPO: repairDir, DE_ARM: arm, DE_PHASE: "repair" },
@@ -271,7 +322,7 @@ const effectsFor = (
     },
     runAudit: async (arm) => {
       const artifactId = checkpoints.get(arm)!.head;
-      const envelope = checkIn(
+      const { envelope } = checkIn(
         entry,
         checkpoints.get(arm)!,
         join(pairDir, `${arm}-audit`),
