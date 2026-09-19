@@ -95,7 +95,13 @@ const git = (cwd: string, args: readonly string[]): string =>
  * everything else rests on -- an arm that started from a different tree is not
  * a control.
  */
-const seedWorkspace = (dir: string, entry: ExecutableCase): string => {
+/**
+ * Exported so the screen seeds a case exactly as the study does.
+ *
+ * A screen that built its own workspace would be screening a different case,
+ * and the answer it gave would be about that one.
+ */
+export const seedWorkspace = (dir: string, entry: ExecutableCase): string => {
   mkdirSync(dir, { recursive: true });
   git(dir, ["init", "--quiet", "--initial-branch=main"]);
   git(dir, ["config", "user.name", "DE Study"]);
