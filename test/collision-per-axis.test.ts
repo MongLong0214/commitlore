@@ -103,6 +103,113 @@ const valuesFor = (dir: string, key: string): string[] =>
     .filter((trailer) => trailer.key === key)
     .map((trailer) => trailer.value);
 
+/**
+ * A squash merge as a forge composes one: two records folded into a single
+ * trailer paragraph in the message, and one blank-line-separated block per
+ * record on the notes ref.
+ *
+ * The framing difference is not hypothetical and is not commitlore's doing. On
+ * the reported commit the committer is `GitHub <noreply@github.com>`: the forge
+ * wrote the message, `writeRecordBlocks` wrote the note, and only one of them
+ * frames blocks. `renderMessage` frames them correctly when it is the writer,
+ * which was checked before blaming it.
+ */
+const repoWithFoldedMessage = (): string => {
+  const dir = mkdtempSync(join(tmpdir(), 'commitlore-folded-'));
+  temporaries.push(dir);
+  git(dir, ['init', '-q', '--initial-branch=main']);
+  mkdirSync(join(dir, 'src'), { recursive: true });
+  writeFileSync(join(dir, 'src', 'realm.ts'), 'export const a = 1;\n');
+  git(dir, ['add', '-A']);
+  // One paragraph, two records -- what git hands back as a single block.
+  git(dir, [
+    ...IDENTITY,
+    'commit',
+    '-q',
+    '--no-verify',
+    '-m',
+    `feat: realm\n\nprose\n\nLimit: ${LIMIT}\nBlast: local\nRecord-Id: r-folded00001\n` +
+      `Warn: ${WARN}\nUndo: easy\nRecord-Id: r-folded00002\n`,
+  ]);
+  // Two paragraphs, one record each -- what writeRecordBlocks puts on the ref.
+  git(dir, [
+    ...IDENTITY,
+    'notes',
+    '--ref=refs/notes/commitlore',
+    'add',
+    '-f',
+    '-m',
+    `Limit: ${LIMIT}\nBlast: local\nRecord-Id: r-folded00001\n\n` +
+      `Warn: ${WARN}\nUndo: easy\nRecord-Id: r-folded00002\n`,
+    git(dir, ['rev-parse', 'HEAD']).trim(),
+  ]);
+  return dir;
+};
+
+describe('#1116 a note block that is one record of a folded message is not a rival', () => {
+  it('serves every axis when neither declaration contradicts the other', () => {
+    // The reported symptom: both note blocks are exact subsets of the folded
+    // message block, nothing disagrees, and the axes a reader needs before
+    // editing were withheld anyway.
+    const dir = repoWithFoldedMessage();
+
+    // `toContain` rather than `toEqual`: the second record is served from both
+    // channels and so arrives twice. That duplication has the same root as the
+    // withholding -- `groupsByRecordId` keys a block on the one `Record-Id`
+    // `trailerValue` picks, so the folded message groups under the first and
+    // the note block declaring the second has no sibling to merge with. It is
+    // a separate defect, it predates this fix, and it is recorded rather than
+    // quietly absorbed into an assertion.
+    expect(valuesFor(dir, 'Limit')).toContain(LIMIT);
+    expect(valuesFor(dir, 'Warn')).toContain(WARN);
+    expect(valuesFor(dir, 'Undo')).toContain('easy');
+  }, 300_000);
+
+  it('says nothing about a withheld key, because nothing is withheld', () => {
+    const dir = repoWithFoldedMessage();
+
+    expect(runQuery({ cwd: dir, paths: ['src/realm.ts'] }).diagnostics.join('\n')).not.toContain(
+      'withheld',
+    );
+  }, 300_000);
+
+  it('still withholds when a folded message and its note actually disagree', () => {
+    // The control. Forgiving a component must not become forgiving a
+    // contradiction -- r-peraxiscollision1020 rules out serving both values,
+    // and this keeps that: the divergent key is withheld, not offered twice.
+    const dir = mkdtempSync(join(tmpdir(), 'commitlore-folded-bad-'));
+    temporaries.push(dir);
+    git(dir, ['init', '-q', '--initial-branch=main']);
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'realm.ts'), 'export const a = 1;\n');
+    git(dir, ['add', '-A']);
+    git(dir, [
+      ...IDENTITY,
+      'commit',
+      '-q',
+      '--no-verify',
+      '-m',
+      `feat: realm\n\nprose\n\nLimit: ${LIMIT}\nUndo: easy\nRecord-Id: r-folded00001\n` +
+        `Warn: ${WARN}\nRecord-Id: r-folded00002\n`,
+    ]);
+    git(dir, [
+      ...IDENTITY,
+      'notes',
+      '--ref=refs/notes/commitlore',
+      'add',
+      '-f',
+      '-m',
+      `Limit: ${LIMIT}\nUndo: costly\nRecord-Id: r-folded00001\n`,
+      git(dir, ['rev-parse', 'HEAD']).trim(),
+    ]);
+
+    expect(valuesFor(dir, 'Undo')).toEqual([]);
+    expect(runQuery({ cwd: dir, paths: ['src/realm.ts'] }).diagnostics.join('\n')).toContain(
+      'withheld',
+    );
+  }, 300_000);
+});
+
 describe('#1020 a divergent mirror blocks only the keys that diverged', () => {
   /** The reported shape: the content axes agree, `Undo:` is missing from the note. */
   const DROPPED_UNDO =
