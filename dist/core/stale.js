@@ -366,12 +366,6 @@ const undecidableExpiry = (ordered) => {
     }
     return found;
 };
-/** `payloadSignature` without the provenance stamp the mirroring rewrites. */
-const payloadSignatureWithoutProvenance = (record) => record.trailers
-    .filter((trailer) => trailer.key !== RECORD_ID_KEY && trailer.key !== PROVENANCE_KEY)
-    .map((trailer) => `${trailer.key} ${trailer.value}`)
-    .sort()
-    .join('');
 /**
  * Whether a note is its own commit's mirror rather than a rival declaration.
  *
@@ -393,13 +387,60 @@ const payloadSignatureWithoutProvenance = (record) => record.trailers
  * r-refint74's rule and the reason it exists: notes are remote-reachable, so
  * divergent note content must not inherit an identity a human approved.
  */
+/** `payloadSignature` without the provenance stamp the mirroring rewrites. */
+const payloadSignatureWithoutProvenance = (record) => record.trailers
+    .filter((trailer) => trailer.key !== RECORD_ID_KEY && trailer.key !== PROVENANCE_KEY)
+    .map((trailer) => `${trailer.key}\u0000${trailer.value}`)
+    .sort()
+    .join('\u0001');
+/**
+ * Whether `message` is a fold of several records and `note` is one of them
+ * (#1116).
+ *
+ * The two channels are written by different hands on a squash merge.
+ * `writeRecordBlocks` puts one record per blank-line-separated paragraph on the
+ * notes ref; the merge commit's message is composed by the forge -- on the
+ * reported commit, `committer: GitHub <noreply@github.com>` -- which carried
+ * the same records with no blank line between them. Git reads that as one
+ * trailer block, so the message side arrives as a single record carrying every
+ * trailer of both while the notes side arrives as two.
+ *
+ * Grouped by the one `Record-Id` that `trailerValue` picks, the flattened
+ * message block and the note block declaring that same id land together and
+ * compare unequal -- thirteen trailers against eight on the reported commit.
+ * Nothing contradicted anything: both note blocks were exact subsets.
+ *
+ * The extra `Record-Id` is what makes this safe to forgive, and why the test is
+ * not simply "the note is a subset". A block declaring one identity that omits
+ * a key is one record's declaration differing from another's, and #1020 already
+ * decided how that is treated -- it withholds that key. A block declaring two
+ * identities is a *union* of records, so a note covering one of them is a
+ * component of it rather than a rival account of the same thing, and the
+ * subset says so.
+ *
+ * Contradiction is still not forgiven at either arity: a changed value is a
+ * pair the message does not carry, and the subset test fails on it. That is
+ * `r-refint74`'s rule -- notes are remote-reachable, so divergent note content
+ * must not inherit an identity a human approved -- and a component that adds
+ * nothing inherits nothing unapproved.
+ */
+const isFoldedComponent = (note, message) => {
+    const identities = message.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY);
+    if (identities.length < 2)
+        return false;
+    const pairs = (record) => record.trailers
+        .filter((trailer) => trailer.key !== RECORD_ID_KEY && trailer.key !== PROVENANCE_KEY)
+        .map((trailer) => `${trailer.key}\u0000${trailer.value}`);
+    const carried = new Set(pairs(message));
+    return pairs(note).every((pair) => carried.has(pair));
+};
 const isOwnCommitMirror = (record, group) => {
     if (record.source !== 'notes' || record.sha === undefined)
         return false;
-    const signature = payloadSignatureWithoutProvenance(record);
     return group.some((sibling) => sibling.source === 'commit' &&
         sibling.sha === record.sha &&
-        payloadSignatureWithoutProvenance(sibling) === signature);
+        (payloadSignatureWithoutProvenance(sibling) === payloadSignatureWithoutProvenance(record) ||
+            isFoldedComponent(record, sibling)));
 };
 /**
  * A notes mirror diverging from the commit block it mirrors. Each note that is

@@ -15647,11 +15647,17 @@ var undecidableExpiry = (ordered) => {
   return found;
 };
 var payloadSignatureWithoutProvenance = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2 && trailer.key !== PROVENANCE_KEY).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
+var isFoldedComponent = (note, message) => {
+  const identities = message.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY2);
+  if (identities.length < 2) return false;
+  const pairs = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2 && trailer.key !== PROVENANCE_KEY).map((trailer) => `${trailer.key}\0${trailer.value}`);
+  const carried = new Set(pairs(message));
+  return pairs(note).every((pair) => carried.has(pair));
+};
 var isOwnCommitMirror = (record2, group) => {
   if (record2.source !== "notes" || record2.sha === void 0) return false;
-  const signature = payloadSignatureWithoutProvenance(record2);
   return group.some(
-    (sibling) => sibling.source === "commit" && sibling.sha === record2.sha && payloadSignatureWithoutProvenance(sibling) === signature
+    (sibling) => sibling.source === "commit" && sibling.sha === record2.sha && (payloadSignatureWithoutProvenance(sibling) === payloadSignatureWithoutProvenance(record2) || isFoldedComponent(record2, sibling))
   );
 };
 var notesPayloadDiverges = (group) => {
