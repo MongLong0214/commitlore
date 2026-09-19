@@ -188,6 +188,55 @@ describe('#1036 the execution loop runs both arms with no model', () => {
   }, 120_000);
 });
 
+describe('#1038 §3 the prior discussion never reaches the workspace', () => {
+  /*
+   * The leak that made the first complete run meaningless.
+   *
+   * `seedWorkspace` committed the discussion as DISCUSSION.md, so the reason a
+   * `history_required` case exists to withhold was sitting in the worktree when
+   * the later request arrived. Both arms scored 100%, and the OFF arm's own
+   * comment in the code it wrote was "which DISCUSSION.md rules out" -- it had
+   * simply read the file. A study that shipped that would have reported no
+   * effect from a case whose answer was lying on disk.
+   *
+   * The discussion reaches the capture actor through its prompt, which
+   * `de-prompt.test.ts` covers. Nothing else may carry it.
+   */
+
+  const discussionIn = (dir: string): string[] =>
+    execFileSync('git', ['-C', dir, 'grep', '-l', 'legacy clients', 'HEAD'], { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+
+  it('leaves no file in the committed tree carrying the discussion', async () => {
+    const { root, actor, entry } = setup('noleak');
+    const plan = planSchedule({ cases: [entry], repeat: 1, seed: 'exec' });
+
+    await executePlan(plan, new Map([[entry.id, entry]]), options(root, actor));
+
+    for (const arm of ['off', 'native']) {
+      const dir = join(root, 'run', `${entry.id}-rep1`, `arm-${arm}`);
+      // `git grep` exits 1 with no match, which is the passing case here.
+      expect(() => discussionIn(dir)).toThrow();
+    }
+  });
+
+  it('still hands the discussion to the capture actor, or the case measures nothing', async () => {
+    // The control. Removing the file would also "pass" the test above if the
+    // actor stopped being told the reason at all, and then every arm would be
+    // guessing rather than one arm remembering.
+    const { root, actor, entry } = setup('stillsent');
+    const plan = planSchedule({ cases: [entry], repeat: 1, seed: 'exec' });
+
+    await executePlan(plan, new Map([[entry.id, entry]]), options(root, actor));
+
+    const prompt = readFileSync(join(root, 'run', `${entry.id}-rep1`, 'capture-off.prompt.txt'), 'utf8');
+
+    expect(prompt).toContain('legacy clients');
+  });
+});
+
 describe('#1036 the budget stops the run rather than half-funding a pair', () => {
   it('records the refusal and runs nothing further', async () => {
     const { root, actor, entry } = setup('budget');

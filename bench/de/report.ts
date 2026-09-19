@@ -69,6 +69,14 @@ export interface ArmObservation extends ObservedOutcome {
   readonly audit_score: boolean | null;
   readonly repair_decision: string | null;
   readonly handoff: string;
+  /**
+   * The harness bound that ended the capture session, or null if none did.
+   *
+   * Reported beside the handoff rather than folded into it. A row stopped by
+   * this study's own turn cap and a row where the actor genuinely failed are
+   * both `terminal_failure`, and only one of them is evidence about the actor.
+   */
+  readonly stopped_on_bound: string | null;
 }
 
 /**
@@ -97,6 +105,7 @@ export const observationsFrom = (
         audit_score: arm.audit?.verdict.score ?? null,
         repair_decision: arm.repairChoice?.decision ?? null,
         handoff: arm.capture.handoff,
+        stopped_on_bound: arm.capture.stoppedOnBound ?? null,
       });
     }
   }
@@ -113,6 +122,16 @@ export interface Report {
   /** Rows whose feedback passed and whose audit failed, with no repair run. */
   readonly detector_misses: readonly ArmObservation[];
   readonly terminal_handoffs: readonly ArmObservation[];
+  /**
+   * Rows whose capture session was ended by one of this harness's own bounds.
+   *
+   * Separate from `terminal_handoffs` because the two overlap without being the
+   * same set, and because this one is a fact about the instrument. A run with
+   * any of these has not measured what it set out to measure: the first real
+   * run stopped both arms on `error_max_turns` at different phases, which is a
+   * turn cap being compared against itself.
+   */
+  readonly stopped_on_bound: readonly ArmObservation[];
   readonly observations: readonly ArmObservation[];
 }
 
@@ -136,11 +155,35 @@ export const buildReport = (inputs: RunInputs): Report => {
     ),
     // "Show terminal handoff failure beside zero solve/repair spending."
     terminal_handoffs: observations.filter((entry) => entry.handoff === "terminal_failure"),
+    stopped_on_bound: observations.filter((entry) => entry.stopped_on_bound !== null),
     observations,
   };
 };
 
 const pct = (value: number | null): string => (value === null ? "unavailable" : `${(value * 100).toFixed(1)}%`);
+
+/**
+ * Say it, and say what it means, rather than printing a count nobody reads.
+ *
+ * A bound that binds is not a finding about the arms -- it is the study
+ * measuring its own ceiling. The first real run printed "terminal handoff
+ * failures: 1" and nothing else, and that line was read as an outcome for
+ * several minutes before the session logs said `error_max_turns`.
+ */
+const boundLines = (stopped: readonly ArmObservation[]): string[] => {
+  if (stopped.length === 0) return [];
+  const byBound = new Map<string, number>();
+  for (const row of stopped) {
+    const bound = row.stopped_on_bound ?? "unknown";
+    byBound.set(bound, (byBound.get(bound) ?? 0) + 1);
+  }
+  return [
+    `sessions stopped by this harness's own bounds: ${String(stopped.length)} (${[...byBound]
+      .map(([bound, count]) => `${bound} x${String(count)}`)
+      .join(", ")})`,
+    "  those rows say what the bound allowed, not what the arm can do — the means above are not a comparison while any remain.",
+  ];
+};
 
 const points = (value: number | null): string =>
   value === null ? "withheld — one arm has no mean" : `${value >= 0 ? "+" : ""}${value.toFixed(1)} points`;
@@ -166,6 +209,7 @@ export const renderReport = (report: Report): string => {
     "",
     `detector misses (feedback passed, audit failed, no repair): ${String(report.detector_misses.length)}`,
     `terminal handoff failures: ${String(report.terminal_handoffs.length)}`,
+    ...boundLines(report.stopped_on_bound),
     "",
     "no model and no checker ran to produce this: it reads saved evidence only.",
   ];
