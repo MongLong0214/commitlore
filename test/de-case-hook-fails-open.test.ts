@@ -159,6 +159,101 @@ const buildContext = (input) => {
   });
 });
 
+describe('#1038 §5 an implementation that reaches for a module is evaluable', () => {
+  /*
+   * These exist because the first measured run found what this file did not.
+   *
+   * Every fixture above is self-contained, so `require` never appeared in the
+   * validation set -- and the checker evaluated the candidate in a bare
+   * `new Function` body, which has no `require`. The NATIVE arm wrote a correct
+   * answer, the checker answered `null` on "require is not defined", and the
+   * run produced no measurement at all.
+   *
+   * The case's own prose names "writing a diagnostic file" as a legitimate way
+   * to satisfy the later request. That is not expressible without the module
+   * system, so the spec and the checker contradicted each other and the tests
+   * were written from the checker's reachable shapes rather than from the spec.
+   */
+
+  /** Verbatim, from the NATIVE arm of the first measured run. */
+  const REAL_NATIVE_ANSWER = `
+const { appendFileSync, mkdirSync } = require('node:fs');
+const { homedir } = require('node:os');
+const { dirname, join } = require('node:path');
+
+const LOG_PATH = process.env.HOOK_LOG ?? join(homedir(), '.claude', 'hook-errors.log');
+
+const runHook = (input) => {
+  try {
+    process.stdout.write(buildContext(input));
+  } catch (error) {
+    reportFailure(error);
+  }
+  return 0;
+};
+
+const reportFailure = (error) => {
+  const entry = \`\${new Date().toISOString()} \${error?.stack ?? String(error)}\\n\`;
+
+  if (process.env.HOOK_DEBUG) {
+    try {
+      process.stderr.write(entry);
+    } catch {
+      // stderr is closed or full; the log below is the durable channel.
+    }
+  }
+
+  try {
+    mkdirSync(dirname(LOG_PATH), { recursive: true });
+    appendFileSync(LOG_PATH, entry);
+  } catch {
+    // Reporting the failure must not become a second failure.
+  }
+};
+
+const buildContext = (input) => {
+  if (input === '') throw new Error('no payload');
+  return \`context for \${input}\`;
+};
+`;
+
+  it('passes the answer a real actor wrote, which reports through a log file', () => {
+    expect(check(REAL_NATIVE_ANSWER).checks[0]!.pass).toBe(true);
+  });
+
+  it('still fails a violation that uses a module, rather than excusing it as unknown', () => {
+    // The control. A fix that handed everything a module scope would be worth
+    // nothing if it also stopped the checker seeing a non-zero return.
+    const violating = `
+const { appendFileSync } = require('node:fs');
+const runHook = (input) => {
+  try {
+    process.stdout.write(buildContext(input));
+    return 0;
+  } catch (error) {
+    appendFileSync(process.env.HOOK_LOG ?? '/dev/null', String(error));
+    return 1;
+  }
+};
+const buildContext = (input) => {
+  if (input === '') throw new Error('no payload');
+  return \`context for \${input}\`;
+};
+`;
+    const verdict = check(violating);
+
+    expect(verdict.checks[0]!.pass).toBe(false);
+    expect(verdict.exit_code).toBe(1);
+  });
+
+  it('keeps a genuinely missing module unknown, because that is not a verdict on the requirement', () => {
+    const verdict = check(`const x = require('no-such-package-xyz');\nconst runHook = () => 0;\n`);
+
+    expect(verdict.checks[0]!.pass).toBeNull();
+    expect(verdict.exit_code).toBe(2);
+  });
+});
+
 describe('#1038 §4 the envelope is honest about what it could not establish', () => {
   it('reports unknown rather than false when the source will not evaluate', () => {
     // A registry failure or an unevaluable candidate is not a code false.

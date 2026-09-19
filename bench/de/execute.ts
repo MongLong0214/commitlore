@@ -101,7 +101,22 @@ const seedWorkspace = (dir: string, entry: ExecutableCase): string => {
   git(dir, ["config", "user.name", "DE Study"]);
   git(dir, ["config", "user.email", "de@example.invalid"]);
   git(dir, ["config", "commit.gpgsign", "false"]);
-  writeFileSync(join(dir, "DISCUSSION.md"), entry.discussion);
+  /*
+   * The discussion reaches the capture actor through its prompt and never
+   * through the tree.
+   *
+   * It used to be committed here, and that silently destroyed the thing the
+   * study measures. `history_required` is defined by #1038 §3 as a reason that
+   * lives in the record and nowhere in the current source -- and a committed
+   * DISCUSSION.md *is* current source, still sitting in the worktree when the
+   * later request arrives. Both arms could simply read it.
+   *
+   * The first complete run said so out loud: OFF scored 100%, NATIVE scored
+   * 100%, and the OFF arm's own comment in the code it wrote was "which
+   * DISCUSSION.md rules out". That is not a null effect, it is a leak, and a
+   * study that shipped it would have reported no effect from a case where the
+   * answer was lying in the working tree.
+   */
   for (const [path, content] of Object.entries(entry.staged)) writeFileSync(join(dir, path), content);
   git(dir, ["add", "."]);
   git(dir, ["commit", "-m", "prior: the legitimate history both arms start from"]);
@@ -189,6 +204,30 @@ const requiredFor = (entry: ExecutableCase, purpose: Purpose): string[] =>
   entry.described.filter((definition) => definition.purpose === purpose).map((definition) => definition.id);
 
 /**
+ * Which of the harness's own bounds ended this session, if one did.
+ *
+ * Read from the actor's terminal event rather than inferred from the exit code,
+ * because a host that stops on its turn cap reports the stop and still exits
+ * cleanly -- the first measured run's OFF arm exited 0, made no commit, and the
+ * only place that said why was `subtype: "error_max_turns"`.
+ *
+ * `null` means nothing here stopped it, which is not the same as "it succeeded":
+ * the handoff verdict answers that, and this only ever qualifies it.
+ */
+const boundThatStopped = (result: { readonly timedOut: boolean; readonly events: readonly unknown[] }): string | null => {
+  if (result.timedOut) return "wall_clock";
+  for (let index = result.events.length - 1; index >= 0; index -= 1) {
+    const event = result.events[index];
+    if (typeof event !== "object" || event === null) continue;
+    const subtype = (event as { subtype?: unknown }).subtype;
+    // Every `error_*` terminal subtype a host reports is a bound it hit, and
+    // naming them individually here would silently pass over the next one.
+    if (typeof subtype === "string" && subtype.startsWith("error_")) return subtype;
+  }
+  return null;
+};
+
+/**
  * Build the effects for one pair, closing over this run's directories.
  *
  * Every arm gets its own workspace, its own checkpoint and its own evaluation
@@ -260,6 +299,7 @@ const effectsFor = (
           ? "valid"
           : "terminal_failure",
         committed,
+        stoppedOnBound: boundThatStopped(result),
       };
     },
     runSolve: async (arm, input) => {

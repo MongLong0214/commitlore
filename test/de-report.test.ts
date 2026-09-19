@@ -198,6 +198,60 @@ describe('#1037 a terminal handoff is shown, not dropped', () => {
   });
 });
 
+describe('#1035 a bound the harness set is reported as an instrument fault, not as a result', () => {
+  /*
+   * From the first measured run. Both arms ended on `error_max_turns`, at
+   * different phases, and the report printed "terminal handoff failures: 1"
+   * and nothing else -- a line that reads as an outcome. It took the session
+   * logs to find that the study had measured its own turn cap.
+   */
+
+  it('names the bound and says the means are not a comparison', () => {
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [
+      {
+        ...arm('off'),
+        capture: { handoff: 'terminal_failure', committed: null, stoppedOnBound: 'error_max_turns' },
+        solve: null,
+        audit: null,
+      },
+      arm('native'),
+    ]);
+
+    const rendered = renderReport(buildReport(inputs(dir)));
+
+    expect(rendered).toMatch(/error_max_turns x1/);
+    expect(rendered).toMatch(/not a comparison while any remain/);
+  });
+
+  it('keeps it out of the report entirely when no bound bound', () => {
+    // The control. A line that always printed would stop carrying a warning.
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [arm('off'), arm('native')]);
+
+    const report = buildReport(inputs(dir));
+
+    expect(report.stopped_on_bound).toHaveLength(0);
+    expect(renderReport(report)).not.toMatch(/harness's own bounds/);
+  });
+
+  it('counts a bound that stopped a session which still produced a valid handoff', () => {
+    // The two sets overlap without being the same one: a session can hit the
+    // cap after committing, which is a valid handoff and still an instrument
+    // fault for everything measured after it.
+    const dir = runDir();
+    writeEpisode(dir, plan[0]!, [
+      { ...arm('off'), capture: { handoff: 'valid', committed: 'sha', stoppedOnBound: 'wall_clock' } },
+      arm('native'),
+    ]);
+
+    const report = buildReport(inputs(dir));
+
+    expect(report.terminal_handoffs).toHaveLength(0);
+    expect(report.stopped_on_bound).toHaveLength(1);
+  });
+});
+
 describe('#1037 the report calls nothing', () => {
   it('says so, and reads only what is on disk', () => {
     const dir = runDir();

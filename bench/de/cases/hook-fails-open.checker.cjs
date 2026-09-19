@@ -16,6 +16,7 @@
  */
 
 const { readFileSync, writeFileSync, existsSync } = require('node:fs');
+const { createRequire } = require('node:module');
 const { join } = require('node:path');
 
 const repo = process.env.CHECK_REPO;
@@ -65,10 +66,35 @@ const source = readFileSync(path, 'utf8');
  */
 let runHook;
 try {
-  // Plain JavaScript, evaluated as written. A checker that compiled first
-  // would report its own transform's limits as facts about the candidate.
-  const factory = new Function(`${source}; return typeof runHook === 'function' ? runHook : null;`);
-  runHook = factory();
+  /*
+   * Plain JavaScript, evaluated as written, in the scope a real hook file gets.
+   *
+   * A checker that compiled first would report its own transform's limits as
+   * facts about the candidate -- the first version did that, answering
+   * `unknown` for a correct implementation whose `as` assertion it could not
+   * strip. The second version fixed the transform and kept the fault: a bare
+   * `new Function` body has no `require`, so every implementation that reaches
+   * for a module was unevaluable too.
+   *
+   * That is not hypothetical. The first measured run's NATIVE arm wrote a
+   * correct answer -- returns 0, reports the failure to a log -- and this
+   * checker scored it `null` on "require is not defined", deleting the one
+   * observation the run existed to make.
+   *
+   * The module scope below is the same one Node gives `hook.js` in place, so
+   * `require('node:fs')` resolves and a genuinely missing module still raises,
+   * which is `unknown` and correctly so.
+   */
+  const factory = new Function(
+    'require',
+    'module',
+    'exports',
+    '__filename',
+    '__dirname',
+    `${source}\n;return typeof runHook === 'function' ? runHook : null;`,
+  );
+  const scoped = { exports: {} };
+  runHook = factory(createRequire(path), scoped, scoped.exports, path, repo);
 } catch (error) {
   write(null, `the saved source could not be evaluated: ${error.message}`);
   process.exit(0);
