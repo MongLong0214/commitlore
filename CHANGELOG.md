@@ -4,6 +4,41 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.5.1
+
+Records the two channels agreed on were being withheld.
+
+On a squash-merged repository, a merge commit carrying more than one record had
+them served as nothing. `commitlore context` reported *"N trailer key(s) are
+withheld because a record's commit message and its note on
+refs/notes/commitlore declare different values for them"* — and the two
+declarations agreed.
+
+**The two channels are written by different hands.** A forge composes the squash
+message; `writeRecordBlocks` writes the note. Only one of them separates record
+blocks with a blank line, so git read the message's two records as a single
+folded block while the note arrived as two. Grouped by the first `Record-Id`,
+the folded block and the note block declaring that same id compared unequal —
+thirteen trailers against eight on the reported commit — and every key that
+differed was withheld. Nothing contradicted anything: both note blocks were
+exact subsets of the folded one.
+
+**On the reporting repository this moved one file from four `Limit:`, two
+`Ruled-out:` and six `Warn:` to eight, four and twelve.** Those are the lines a
+reader is meant to see before editing, and they were the ones going missing.
+
+A note block that is one record of a folded message is now read as a component
+of it rather than a rival account of it. **A real disagreement still withholds**
+— a note that changes a value declares a pair the message does not carry, and
+that key is withheld exactly as before.
+
+What this gives up is recorded with the code: a folded block carries both
+records' pairs, so a note that attributes the second record's content to the
+first record's identity is now served rather than withheld. Reaching that takes
+a hand-edited or corrupted note rather than an ordinary workflow, and the
+alternative was leaving every squash-merged repository withholding records that
+agree.
+
 ## 1.5.0
 
 Something now starts the capture.
