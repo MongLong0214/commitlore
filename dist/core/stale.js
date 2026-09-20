@@ -418,6 +418,20 @@ const payloadSignatureWithoutProvenance = (record) => record.trailers
  * component of it rather than a rival account of the same thing, and the
  * subset says so.
  *
+ * **What this gives up.** A folded block carries both records' pairs, so a note
+ * that attributes the *second* record's content to the *first* record's
+ * identity is still a subset of it, and is now served rather than withheld. The
+ * guard is weaker in exactly that shape, and it is the shape `r-refint74` cares
+ * about -- notes are remote-reachable. It is accepted because the note is
+ * written by `writeRecordBlocks` from the same source that composes the
+ * message, so reaching it takes a hand-edited or corrupted note rather than an
+ * ordinary workflow; and because the alternative on the table was leaving every
+ * squash-merged repository withholding records that agree.
+ *
+ * This follows from the predicate rather than from a measurement. Two attempts
+ * to build the shape produced blocks that split instead of folding, so the
+ * escape was reasoned about and not reproduced.
+ *
  * Contradiction is still not forgiven at either arity: a changed value is a
  * pair the message does not carry, and the subset test fails on it. That is
  * `r-refint74`'s rule -- notes are remote-reachable, so divergent note content
