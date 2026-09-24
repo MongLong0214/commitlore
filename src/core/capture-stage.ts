@@ -17,7 +17,7 @@ import { writeConsideration } from './commit-consideration.js';
 import { createHash } from 'node:crypto';
 import { markCaptureError } from './capture-outcome.js';
 import { readPending, stagePending, type PendingRecord } from './pending.js';
-import { resolvePolicy } from './capture-policy.js';
+import { POLICY_FILE_NAME, resolvePolicy } from './capture-policy.js';
 import { execGitOrThrow } from './git.js';
 
 // ---------------------------------------------------------------------------
@@ -117,7 +117,8 @@ export const stageCaptureRecord = (opts: StageCaptureOptions): string | null => 
   if (record.records.length > policy.policy.max_records_per_commit) {
     throw markCaptureError(
       new Error(
-        `Staging rejected: ${record.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`,
+        `Staging rejected: ${record.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit}); ` +
+          `merge their trailers into fewer records, or raise max_records_per_commit in ${POLICY_FILE_NAME}`,
       ),
       'internal',
     );

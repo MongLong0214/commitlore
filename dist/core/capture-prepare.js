@@ -114,9 +114,12 @@ const prepareValues = (opts) => {
     if (!isFullObjectId(stagedTreeOid)) {
         throw markCaptureError(new Error('Cannot resolve staged tree — is this a git repository with at least one commit?'), 'operational');
     }
+    // What the records are checked against. The same as the staged diff except
+    // for an amend (#1129), where the bindings above stay on the staged diff.
+    const evidenceDiff = opts.evidenceDiff ?? diff;
     const sourceHashes = {
         transcript: createHash('sha256').update(transcript).digest('hex'),
-        diff: stagedDiffHash,
+        diff: evidenceDiff === diff ? stagedDiffHash : createHash('sha256').update(evidenceDiff).digest('hex'),
     };
     const policy = resolvePolicy(cwd);
     if (policy.policy.mode === 'off') {
@@ -132,7 +135,7 @@ const prepareValues = (opts) => {
         !(policy.policy.mode === 'auto' && policy.policy.unattended)) {
         throw markCaptureError(new Error(`unattended capture is off for this repository (${policySourceLabel(policy)}: "unattended": true with mode "auto" opts in) — nothing was prepared`), 'rejected');
     }
-    const diffPaths = extractPathsFromDiff(diff);
+    const diffPaths = extractPathsFromDiff(evidenceDiff);
     // Windowed once, then used for both the advisory and the prompt. The guard
     // reads the same bytes the model is shown: an advisory computed over the
     // whole session could warn about a decision that is not in the prompt at all,
@@ -152,7 +155,7 @@ const prepareValues = (opts) => {
                 ? {}
                 : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         });
-    const harvest = buildHarvestPromptWithWindow({ transcript, diff }, windowed);
+    const harvest = buildHarvestPromptWithWindow({ transcript, diff: evidenceDiff }, windowed);
     return {
         base_head: baseHead,
         staged_diff_hash: stagedDiffHash,

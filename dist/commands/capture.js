@@ -23,10 +23,11 @@ import { stageCaptureRecord } from '../core/capture-stage.js';
 import { POLICY_FILE_NAME } from '../core/capture-policy.js';
 import { classifyCaptureError, exitCodeForCaptureOutcome, markCaptureError, messageOf, } from '../core/capture-outcome.js';
 import { runCaptureShadow } from '../core/capture-shadow.js';
-import { execGitOrThrow } from '../core/git.js';
+import { execGit, execGitOrThrow } from '../core/git.js';
 import { configuredSignedDirectivesRequired, configuredTrustedSignerFingerprints, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { parseDraft } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
+import { deletePending } from '../core/pending.js';
 /** Render historical measurement output without ever echoing a blocked secret. */
 export const formatCaptureShadow = (result) => {
     const lines = [
@@ -74,6 +75,22 @@ const readCallerFile = (path) => {
         const wrapped = new Error(`cannot read ${JSON.stringify(path)}: ${messageOf(error)}`);
         throw markCaptureError(wrapped, errnoCode(error) === 'ENOENT' ? 'usage' : 'operational');
     }
+};
+/**
+ * The diff the amended commit will carry: its parent to the index (#1129).
+ *
+ * The staged diff is the change since HEAD, which during an amend is only what
+ * was added to the commit -- quoting the commit's own content was refused, and
+ * a message-only amend had no diff to cite at all. A root commit has no parent,
+ * so its diff starts from the empty tree, asked of git so a SHA-256 repository
+ * gets its own.
+ */
+const amendedCommitDiff = (cwd) => {
+    const parent = execGit(['rev-parse', '--verify', '--quiet', 'HEAD^'], { cwd });
+    const base = parent.code === 0
+        ? parent.stdout.trim()
+        : execGitOrThrow(['hash-object', '-t', 'tree', '--stdin'], { cwd, stdin: '' }).trim();
+    return execGitOrThrow(['diff', '--cached', base], { cwd });
 };
 const failureResult = (error) => ({
     outcome: classifyCaptureError(error),
@@ -129,7 +146,9 @@ const runCapturePipeline = (opts) => {
     // to the flag. The reporter re-checked quotes and locators that were never
     // wrong. It is refused here instead, before prepare, naming the flag.
     const callerDiff = diffPath === undefined ? undefined : readCallerFile(diffPath);
-    const diff = execGitOrThrow(['diff', '--cached'], { cwd });
+    const staged = execGitOrThrow(['diff', '--cached'], { cwd });
+    const replacing = opts.amend === true ? execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim() : undefined;
+    const diff = replacing === undefined ? staged : amendedCommitDiff(cwd);
     if (callerDiff !== undefined && callerDiff !== diff) {
         throw markCaptureError(new Error(`--diff ${JSON.stringify(diffPath)} is not the staged diff. A capture transaction ` +
             'binds to the staged diff -- prepare, verify and stage each recompute it, so --diff ' +
@@ -147,6 +166,7 @@ const runCapturePipeline = (opts) => {
             ? {}
             : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         ...(opts.unattended === true ? { unattended: true } : {}),
+        ...(diff === staged ? {} : { evidenceDiff: diff }),
     });
     if (prepareResult.policy_error !== null) {
         // The defaults ran. Say which policy actually applied rather than letting a
@@ -208,25 +228,7 @@ const runCapturePipeline = (opts) => {
         transcript,
         diff,
         cwd,
-    });
-    // 4. Stage — passes ONLY the nonce and cwd to stage (CEO amendment)
-    //    Never forwards base_head, diff hash, policy hash, or timestamp.
-    //
-    // Unconditional on purpose, and the condition belongs where it is rather than
-    // here. `stageCaptureRecord` refuses a stored result that is `empty` or
-    // `incomplete`, so a run whose records were all rejected stages nothing --
-    // checked by `test/capture-stage-after-refusal.test.ts`. A guard here on this
-    // call's `accepted` would restate that decision in a second place, agreeing
-    // today and free to drift tomorrow; it was written, measured against the same
-    // test, and found to change nothing.
-    const stagedNonce = stageCaptureRecord({
-        nonce: prepareResult.nonce,
-        cwd,
-        // The receipt this run's own verification was issued (#1005). Taken from
-        // the result rather than re-read from the transaction, which is the point:
-        // a caller presents what its verification returned, and a caller whose
-        // verification bound nothing has nothing to present.
-        ...(verifyResult.receipt === undefined ? {} : { receipt: verifyResult.receipt }),
+        ...(replacing === undefined ? {} : { replacing }),
     });
     const rejected = [
         ...draftRejections,
@@ -237,6 +239,52 @@ const runCapturePipeline = (opts) => {
             reason: rejection.reason,
         })),
     ];
+    /*
+     * #1127. Without this the survivors of a partial draft were staged -- and the
+     * tree bound as `recorded` -- before `commitlore commit` reported the refusal,
+     * so the next plain `git commit` carried a record from a call that said it
+     * bound nothing. The verified transaction is this call's own and is removed,
+     * so `pending ls` does not show a capture waiting for a commit either.
+     */
+    if (opts.allOrNothing === true && rejected.length > 0) {
+        deletePending(prepareResult.nonce, { cwd });
+        return {
+            outcome: 'rejected',
+            nonce: prepareResult.nonce,
+            staged: false,
+            guard_advisory: prepareResult.guard_advisory,
+            rejected,
+        };
+    }
+    // 4. Stage — passes ONLY the nonce and cwd to stage (CEO amendment)
+    //    Never forwards base_head, diff hash, policy hash, or timestamp.
+    //
+    // Unconditional on purpose, and the condition belongs where it is rather than
+    // here. `stageCaptureRecord` refuses a stored result that is `empty` or
+    // `incomplete`, so a run whose records were all rejected stages nothing --
+    // checked by `test/capture-stage-after-refusal.test.ts`. A guard here on this
+    // call's `accepted` would restate that decision in a second place, agreeing
+    // today and free to drift tomorrow; it was written, measured against the same
+    // test, and found to change nothing.
+    let stagedNonce;
+    try {
+        stagedNonce = stageCaptureRecord({
+            nonce: prepareResult.nonce,
+            cwd,
+            // The receipt this run's own verification was issued (#1005). Taken from
+            // the result rather than re-read from the transaction, which is the point:
+            // a caller presents what its verification returned, and a caller whose
+            // verification bound nothing has nothing to present.
+            ...(verifyResult.receipt === undefined ? {} : { receipt: verifyResult.receipt }),
+        });
+    }
+    catch (error) {
+        // The rejections were computed before stage threw, and dropping them with
+        // the throw is how #1127's refused record disappeared from every output.
+        if (opts.allOrNothing === true)
+            deletePending(prepareResult.nonce, { cwd });
+        return { ...failureResult(error), guard_advisory: prepareResult.guard_advisory, rejected };
+    }
     if (stagedNonce !== null) {
         return {
             outcome: 'staged',

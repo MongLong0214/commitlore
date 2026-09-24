@@ -20,7 +20,7 @@ import type { Command } from 'commander';
 import { type CaptureOutcome } from '../core/capture-outcome.js';
 import { type CaptureShadowResult } from '../core/capture-shadow.js';
 import { type TranscriptWindow } from '../core/harvest.js';
-import type { GuardAdvisory } from '../core/pending.js';
+import { type GuardAdvisory } from '../core/pending.js';
 /** Why a drafted record did not survive. Empty when everything was accepted. */
 export interface CaptureRejectionReport {
     /** Index in the submitted draft. */
@@ -90,5 +90,12 @@ export declare const runCapture: (opts: {
      * repository opted in — the CLI never decides consent on its own.
      */
     unattended?: boolean;
+    /**
+     * Stage nothing unless every record verified (#1127). `commitlore commit`
+     * promises all or nothing; `capture` stages the survivors and names the rest.
+     */
+    allOrNothing?: boolean;
+    /** The records describe the commit `git commit --amend` will produce (#1129). */
+    amend?: boolean;
 }) => CaptureResult;
 export declare const register: (program: Command) => void;

@@ -16,7 +16,7 @@ interface SyncCommandOptions {
     dryRun?: boolean;
     json?: boolean;
 }
-/** Exit 2 when a remote needs a human. Everything else is 0. */
+/** Exit 2 when a remote needs a human, or no remote could be chosen. Everything else is 0. */
 export declare const SYNC_ATTENTION_EXIT = 2;
 export declare const runSync: (options?: SyncCommandOptions) => {
     code: number;

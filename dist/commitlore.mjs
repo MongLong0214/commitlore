@@ -18050,9 +18050,10 @@ var prepareValues = (opts) => {
       "operational"
     );
   }
+  const evidenceDiff = opts.evidenceDiff ?? diff;
   const sourceHashes = {
     transcript: createHash3("sha256").update(transcript).digest("hex"),
-    diff: stagedDiffHash
+    diff: evidenceDiff === diff ? stagedDiffHash : createHash3("sha256").update(evidenceDiff).digest("hex")
   };
   const policy = resolvePolicy(cwd);
   if (policy.policy.mode === "off") {
@@ -18071,7 +18072,7 @@ var prepareValues = (opts) => {
       "rejected"
     );
   }
-  const diffPaths = extractPathsFromDiff(diff);
+  const diffPaths = extractPathsFromDiff(evidenceDiff);
   const windowed = windowTranscript(transcript);
   const advisory = opts.skipGuard === true ? null : computeGuardAdvisory({
     proposal: windowed.text,
@@ -18083,7 +18084,7 @@ var prepareValues = (opts) => {
     ...opts.requireSignedDirective === true ? { requireSignedDirective: true } : {},
     ...opts.trustedSignerFingerprints === void 0 ? {} : { trustedSignerFingerprints: opts.trustedSignerFingerprints }
   });
-  const harvest2 = buildHarvestPromptWithWindow({ transcript, diff }, windowed);
+  const harvest2 = buildHarvestPromptWithWindow({ transcript, diff: evidenceDiff }, windowed);
   return {
     base_head: baseHead,
     staged_diff_hash: stagedDiffHash,
@@ -18317,12 +18318,14 @@ var rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
   }
   return remaining;
 };
-var loadCaptureVerificationHistory = (cwd) => {
+var declaredOnlyBy = (rec, commit) => (rec.shas.length > 0 ? rec.shas : [rec.sha]).every((sha) => sha === commit);
+var loadCaptureVerificationHistory = (cwd, replacing) => {
   try {
     const recordIds = /* @__PURE__ */ new Set();
     const activeCanonicalTuples = /* @__PURE__ */ new Set();
     const queryResult = runQuery({ cwd, noIndex: true, allHistory: true });
     for (const rec of queryResult.records) {
+      if (replacing !== void 0 && declaredOnlyBy(rec, replacing)) continue;
       const idTrailer = rec.trailers.find((t) => t.key === "Record-Id");
       if (idTrailer) recordIds.add(idTrailer.value);
       if (rec.lifecycle !== "active") continue;
@@ -18470,7 +18473,7 @@ var runVerifyCaptureRecords = (opts) => {
       };
       return settle(result3);
     }
-    const history = opts.history === void 0 ? loadCaptureVerificationHistory(cwd) : opts.history;
+    const history = opts.history === void 0 ? loadCaptureVerificationHistory(cwd, opts.replacing) : opts.history;
     if (history === null) {
       const result3 = {
         accepted: [],
@@ -18611,7 +18614,7 @@ var stageCaptureRecord = (opts) => {
   if (record2.records.length > policy.policy.max_records_per_commit) {
     throw markCaptureError(
       new Error(
-        `Staging rejected: ${record2.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`
+        `Staging rejected: ${record2.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit}); merge their trailers into fewer records, or raise max_records_per_commit in ${POLICY_FILE_NAME}`
       ),
       "internal"
     );
@@ -19169,6 +19172,11 @@ var readCallerFile = (path2) => {
     throw markCaptureError(wrapped, errnoCode2(error2) === "ENOENT" ? "usage" : "operational");
   }
 };
+var amendedCommitDiff = (cwd) => {
+  const parent = execGit(["rev-parse", "--verify", "--quiet", "HEAD^"], { cwd });
+  const base = parent.code === 0 ? parent.stdout.trim() : execGitOrThrow(["hash-object", "-t", "tree", "--stdin"], { cwd, stdin: "" }).trim();
+  return execGitOrThrow(["diff", "--cached", base], { cwd });
+};
 var failureResult = (error2) => ({
   outcome: classifyCaptureError(error2),
   nonce: null,
@@ -19192,7 +19200,9 @@ var runCapturePipeline = (opts) => {
     );
   }
   const callerDiff = diffPath === void 0 ? void 0 : readCallerFile(diffPath);
-  const diff = execGitOrThrow(["diff", "--cached"], { cwd });
+  const staged = execGitOrThrow(["diff", "--cached"], { cwd });
+  const replacing = opts.amend === true ? execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim() : void 0;
+  const diff = replacing === void 0 ? staged : amendedCommitDiff(cwd);
   if (callerDiff !== void 0 && callerDiff !== diff) {
     throw markCaptureError(
       new Error(
@@ -19207,7 +19217,8 @@ var runCapturePipeline = (opts) => {
     ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors },
     ...opts.requireSignedDirective === true ? { requireSignedDirective: true } : {},
     ...opts.trustedSignerFingerprints === void 0 ? {} : { trustedSignerFingerprints: opts.trustedSignerFingerprints },
-    ...opts.unattended === true ? { unattended: true } : {}
+    ...opts.unattended === true ? { unattended: true } : {},
+    ...diff === staged ? {} : { evidenceDiff: diff }
   });
   if (prepareResult.policy_error !== null) {
     process.stderr.write(
@@ -19250,16 +19261,8 @@ commitlore capture: the built-in defaults were used for this capture
     draft: draftRecords,
     transcript,
     diff,
-    cwd
-  });
-  const stagedNonce = stageCaptureRecord({
-    nonce: prepareResult.nonce,
     cwd,
-    // The receipt this run's own verification was issued (#1005). Taken from
-    // the result rather than re-read from the transaction, which is the point:
-    // a caller presents what its verification returned, and a caller whose
-    // verification bound nothing has nothing to present.
-    ...verifyResult.receipt === void 0 ? {} : { receipt: verifyResult.receipt }
+    ...replacing === void 0 ? {} : { replacing }
   });
   const rejected = [
     ...draftRejections,
@@ -19270,6 +19273,31 @@ commitlore capture: the built-in defaults were used for this capture
       reason: rejection.reason
     }))
   ];
+  if (opts.allOrNothing === true && rejected.length > 0) {
+    deletePending(prepareResult.nonce, { cwd });
+    return {
+      outcome: "rejected",
+      nonce: prepareResult.nonce,
+      staged: false,
+      guard_advisory: prepareResult.guard_advisory,
+      rejected
+    };
+  }
+  let stagedNonce;
+  try {
+    stagedNonce = stageCaptureRecord({
+      nonce: prepareResult.nonce,
+      cwd,
+      // The receipt this run's own verification was issued (#1005). Taken from
+      // the result rather than re-read from the transaction, which is the point:
+      // a caller presents what its verification returned, and a caller whose
+      // verification bound nothing has nothing to present.
+      ...verifyResult.receipt === void 0 ? {} : { receipt: verifyResult.receipt }
+    });
+  } catch (error2) {
+    if (opts.allOrNothing === true) deletePending(prepareResult.nonce, { cwd });
+    return { ...failureResult(error2), guard_advisory: prepareResult.guard_advisory, rejected };
+  }
   if (stagedNonce !== null) {
     return {
       outcome: "staged",
@@ -20084,7 +20112,11 @@ var runCommit = (opts) => {
     ...opts.transcript === void 0 ? {} : { transcript: opts.transcript },
     ...opts.transcriptPath === void 0 ? {} : { transcriptPath: opts.transcriptPath },
     ...opts.draft === void 0 ? {} : { draft: opts.draft },
-    ...opts.draftPath === void 0 ? {} : { draftPath: opts.draftPath }
+    ...opts.draftPath === void 0 ? {} : { draftPath: opts.draftPath },
+    allOrNothing: true,
+    // The records describe the commit the amend produces, so their diff
+    // evidence is checked against its parent rather than against HEAD (#1129).
+    ...opts.amend === true ? { amend: true } : {}
   });
   const rejected = capture.rejected ?? [];
   if (rejected.length > 0 || capture.outcome === "rejected") {
@@ -20097,6 +20129,13 @@ var runCommit = (opts) => {
       ],
       { rejected }
     );
+  }
+  if (capture.outcome === "usage" || capture.outcome === "operational" || capture.outcome === "internal") {
+    return result("error", [
+      "the capture failed, so nothing was committed and nothing was bound",
+      ...capture.error === void 0 ? [] : [capture.error],
+      ...stagedByAll ? ["--all already staged your tracked changes; they are still staged, unlike a failed git commit -a"] : []
+    ]);
   }
   if (capture.outcome !== "staged") {
     writeConsideration({
@@ -20146,7 +20185,7 @@ var exitCodeFor = (outcome) => {
 var register5 = (program3) => {
   program3.command("commit").description("consider this change and commit it in one call; recording nothing is a complete answer").requiredOption("-m, --message <message>", "the commit message, subject and body").option("--transcript <path>", "the session transcript the records are checked against").option("--records <path>", "a draft JSON file; omit it to commit with nothing recorded").option("--none", "state that there is nothing to record (the same as omitting --records)").option("--amend", "amend the previous commit rather than making a new one").option("-a, --all", "stage tracked changes first \u2014 unlike git commit -a, they stay staged if the commit is refused").option("--no-commit", "verify and bind without committing, and run git commit yourself").option("--json", "emit the result as JSON").addHelpText(
     "after",
-    '\nOne call in place of prepare -> draft -> verify -> stage -> git commit. It composes no message of its own: the records reach the commit through the installed prepare-commit-msg hook, the same way they do when you stage a capture and commit by hand.\n\nRecording nothing is normal and expected. Most commits carry nothing a diff cannot show, and `commitlore commit -m "..."` with no --records is the complete answer for them -- not a shortfall, and nothing downstream asks for more.\n\nAll or nothing: if any record fails verification the commit does not happen and nothing is bound, because committing the survivors would hide the refusal at the moment it matters. Correct the quotes against the transcript, or commit with no records.\n\nExit codes: 0 committed (with or without a record) or bound; 1 a record was refused, git refused the commit, or the message that landed carries no record; 2 nothing could be attempted -- not a repository, nothing staged, or no hook to apply a record.'
+    '\nOne call in place of prepare -> draft -> verify -> stage -> git commit. It composes no message of its own: the records reach the commit through the installed prepare-commit-msg hook, the same way they do when you stage a capture and commit by hand.\n\nRecording nothing is normal and expected. Most commits carry nothing a diff cannot show, and `commitlore commit -m "..."` with no --records is the complete answer for them -- not a shortfall, and nothing downstream asks for more.\n\nAll or nothing: if any record fails verification the commit does not happen and nothing is bound, because committing the survivors would hide the refusal at the moment it matters. Correct the quotes against the transcript, or commit with no records.\n\nExit codes: 0 committed (with or without a record) or bound; 1 a record was refused, git refused the commit, or the message that landed carries no record; 2 nothing was committed because nothing could be attempted -- not a repository, nothing staged, no hook to apply a record -- or because the capture itself failed, such as a draft holding more records than max_records_per_commit allows.'
   ).action((options) => {
     const attempt = () => runCommit({
       cwd: process.cwd(),
@@ -26256,7 +26295,7 @@ var syncRemote = (remote, opts = {}) => {
   }
   if (local === null && theirs !== null) {
     if (opts.dryRun === true) {
-      return { remote, outcome: "fetched", detail: "would collect the remote mirror" };
+      return { remote, outcome: "would-fetch", detail: "would collect the remote mirror" };
     }
     const updated = execGit(["update-ref", NOTES_REF, theirs], gitOptions4(opts));
     return updated.code === 0 ? { remote, outcome: "fetched", detail: "collected the remote mirror" } : failure3(remote, updated.stderr.trim() || "could not update the local notes ref");
@@ -26265,14 +26304,14 @@ var syncRemote = (remote, opts = {}) => {
     if (local === theirs) return { remote, outcome: "in-sync", detail: "" };
     if (isAncestor2(local, theirs, opts)) {
       if (opts.dryRun === true) {
-        return { remote, outcome: "fetched", detail: "would fast-forward to the remote mirror" };
+        return { remote, outcome: "would-fetch", detail: "would fast-forward to the remote mirror" };
       }
       const updated = execGit(["update-ref", NOTES_REF, theirs], gitOptions4(opts));
       return updated.code === 0 ? { remote, outcome: "fetched", detail: "fast-forwarded to the remote mirror" } : failure3(remote, updated.stderr.trim() || "could not update the local notes ref");
     }
     if (!isAncestor2(theirs, local, opts)) {
       if (opts.dryRun === true) {
-        return { remote, outcome: "merged", detail: "would merge both mirrors" };
+        return { remote, outcome: "would-merge", detail: "would merge both mirrors" };
       }
       const merged = execGit(
         ["notes", `--ref=${NOTES_REF}`, "merge", "-s", "cat_sort_uniq", FETCH_HEAD_REF],
@@ -26296,15 +26335,41 @@ var syncRemote = (remote, opts = {}) => {
     return { remote, outcome: "in-sync", detail: "local records are not published (--fetch-only)" };
   }
   if (opts.dryRun === true) {
-    return { remote, outcome: "pushed", detail: "would publish the local mirror" };
+    return { remote, outcome: "would-push", detail: "would publish the local mirror" };
   }
   const pushed = pushMirror(remote, opts);
   return pushed.code === 0 ? { remote, outcome: "pushed", detail: "published the local mirror" } : failure3(remote, pushed.stderr.trim() || `git push ${remote} failed`);
 };
-var syncNotes = (opts = {}) => {
-  const remotes = opts.remotes ?? listRemotes(opts);
-  return remotes.map((remote) => syncRemote(remote, opts));
+var SYNC_REMOTE_CONFIG = "commitlore.syncRemote";
+var configValues = (key, opts) => {
+  const result2 = execGit(["config", "--get-all", key], gitOptions4(opts));
+  if (result2.code !== 0) return [];
+  return result2.stdout.split("\n").map((value) => value.trim()).filter((value) => value.length > 0);
 };
+var configValue2 = (key, opts) => configValues(key, opts).at(-1) ?? null;
+var pushRemote = (opts) => {
+  const head = execGit(["symbolic-ref", "--quiet", "--short", "HEAD"], gitOptions4(opts));
+  const branch = head.code === 0 ? head.stdout.trim() : "";
+  const forBranch = (key) => branch === "" ? null : configValue2(`branch.${branch}.${key}`, opts);
+  return forBranch("pushRemote") ?? configValue2("remote.pushDefault", opts) ?? forBranch("remote");
+};
+var resolveSyncRemotes = (opts = {}) => {
+  const configured = listRemotes(opts);
+  const target = (remotes, source) => ({
+    remotes,
+    skipped: configured.filter((remote) => !remotes.includes(remote)),
+    source
+  });
+  if (opts.remotes !== void 0) return target(opts.remotes, "named");
+  const listed = [...new Set(configValues(SYNC_REMOTE_CONFIG, opts))];
+  if (listed.length > 0) return target(listed, "configured");
+  const push = pushRemote(opts);
+  if (push !== null && configured.includes(push)) return target([push], "push-remote");
+  if (configured.includes("origin")) return target(["origin"], "origin");
+  if (configured.length === 1) return target(configured, "only-remote");
+  return target([], "none");
+};
+var syncNotes = (opts = {}) => resolveSyncRemotes(opts).remotes.map((remote) => syncRemote(remote, opts));
 var syncNeedsAttention = (results) => results.some((result2) => result2.outcome === "failed" || result2.outcome === "diverged");
 
 // src/hooks/pre-push.ts
@@ -39803,31 +39868,51 @@ var line = (result2) => {
   const detail = result2.detail === "" ? result2.outcome : result2.detail;
   return `${result2.remote.padEnd(12)} ${result2.outcome.padEnd(14)} ${detail}`;
 };
+var CHOSEN_BY = {
+  named: "the remotes named with --remote",
+  configured: `the remotes listed in ${SYNC_REMOTE_CONFIG}`,
+  "push-remote": "this branch's push remote",
+  origin: "origin, since this branch has no push remote",
+  "only-remote": "the only remote",
+  none: "no remote"
+};
 var runSync = (options = {}) => {
+  const cwd = options.cwd === void 0 ? {} : { cwd: options.cwd };
+  const targets = resolveSyncRemotes({
+    ...cwd,
+    ...options.remote === void 0 || options.remote.length === 0 ? {} : { remotes: options.remote }
+  });
   const results = syncNotes({
-    ...options.cwd === void 0 ? {} : { cwd: options.cwd },
-    ...options.remote === void 0 || options.remote.length === 0 ? {} : { remotes: options.remote },
+    ...cwd,
+    remotes: targets.remotes,
     ...options.fetchOnly === void 0 ? {} : { fetchOnly: options.fetchOnly },
     ...options.dryRun === void 0 ? {} : { dryRun: options.dryRun }
   });
+  const unchosen = targets.source === "none" && targets.skipped.length > 0;
+  const code = unchosen || syncNeedsAttention(results) ? SYNC_ATTENTION_EXIT : 0;
   if (options.json === true) {
     return {
-      code: syncNeedsAttention(results) ? SYNC_ATTENTION_EXIT : 0,
-      stdout: `${JSON.stringify({ remotes: results }, null, 2)}
+      code,
+      stdout: `${JSON.stringify({ remotes: results, skipped: targets.skipped, source: targets.source }, null, 2)}
+`
+    };
+  }
+  if (unchosen) {
+    return {
+      code,
+      stdout: `not synced: ${targets.skipped.join(", ")} \u2014 this branch has no push remote and none is called origin, so no remote was chosen; name one with --remote, or list them with git config --add ${SYNC_REMOTE_CONFIG} <remote>
 `
     };
   }
   if (results.length === 0) {
     return { code: 0, stdout: "no remotes configured \u2014 the mirror has nowhere to go\n" };
   }
-  return {
-    code: syncNeedsAttention(results) ? SYNC_ATTENTION_EXIT : 0,
-    stdout: `${results.map(line).join("\n")}
-`
-  };
+  const skipped = targets.source === "named" || targets.skipped.length === 0 ? [] : [`not synced: ${targets.skipped.join(", ")} \u2014 sync writes only to ${CHOSEN_BY[targets.source]}; name one with --remote to sync it`];
+  return { code, stdout: `${[...results.map(line), ...skipped].join("\n")}
+` };
 };
 var register27 = (program3) => {
-  program3.command("sync").description("publish and collect the notes mirror (the pre-push hook runs this for you)").option("--remote <name>", "sync only this remote (repeatable)", (value, previous = []) => [
+  program3.command("sync").description("publish and collect the notes mirror (the pre-push hook runs this for you)").option("--remote <name>", "sync this remote instead of the branch's push remote (repeatable)", (value, previous = []) => [
     ...previous,
     value
   ]).option("--fetch-only", "collect from the remote and publish nothing").option("--dry-run", "report what would happen and change nothing").option("--json", "machine-readable output").action((options) => {

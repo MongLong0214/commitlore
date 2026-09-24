@@ -72,6 +72,13 @@ export interface VerifyCaptureOptions {
   readOnly?: boolean;
   /** A read-only snapshot of active records, reusable across a historical run. */
   history?: CaptureVerificationHistory | null;
+  /**
+   * The commit an amend replaces (#1129). A record declared by it alone is the
+   * one being carried over, not a duplicate of it -- the same distinction the
+   * amend marker gives `commit-msg` (#638). Set only by a caller that knows it
+   * is amending: dropping HEAD unconditionally is what r-amendid430 ruled out.
+   */
+  replacing?: string;
 }
 
 export interface CaptureRejection {
@@ -282,17 +289,24 @@ const rejectDanglingRefs = (
   return remaining;
 };
 
+const declaredOnlyBy = (rec: { sha: string; shas: readonly string[] }, commit: string): boolean =>
+  (rec.shas.length > 0 ? rec.shas : [rec.sha]).every((sha) => sha === commit);
+
 /**
  * Read the active records exactly as verification does, without touching the
  * derived index. A caller with a known read-only history can provide it through
  * `VerifyCaptureOptions.history` instead.
  */
-export const loadCaptureVerificationHistory = (cwd: string): CaptureVerificationHistory | null => {
+export const loadCaptureVerificationHistory = (
+  cwd: string,
+  replacing?: string,
+): CaptureVerificationHistory | null => {
   try {
     const recordIds: Set<string> = new Set();
     const activeCanonicalTuples: Set<string> = new Set();
     const queryResult = runQuery({ cwd, noIndex: true, allHistory: true });
     for (const rec of queryResult.records) {
+      if (replacing !== undefined && declaredOnlyBy(rec, replacing)) continue;
       const idTrailer = rec.trailers.find((t) => t.key === 'Record-Id');
       if (idTrailer) recordIds.add(idTrailer.value);
 
@@ -630,7 +644,7 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
     }
 
     // 3. Load active records for duplicate checking
-    const history = opts.history === undefined ? loadCaptureVerificationHistory(cwd) : opts.history;
+    const history = opts.history === undefined ? loadCaptureVerificationHistory(cwd, opts.replacing) : opts.history;
     if (history === null) {
       // If we can't read active records, we cannot be sure → incomplete
       const result: VerifyCaptureResult = {

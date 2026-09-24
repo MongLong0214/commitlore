@@ -23,6 +23,16 @@ export interface PrepareCaptureOptions {
      * setting, not a caller's say-so.
      */
     unattended?: boolean;
+    /**
+     * The diff the records describe, when it is not the staged diff (#1129).
+     *
+     * An amend's records describe the commit it produces, so their diff evidence
+     * is `HEAD^..index`, while every binding -- `staged_diff_hash`, and the hook's
+     * check at commit time -- stays on `git diff --cached`, which is what git
+     * compares against while the amend is running. This moves the prompt and
+     * `source_hashes.diff` only, so verify must be handed the same bytes.
+     */
+    evidenceDiff?: string;
 }
 /** A historical index snapshot supplied by the read-only shadow runner. */
 export interface HistoricalCaptureSnapshot {

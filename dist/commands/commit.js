@@ -232,6 +232,10 @@ export const runCommit = (opts) => {
         ...(opts.transcriptPath === undefined ? {} : { transcriptPath: opts.transcriptPath }),
         ...(opts.draft === undefined ? {} : { draft: opts.draft }),
         ...(opts.draftPath === undefined ? {} : { draftPath: opts.draftPath }),
+        allOrNothing: true,
+        // The records describe the commit the amend produces, so their diff
+        // evidence is checked against its parent rather than against HEAD (#1129).
+        ...(opts.amend === true ? { amend: true } : {}),
     });
     const rejected = capture.rejected ?? [];
     /*
@@ -247,6 +251,21 @@ export const runCommit = (opts) => {
                 ? ['--all already staged your tracked changes; they are still staged, unlike a failed git commit -a']
                 : []),
         ], { rejected });
+    }
+    /*
+     * #1127. A capture that failed is not a draft that held nothing. Every
+     * outcome but `staged` used to fall through to the branch below, so a draft
+     * whose records all verified -- and then exceeded `max_records_per_commit` at
+     * stage -- committed with none of them and called that a complete answer.
+     */
+    if (capture.outcome === 'usage' || capture.outcome === 'operational' || capture.outcome === 'internal') {
+        return result('error', [
+            'the capture failed, so nothing was committed and nothing was bound',
+            ...(capture.error === undefined ? [] : [capture.error]),
+            ...(stagedByAll
+                ? ['--all already staged your tracked changes; they are still staged, unlike a failed git commit -a']
+                : []),
+        ]);
     }
     if (capture.outcome !== 'staged') {
         // A draft that parsed to nothing is the same statement as passing none.
@@ -317,8 +336,10 @@ export const register = (program) => {
         'is bound, because committing the survivors would hide the refusal at the moment it matters. ' +
         'Correct the quotes against the transcript, or commit with no records.' +
         '\n\nExit codes: 0 committed (with or without a record) or bound; 1 a record was refused, git ' +
-        'refused the commit, or the message that landed carries no record; 2 nothing could be ' +
-        'attempted -- not a repository, nothing staged, or no hook to apply a record.')
+        'refused the commit, or the message that landed carries no record; 2 nothing was committed ' +
+        'because nothing could be attempted -- not a repository, nothing staged, no hook to apply a ' +
+        'record -- or because the capture itself failed, such as a draft holding more records than ' +
+        'max_records_per_commit allows.')
         .action((options) => {
         const attempt = () => runCommit({
             cwd: process.cwd(),
