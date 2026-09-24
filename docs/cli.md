@@ -134,6 +134,18 @@ Both directions are handled after `commitlore init`, and neither needs a command
 hooks were never installed, collecting without pushing (`--fetch-only`), and
 seeing what would happen first (`--dry-run`).
 
+`sync` writes only to the remote your branch is pushed to, never to every
+remote. The hook syncs the remote `git push` is pushing to. Run by hand with no
+`--remote`, it uses the remotes listed in `commitlore.syncRemote`
+(`git config --add commitlore.syncRemote <remote>`, once per remote); failing
+that, the branch's push remote, in the order `git push` reads it
+(`branch.<name>.pushRemote`, `remote.pushDefault`, `branch.<name>.remote`);
+then `origin`; then the only remote. Every other remote — a contributor's fork
+added to fetch a pull request, say — is listed as `not synced` and is never
+contacted. With several remotes and none of those to go on, it writes nowhere,
+exits 2, and asks you to name one. A dry run reports `would-push`,
+`would-fetch` or `would-merge`, never an outcome that reads as done.
+
 When two clones have both written records, `sync` merges the union rather than
 picking a winner, because concatenating two sets of records loses nothing.
 **A merged note is graded `claim` until every writer's author string matches a
