@@ -432,7 +432,22 @@ export const codexResultWithPlugin = (mcp: HostResult, plugin: StepOutcome): Hos
 };
 
 export const inspectAndApplyHosts = async (options: Options): Promise<HostSummary> => {
-  const requested: Array<Promise<HostResult>> = [];
+  // Each row is started only when the one before it has finished (#1137). The
+  // MCP probes are asynchronous, but the Hermes step, the `claude plugin`
+  // commands and `plugin install-codex` run through spawnSync and hold the event
+  // loop. The probe writes `initialize` from a timer, so while the loop was held
+  // the request was never sent; when it was released the write and the timeout
+  // were both overdue, and the timeout won. Five healthy registrations were
+  // reported as `initialize timed out` on a first run and as healthy on the
+  // next, which is the unreproduced first-run timeout recorded on #716.
+  //
+  // Starting the probe's budget at the write instead would not have been enough:
+  // a step that runs while the answer is in flight still outlasts it, and the
+  // second round trip (`tools/list`) is sent only after the first answer is
+  // read. The cost is that the rows take the sum of their durations rather than
+  // the longest one, a few hundred milliseconds per probe. A new row is pushed
+  // as a function, never as a promise that has already started.
+  const requested: Array<() => Promise<HostResult>> = [];
   const notDetected: string[] = [];
   const home = options.home;
   // Detection asks for what the wiring operation needs, which is why the rows
@@ -468,13 +483,13 @@ export const inspectAndApplyHosts = async (options: Options): Promise<HostSummar
   //
   // Changing any row means changing what that row's wiring does first.
   if (hasCommand('codex')) {
-    requested.push(
+    requested.push(() =>
       cliHost('codex', options.wrapper).then((result) =>
         result.healthy ? codexResultWithPlugin(result, codexPluginOutcome(options.wrapper)) : result,
       ),
     );
   } else if (existsSync(join(home, '.codex'))) {
-    requested.push(tomlHost(join(home, '.codex', 'config.toml'), options.wrapper));
+    requested.push(() => tomlHost(join(home, '.codex', 'config.toml'), options.wrapper));
   } else notDetected.push('codex');
   const candidates: Array<[string, string, JsonFormat, boolean]> = [
     ['gemini-cli', join(home, '.gemini', 'settings.json'), 'json-mcpServers', hasCommand('gemini') || existsSync(join(home, '.gemini'))],
@@ -483,15 +498,17 @@ export const inspectAndApplyHosts = async (options: Options): Promise<HostSummar
     ['opencode', join(home, '.config', 'opencode', 'opencode.json'), 'json-mcp', hasCommand('opencode') || existsSync(join(home, '.config', 'opencode'))],
   ];
   for (const [host, path, format, present] of candidates) {
-    if (present) requested.push(jsonHost(host, path, format, options.wrapper)); else notDetected.push(host);
+    if (present) requested.push(() => jsonHost(host, path, format, options.wrapper)); else notDetected.push(host);
   }
   // Hermes is intentionally still delegated to its existing transactional
   // helper. This command judges its exit and reports it in the same schema.
   if (hasCommand('hermes') || existsSync(join(home, '.hermes'))) {
-    const result = commandStatus(options.wrapper, ['hermes', 'install', '--config', join(home, '.hermes', 'config.yaml'), '--command', options.wrapper, '--data-root', options.dataRoot, '--verify'], 30_000);
-    requested.push(Promise.resolve(result.status === 0
-      ? { host: 'hermes', requested: true, outcome: 'installed', healthy: true, detail: 'Hermes setup verified' }
-      : { host: 'hermes', requested: true, outcome: 'failed', healthy: false, detail: failureMessage('Hermes setup failed', result.detail) }));
+    requested.push(() => {
+      const result = commandStatus(options.wrapper, ['hermes', 'install', '--config', join(home, '.hermes', 'config.yaml'), '--command', options.wrapper, '--data-root', options.dataRoot, '--verify'], 30_000);
+      return Promise.resolve<HostResult>(result.status === 0
+        ? { host: 'hermes', requested: true, outcome: 'installed', healthy: true, detail: 'Hermes setup verified' }
+        : { host: 'hermes', requested: true, outcome: 'failed', healthy: false, detail: failureMessage('Hermes setup failed', result.detail) });
+    });
   } else notDetected.push('hermes');
   /**
    * Claude Code, which was in neither list until now (#689).
@@ -507,9 +524,10 @@ export const inspectAndApplyHosts = async (options: Options): Promise<HostSummar
    * (#660).
    */
   if (hasCommand('claude')) {
-    requested.push(Promise.resolve(claudePluginHost()));
+    requested.push(() => Promise.resolve(claudePluginHost()));
   } else notDetected.push('claude-code');
-  const hosts = await Promise.all(requested);
+  const hosts: HostResult[] = [];
+  for (const wire of requested) hosts.push(await wire());
   return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
 

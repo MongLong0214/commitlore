@@ -273,3 +273,32 @@ describe('a registration that exits immediately is unhealthy, not a crash', () =
     expect((summary.hosts ?? []).find((entry) => entry.host === 'cursor')?.healthy).toBe(false);
   });
 });
+
+/**
+ * #1137 — a healthy registration reported as `initialize timed out`.
+ *
+ * The probes are asynchronous and the Claude Code step is not: it runs the
+ * `claude plugin` commands through spawnSync. When every row was started at
+ * once, a probe begun before that step could not write `initialize` (the write
+ * is a timer) until the step returned, and by then its own timeout was overdue
+ * too. The fake `claude` here takes longer than the probe budget on its first
+ * command, which is all it takes; the cursor registration is the same healthy
+ * wrapper the tests above call `owned`.
+ */
+describe('a slow synchronous host step does not time out the probes (#1137)', () => {
+  it.skipIf(process.platform === 'win32')('reports a healthy registration healthy while claude plugin commands run long', () => {
+    const root = temporary();
+    const home = join(root, 'home');
+    const ours = wrapper(root);
+    cursorConfig(home, { command: ours, args: ['mcp'] });
+    const bin = join(root, 'host-bin');
+    mkdirSync(bin);
+    const claude = join(bin, 'claude');
+    writeFileSync(claude, '#!/bin/sh\nif [ "$2" = marketplace ] && [ "$3" = add ]; then sleep 4; fi\nexit 0\n');
+    chmodSync(claude, 0o755);
+
+    const result = run(home, ours, { PATH: `${bin}${delimiter}${isolatedPath()}`, COMMITLORE_MCP_PROBE_TIMEOUT_MS: '3000' });
+
+    expect(result.summary.hosts).toContainEqual(expect.objectContaining({ host: 'cursor', outcome: 'owned', healthy: true }));
+  }, 30_000);
+});
