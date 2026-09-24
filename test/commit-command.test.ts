@@ -559,3 +559,129 @@ describe('a draft of several records is all or nothing too (#1127)', () => {
     expect(stagedNonces(cwd)).toEqual([]);
   });
 });
+
+/*
+ * #1129. `--amend` checked a record's diff evidence against the change staged
+ * since HEAD, not against the diff of the commit the amend produces. A quote of
+ * the commit's own content was refused while that commit was being amended,
+ * and the only way through was to soft-reset it first. The cases follow the
+ * reported sequence: record a commit, stage a small follow-up that leaves the
+ * quoted line alone, and amend with the same draft.
+ */
+describe('an amend checks its records against the commit it produces (#1129)', () => {
+  const NOTE = 'rail, which rounds to the same whole number, so only equality reports it';
+  const TRANSCRIPT_1129 = 'Only equality reports it, because the rail rounds to the same whole number.\n';
+
+  const draftQuotingDiff = (id: string): string =>
+    JSON.stringify({
+      records: [
+        {
+          trailers: [
+            { key: 'Warn', value: 'only equality reports a rail that rounds to the same whole number' },
+            { key: 'Record-Id', value: id },
+          ],
+          evidence: [
+            { key: 'Warn', source: 'transcript', quote: 'Only equality reports it', locator: 'L1-L1' },
+            { key: 'Warn', source: 'diff', quote: `/// ${NOTE}`, locator: '@@ -0,0 +1,10 @@' },
+          ],
+        },
+      ],
+    });
+
+  // Long enough that a change to the last line leaves the quoted first line
+  // outside git's three lines of context, as in the report: a quote the staged
+  // diff shows as context would pass without the repair.
+  const rail = (last: number): string =>
+    [`/// ${NOTE}`, ...Array.from({ length: 8 }, (_, i) => `export const line${String(i)} = ${String(i)};`), `export const last = ${String(last)};`, ''].join('\n');
+
+  /** A repository whose HEAD adds `rail.ts` and carries a record quoting it. */
+  const recorded = (label: string, id: string): string => {
+    const { cwd } = repo(label);
+    writeFileSync(join(cwd, 'rail.ts'), rail(2));
+    git(cwd, ['add', 'rail.ts']);
+    const first = runCommit({ cwd, message: 'test: add the rail', transcript: TRANSCRIPT_1129, draft: draftQuotingDiff(id) });
+    expect(first.outcome).toBe('recorded');
+    return cwd;
+  };
+
+  it('verifies a quote of the amended commit’s own content, and the record lands', () => {
+    const cwd = recorded('amend-follow-up', 'r-amend1129a');
+    const parent = git(cwd, ['rev-parse', 'HEAD^']).trim();
+    writeFileSync(join(cwd, 'rail.ts'), rail(3));
+    git(cwd, ['add', 'rail.ts']);
+
+    const outcome = runCommit({
+      cwd,
+      message: 'test: add the rail',
+      transcript: TRANSCRIPT_1129,
+      draft: draftQuotingDiff('r-amend1129a'),
+      amend: true,
+    });
+
+    expect(outcome.rejected).toEqual([]);
+    expect(outcome.outcome).toBe('recorded');
+    expect(git(cwd, ['rev-parse', 'HEAD^']).trim()).toBe(parent);
+    expect(headBody(cwd)).toContain('Record-Id: r-amend1129a');
+    expect(git(cwd, ['show', 'HEAD:rail.ts'])).toContain('last = 3');
+  });
+
+  it('a message-only amend has the commit’s diff to cite, not an empty one', () => {
+    const cwd = recorded('amend-message-only', 'r-amend1129b');
+
+    const outcome = runCommit({
+      cwd,
+      message: 'test: add the rail, reworded',
+      transcript: TRANSCRIPT_1129,
+      draft: draftQuotingDiff('r-amend1129b'),
+      amend: true,
+      commit: false,
+    });
+
+    expect(outcome.rejected).toEqual([]);
+    expect(outcome.outcome).toBe('staged');
+  });
+
+  it('amends a root commit against the empty tree', () => {
+    const dir = mkdtempSync(join(realpathSync(tmpdir()), 'commitlore-commit-amend-root-'));
+    scratch.push(dir);
+    createTestRepo({ path: dir });
+    writeFileSync(join(dir, 'rail.ts'), `/// ${NOTE}\nexport const rail = 1;\n`);
+    git(dir, ['add', '-A']);
+    git(dir, ['commit', '--no-verify', '--quiet', '-m', 'root']);
+    withRealBundle(() => {
+      installHook({ cwd: dir });
+      installPrepareCommitMsgHook(dir);
+    });
+
+    const outcome = runCommit({
+      cwd: dir,
+      message: 'root, with its record',
+      transcript: TRANSCRIPT_1129,
+      draft: draftQuotingDiff('r-amend1129c'),
+      amend: true,
+    });
+
+    expect(outcome.rejected).toEqual([]);
+    expect(outcome.outcome).toBe('recorded');
+    expect(git(dir, ['rev-list', '--count', 'HEAD']).trim()).toBe('1');
+  });
+
+  it('without --amend the same quote is still checked against the change since HEAD', () => {
+    // The control: the evidence base moves only for an amend. A new commit's
+    // records describe the new commit, and HEAD's content is not in it.
+    const cwd = recorded('amend-control', 'r-amend1129d');
+    writeFileSync(join(cwd, 'rail.ts'), rail(3));
+    git(cwd, ['add', 'rail.ts']);
+
+    const outcome = runCommit({
+      cwd,
+      message: 'test: a new commit',
+      transcript: TRANSCRIPT_1129,
+      draft: draftQuotingDiff('r-amend1129e'),
+      commit: false,
+    });
+
+    expect(outcome.outcome).toBe('refused');
+    expect(outcome.rejected.map((r) => r.rule)).toContain('evidence-not-found');
+  });
+});

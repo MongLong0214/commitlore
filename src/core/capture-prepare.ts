@@ -140,6 +140,16 @@ export interface PrepareCaptureOptions {
    * setting, not a caller's say-so.
    */
   unattended?: boolean;
+  /**
+   * The diff the records describe, when it is not the staged diff (#1129).
+   *
+   * An amend's records describe the commit it produces, so their diff evidence
+   * is `HEAD^..index`, while every binding -- `staged_diff_hash`, and the hook's
+   * check at commit time -- stays on `git diff --cached`, which is what git
+   * compares against while the amend is running. This moves the prompt and
+   * `source_hashes.diff` only, so verify must be handed the same bytes.
+   */
+  evidenceDiff?: string;
 }
 
 /** A historical index snapshot supplied by the read-only shadow runner. */
@@ -210,6 +220,7 @@ const prepareValues = (opts: {
   readOnly: boolean;
   skipGuard?: boolean;
   unattended?: boolean;
+  evidenceDiff?: string;
   trustedAuthors?: readonly string[];
   requireSignedDirective?: boolean;
   trustedSignerFingerprints?: readonly string[];
@@ -236,9 +247,13 @@ const prepareValues = (opts: {
     );
   }
 
+  // What the records are checked against. The same as the staged diff except
+  // for an amend (#1129), where the bindings above stay on the staged diff.
+  const evidenceDiff = opts.evidenceDiff ?? diff;
+
   const sourceHashes = {
     transcript: createHash('sha256').update(transcript).digest('hex'),
-    diff: stagedDiffHash,
+    diff: evidenceDiff === diff ? stagedDiffHash : createHash('sha256').update(evidenceDiff).digest('hex'),
   };
 
   const policy = resolvePolicy(cwd);
@@ -269,7 +284,7 @@ const prepareValues = (opts: {
     );
   }
 
-  const diffPaths = extractPathsFromDiff(diff);
+  const diffPaths = extractPathsFromDiff(evidenceDiff);
   // Windowed once, then used for both the advisory and the prompt. The guard
   // reads the same bytes the model is shown: an advisory computed over the
   // whole session could warn about a decision that is not in the prompt at all,
@@ -290,7 +305,7 @@ const prepareValues = (opts: {
           : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
       });
 
-  const harvest = buildHarvestPromptWithWindow({ transcript, diff }, windowed);
+  const harvest = buildHarvestPromptWithWindow({ transcript, diff: evidenceDiff }, windowed);
 
   return {
     base_head: baseHead,

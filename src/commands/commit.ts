@@ -310,6 +310,9 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
     ...(opts.draft === undefined ? {} : { draft: opts.draft }),
     ...(opts.draftPath === undefined ? {} : { draftPath: opts.draftPath }),
     allOrNothing: true,
+    // The records describe the commit the amend produces, so their diff
+    // evidence is checked against its parent rather than against HEAD (#1129).
+    ...(opts.amend === true ? { amend: true } : {}),
   });
 
   const rejected = capture.rejected ?? [];

@@ -33,7 +33,7 @@ import {
   type CaptureOutcome,
 } from '../core/capture-outcome.js';
 import { runCaptureShadow, type CaptureShadowResult } from '../core/capture-shadow.js';
-import { execGitOrThrow } from '../core/git.js';
+import { execGit, execGitOrThrow } from '../core/git.js';
 import {
   configuredSignedDirectivesRequired,
   configuredTrustedSignerFingerprints,
@@ -160,6 +160,24 @@ const readCallerFile = (path: string): string => {
   }
 };
 
+/**
+ * The diff the amended commit will carry: its parent to the index (#1129).
+ *
+ * The staged diff is the change since HEAD, which during an amend is only what
+ * was added to the commit -- quoting the commit's own content was refused, and
+ * a message-only amend had no diff to cite at all. A root commit has no parent,
+ * so its diff starts from the empty tree, asked of git so a SHA-256 repository
+ * gets its own.
+ */
+const amendedCommitDiff = (cwd: string): string => {
+  const parent = execGit(['rev-parse', '--verify', '--quiet', 'HEAD^'], { cwd });
+  const base =
+    parent.code === 0
+      ? parent.stdout.trim()
+      : execGitOrThrow(['hash-object', '-t', 'tree', '--stdin'], { cwd, stdin: '' }).trim();
+  return execGitOrThrow(['diff', '--cached', base], { cwd });
+};
+
 const failureResult = (error: unknown): CaptureResult => ({
   outcome: classifyCaptureError(error),
   nonce: null,
@@ -199,6 +217,8 @@ export const runCapture = (opts: {
    * promises all or nothing; `capture` stages the survivors and names the rest.
    */
   allOrNothing?: boolean;
+  /** The records describe the commit `git commit --amend` will produce (#1129). */
+  amend?: boolean;
 }): CaptureResult => {
   try {
     return runCapturePipeline(opts);
@@ -219,6 +239,7 @@ const runCapturePipeline = (opts: {
   trustedSignerFingerprints?: readonly string[];
   unattended?: boolean;
   allOrNothing?: boolean;
+  amend?: boolean;
 }): CaptureResult => {
   const { diffPath, cwd } = opts;
 
@@ -255,7 +276,9 @@ const runCapturePipeline = (opts: {
   // to the flag. The reporter re-checked quotes and locators that were never
   // wrong. It is refused here instead, before prepare, naming the flag.
   const callerDiff = diffPath === undefined ? undefined : readCallerFile(diffPath);
-  const diff = execGitOrThrow(['diff', '--cached'], { cwd });
+  const staged = execGitOrThrow(['diff', '--cached'], { cwd });
+  const replacing = opts.amend === true ? execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim() : undefined;
+  const diff = replacing === undefined ? staged : amendedCommitDiff(cwd);
   if (callerDiff !== undefined && callerDiff !== diff) {
     throw markCaptureError(
       new Error(
@@ -279,6 +302,7 @@ const runCapturePipeline = (opts: {
       ? {}
       : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
     ...(opts.unattended === true ? { unattended: true } : {}),
+    ...(diff === staged ? {} : { evidenceDiff: diff }),
   });
   if (prepareResult.policy_error !== null) {
     // The defaults ran. Say which policy actually applied rather than letting a
@@ -344,6 +368,7 @@ const runCapturePipeline = (opts: {
     transcript,
     diff,
     cwd,
+    ...(replacing === undefined ? {} : { replacing }),
   });
 
   const rejected: CaptureRejectionReport[] = [
