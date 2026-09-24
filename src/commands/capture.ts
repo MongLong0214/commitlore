@@ -41,7 +41,7 @@ import {
 } from '../core/trusted-authors.js';
 import { parseDraft, type TranscriptWindow } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
-import type { GuardAdvisory } from '../core/pending.js';
+import { deletePending, type GuardAdvisory } from '../core/pending.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -194,6 +194,11 @@ export const runCapture = (opts: {
    * repository opted in — the CLI never decides consent on its own.
    */
   unattended?: boolean;
+  /**
+   * Stage nothing unless every record verified (#1127). `commitlore commit`
+   * promises all or nothing; `capture` stages the survivors and names the rest.
+   */
+  allOrNothing?: boolean;
 }): CaptureResult => {
   try {
     return runCapturePipeline(opts);
@@ -213,6 +218,7 @@ const runCapturePipeline = (opts: {
   requireSignedDirective?: boolean;
   trustedSignerFingerprints?: readonly string[];
   unattended?: boolean;
+  allOrNothing?: boolean;
 }): CaptureResult => {
   const { diffPath, cwd } = opts;
 
@@ -340,6 +346,34 @@ const runCapturePipeline = (opts: {
     cwd,
   });
 
+  const rejected: CaptureRejectionReport[] = [
+    ...draftRejections,
+    ...verifyResult.rejected.map((rejection, index) => ({
+      index,
+      rule: rejection.reason,
+      detail: rejection.detail,
+      reason: rejection.reason,
+    })),
+  ];
+
+  /*
+   * #1127. Without this the survivors of a partial draft were staged -- and the
+   * tree bound as `recorded` -- before `commitlore commit` reported the refusal,
+   * so the next plain `git commit` carried a record from a call that said it
+   * bound nothing. The verified transaction is this call's own and is removed,
+   * so `pending ls` does not show a capture waiting for a commit either.
+   */
+  if (opts.allOrNothing === true && rejected.length > 0) {
+    deletePending(prepareResult.nonce, { cwd });
+    return {
+      outcome: 'rejected',
+      nonce: prepareResult.nonce,
+      staged: false,
+      guard_advisory: prepareResult.guard_advisory,
+      rejected,
+    };
+  }
+
   // 4. Stage — passes ONLY the nonce and cwd to stage (CEO amendment)
   //    Never forwards base_head, diff hash, policy hash, or timestamp.
   //
@@ -350,25 +384,23 @@ const runCapturePipeline = (opts: {
   // call's `accepted` would restate that decision in a second place, agreeing
   // today and free to drift tomorrow; it was written, measured against the same
   // test, and found to change nothing.
-  const stagedNonce = stageCaptureRecord({
-    nonce: prepareResult.nonce,
-    cwd,
-    // The receipt this run's own verification was issued (#1005). Taken from
-    // the result rather than re-read from the transaction, which is the point:
-    // a caller presents what its verification returned, and a caller whose
-    // verification bound nothing has nothing to present.
-    ...(verifyResult.receipt === undefined ? {} : { receipt: verifyResult.receipt }),
-  });
-
-  const rejected: CaptureRejectionReport[] = [
-    ...draftRejections,
-    ...verifyResult.rejected.map((rejection, index) => ({
-      index,
-      rule: rejection.reason,
-      detail: rejection.detail,
-      reason: rejection.reason,
-    })),
-  ];
+  let stagedNonce: string | null;
+  try {
+    stagedNonce = stageCaptureRecord({
+      nonce: prepareResult.nonce,
+      cwd,
+      // The receipt this run's own verification was issued (#1005). Taken from
+      // the result rather than re-read from the transaction, which is the point:
+      // a caller presents what its verification returned, and a caller whose
+      // verification bound nothing has nothing to present.
+      ...(verifyResult.receipt === undefined ? {} : { receipt: verifyResult.receipt }),
+    });
+  } catch (error) {
+    // The rejections were computed before stage threw, and dropping them with
+    // the throw is how #1127's refused record disappeared from every output.
+    if (opts.allOrNothing === true) deletePending(prepareResult.nonce, { cwd });
+    return { ...failureResult(error), guard_advisory: prepareResult.guard_advisory, rejected };
+  }
 
   if (stagedNonce !== null) {
     return {

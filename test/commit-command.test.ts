@@ -31,6 +31,7 @@ import { runCapture } from '../src/commands/capture.js';
 import { recordLanded, runCommit } from '../src/commands/commit.js';
 import { installHook } from '../src/commands/hooks.js';
 import { readConsideration } from '../src/core/commit-consideration.js';
+import { listPendingNonces, readPending } from '../src/core/pending.js';
 import { installPrepareCommitMsgHook } from '../src/hooks/prepare-commit-msg.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -461,5 +462,100 @@ describe('the five-step flow satisfies the gate', () => {
 
     expect(capture.outcome).toBe('rejected');
     expect(readConsideration(cwd)).toBeNull();
+  });
+});
+
+/*
+ * #1127. A draft of several records committed with none of them, and the
+ * output called that a complete answer. Two routes reached it, and both are
+ * driven here from the reported shape rather than from the repair:
+ *
+ *  - every record verified, and staging then threw on
+ *    `max_records_per_commit` (1 by default). `runCommit` read any outcome
+ *    other than `staged` as "the draft held no records" and committed;
+ *  - one record verified and one did not. The survivor was staged, and bound,
+ *    before `runCommit` reported the refusal -- so the next plain `git commit`
+ *    would have carried a record from a call that said it bound nothing.
+ */
+describe('a draft of several records is all or nothing too (#1127)', () => {
+  const TWO_LINES =
+    'We chose sha256 because it is the standard hash function for integrity checking.\n' +
+    'The timeout stays at five seconds because the upstream service drops idle sockets.\n';
+
+  const record = (key: string, value: string, quote: string, locator: string, id: string) => ({
+    trailers: [
+      { key, value },
+      { key: 'Record-Id', value: id },
+    ],
+    evidence: [{ key, source: 'transcript', quote, locator }],
+  });
+
+  const limit = (id: string) =>
+    record('Limit', 'use sha256 for integrity checking', 'chose sha256 because it is the standard hash function', 'L1-L1', id);
+  const warn = (id: string) =>
+    record('Warn', 'the timeout stays at five seconds', 'The timeout stays at five seconds because the upstream service drops idle sockets', 'L2-L2', id);
+
+  const stagedNonces = (cwd: string): string[] =>
+    listPendingNonces(cwd).nonces.filter((nonce) => readPending(nonce, { cwd })?.phase === 'staged');
+
+  it('refuses when the records verify but exceed max_records_per_commit, and commits nothing', () => {
+    const { cwd } = repo('over-max');
+    const before = head(cwd);
+
+    const outcome = runCommit({
+      cwd,
+      message: 'feat: two records',
+      transcript: TWO_LINES,
+      draft: JSON.stringify({ records: [limit('r-overmax01'), warn('r-overmax02')] }),
+    });
+
+    expect(outcome.outcome).not.toBe('empty');
+    expect(outcome.outcome).toBe('error');
+    expect(head(cwd)).toBe(before);
+    expect(outcome.lines.join('\n')).toMatch(/max_records_per_commit/);
+    expect(readConsideration(cwd)).toBeNull();
+  });
+
+  it('shows the refused record and stages none of the survivors', () => {
+    const { cwd } = repo('partial');
+    const before = head(cwd);
+
+    const outcome = runCommit({
+      cwd,
+      message: 'feat: one good, one bad',
+      transcript: TWO_LINES,
+      draft: JSON.stringify({
+        records: [
+          limit('r-partial01'),
+          record('Warn', 'nothing supports this', 'this sentence is nowhere in the transcript', 'L2-L2', 'r-partial02'),
+        ],
+      }),
+    });
+
+    expect(outcome.outcome).toBe('refused');
+    expect(outcome.rejected).toHaveLength(1);
+    expect(head(cwd)).toBe(before);
+    expect(stagedNonces(cwd)).toEqual([]);
+    expect(readConsideration(cwd)).toBeNull();
+
+    // The control: the next ordinary commit must not pick a survivor up.
+    git(cwd, ['commit', '--quiet', '-m', 'chore: an ordinary commit afterwards']);
+    expect(headBody(cwd)).not.toContain('Record-Id:');
+  });
+
+  it('--no-commit refuses the same way rather than reporting an empty draft', () => {
+    const { cwd } = repo('over-max-nocommit');
+
+    const outcome = runCommit({
+      cwd,
+      message: 'feat: two records',
+      transcript: TWO_LINES,
+      draft: JSON.stringify({ records: [limit('r-overmax03'), warn('r-overmax04')] }),
+      commit: false,
+    });
+
+    expect(outcome.outcome).toBe('error');
+    expect(outcome.lines.join('\n')).not.toContain('held no records');
+    expect(stagedNonces(cwd)).toEqual([]);
   });
 });
