@@ -76,7 +76,7 @@ describe('Codex plugin installation', () => {
                 ],
               }),
             )
-          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.7.1 /tmp/commitlore\n');
+          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 999.0.0 /tmp/commitlore\n');
       },
     });
 
@@ -86,6 +86,77 @@ describe('Codex plugin installation', () => {
       ['plugin', 'list'],
     ]);
     expect(installed.report.join('\n')).toContain('Codex plugin already installed: commitlore@commitlore');
+  });
+
+  // #1134. The rows above use a version no release will reach, because "already
+  // installed" now means "already current": a plugin older than the running CLI
+  // is upgraded. A literal release version there would turn every release into
+  // a test failure (#680).
+  describe('a plugin installed at an older version (#1134)', () => {
+    const ours = result(
+      JSON.stringify({
+        marketplaces: [
+          { name: 'commitlore', marketplaceSource: { sourceType: 'git', source: 'https://github.com/MongLong0214/commitlore.git' } },
+        ],
+      }),
+    );
+    const row = (version: string): CodexCommandResult =>
+      result(`PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled ${version} /tmp/commitlore\n`);
+
+    it('upgrades its marketplace, confirms the new version, and still claims no ownership', () => {
+      const calls: string[][] = [];
+      const home = dataHome();
+      const lists = [row('0.7.1'), row('999.0.0')];
+      const upgraded = installCodexPlugin({
+        dataHome: home,
+        run: (args) => {
+          calls.push([...args]);
+          if (args.join(' ') === 'plugin marketplace list --json') return ours;
+          if (args.join(' ') === 'plugin list') return lists.shift() ?? result('', 2);
+          return result();
+        },
+      });
+
+      expect(upgraded.exitCode).toBe(0);
+      expect(calls).toEqual([
+        ['plugin', 'marketplace', 'list', '--json'],
+        ['plugin', 'list'],
+        ['plugin', 'marketplace', 'upgrade', 'commitlore'],
+        ['plugin', 'list'],
+      ]);
+      expect(upgraded.report).toContain('upgraded Codex plugin: commitlore@commitlore 0.7.1 -> 999.0.0');
+      expect(existsSync(codexPluginMarkerPath(undefined, home))).toBe(false);
+    });
+
+    it('fails with what Codex said when the marketplace upgrade fails', () => {
+      const failed = installCodexPlugin({
+        dataHome: dataHome(),
+        run: (args) => {
+          if (args.join(' ') === 'plugin marketplace list --json') return ours;
+          if (args.join(' ') === 'plugin list') return row('0.7.1');
+          return { status: 1, stdout: '', stderr: 'fatal: unable to access the marketplace\n' };
+        },
+      });
+
+      expect(failed.exitCode).toBe(2);
+      expect(failed.report.join('\n')).toContain('is at 0.7.1, older than this install');
+      expect(failed.report).toContain('codex said: fatal: unable to access the marketplace');
+      expect(failed.report).toContain('retry with: codex plugin marketplace upgrade commitlore');
+    });
+
+    it('fails rather than reporting success when the upgrade leaves the old version', () => {
+      const stale = installCodexPlugin({
+        dataHome: dataHome(),
+        run: (args) => {
+          if (args.join(' ') === 'plugin marketplace list --json') return ours;
+          if (args.join(' ') === 'plugin list') return row('0.7.1');
+          return result();
+        },
+      });
+
+      expect(stale.exitCode).toBe(2);
+      expect(stale.report.join('\n')).toContain('is still at 0.7.1 after upgrading the commitlore marketplace');
+    });
   });
 
   // The marker is a claim of ownership and `uninstall` removes what it marks.
@@ -148,7 +219,7 @@ describe('Codex plugin installation', () => {
                 ],
               }),
             )
-          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.8.0 /tmp/c\n'),
+          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 999.0.0 /tmp/c\n'),
     });
 
     expect(installed.exitCode).toBe(0);
@@ -183,7 +254,7 @@ describe('Codex plugin installation', () => {
       run: (args) =>
         args.join(' ') === 'plugin marketplace list --json'
           ? result('MARKETPLACE ROOT\nopenai-bundled /tmp/bundled\n')
-          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.8.0 /tmp/c\n'),
+          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 999.0.0 /tmp/c\n'),
     });
 
     expect(installed.exitCode).toBe(0);
@@ -197,7 +268,7 @@ describe('Codex plugin installation', () => {
       run: (args) =>
         args.join(' ') === 'plugin marketplace list'
           ? result('MARKETPLACE ROOT\ncommitlore /tmp/commitlore\n')
-          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.7.1 /tmp/commitlore\n'),
+          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 999.0.0 /tmp/commitlore\n'),
     });
 
     expect(installed.exitCode).toBe(0);

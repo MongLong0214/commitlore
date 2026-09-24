@@ -302,3 +302,83 @@ describe('a slow synchronous host step does not time out the probes (#1137)', ()
     expect(result.summary.hosts).toContainEqual(expect.objectContaining({ host: 'cursor', outcome: 'owned', healthy: true }));
   }, 30_000);
 });
+
+/**
+ * #1134 — `claude plugin install` exits 0 for a plugin that is already
+ * installed at any version, and that exit was the verdict. The fake below keeps
+ * the installed version in a file: `plugin list --json` reports it and
+ * `plugin update` moves it only when the test says it can.
+ */
+describe('the Claude Code plugin is judged by the version it ends at (#1134)', () => {
+  const claudeAt = (root: string, installed: string, updateTo?: string) => {
+    const bin = join(root, 'host-bin');
+    mkdirSync(bin, { recursive: true });
+    const state = join(root, 'claude-plugin-version');
+    writeFileSync(state, installed);
+    const claude = join(bin, 'claude');
+    writeFileSync(claude, [
+      '#!/bin/sh',
+      `state=${JSON.stringify(state)}`,
+      'echo "$*" >> "$state.calls"',
+      'case "$1 $2" in',
+      '  "plugin list") printf \'[{"id":"commitlore@commitlore","version":"%s","scope":"user","enabled":true}]\\n\' "$(cat "$state")" ;;',
+      `  "plugin update") ${updateTo === undefined ? ':' : `printf %s ${JSON.stringify(updateTo)} > "$state"`} ;;`,
+      'esac',
+      'exit 0',
+      '',
+    ].join('\n'));
+    chmodSync(claude, 0o755);
+    return { env: { PATH: `${bin}${delimiter}${isolatedPath()}` }, calls: () => readFileSync(`${state}.calls`, 'utf8') };
+  };
+
+  it.skipIf(process.platform === 'win32')('updates a plugin found at an older version and reports the version it reached', () => {
+    const root = temporary();
+    const fake = claudeAt(root, '0.0.1', '999.0.0');
+    const result = run(join(root, 'home'), wrapper(root), fake.env);
+
+    expect(fake.calls()).toContain('plugin update commitlore@commitlore --scope user');
+    expect(result.summary.hosts).toContainEqual(expect.objectContaining({ host: 'claude-code', outcome: 'installed', healthy: true }));
+    expect(JSON.stringify(result.summary.hosts)).toContain('Claude Code plugin at 999.0.0');
+  });
+
+  it.skipIf(process.platform === 'win32')('fails, naming both versions, when the plugin is still older than this install', () => {
+    const root = temporary();
+    const fake = claudeAt(root, '0.0.1');
+    const result = run(join(root, 'home'), wrapper(root), fake.env);
+
+    expect(result.status).toBe(1);
+    expect(result.summary.hosts).toContainEqual(expect.objectContaining({ host: 'claude-code', outcome: 'failed', healthy: false }));
+    expect(JSON.stringify(result.summary.hosts)).toContain('still at 0.0.1, older than this install');
+  });
+});
+
+describe('a failed Codex plugin step keeps what Codex said (#1134)', () => {
+  it.skipIf(process.platform === 'win32')('carries the codex said line into the host detail', () => {
+    const root = temporary();
+    const ours = wrapper(root);
+    const bin = join(root, 'host-bin');
+    mkdirSync(bin);
+    const marketplaces = JSON.stringify({
+      marketplaces: [{ name: 'commitlore', marketplaceSource: { sourceType: 'git', source: 'https://github.com/MongLong0214/commitlore.git' } }],
+    });
+    const codex = join(bin, 'codex');
+    writeFileSync(codex, [
+      '#!/bin/sh',
+      'case "$*" in',
+      `  "mcp get commitlore") printf '  command: %s\\n  args: [mcp]\\n' ${JSON.stringify(ours)} ;;`,
+      `  "plugin marketplace list --json") printf '%s\\n' '${marketplaces}' ;;`,
+      '  "plugin list") echo "Could not resolve host: github.com" >&2; exit 1 ;;',
+      'esac',
+      'exit 0',
+      '',
+    ].join('\n'));
+    chmodSync(codex, 0o755);
+
+    const result = run(join(root, 'home'), ours, { PATH: `${bin}${delimiter}${isolatedPath()}` });
+    const host = result.summary.hosts.find((entry) => entry.host === 'codex') as { healthy: boolean; detail: string } | undefined;
+
+    expect(host?.healthy).toBe(false);
+    expect(host?.detail).toContain('could not list Codex plugins');
+    expect(host?.detail).toContain('codex said: Could not resolve host: github.com');
+  }, 30_000);
+});
