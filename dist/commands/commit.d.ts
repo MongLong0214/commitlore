@@ -40,7 +40,7 @@ export type CommitOutcome =
  | 'commit_failed'
 /** Committed, and the records are not in the message that landed. */
  | 'stripped'
-/** Nothing was attempted: not a repository, nothing staged, no hook. */
+/** Nothing was committed: not a repository, nothing staged, no hook, or the capture failed. */
  | 'error';
 export interface CommitResult {
     outcome: CommitOutcome;

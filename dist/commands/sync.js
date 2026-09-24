@@ -8,24 +8,49 @@
  * installed, a mirror that needs collecting without a push, and finding out
  * what would happen before it does.
  */
-import { syncNeedsAttention, syncNotes } from '../core/sync.js';
-/** Exit 2 when a remote needs a human. Everything else is 0. */
+import { SYNC_REMOTE_CONFIG, resolveSyncRemotes, syncNeedsAttention, syncNotes, } from '../core/sync.js';
+/** Exit 2 when a remote needs a human, or no remote could be chosen. Everything else is 0. */
 export const SYNC_ATTENTION_EXIT = 2;
 const line = (result) => {
     const detail = result.detail === '' ? result.outcome : result.detail;
     return `${result.remote.padEnd(12)} ${result.outcome.padEnd(14)} ${detail}`;
 };
+const CHOSEN_BY = {
+    named: 'the remotes named with --remote',
+    configured: `the remotes listed in ${SYNC_REMOTE_CONFIG}`,
+    'push-remote': "this branch's push remote",
+    origin: 'origin, since this branch has no push remote',
+    'only-remote': 'the only remote',
+    none: 'no remote',
+};
 export const runSync = (options = {}) => {
-    const results = syncNotes({
-        ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    const cwd = options.cwd === undefined ? {} : { cwd: options.cwd };
+    // Resolved here as well as inside `syncNotes` so the remotes left alone can
+    // be named (#1128): a remote nobody chose is reported, never written to.
+    const targets = resolveSyncRemotes({
+        ...cwd,
         ...(options.remote === undefined || options.remote.length === 0 ? {} : { remotes: options.remote }),
+    });
+    const results = syncNotes({
+        ...cwd,
+        remotes: targets.remotes,
         ...(options.fetchOnly === undefined ? {} : { fetchOnly: options.fetchOnly }),
         ...(options.dryRun === undefined ? {} : { dryRun: options.dryRun }),
     });
+    const unchosen = targets.source === 'none' && targets.skipped.length > 0;
+    const code = unchosen || syncNeedsAttention(results) ? SYNC_ATTENTION_EXIT : 0;
     if (options.json === true) {
         return {
-            code: syncNeedsAttention(results) ? SYNC_ATTENTION_EXIT : 0,
-            stdout: `${JSON.stringify({ remotes: results }, null, 2)}\n`,
+            code,
+            stdout: `${JSON.stringify({ remotes: results, skipped: targets.skipped, source: targets.source }, null, 2)}\n`,
+        };
+    }
+    if (unchosen) {
+        return {
+            code,
+            stdout: `not synced: ${targets.skipped.join(', ')} — this branch has no push remote and none is called origin, ` +
+                `so no remote was chosen; name one with --remote, or list them with ` +
+                `git config --add ${SYNC_REMOTE_CONFIG} <remote>\n`,
         };
     }
     if (results.length === 0) {
@@ -33,16 +58,16 @@ export const runSync = (options = {}) => {
         // saying so is a truer answer than an empty table.
         return { code: 0, stdout: 'no remotes configured — the mirror has nowhere to go\n' };
     }
-    return {
-        code: syncNeedsAttention(results) ? SYNC_ATTENTION_EXIT : 0,
-        stdout: `${results.map(line).join('\n')}\n`,
-    };
+    const skipped = targets.source === 'named' || targets.skipped.length === 0
+        ? []
+        : [`not synced: ${targets.skipped.join(', ')} — sync writes only to ${CHOSEN_BY[targets.source]}; name one with --remote to sync it`];
+    return { code, stdout: `${[...results.map(line), ...skipped].join('\n')}\n` };
 };
 export const register = (program) => {
     program
         .command('sync')
         .description('publish and collect the notes mirror (the pre-push hook runs this for you)')
-        .option('--remote <name>', 'sync only this remote (repeatable)', (value, previous = []) => [
+        .option('--remote <name>', "sync this remote instead of the branch's push remote (repeatable)", (value, previous = []) => [
         ...previous,
         value,
     ])

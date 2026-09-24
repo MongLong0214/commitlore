@@ -48,7 +48,13 @@ export type SyncOutcome =
 /** Refused: git would not merge the two sides, so nothing was written. */
  | 'diverged'
 /** git or the network refused. `detail` says what it said. */
- | 'failed';
+ | 'failed'
+/**
+ * A dry run's plan: the transfer this call would have made and did not
+ * (#1128). Kept apart from `fetched`, `pushed` and `merged` so that no
+ * outcome describing a write is ever reported for one that did not happen.
+ */
+ | 'would-fetch' | 'would-push' | 'would-merge';
 export interface SyncResult {
     readonly remote: string;
     readonly outcome: SyncOutcome;
@@ -56,7 +62,7 @@ export interface SyncResult {
     readonly detail: string;
 }
 export interface SyncOptions extends NotesOptions {
-    /** Remotes to sync. Defaults to every configured remote. */
+    /** Remotes to sync. Defaults to the ones `resolveSyncRemotes` chooses, never every remote. */
     readonly remotes?: readonly string[];
     /** Collect from the remote but publish nothing. */
     readonly fetchOnly?: boolean;
@@ -76,8 +82,47 @@ export declare const classifyFailureDetail: (detail: string) => string;
  * ref makes the three-way comparison below possible at all.
  */
 export declare const syncRemote: (remote: string, opts?: SyncOptions) => SyncResult;
+/** The git config key listing the remotes a sync writes to by default (#1128). */
+export declare const SYNC_REMOTE_CONFIG = "commitlore.syncRemote";
+/** Why a sync chose the remotes it did. */
+export type SyncRemoteSource = 
+/** Named by the caller: `--remote`, or the remote git is pushing to. */
+'named'
+/** Listed in `commitlore.syncRemote`. */
+ | 'configured'
+/** The current branch's push remote, resolved as `git push` resolves it. */
+ | 'push-remote'
+/** No push remote is configured, so `origin`, as `git push` falls back to. */
+ | 'origin'
+/** The repository has exactly one remote. */
+ | 'only-remote'
+/** Several remotes and nothing to choose between them, or none at all. */
+ | 'none';
+export interface SyncTargets {
+    readonly remotes: readonly string[];
+    /** Configured remotes this sync leaves alone: never fetched, never written. */
+    readonly skipped: readonly string[];
+    readonly source: SyncRemoteSource;
+}
 /**
- * Synchronise every configured remote, or the ones named.
+ * The remotes a sync writes to when the caller names none (#1128).
+ *
+ * It used to be every configured remote, and a remote is often added only to
+ * read from it -- a contributor's fork, fetched to check out a pull request.
+ * Publishing the mirror there sends every record in the repository to someone
+ * else's repository, and a fork that allows edits by maintainers accepts it.
+ * The refusals from forks that did not were reported as failures to fix.
+ *
+ * So the default is the remote this branch is pushed to, which is where its
+ * code goes and so where the records describing it belong: the list in
+ * `commitlore.syncRemote` when one is set, else the push remote in the order
+ * `git push` reads it, else `origin`, else the only remote. With several
+ * remotes and nothing to choose between them it chooses none, because every
+ * guess here is a write to a remote nobody picked.
+ */
+export declare const resolveSyncRemotes: (opts?: SyncOptions) => SyncTargets;
+/**
+ * Synchronise the remotes `resolveSyncRemotes` chooses, or the ones named.
  *
  * A repository with no remote returns an empty list rather than an error: there
  * is nowhere to publish to, which is a state and not a fault.

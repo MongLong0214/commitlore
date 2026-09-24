@@ -129,7 +129,7 @@ export const syncRemote = (remote, opts = {}) => {
     // Only the remote has records: adopt them.
     if (local === null && theirs !== null) {
         if (opts.dryRun === true) {
-            return { remote, outcome: 'fetched', detail: 'would collect the remote mirror' };
+            return { remote, outcome: 'would-fetch', detail: 'would collect the remote mirror' };
         }
         const updated = execGit(['update-ref', NOTES_REF, theirs], gitOptions(opts));
         return updated.code === 0
@@ -142,7 +142,7 @@ export const syncRemote = (remote, opts = {}) => {
         // The remote is ahead: take it, nothing of ours is lost.
         if (isAncestor(local, theirs, opts)) {
             if (opts.dryRun === true) {
-                return { remote, outcome: 'fetched', detail: 'would fast-forward to the remote mirror' };
+                return { remote, outcome: 'would-fetch', detail: 'would fast-forward to the remote mirror' };
             }
             const updated = execGit(['update-ref', NOTES_REF, theirs], gitOptions(opts));
             return updated.code === 0
@@ -160,7 +160,7 @@ export const syncRemote = (remote, opts = {}) => {
         // rather than left to be discovered.
         if (!isAncestor(theirs, local, opts)) {
             if (opts.dryRun === true) {
-                return { remote, outcome: 'merged', detail: 'would merge both mirrors' };
+                return { remote, outcome: 'would-merge', detail: 'would merge both mirrors' };
             }
             const merged = execGit(['notes', `--ref=${NOTES_REF}`, 'merge', '-s', 'cat_sort_uniq', FETCH_HEAD_REF], gitOptions(opts));
             if (merged.code !== 0) {
@@ -184,23 +184,76 @@ export const syncRemote = (remote, opts = {}) => {
         return { remote, outcome: 'in-sync', detail: 'local records are not published (--fetch-only)' };
     }
     if (opts.dryRun === true) {
-        return { remote, outcome: 'pushed', detail: 'would publish the local mirror' };
+        return { remote, outcome: 'would-push', detail: 'would publish the local mirror' };
     }
     const pushed = pushMirror(remote, opts);
     return pushed.code === 0
         ? { remote, outcome: 'pushed', detail: 'published the local mirror' }
         : failure(remote, pushed.stderr.trim() || `git push ${remote} failed`);
 };
+/** The git config key listing the remotes a sync writes to by default (#1128). */
+export const SYNC_REMOTE_CONFIG = 'commitlore.syncRemote';
+const configValues = (key, opts) => {
+    // Exit 1 means "key not set", which is an answer, not a failure.
+    const result = execGit(['config', '--get-all', key], gitOptions(opts));
+    if (result.code !== 0)
+        return [];
+    return result.stdout.split('\n').map((value) => value.trim()).filter((value) => value.length > 0);
+};
+const configValue = (key, opts) => configValues(key, opts).at(-1) ?? null;
+/** The remote `git push` with no arguments would use, or null when none is configured. */
+const pushRemote = (opts) => {
+    const head = execGit(['symbolic-ref', '--quiet', '--short', 'HEAD'], gitOptions(opts));
+    const branch = head.code === 0 ? head.stdout.trim() : '';
+    const forBranch = (key) => branch === '' ? null : configValue(`branch.${branch}.${key}`, opts);
+    return forBranch('pushRemote') ?? configValue('remote.pushDefault', opts) ?? forBranch('remote');
+};
 /**
- * Synchronise every configured remote, or the ones named.
+ * The remotes a sync writes to when the caller names none (#1128).
+ *
+ * It used to be every configured remote, and a remote is often added only to
+ * read from it -- a contributor's fork, fetched to check out a pull request.
+ * Publishing the mirror there sends every record in the repository to someone
+ * else's repository, and a fork that allows edits by maintainers accepts it.
+ * The refusals from forks that did not were reported as failures to fix.
+ *
+ * So the default is the remote this branch is pushed to, which is where its
+ * code goes and so where the records describing it belong: the list in
+ * `commitlore.syncRemote` when one is set, else the push remote in the order
+ * `git push` reads it, else `origin`, else the only remote. With several
+ * remotes and nothing to choose between them it chooses none, because every
+ * guess here is a write to a remote nobody picked.
+ */
+export const resolveSyncRemotes = (opts = {}) => {
+    const configured = listRemotes(opts);
+    const target = (remotes, source) => ({
+        remotes,
+        skipped: configured.filter((remote) => !remotes.includes(remote)),
+        source,
+    });
+    if (opts.remotes !== undefined)
+        return target(opts.remotes, 'named');
+    // A listed name that is not a remote is kept: syncing it fails and says so,
+    // where dropping it would hide the typo behind a sync that looked complete.
+    const listed = [...new Set(configValues(SYNC_REMOTE_CONFIG, opts))];
+    if (listed.length > 0)
+        return target(listed, 'configured');
+    const push = pushRemote(opts);
+    if (push !== null && configured.includes(push))
+        return target([push], 'push-remote');
+    if (configured.includes('origin'))
+        return target(['origin'], 'origin');
+    if (configured.length === 1)
+        return target(configured, 'only-remote');
+    return target([], 'none');
+};
+/**
+ * Synchronise the remotes `resolveSyncRemotes` chooses, or the ones named.
  *
  * A repository with no remote returns an empty list rather than an error: there
  * is nowhere to publish to, which is a state and not a fault.
  */
-export const syncNotes = (opts = {}) => {
-    const remotes = opts.remotes ?? listRemotes(opts);
-    return remotes.map((remote) => syncRemote(remote, opts));
-};
+export const syncNotes = (opts = {}) => resolveSyncRemotes(opts).remotes.map((remote) => syncRemote(remote, opts));
 /** Whether any remote reported something a user would want to act on. */
 export const syncNeedsAttention = (results) => results.some((result) => result.outcome === 'failed' || result.outcome === 'diverged');
 //# sourceMappingURL=sync.js.map

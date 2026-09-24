@@ -156,17 +156,20 @@ const rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
     }
     return remaining;
 };
+const declaredOnlyBy = (rec, commit) => (rec.shas.length > 0 ? rec.shas : [rec.sha]).every((sha) => sha === commit);
 /**
  * Read the active records exactly as verification does, without touching the
  * derived index. A caller with a known read-only history can provide it through
  * `VerifyCaptureOptions.history` instead.
  */
-export const loadCaptureVerificationHistory = (cwd) => {
+export const loadCaptureVerificationHistory = (cwd, replacing) => {
     try {
         const recordIds = new Set();
         const activeCanonicalTuples = new Set();
         const queryResult = runQuery({ cwd, noIndex: true, allHistory: true });
         for (const rec of queryResult.records) {
+            if (replacing !== undefined && declaredOnlyBy(rec, replacing))
+                continue;
             const idTrailer = rec.trailers.find((t) => t.key === 'Record-Id');
             if (idTrailer)
                 recordIds.add(idTrailer.value);
@@ -487,7 +490,7 @@ const runVerifyCaptureRecords = (opts) => {
             return settle(result);
         }
         // 3. Load active records for duplicate checking
-        const history = opts.history === undefined ? loadCaptureVerificationHistory(cwd) : opts.history;
+        const history = opts.history === undefined ? loadCaptureVerificationHistory(cwd, opts.replacing) : opts.history;
         if (history === null) {
             // If we can't read active records, we cannot be sure → incomplete
             const result = {

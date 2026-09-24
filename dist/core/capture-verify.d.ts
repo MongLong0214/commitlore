@@ -48,6 +48,13 @@ export interface VerifyCaptureOptions {
     readOnly?: boolean;
     /** A read-only snapshot of active records, reusable across a historical run. */
     history?: CaptureVerificationHistory | null;
+    /**
+     * The commit an amend replaces (#1129). A record declared by it alone is the
+     * one being carried over, not a duplicate of it -- the same distinction the
+     * amend marker gives `commit-msg` (#638). Set only by a caller that knows it
+     * is amending: dropping HEAD unconditionally is what r-amendid430 ruled out.
+     */
+    replacing?: string;
 }
 export interface CaptureRejection {
     record: DraftRecord;
@@ -118,7 +125,7 @@ export declare const captureCanonicalTuple: (trailers: readonly {
  * derived index. A caller with a known read-only history can provide it through
  * `VerifyCaptureOptions.history` instead.
  */
-export declare const loadCaptureVerificationHistory: (cwd: string) => CaptureVerificationHistory | null;
+export declare const loadCaptureVerificationHistory: (cwd: string, replacing?: string) => CaptureVerificationHistory | null;
 /**
  * Verifies capture records against the transcript and diff.
  *
