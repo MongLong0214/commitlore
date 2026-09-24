@@ -17,6 +17,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { NOTES_REF, NOTES_REFSPEC, forcesNotes, readRecord, writeRecord } from '../src/core/notes.js';
+import { runSync } from '../src/commands/sync.js';
 import { classifyFailureDetail, syncNotes } from '../src/core/sync.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -165,7 +166,7 @@ describe('#416 the notes mirror completes a round trip between two clones', () =
     const sha = git(alice, ['rev-parse', 'HEAD']).trim();
     writeRecord(sha, record('unpublished'), { cwd: alice });
 
-    expect(syncNotes({ cwd: alice, dryRun: true }).map((r) => r.outcome)).toEqual(['pushed']);
+    expect(syncNotes({ cwd: alice, dryRun: true }).map((r) => r.outcome)).toEqual(['would-push']);
 
     git(bob, ['fetch', '--quiet', 'origin']);
     expect(readRecord(sha, { cwd: bob })).toEqual([]);
@@ -280,5 +281,96 @@ describe('#416 the notes mirror completes a round trip between two clones', () =
     expect(results.map((r) => r.outcome)).toEqual(['failed']);
     expect(git(alice, ['rev-parse', NOTES_REF]).trim()).toBe(before);
     expect(readRecord(sha, { cwd: alice }).map((t) => t.value)).toContain('local only');
+  });
+});
+
+describe('#1128 sync writes only to the remote the branch is pushed to', () => {
+  /** A second bare remote: the shape of a contributor's fork added to fetch a PR branch. */
+  const addRemote = (cwd: string, name: string): string => {
+    const bare = createTestRepo({ path: temp(`${name}-remote`), bare: true });
+    git(cwd, ['remote', 'add', name, bare]);
+    return bare;
+  };
+
+  const hasMirror = (bare: string): boolean =>
+    execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], { cwd: bare }).code === 0;
+
+  const withRecord = (label: string): { origin: string; alice: string } => {
+    const { origin, alice } = team(label);
+    writeRecord(git(alice, ['rev-parse', 'HEAD']).trim(), record('internal decision'), { cwd: alice });
+    return { origin, alice };
+  };
+
+  it('publishes to the push remote and never writes to a fork', () => {
+    const { origin, alice } = withRecord('fork');
+    const fork = addRemote(alice, 'pr54-fork');
+
+    const results = syncNotes({ cwd: alice });
+
+    expect(results.map((r) => [r.remote, r.outcome])).toEqual([['origin', 'pushed']]);
+    expect(hasMirror(origin)).toBe(true);
+    expect(hasMirror(fork), 'the fork was written to').toBe(false);
+  });
+
+  it('resolves the push remote the way git push does', () => {
+    const { origin, alice } = withRecord('pushremote');
+    const mine = addRemote(alice, 'mine');
+    const branch = git(alice, ['symbolic-ref', '--short', 'HEAD']).trim();
+    git(alice, ['config', 'remote.pushDefault', 'origin']);
+    git(alice, ['config', `branch.${branch}.pushRemote`, 'mine']);
+
+    expect(syncNotes({ cwd: alice }).map((r) => [r.remote, r.outcome])).toEqual([['mine', 'pushed']]);
+    expect(hasMirror(mine)).toBe(true);
+    expect(hasMirror(origin)).toBe(false);
+  });
+
+  it('syncs the remotes listed in commitlore.syncRemote instead', () => {
+    const { origin, alice } = withRecord('configured');
+    const upstream = addRemote(alice, 'upstream');
+    const fork = addRemote(alice, 'pr270-fork');
+    git(alice, ['config', '--add', 'commitlore.syncRemote', 'upstream']);
+    git(alice, ['config', '--add', 'commitlore.syncRemote', 'origin']);
+
+    expect(syncNotes({ cwd: alice }).map((r) => r.remote)).toEqual(['upstream', 'origin']);
+    expect([hasMirror(upstream), hasMirror(origin), hasMirror(fork)]).toEqual([true, true, false]);
+  });
+
+  it('writes nowhere when it cannot tell which remote is meant, and says so', () => {
+    const { alice } = withRecord('ambiguous');
+    const a = addRemote(alice, 'a');
+    const b = addRemote(alice, 'b');
+    git(alice, ['remote', 'remove', 'origin']);
+
+    expect(syncNotes({ cwd: alice })).toEqual([]);
+    const out = runSync({ cwd: alice });
+    expect(out.code).toBe(2);
+    expect(out.stdout).toContain('--remote');
+    expect(out.stdout).toContain('not synced: a, b');
+    expect([hasMirror(a), hasMirror(b)]).toEqual([false, false]);
+  });
+
+  it('writes to a remote that is named, fork or not', () => {
+    const { origin, alice } = withRecord('named');
+    const fork = addRemote(alice, 'pr54-fork');
+
+    expect(runSync({ cwd: alice, remote: ['pr54-fork'] }).code).toBe(0);
+    expect([hasMirror(fork), hasMirror(origin)]).toEqual([true, false]);
+  });
+
+  it('names the remotes it left alone, and a dry run says what it would do', () => {
+    const { origin, alice } = withRecord('reported');
+    addRemote(alice, 'pr54-fork');
+
+    const text = runSync({ cwd: alice, dryRun: true });
+    expect(text.stdout).toMatch(/^origin\s+would-push\s/m);
+    expect(text.stdout).toContain('not synced: pr54-fork');
+
+    const json = JSON.parse(runSync({ cwd: alice, dryRun: true, json: true }).stdout) as {
+      remotes: { remote: string; outcome: string }[];
+      skipped: string[];
+    };
+    expect(json.remotes.map((r) => [r.remote, r.outcome])).toEqual([['origin', 'would-push']]);
+    expect(json.skipped).toEqual(['pr54-fork']);
+    expect(hasMirror(origin)).toBe(false);
   });
 });
