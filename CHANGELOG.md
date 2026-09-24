@@ -4,6 +4,49 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.6.0
+
+`commitlore sync` no longer publishes the notes mirror to every remote.
+
+With no `--remote`, sync used to write `refs/notes/commitlore` to every
+configured remote, including forks added only to fetch a pull request. The
+refusals from forks this account could not write to were reported as `failed`.
+A fork that allows edits by maintainers would have accepted the push, and the
+mirror carries every record in the repository (#1128).
+
+**Sync now writes only where the branch's code goes.** It uses the remotes
+listed in `commitlore.syncRemote` (`git config --add commitlore.syncRemote
+<remote>`), else the branch's push remote in the order `git push` reads it,
+else `origin`, else the only remote. Every other remote is named as `not
+synced` and is never contacted. With several remotes and nothing to choose
+between them, sync writes nowhere, exits 2 and asks for `--remote`. The
+`pre-push` hook already synced only the remote being pushed to, and still does.
+
+**A dry run says what it would do.** Its planned writes were reported as
+`pushed`, `fetched` and `merged`; they are now `would-push`, `would-fetch` and
+`would-merge`, in the table and in `--json`, which also gains `skipped` and
+`source`. A script that matched a dry run's `pushed` needs `would-push`.
+
+Minor rather than patch: `commitlore.syncRemote` is a new configuration key,
+and a dry run's `--json` outcomes changed names.
+
+Two `commitlore commit` fixes ship with it:
+
+- **A draft of several records is all or nothing (#1127).** A draft whose
+  records all verified and then exceeded `max_records_per_commit` was committed
+  with none of them, and reported as a complete answer. A draft with one bad
+  record staged the survivor before the refusal was reported, so the next plain
+  `git commit` carried it. Now any rejection or failed capture stops the commit
+  with nothing bound, and the max-records refusal says how to proceed.
+  `commitlore capture` still stages the survivors and names the rest.
+- **`--amend` checks evidence against the commit it produces (#1129).** A quote
+  of the amended commit's own content was refused, because evidence was checked
+  against the change since HEAD only. A message-only amend had nothing to cite.
+  A record carried over from the replaced commit was refused with
+  `duplicate-record-id`. Evidence is now checked against HEAD's parent to the
+  index (the empty tree for a root commit), and the replaced commit's own
+  records are left out of the duplicate checks.
+
 ## 1.5.1
 
 Records the two channels agreed on were being withheld.
