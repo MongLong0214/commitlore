@@ -25,7 +25,7 @@ import { checkGit } from '../src/commands/doctor/checks/runtime-git-trailers.js'
 import { checkPush } from '../src/commands/doctor/checks/transport-notes-push.js';
 import { checkRefspec } from '../src/commands/doctor/checks/transport-notes-refspec.js';
 import { check, type DoctorCheck, type DoctorContext } from '../src/commands/doctor/model.js';
-import type { GitResult } from '../src/core/git.js';
+import type { ExecGitOptions, GitResult } from '../src/core/git.js';
 
 const noRepository = join(tmpdir(), `commitlore-doctor-effects-no-repository-${process.pid}`);
 
@@ -100,6 +100,61 @@ describe('doctor check effects', () => {
 
     expect(row.status).toBe('ok');
     expect(git).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * #1136. The call that reaches a remote gets a limit, cannot prompt, and
+   * refuses interactive SSH, unless the user chose an SSH command of their own.
+   * That command may carry the key or routing the remote needs, and
+   * GIT_SSH_COMMAND would override it, core.sshCommand included.
+   */
+  describe('a call that reaches a remote (#1136)', () => {
+    const remoteCall = (env: NodeJS.ProcessEnv, sshCommand?: string): ExecGitOptions | undefined => {
+      const calls: Array<{ args: string[]; options?: ExecGitOptions }> = [];
+      const git = vi.fn((args: string[], options?: ExecGitOptions) => {
+        calls.push({ args, options });
+        if (args[0] === 'rev-parse') return gitResult({ code: 0, stdout: `${'a'.repeat(40)}\n` });
+        if (args.join(' ') === 'config --get core.sshCommand' && sshCommand !== undefined) {
+          return gitResult({ code: 0, stdout: `${sshCommand}\n` });
+        }
+        return gitResult();
+      });
+      checkPush(context({ git: git as DoctorContext['git'], env }));
+      return calls.find(({ args }) => args[0] === 'ls-remote')?.options;
+    };
+
+    it('is bounded and non-interactive', () => {
+      const options = remoteCall({ PATH: '/usr/bin' });
+
+      expect(options?.timeout).toBe(15_000);
+      expect(options?.env).toEqual({
+        PATH: '/usr/bin',
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_SSH_COMMAND: 'ssh -o BatchMode=yes',
+      });
+    });
+
+    it('keeps an SSH command the user set, in the environment or in git config', () => {
+      expect(remoteCall({ GIT_SSH_COMMAND: 'ssh -i deploy-key' })?.env?.['GIT_SSH_COMMAND']).toBe('ssh -i deploy-key');
+      expect(remoteCall({ GIT_SSH: '/usr/local/bin/ssh-wrapper' })?.env).not.toHaveProperty('GIT_SSH_COMMAND');
+      expect(remoteCall({}, 'ssh -i deploy-key')?.env).not.toHaveProperty('GIT_SSH_COMMAND');
+    });
+
+    it('takes a longer limit from COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS', () => {
+      expect(remoteCall({ COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS: '60000' })?.timeout).toBe(60_000);
+      expect(remoteCall({ COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS: 'soon' })?.timeout).toBe(15_000);
+    });
+
+    it('names the limit when the call ran out of time', () => {
+      const git = vi.fn((args: string[]) =>
+        args[0] === 'rev-parse'
+          ? gitResult({ code: 0, stdout: `${'a'.repeat(40)}\n` })
+          : gitResult({ code: -1, stderr: 'spawnSync git ETIMEDOUT', timedOut: true }));
+      const row = checkPush(context({ git: git as DoctorContext['git'] }));
+
+      expect(row.status).toBe('warn');
+      expect(row.detail).toBe('could not verify (origin: no answer within 15s)');
+    });
   });
 
   it('runs commit-msg-hook’s non-repository branch through injected Git', () => {

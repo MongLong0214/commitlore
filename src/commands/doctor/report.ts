@@ -35,7 +35,7 @@ import { join, resolve, sep } from 'node:path';
 import type { Command } from 'commander';
 
 import { PACKAGE_ROOT, installedPath, packageVersion } from '../../core/paths.js';
-import { SKIP_CLASS } from './model.js';
+import { REMOTE_PROBE_TIMEOUT_MS, SKIP_CLASS } from './model.js';
 import type { DoctorCheck, DoctorOptions, DoctorReport, DoctorStatus, InstallSource } from './model.js';
 import { formatReport } from './render.js';
 import { runDoctor } from './runner.js';
@@ -196,7 +196,9 @@ export const register = (program: Command): void => {
     .option('--category <name>', 'run only checks in this category')
     .addHelpText(
       'after',
-      '\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC §10).',
+      '\nThe transport checks ask each remote with git, with terminal prompts turned off. A remote that does not answer within ' +
+        `${REMOTE_PROBE_TIMEOUT_MS / 1000}s is reported as could not verify; COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS sets another limit, in milliseconds.\n` +
+        '\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC §10).',
     )
     .action((options: { fix?: boolean; json?: boolean; verbose?: boolean; only?: string; category?: string }) => {
       const doctorOptions: DoctorOptions = { fix: options.fix === true };

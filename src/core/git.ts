@@ -19,6 +19,8 @@ export interface GitResult {
   stdout: string;
   stderr: string;
   code: number;
+  /** Present when git was stopped by `timeout` rather than finishing. */
+  timedOut?: true;
 }
 
 export interface ExecGitOptions {
@@ -51,7 +53,15 @@ export const gitResultFromSpawn = (result: SpawnSyncReturns<string>): GitResult 
   // alongside its real status and output. The completed child result wins.
   if (result.status !== null) return { stdout, stderr, code: result.status };
   if (result.error !== undefined) {
-    return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
+    // Read from the error's code, not its message, so a caller can name the
+    // limit it set instead of repeating `spawnSync git ETIMEDOUT` (#1136).
+    const timedOut = 'code' in result.error && result.error.code === 'ETIMEDOUT';
+    return {
+      stdout,
+      stderr: `${stderr}${result.error.message}`,
+      code: GIT_SPAWN_FAILED,
+      ...(timedOut ? { timedOut: true as const } : {}),
+    };
   }
 
   const signal = result.signal ?? 'unknown';

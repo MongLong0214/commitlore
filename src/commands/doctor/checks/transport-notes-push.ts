@@ -9,7 +9,15 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { NOTES_REF, listRemotes } from '../../../core/notes.js';
-import { check, gitOptions, streamEvidence, type DoctorCheck, type DoctorContext } from '../model.js';
+import {
+  check,
+  gitOptions,
+  remoteProbe,
+  remoteTimedOut,
+  streamEvidence,
+  type DoctorCheck,
+  type DoctorContext,
+} from '../model.js';
 
 /**
  * Pushing is never automatic: `git push` writes to a ref other people read,
@@ -40,13 +48,14 @@ export const checkPush = (ctx: DoctorContext): DoctorCheck => {
     );
   }
 
-  const advertised = git(['ls-remote', remote, NOTES_REF], gitOptions(opts));
+  const probe = remoteProbe(ctx);
+  const advertised = git(['ls-remote', remote, NOTES_REF], probe.options);
   if (advertised.code !== 0) {
     return check(
       'notes-push', 'transport',
       title,
       'warn',
-      `could not verify (${remote}: ${advertised.stderr.trim().split('\n')[0] ?? 'git ls-remote failed'})`,
+      `could not verify (${remote}: ${remoteTimedOut(advertised, probe) ?? advertised.stderr.trim().split('\n')[0] ?? 'git ls-remote failed'})`,
       command,
       false,
       undefined,

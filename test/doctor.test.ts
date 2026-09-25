@@ -29,6 +29,7 @@ import {
   formatReport,
   runDoctor,
 } from '../src/commands/doctor.js';
+import { defaultDoctorContext, type DoctorOptions } from '../src/commands/doctor/model.js';
 import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
 import { packageVersion } from '../src/core/paths.js';
@@ -258,6 +259,46 @@ describe('doctor: notes fetch refspec', () => {
     expect(check?.needsAttention).toBe(false);
     expect(check?.detail).toContain('no remote');
   });
+});
+
+/**
+ * #1136. Doctor's calls to a remote had no time limit, so a remote that stopped
+ * answering held the report for as long as it stalled. A stalled fetch that did
+ * answer eventually still reported `ok`. The remote below answers after four
+ * seconds and the limit is one, so these rows must report the limit rather than
+ * wait for the answer.
+ */
+describe('doctor: a remote that does not answer in time (#1136)', () => {
+  const slowRemote = (label: string): string => {
+    const { repo } = repoWithRemote(label);
+    git(repo, ['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC]);
+    git(repo, ['config', 'remote.origin.uploadpack', 'sleep 4; git-upload-pack']);
+    return repo;
+  };
+  const withLimit = (opts: DoctorOptions): DoctorReport =>
+    runDoctor(opts, {
+      ...defaultDoctorContext(opts),
+      env: { ...process.env, COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS: '1000' },
+    });
+
+  it.skipIf(process.platform === 'win32')('notes-refspec reports it could not verify, naming the limit', () => {
+    const repo = slowRemote('doctor-remote-stall-refspec');
+
+    const row = withLimit({ cwd: repo, only: ['notes-refspec'] }).checks.find((entry) => entry.id === 'notes-refspec');
+
+    expect(row?.status).toBe('warn');
+    expect(row?.detail).toContain('could not verify (origin: no answer within 1s)');
+  }, 30_000);
+
+  it.skipIf(process.platform === 'win32')('notes-push reports it could not verify, naming the limit', () => {
+    const repo = slowRemote('doctor-remote-stall-push');
+    git(repo, ['notes', '--ref', NOTES_REF, 'add', '-m', 'record', 'HEAD']);
+
+    const row = withLimit({ cwd: repo, only: ['notes-push'] }).checks.find((entry) => entry.id === 'notes-push');
+
+    expect(row?.status).toBe('warn');
+    expect(row?.detail).toContain('could not verify (origin: no answer within 1s)');
+  }, 30_000);
 });
 
 describe('commitlore-query skill', () => {
