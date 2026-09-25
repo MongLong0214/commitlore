@@ -44,6 +44,7 @@ import { REQUIRE_SIGNED_DIRECTIVE_KEY } from '../src/core/trusted-authors.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { CHAINED_HOOK_NAME, HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
+import { PRE_PUSH_HOOK_MARKER, PRE_PUSH_HOOK_NAME } from '../src/hooks/pre-push.js';
 import {
   CLAUDE_HOOK_MARKER,
   claudeSettingsPath,
@@ -465,6 +466,21 @@ describe('doctor: a stale stub', () => {
     expect(check?.status).toBe('warn');
     expect(check?.detail).toContain('out of date');
     expect(check?.fix).toContain('hooks install');
+  });
+
+  // #1135. The hooks `init` installs beside the gate went stale unseen: this row
+  // looked only at `commit-msg`, and `hooks install`, its fix, wrote only that.
+  it('names an out-of-date commitlore stub beside a current commit-msg hook', () => {
+    const { repo } = repoWithRemote('doctor-hook-stale-sibling');
+    writeScript(hookPath(repo), commitMsgStub());
+    recordHookTarget(repo);
+    const prePush = resolve(repo, git(repo, ['rev-parse', '--git-path', `hooks/${PRE_PUSH_HOOK_NAME}`]).trim());
+    writeScript(prePush, `#!/bin/sh\n${PRE_PUSH_HOOK_MARKER}\nexec commitlore pre-push "$@"\n`);
+
+    const check = runDoctor({ cwd: repo }).checks.find((e) => e.id === 'commit-msg-hook');
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain(`the ${PRE_PUSH_HOOK_NAME} hook beside it is an out-of-date commitlore stub (${prePush})`);
+    expect(check?.fix).toBe('commitlore hooks install');
   });
 
   it('reports ok for the current stub', () => {

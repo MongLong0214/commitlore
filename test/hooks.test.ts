@@ -33,13 +33,15 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { installHook, readHookStatus, uninstallHook } from '../src/commands/hooks.js';
+import { hookStatus, installHook, readHookStatus, uninstallHook } from '../src/commands/hooks.js';
 import { runInit } from '../src/commands/init.js';
 import { packageVersion } from '../src/core/paths.js';
 import { captureHookFailOpen } from '../src/hooks/capture-fail-open.js';
 import { CHAINED_HOOK_NAME, HOOK_MARKER, HOOK_NAME, captureHookStub, commitMsgStub } from '../src/hooks/commit-msg.js';
-import { POST_COMMIT_HOOK_NAME } from '../src/hooks/post-commit.js';
+import { POST_COMMIT_HOOK_NAME, postCommitStub } from '../src/hooks/post-commit.js';
+import { PRE_PUSH_HOOK_MARKER, PRE_PUSH_HOOK_NAME, prePushStub } from '../src/hooks/pre-push.js';
 import {
+  PREPARE_COMMIT_MSG_HOOK_MARKER,
   PREPARE_COMMIT_MSG_HOOK_NAME,
   prepareCommitMsgStub,
 } from '../src/hooks/prepare-commit-msg.js';
@@ -451,6 +453,63 @@ describe('hooks install', () => {
     const result = runCli(notARepo, ['hooks', 'install']);
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('not a git repository');
+  });
+});
+
+/**
+ * #1135. `hooks install` is what the installer tells an upgraded repository to
+ * run, and it wrote only `commit-msg`. The three hooks `init` installs beside it
+ * kept whatever stub their build wrote. Stubs from before 1.1.3 cannot rebind to
+ * a new release, so after the next upgrade a GUI client's commit got no staged
+ * record and its push published no notes. Nothing reported the old stubs.
+ */
+describe('hooks install — the other commitlore hooks (#1135)', () => {
+  const outdated = (marker: string): string => `#!/bin/sh\n${marker}\nexec commitlore stub-from-an-older-build "$@"\n`;
+  /** Exact bytes: `writeScript` appends a newline, which would make a current stub read as outdated. */
+  const put = (repo: string, name: string, contents: string): string => {
+    const path = join(hooksDirOf(repo), name);
+    mkdirSync(hooksDirOf(repo), { recursive: true });
+    writeFileSync(path, contents);
+    chmodSync(path, 0o755);
+    return path;
+  };
+
+  it('refreshes a commitlore stub from another build, and installs none that is missing', () => {
+    const repo = makeRepo();
+    const prePush = put(repo, PRE_PUSH_HOOK_NAME, outdated(PRE_PUSH_HOOK_MARKER));
+    const postCommit = put(repo, POST_COMMIT_HOOK_NAME, postCommitStub());
+
+    const result = installHook({ cwd: repo });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`updated ${PRE_PUSH_HOOK_NAME} hook: ${prePush}`);
+    expect(readFileSync(prePush, 'utf8')).toBe(prePushStub());
+    expect(spawnSync('test', ['-x', prePush], { shell: false }).status).toBe(0);
+    expect(result.stdout, 'a current stub is not news').not.toContain(POST_COMMIT_HOOK_NAME);
+    expect(readFileSync(postCommit, 'utf8')).toBe(postCommitStub());
+    expect(existsSync(join(hooksDirOf(repo), PREPARE_COMMIT_MSG_HOOK_NAME)), 'installing it stays init’s choice').toBe(false);
+  });
+
+  it('leaves a hook of the same name that commitlore did not write', () => {
+    const repo = makeRepo();
+    const foreign = '#!/bin/sh\nexec some-other-tool pre-push "$@"\n';
+    const prePush = put(repo, PRE_PUSH_HOOK_NAME, foreign);
+
+    const result = installHook({ cwd: repo });
+
+    expect(result.code).toBe(0);
+    expect(readFileSync(prePush, 'utf8')).toBe(foreign);
+    expect(result.stdout).not.toContain(PRE_PUSH_HOOK_NAME);
+  });
+
+  it('is named by hooks status until it is refreshed', () => {
+    const repo = makeRepo();
+    put(repo, PREPARE_COMMIT_MSG_HOOK_NAME, outdated(PREPARE_COMMIT_MSG_HOOK_MARKER));
+    const line = `${PREPARE_COMMIT_MSG_HOOK_NAME}: installed (commitlore), stub is out of date — run \`commitlore hooks install\``;
+
+    expect(hookStatus({ cwd: repo }).stdout).toContain(line);
+    expect(installHook({ cwd: repo }).code).toBe(0);
+    expect(hookStatus({ cwd: repo }).stdout).not.toContain(PREPARE_COMMIT_MSG_HOOK_NAME);
   });
 });
 

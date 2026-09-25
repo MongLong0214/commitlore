@@ -56,16 +56,22 @@ import {
   POST_COMMIT_CHAINED_HOOK_NAME,
   POST_COMMIT_HOOK_MARKER,
   POST_COMMIT_HOOK_NAME,
+  installPostCommitHook,
+  postCommitStub,
 } from '../hooks/post-commit.js';
 import {
   PRE_PUSH_CHAINED_HOOK_NAME,
   PRE_PUSH_HOOK_MARKER,
   PRE_PUSH_HOOK_NAME,
+  installPrePushHook,
+  prePushStub,
 } from '../hooks/pre-push.js';
 import {
   PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME,
   PREPARE_COMMIT_MSG_HOOK_MARKER,
   PREPARE_COMMIT_MSG_HOOK_NAME,
+  installPrepareCommitMsgHook,
+  prepareCommitMsgStub,
 } from '../hooks/prepare-commit-msg.js';
 
 /**
@@ -136,7 +142,7 @@ const isExecutable = (path: string): boolean => {
   }
 };
 
-const readHookState = (hookPath: string): HookState => {
+const readStubState = (hookPath: string, marker: string, stub: () => string): HookState => {
   if (!existsSync(hookPath)) return 'absent';
 
   let contents: string;
@@ -147,9 +153,11 @@ const readHookState = (hookPath: string): HookState => {
     return 'foreign';
   }
 
-  if (!contents.includes(HOOK_MARKER)) return 'foreign';
-  return contents === commitMsgStub() ? 'installed' : 'outdated';
+  if (!contents.includes(marker)) return 'foreign';
+  return contents === stub() ? 'installed' : 'outdated';
 };
+
+const readHookState = (hookPath: string): HookState => readStubState(hookPath, HOOK_MARKER, commitMsgStub);
 
 export const readHookStatus = (cwd = process.cwd()): HookStatus => {
   const hooksDir = resolveHooksDir(cwd);
@@ -386,13 +394,34 @@ export const installHook = (input: HookInput = {}): HookResult => {
     ...(rootMoved ? [transition('recorded install root', 'moved', rootBefore, rootAfter)] : []),
   ];
 
-  return success(after, [headline, ...repoint, ...describeChained(after)]);
+  // #1135. The installer tells an upgraded repository to run this command, and
+  // it wrote only the gate. The hooks `init` installs beside it kept the stub
+  // their build wrote. A stub from before 1.1.3 cannot rebind when `current`
+  // moves, so after the next upgrade, under a hook's PATH, a commit got no
+  // staged record and a push published no notes. Both exit 0, so nobody saw it.
+  // A stub that is ours and differs is refreshed. A missing hook stays `init`'s
+  // choice, and a file without the marker is not ours to touch.
+  const lines = [headline, ...repoint, ...describeChained(after)];
+  for (const hook of CAPTURE_HOOKS) {
+    if (readStubState(join(after.hooksDir, hook.name), hook.marker, hook.stub) !== 'outdated') continue;
+    const refreshed = hook.install(cwd);
+    if (refreshed.code !== 0) {
+      return { code: 2, stdout: `${lines.join('\n')}\n`, stderr: refreshed.stderr, status: after };
+    }
+    lines.push(firstLine(refreshed.stdout));
+  }
+
+  return success(after, lines);
 };
 
 interface CaptureHook {
   readonly name: string;
   readonly marker: string;
   readonly chainedName: string;
+  /** What this build writes, so a marked file that differs came from another build. */
+  readonly stub: () => string;
+  /** `init`'s installer: rewrites a marked stub that differs, and refuses a file without the marker. */
+  readonly install: (cwd: string) => { readonly code: 0 | 2; readonly stdout: string; readonly stderr: string };
 }
 
 /**
@@ -408,11 +437,15 @@ const CAPTURE_HOOKS: readonly CaptureHook[] = [
     name: PREPARE_COMMIT_MSG_HOOK_NAME,
     marker: PREPARE_COMMIT_MSG_HOOK_MARKER,
     chainedName: PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME,
+    stub: prepareCommitMsgStub,
+    install: installPrepareCommitMsgHook,
   },
   {
     name: POST_COMMIT_HOOK_NAME,
     marker: POST_COMMIT_HOOK_MARKER,
     chainedName: POST_COMMIT_CHAINED_HOOK_NAME,
+    stub: postCommitStub,
+    install: installPostCommitHook,
   },
   // #416. Listed here so `hooks uninstall` removes what `init` installed: a
   // hook this command does not know about is one it leaves behind.
@@ -420,8 +453,27 @@ const CAPTURE_HOOKS: readonly CaptureHook[] = [
     name: PRE_PUSH_HOOK_NAME,
     marker: PRE_PUSH_HOOK_MARKER,
     chainedName: PRE_PUSH_CHAINED_HOOK_NAME,
+    stub: prePushStub,
+    install: installPrePushHook,
   },
 ];
+
+export interface CaptureHookState {
+  readonly name: string;
+  readonly path: string;
+  readonly state: HookState;
+}
+
+/**
+ * The hooks `init` installs beside the gate, as they stand in `hooksDir`
+ * (#1135). `hooks install`, `hooks status` and doctor all read them here, so
+ * that the three cannot disagree about which stub is out of date.
+ */
+export const readCaptureHookStates = (hooksDir: string): CaptureHookState[] =>
+  CAPTURE_HOOKS.map((hook) => {
+    const path = join(hooksDir, hook.name);
+    return { name: hook.name, path, state: readStubState(path, hook.marker, hook.stub) };
+  });
 
 /** Throws on a filesystem failure, which the caller reports against the hook's name. */
 const removeCaptureHook = (hooksDir: string, hook: CaptureHook): string[] => {
@@ -503,12 +555,18 @@ export const hookStatus = (input: HookInput = {}): HookResult => {
     return failure(messageOf(error));
   }
 
-  const state = {
+  const describe: Record<HookState, string> = {
     absent: 'not installed',
     installed: 'installed (commitlore)',
     outdated: 'installed (commitlore), stub is out of date — run `commitlore hooks install`',
     foreign: 'present, not installed by commitlore',
-  }[status.state];
+  };
+  const state = describe[status.state];
+  // Only an out-of-date one is named (#1135). A missing or foreign hook beside
+  // the gate is a choice `init` or the user made rather than something to repair.
+  const staleCaptureHooks = readCaptureHookStates(status.hooksDir)
+    .filter((hook) => hook.state === 'outdated')
+    .map((hook) => `${hook.name}: ${describe.outdated}`);
   const targetWarning =
     status.state === 'installed' && status.recordedTarget.problems.length > 0
       ? ', recorded target warning — run `commitlore hooks install`'
@@ -518,6 +576,7 @@ export const hookStatus = (input: HookInput = {}): HookResult => {
   return success(status, [
     `hooks dir: ${status.hooksDir}`,
     `${HOOK_NAME}: ${state}${targetWarning}`,
+    ...staleCaptureHooks,
     ...describeRecordedHookTarget(status.recordedTarget),
     ...(identity === null
       ? []
@@ -542,7 +601,9 @@ export const register = (program: Command): void => {
 
   hooks
     .command('install')
-    .description('install the commit-msg hook, preserving and chaining any existing one')
+    .description(
+      'install the commit-msg hook, preserving and chaining any existing one, and refresh the other commitlore hooks already installed here',
+    )
     .option('--force', 'replace an already preserved hook when a foreign hook is in the way')
     .addHelpText('after', '\nExit codes: 0 installed (or already installed), 2 could not run -- no repository, or the hook could not be written (SPEC §10).')
     .action((flags: { force?: boolean }) => {
