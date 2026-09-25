@@ -31,7 +31,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { PACKAGE_ROOT, installedPath, packageVersion } from '../../core/paths.js';
-import { SKIP_CLASS } from './model.js';
+import { REMOTE_PROBE_TIMEOUT_MS, SKIP_CLASS } from './model.js';
 import { formatReport } from './render.js';
 import { runDoctor } from './runner.js';
 /**
@@ -157,7 +157,9 @@ export const register = (program) => {
         .option('--verbose', 'include diagnostic evidence, skip reasons, and durations for each check')
         .option('--only <ids>', 'run only these comma-separated check ids')
         .option('--category <name>', 'run only checks in this category')
-        .addHelpText('after', '\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC §10).')
+        .addHelpText('after', '\nThe transport checks ask each remote with git, with terminal prompts turned off. A remote that does not answer within ' +
+        `${REMOTE_PROBE_TIMEOUT_MS / 1000}s is reported as could not verify; COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS sets another limit, in milliseconds.\n` +
+        '\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC §10).')
         .action((options) => {
         const doctorOptions = { fix: options.fix === true };
         if (options.only !== undefined) {

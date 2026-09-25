@@ -13,6 +13,8 @@ export interface GitResult {
     stdout: string;
     stderr: string;
     code: number;
+    /** Present when git was stopped by `timeout` rather than finishing. */
+    timedOut?: true;
 }
 export interface ExecGitOptions {
     /** Written to git's stdin. */
@@ -225,3 +227,16 @@ export declare const vantageCaveat: (vantage: Vantage) => string | null;
  * where the commit was made and is left exactly as git wrote it.
  */
 export declare const canonicalCommittedAt: (value: string) => string;
+/**
+ * The environment for a git call that must not stop to ask anyone anything:
+ * the pre-push notes push and doctor's remote probes (#1136, #1138).
+ *
+ * git itself is told not to prompt. The SSH client is told the same only when
+ * the caller has not chosen one. git reads `GIT_SSH_COMMAND` before `GIT_SSH`
+ * and `core.sshCommand`, so setting it replaces a command chosen either of
+ * those ways, and with it the key, config file or jump host that command
+ * carries. The config lookup is passed in rather than run here, so doctor
+ * keeps reading git through its injected context and the hook through
+ * `execGit`. It runs only when neither variable is set.
+ */
+export declare const nonInteractiveGitEnv: (env: NodeJS.ProcessEnv, coreSshCommandSet: () => boolean) => NodeJS.ProcessEnv;

@@ -5,7 +5,7 @@
  * sibling check may alter transport configuration on its behalf.
  */
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, forcesNotes, listRemotes, fetchRefspecs, notesAbsenceEvidenceKey, } from '../../../core/notes.js';
-import { check, evidenceKey, gitOptions } from '../model.js';
+import { check, evidenceKey, gitOptions, remoteProbe, remoteTimedOut, } from '../model.js';
 const EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 /**
@@ -79,8 +79,9 @@ export const checkRefspec = (ctx) => {
     if (missing.length > 0) {
         return check('notes-refspec', 'transport', title, 'warn', `${missing.join(', ')} does not fetch ${NOTES_REF}, so records pushed by others stay invisible here`, missing.map((remote) => `git config --add remote.${remote}.fetch '${NOTES_REFSPEC}'`).join('\n'), false, undefined, { evidence: { ...remoteEvidence, missing: missing.join(', ') } });
     }
+    const probe = remoteProbe(ctx);
     const failed = remotes
-        .map((remote) => ({ remote, result: git(['fetch', '--dry-run', remote], gitOptions(opts)) }))
+        .map((remote) => ({ remote, result: git(['fetch', '--dry-run', remote], probe.options) }))
         .filter(({ result }) => result.code !== 0);
     if (failed.length > 0) {
         // A previous observation says nothing about a remote that cannot be
@@ -88,7 +89,7 @@ export const checkRefspec = (ctx) => {
         if (opts.fix === true)
             failed.forEach(({ remote }) => clearAbsenceEvidence(remote, ctx));
         return check('notes-refspec', 'transport', title, 'warn', `could not verify (${failed
-            .map(({ remote, result }) => `${remote}: ${result.stderr.trim().split('\n')[0] ?? 'git fetch failed'}`)
+            .map(({ remote, result }) => `${remote}: ${remoteTimedOut(result, probe) ?? result.stderr.trim().split('\n')[0] ?? 'git fetch failed'}`)
             .join('; ')})`, failed.map(({ remote }) => `git fetch ${remote}`).join('\n'), fixed, undefined, {
             evidence: {
                 ...remoteEvidence,
@@ -105,14 +106,14 @@ export const checkRefspec = (ctx) => {
     }
     const advertised = remotes.map((remote) => ({
         remote,
-        result: git(['ls-remote', remote, NOTES_REF], gitOptions(opts)),
+        result: git(['ls-remote', remote, NOTES_REF], probe.options),
     }));
     const unavailable = advertised.filter(({ result }) => result.code !== 0);
     if (unavailable.length > 0) {
         if (opts.fix === true)
             unavailable.forEach(({ remote }) => clearAbsenceEvidence(remote, ctx));
         return check('notes-refspec', 'transport', title, 'warn', `could not verify whether ${NOTES_REF} exists upstream (${unavailable
-            .map(({ remote, result }) => `${remote}: ${firstLine(result.stderr) || 'git ls-remote failed'}`)
+            .map(({ remote, result }) => `${remote}: ${remoteTimedOut(result, probe) ?? (firstLine(result.stderr) || 'git ls-remote failed')}`)
             .join('; ')})`, unavailable.map(({ remote }) => `git fetch ${remote}`).join('\n'), fixed, undefined, {
             evidence: {
                 ...remoteEvidence,

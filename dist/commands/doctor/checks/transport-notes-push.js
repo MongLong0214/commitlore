@@ -7,7 +7,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NOTES_REF, listRemotes } from '../../../core/notes.js';
-import { check, gitOptions, streamEvidence } from '../model.js';
+import { check, gitOptions, remoteProbe, remoteTimedOut, streamEvidence, } from '../model.js';
 /**
  * Pushing is never automatic: `git push` writes to a ref other people read,
  * which is not something a diagnostic command gets to decide.
@@ -26,9 +26,10 @@ export const checkPush = (ctx) => {
     if (local.code !== 0) {
         return check('notes-push', 'transport', title, 'ok', `no local mirror yet — nothing to push (${command}, once there is)`, null, false, undefined, { evidence: { ...localEvidence, remote_sha: 'not_queried' } });
     }
-    const advertised = git(['ls-remote', remote, NOTES_REF], gitOptions(opts));
+    const probe = remoteProbe(ctx);
+    const advertised = git(['ls-remote', remote, NOTES_REF], probe.options);
     if (advertised.code !== 0) {
-        return check('notes-push', 'transport', title, 'warn', `could not verify (${remote}: ${advertised.stderr.trim().split('\n')[0] ?? 'git ls-remote failed'})`, command, false, undefined, {
+        return check('notes-push', 'transport', title, 'warn', `could not verify (${remote}: ${remoteTimedOut(advertised, probe) ?? advertised.stderr.trim().split('\n')[0] ?? 'git ls-remote failed'})`, command, false, undefined, {
             evidence: {
                 ...localEvidence,
                 ls_remote_exit_code: String(advertised.code),

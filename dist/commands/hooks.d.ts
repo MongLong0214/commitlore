@@ -83,6 +83,17 @@ export declare const readHookStatus: (cwd?: string) => HookStatus;
  */
 export declare const resolveEntryForRecord: (entry: string | undefined, cwd: string) => string | null;
 export declare const installHook: (input?: HookInput) => HookResult;
+export interface CaptureHookState {
+    readonly name: string;
+    readonly path: string;
+    readonly state: HookState;
+}
+/**
+ * The hooks `init` installs beside the gate, as they stand in `hooksDir`
+ * (#1135). `hooks install`, `hooks status` and doctor all read them here, so
+ * that the three cannot disagree about which stub is out of date.
+ */
+export declare const readCaptureHookStates: (hooksDir: string) => CaptureHookState[];
 export declare const uninstallHook: (input?: HookInput) => HookResult;
 export declare const hookStatus: (input?: HookInput) => HookResult;
 export declare const register: (program: Command) => void;

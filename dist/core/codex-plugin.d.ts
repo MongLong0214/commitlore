@@ -68,6 +68,11 @@ export type MarketplaceState =
  */
 export declare const readMarketplaceState: (json: string, plugin: CodexPluginConfig) => MarketplaceState;
 export declare const codexPluginIsInstalled: (output: string, plugin?: CodexPluginConfig) => boolean;
+/**
+ * The version column of the installed plugin's `codex plugin list` row, or
+ * null when there is no installed row or no field in it reads as a release.
+ */
+export declare const codexPluginVersion: (output: string, plugin?: CodexPluginConfig) => string | null;
 export declare const readCodexPluginMarker: (plugin?: CodexPluginConfig, dataHome?: string) => CodexPluginMarker | null;
 export declare const removeCodexPluginMarker: (plugin?: CodexPluginConfig, dataHome?: string) => void;
 /**

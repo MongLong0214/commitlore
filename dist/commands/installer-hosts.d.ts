@@ -65,6 +65,16 @@ export interface CommandInterpreterInvocation {
 }
 export declare const commandInterpreterInvocation: (path: string, args: string[]) => CommandInterpreterInvocation | null;
 /**
+ * The version `claude plugin list --json` reports for the user-scope plugin,
+ * or why it could not be read. A project- or local-scope install of the same
+ * plugin is a different installation and does not answer for this one.
+ */
+export declare const claudePluginVersion: (listJson: string) => {
+    version: string;
+} | {
+    unknown: string;
+};
+/**
  * The Codex plugin layer, which the MCP registration does not cover (#697).
  *
  * `install.ps1` ran `plugin install-codex`; `install.sh` carried the same step
