@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { AGENT_CONFIGS, isCodexPluginConfig, type CodexPluginConfig } from './agent-configs.js';
+import { isNewerRelease, parseReleaseVersion } from './release-version.js';
 import { formatRuntimeIdentity, runtimeIdentity } from './runtime-identity.js';
 
 export interface CodexCommandResult {
@@ -187,6 +188,20 @@ export const codexPluginIsInstalled = (
     .split('\n')
     .some((line) => line.trim().startsWith(codexPluginSelector(plugin)) && line.includes('installed,'));
 
+/**
+ * The version column of the installed plugin's `codex plugin list` row, or
+ * null when there is no installed row or no field in it reads as a release.
+ */
+export const codexPluginVersion = (
+  output: string,
+  plugin: CodexPluginConfig = config(),
+): string | null => {
+  const row = output
+    .split('\n')
+    .find((line) => line.trim().startsWith(codexPluginSelector(plugin)) && line.includes('installed,'));
+  return row?.trim().split(/\s+/).find((field) => parseReleaseVersion(field) !== null) ?? null;
+};
+
 const markerFor = (plugin: CodexPluginConfig): CodexPluginMarker => ({
   version: MARKER_VERSION,
   selector: codexPluginSelector(plugin),
@@ -342,9 +357,47 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
     // state this tool never created.
     writeCodexPluginMarker(plugin, dataHome);
   } else {
-    report.push(
-      `Codex plugin already installed: ${codexPluginSelector(plugin)} — left as it is, and not recorded as ours`,
-    );
+    // Present is not current (#1134). This branch used to end here, so every
+    // upgrade left an older plugin exactly where it was and reported it as
+    // installed. The marketplace is ours by now -- a foreign or unidentifiable
+    // one returned above -- so refreshing its snapshot is the upgrade Codex
+    // itself offers. The plugin is still not recorded as ours: the marker
+    // claims an install, and this is not one.
+    const installed = codexPluginVersion(listed.stdout, plugin);
+    const running = runtimeIdentity().version;
+    if (installed !== null && isNewerRelease(running, installed)) {
+      const upgrade = `codex plugin marketplace upgrade ${plugin.marketplace}`;
+      const upgraded = run(['plugin', 'marketplace', 'upgrade', plugin.marketplace]);
+      if (!successful(upgraded)) {
+        return {
+          exitCode: 2,
+          report: [
+            `Codex plugin ${codexPluginSelector(plugin)} is at ${installed}, older than this install (${running}), ` +
+              `and upgrading the ${plugin.marketplace} marketplace failed`,
+            ...codexSaid(upgraded),
+            `retry with: ${upgrade}`,
+          ],
+        };
+      }
+      const relisted = run(['plugin', 'list']);
+      const now = successful(relisted) ? codexPluginVersion(relisted.stdout, plugin) : null;
+      if (now === null || isNewerRelease(running, now)) {
+        return {
+          exitCode: 2,
+          report: [
+            `Codex plugin ${codexPluginSelector(plugin)} is still at ${now ?? 'a version Codex did not report'} ` +
+              `after upgrading the ${plugin.marketplace} marketplace; this install is ${running}`,
+            ...(successful(relisted) ? [] : codexSaid(relisted)),
+            `retry with: ${upgrade}`,
+          ],
+        };
+      }
+      report.push(`upgraded Codex plugin: ${codexPluginSelector(plugin)} ${installed} -> ${now}`);
+    } else {
+      report.push(
+        `Codex plugin already installed: ${codexPluginSelector(plugin)}${installed === null ? '' : ` ${installed}`} — left as it is, and not recorded as ours`,
+      );
+    }
   }
 
   report.push(`installer runtime identity: ${formatRuntimeIdentity(runtimeIdentity())}`);

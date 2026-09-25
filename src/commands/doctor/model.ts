@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-import { execGit, type ExecGitOptions, type GitResult } from '../../core/git.js';
+import { execGit, nonInteractiveGitEnv, type ExecGitOptions, type GitResult } from '../../core/git.js';
 import { discoverLiveMcpRuntimes, type LiveMcpRuntimeScan } from '../../core/mcp-probe.js';
 import { openIndex } from '../../core/index-db.js';
 
@@ -166,6 +166,50 @@ export type DoctorOpenIndex = typeof openIndex;
 export const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
 
 export const gitOptions = (opts: DoctorOptions) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
+
+/** How long one doctor call to a remote may wait before it is reported unverified. */
+export const REMOTE_PROBE_TIMEOUT_MS = 15_000;
+
+export interface RemoteProbe {
+  readonly options: ExecGitOptions;
+  readonly timeoutMs: number;
+}
+
+/**
+ * Options for a git call that reaches a remote (#1136).
+ *
+ * Doctor ran `fetch --dry-run` and `ls-remote` with no limit and with the
+ * ordinary interactive environment. A remote that stopped answering held the
+ * report, and every check after it, for as long as it stalled. One that asked
+ * for credentials waited for a person. The pre-push hook and the release check
+ * already bound their calls, and these now share the pre-push hook's
+ * environment, `nonInteractiveGitEnv`: git may not prompt, and SSH refuses
+ * interactive authentication.
+ *
+ * `GIT_SSH_COMMAND` takes precedence over `GIT_SSH` and `core.sshCommand`, so
+ * setting it over a command the user chose would drop the key or routing that
+ * command carries, and the remote would read as unreachable. A command the
+ * user chose is kept rather than replaced, and only the limit bounds it.
+ */
+export const remoteProbe = (ctx: DoctorContext): RemoteProbe => {
+  const raw = Number(ctx.env['COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS']);
+  const timeoutMs = Number.isFinite(raw) && raw > 0 ? raw : REMOTE_PROBE_TIMEOUT_MS;
+  return {
+    timeoutMs,
+    options: {
+      ...gitOptions(ctx.opts),
+      timeout: timeoutMs,
+      env: nonInteractiveGitEnv(
+        ctx.env,
+        () => ctx.git(['config', '--get', 'core.sshCommand'], gitOptions(ctx.opts)).code === 0,
+      ),
+    },
+  };
+};
+
+/** The limit a remote call ran into, in the words a row reports; undefined when it finished. */
+export const remoteTimedOut = (result: GitResult, probe: RemoteProbe): string | undefined =>
+  result.timedOut === true ? `no answer within ${probe.timeoutMs / 1000}s` : undefined;
 
 /** The bound keeps a broken child process from making a JSON report unbounded. */
 export const boundedExcerpt = (output: string | null | undefined): {
