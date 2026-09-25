@@ -14,7 +14,15 @@ import {
   fetchRefspecs,
   notesAbsenceEvidenceKey,
 } from '../../../core/notes.js';
-import { check, evidenceKey, gitOptions, type DoctorCheck, type DoctorContext } from '../model.js';
+import {
+  check,
+  evidenceKey,
+  gitOptions,
+  remoteProbe,
+  remoteTimedOut,
+  type DoctorCheck,
+  type DoctorContext,
+} from '../model.js';
 
 const EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
@@ -133,8 +141,9 @@ export const checkRefspec = (ctx: DoctorContext): DoctorCheck => {
     );
   }
 
+  const probe = remoteProbe(ctx);
   const failed = remotes
-    .map((remote) => ({ remote, result: git(['fetch', '--dry-run', remote], gitOptions(opts)) }))
+    .map((remote) => ({ remote, result: git(['fetch', '--dry-run', remote], probe.options) }))
     .filter(({ result }) => result.code !== 0);
   if (failed.length > 0) {
     // A previous observation says nothing about a remote that cannot be
@@ -145,7 +154,7 @@ export const checkRefspec = (ctx: DoctorContext): DoctorCheck => {
       title,
       'warn',
       `could not verify (${failed
-        .map(({ remote, result }) => `${remote}: ${result.stderr.trim().split('\n')[0] ?? 'git fetch failed'}`)
+        .map(({ remote, result }) => `${remote}: ${remoteTimedOut(result, probe) ?? result.stderr.trim().split('\n')[0] ?? 'git fetch failed'}`)
         .join('; ')})`,
       failed.map(({ remote }) => `git fetch ${remote}`).join('\n'),
       fixed,
@@ -180,7 +189,7 @@ export const checkRefspec = (ctx: DoctorContext): DoctorCheck => {
 
   const advertised = remotes.map((remote) => ({
     remote,
-    result: git(['ls-remote', remote, NOTES_REF], gitOptions(opts)),
+    result: git(['ls-remote', remote, NOTES_REF], probe.options),
   }));
   const unavailable = advertised.filter(({ result }) => result.code !== 0);
   if (unavailable.length > 0) {
@@ -190,7 +199,7 @@ export const checkRefspec = (ctx: DoctorContext): DoctorCheck => {
       title,
       'warn',
       `could not verify whether ${NOTES_REF} exists upstream (${unavailable
-        .map(({ remote, result }) => `${remote}: ${firstLine(result.stderr) || 'git ls-remote failed'}`)
+        .map(({ remote, result }) => `${remote}: ${remoteTimedOut(result, probe) ?? (firstLine(result.stderr) || 'git ls-remote failed')}`)
         .join('; ')})`,
       unavailable.map(({ remote }) => `git fetch ${remote}`).join('\n'),
       fixed,

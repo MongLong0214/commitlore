@@ -6,10 +6,11 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import { classifyBinTarget, describeRecordedHookTarget, readRecordedHookTarget } from '../../../core/hook-target.js';
 import { HOOK_MARKER, commitMsgStub } from '../../../hooks/commit-msg.js';
+import { readCaptureHookStates } from '../../hooks.js';
 import { blocked, check, gitOptions, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
@@ -102,8 +103,15 @@ export const checkHook = (ctx: DoctorContext, runtime?: DoctorCheck): DoctorChec
     );
   }
 
+  // #1135. `hooks install` is this row's fix, and it now refreshes these too, so
+  // an out-of-date one is named here rather than left to fail unseen: a stale
+  // prepare-commit-msg or pre-push stub skips under a hook's PATH and exits 0.
+  const staleStubs = readCaptureHookStates(dirname(path))
+    .filter((hook) => hook.state === 'outdated')
+    .map((hook) => `the ${hook.name} hook beside it is an out-of-date commitlore stub (${hook.path})`);
   const problems = [
     ...target.problems,
+    ...staleStubs,
     ...(override === undefined || override === ''
       ? []
       : classifyBinTarget(override) !== null

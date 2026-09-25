@@ -14,7 +14,8 @@ export const register = (program: Command): void => {
     .addHelpText(
       'after',
       '\nRegisters the CommitLore marketplace and installs commitlore@commitlore only when each is absent. ' +
-        'It never edits Codex configuration or cache files directly. Exit codes: 0 installed or already installed, 2 Codex could not complete the operation.',
+        'A plugin already installed at a version older than this CLI is upgraded by refreshing that marketplace. ' +
+        'It never edits Codex configuration or cache files directly. Exit codes: 0 installed, upgraded or already current, 2 Codex could not complete the operation.',
     )
     .action((options: { print?: boolean }) => {
       if (options.print === true) {

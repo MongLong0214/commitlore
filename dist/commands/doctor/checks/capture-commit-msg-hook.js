@@ -5,9 +5,10 @@
  * the registry, keeping its sole declared relationship out of sibling imports.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { classifyBinTarget, describeRecordedHookTarget, readRecordedHookTarget } from '../../../core/hook-target.js';
 import { HOOK_MARKER, commitMsgStub } from '../../../hooks/commit-msg.js';
+import { readCaptureHookStates } from '../../hooks.js';
 import { blocked, check, gitOptions } from '../model.js';
 /**
  * Installation belongs to `commitlore hooks install` (T-202). This reads.
@@ -54,8 +55,15 @@ export const checkHook = (ctx, runtime) => {
     if (contents !== commitMsgStub()) {
         return check(id, category, title, 'warn', `installed at ${path}, but the stub is out of date — it predates a change to how the hook finds the CLI; ${targetDetail}`, install, false, undefined, { evidence: hookEvidence });
     }
+    // #1135. `hooks install` is this row's fix, and it now refreshes these too, so
+    // an out-of-date one is named here rather than left to fail unseen: a stale
+    // prepare-commit-msg or pre-push stub skips under a hook's PATH and exits 0.
+    const staleStubs = readCaptureHookStates(dirname(path))
+        .filter((hook) => hook.state === 'outdated')
+        .map((hook) => `the ${hook.name} hook beside it is an out-of-date commitlore stub (${hook.path})`);
     const problems = [
         ...target.problems,
+        ...staleStubs,
         ...(override === undefined || override === ''
             ? []
             : classifyBinTarget(override) !== null

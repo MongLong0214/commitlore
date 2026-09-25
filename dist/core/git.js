@@ -27,7 +27,15 @@ export const gitResultFromSpawn = (result) => {
     if (result.status !== null)
         return { stdout, stderr, code: result.status };
     if (result.error !== undefined) {
-        return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
+        // Read from the error's code, not its message, so a caller can name the
+        // limit it set instead of repeating `spawnSync git ETIMEDOUT` (#1136).
+        const timedOut = 'code' in result.error && result.error.code === 'ETIMEDOUT';
+        return {
+            stdout,
+            stderr: `${stderr}${result.error.message}`,
+            code: GIT_SPAWN_FAILED,
+            ...(timedOut ? { timedOut: true } : {}),
+        };
     }
     const signal = result.signal ?? 'unknown';
     return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
@@ -260,4 +268,24 @@ export const vantageCaveat = (vantage) => vantage.behind === null || vantage.beh
  * where the commit was made and is left exactly as git wrote it.
  */
 export const canonicalCommittedAt = (value) => value.endsWith('+00:00') ? `${value.slice(0, -6)}Z` : value;
+/**
+ * The environment for a git call that must not stop to ask anyone anything:
+ * the pre-push notes push and doctor's remote probes (#1136, #1138).
+ *
+ * git itself is told not to prompt. The SSH client is told the same only when
+ * the caller has not chosen one. git reads `GIT_SSH_COMMAND` before `GIT_SSH`
+ * and `core.sshCommand`, so setting it replaces a command chosen either of
+ * those ways, and with it the key, config file or jump host that command
+ * carries. The config lookup is passed in rather than run here, so doctor
+ * keeps reading git through its injected context and the hook through
+ * `execGit`. It runs only when neither variable is set.
+ */
+export const nonInteractiveGitEnv = (env, coreSshCommandSet) => {
+    const chosenSsh = env['GIT_SSH_COMMAND'] !== undefined || env['GIT_SSH'] !== undefined || coreSshCommandSet();
+    return {
+        ...env,
+        GIT_TERMINAL_PROMPT: '0',
+        ...(chosenSsh ? {} : { GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }),
+    };
+};
 //# sourceMappingURL=git.js.map

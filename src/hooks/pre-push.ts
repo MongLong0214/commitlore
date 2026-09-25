@@ -28,7 +28,7 @@ import { resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
-import { execGit } from '../core/git.js';
+import { execGit, nonInteractiveGitEnv } from '../core/git.js';
 import { NOTES_REF } from '../core/notes.js';
 import { syncNotes, type SyncResult } from '../core/sync.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
@@ -182,14 +182,16 @@ export const describeSync = (
 
 /**
  * Git itself must not prompt, and the default SSH command refuses interactive
- * authentication. A caller's SSH wrapper is preserved because it may carry
+ * authentication. A caller's SSH command is preserved because it may carry
  * required corporate routing or key-selection settings.
+ *
+ * #1138. Only `GIT_SSH_COMMAND` used to count as the caller's. One set through
+ * `core.sshCommand` or `GIT_SSH` was replaced, so the branch went out over the
+ * user's command and the notes push that followed tried plain `ssh` and could
+ * fail where the branch had just succeeded.
  */
-const nonInteractiveGitEnv = (): NodeJS.ProcessEnv => ({
-  ...process.env,
-  GIT_TERMINAL_PROMPT: '0',
-  GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? 'ssh -o BatchMode=yes',
-});
+const notesPushEnv = (): NodeJS.ProcessEnv =>
+  nonInteractiveGitEnv(process.env, () => execGit(['config', '--get', 'core.sshCommand']).code === 0);
 
 export const register = (program: Command): void => {
   program
@@ -205,7 +207,7 @@ export const register = (program: Command): void => {
         const results = syncNotes({
           ...(remote === undefined || remote === '' ? {} : { remotes: [remote] }),
           transport: {
-            env: nonInteractiveGitEnv(),
+            env: notesPushEnv(),
             timeout: PRE_PUSH_NOTES_SYNC_TIMEOUT_MS,
           },
         });

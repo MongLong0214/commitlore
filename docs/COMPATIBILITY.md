@@ -154,6 +154,16 @@ through to a `PATH` lookup and commits succeed, so nothing looks wrong. Under th
 `PATH` a hook actually gets — a GUI client, an IDE, a launcher — there is no
 `commitlore` on `PATH`, and the commit is refused.
 
+The table is about `commit-msg`. `init` also installs `prepare-commit-msg`,
+`post-commit` and `pre-push`, and their stubs carry the same rebinding block.
+Until #1135, `hooks install` rewrote only `commit-msg`, so a repository set up
+before v1.1.3 kept the old stub in the other three. After an upgrade, under the
+`PATH` a hook gets, those skip instead of refusing: the commit succeeds with no
+staged record attached, and a push publishes no notes. Both exit 0. `hooks
+install` now refreshes each of them that is already a commitlore stub from
+another build. It still installs none that is missing and touches none without
+the marker. `doctor` and `hooks status` name an out-of-date one.
+
 **The installer cannot repair any of them.** It has no way to know which
 repositories have hooks, and not touching a repository's `.git` is policy rather
 than omission. `doctor` reports the mismatch and names `commitlore hooks install`

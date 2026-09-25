@@ -29,6 +29,7 @@ import {
   formatReport,
   runDoctor,
 } from '../src/commands/doctor.js';
+import { defaultDoctorContext, type DoctorOptions } from '../src/commands/doctor/model.js';
 import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
 import { packageVersion } from '../src/core/paths.js';
@@ -43,6 +44,7 @@ import { REQUIRE_SIGNED_DIRECTIVE_KEY } from '../src/core/trusted-authors.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { CHAINED_HOOK_NAME, HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
+import { PRE_PUSH_HOOK_MARKER, PRE_PUSH_HOOK_NAME } from '../src/hooks/pre-push.js';
 import {
   CLAUDE_HOOK_MARKER,
   claudeSettingsPath,
@@ -260,6 +262,46 @@ describe('doctor: notes fetch refspec', () => {
   });
 });
 
+/**
+ * #1136. Doctor's calls to a remote had no time limit, so a remote that stopped
+ * answering held the report for as long as it stalled. A stalled fetch that did
+ * answer eventually still reported `ok`. The remote below answers after four
+ * seconds and the limit is one, so these rows must report the limit rather than
+ * wait for the answer.
+ */
+describe('doctor: a remote that does not answer in time (#1136)', () => {
+  const slowRemote = (label: string): string => {
+    const { repo } = repoWithRemote(label);
+    git(repo, ['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC]);
+    git(repo, ['config', 'remote.origin.uploadpack', 'sleep 4; git-upload-pack']);
+    return repo;
+  };
+  const withLimit = (opts: DoctorOptions): DoctorReport =>
+    runDoctor(opts, {
+      ...defaultDoctorContext(opts),
+      env: { ...process.env, COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS: '1000' },
+    });
+
+  it.skipIf(process.platform === 'win32')('notes-refspec reports it could not verify, naming the limit', () => {
+    const repo = slowRemote('doctor-remote-stall-refspec');
+
+    const row = withLimit({ cwd: repo, only: ['notes-refspec'] }).checks.find((entry) => entry.id === 'notes-refspec');
+
+    expect(row?.status).toBe('warn');
+    expect(row?.detail).toContain('could not verify (origin: no answer within 1s)');
+  }, 30_000);
+
+  it.skipIf(process.platform === 'win32')('notes-push reports it could not verify, naming the limit', () => {
+    const repo = slowRemote('doctor-remote-stall-push');
+    git(repo, ['notes', '--ref', NOTES_REF, 'add', '-m', 'record', 'HEAD']);
+
+    const row = withLimit({ cwd: repo, only: ['notes-push'] }).checks.find((entry) => entry.id === 'notes-push');
+
+    expect(row?.status).toBe('warn');
+    expect(row?.detail).toContain('could not verify (origin: no answer within 1s)');
+  }, 30_000);
+});
+
 describe('commitlore-query skill', () => {
   it('documents that multi-path queries answer literal paths and report skipped rename following', () => {
     const repo = initRepo('query-skill-multiple-paths');
@@ -424,6 +466,21 @@ describe('doctor: a stale stub', () => {
     expect(check?.status).toBe('warn');
     expect(check?.detail).toContain('out of date');
     expect(check?.fix).toContain('hooks install');
+  });
+
+  // #1135. The hooks `init` installs beside the gate went stale unseen: this row
+  // looked only at `commit-msg`, and `hooks install`, its fix, wrote only that.
+  it('names an out-of-date commitlore stub beside a current commit-msg hook', () => {
+    const { repo } = repoWithRemote('doctor-hook-stale-sibling');
+    writeScript(hookPath(repo), commitMsgStub());
+    recordHookTarget(repo);
+    const prePush = resolve(repo, git(repo, ['rev-parse', '--git-path', `hooks/${PRE_PUSH_HOOK_NAME}`]).trim());
+    writeScript(prePush, `#!/bin/sh\n${PRE_PUSH_HOOK_MARKER}\nexec commitlore pre-push "$@"\n`);
+
+    const check = runDoctor({ cwd: repo }).checks.find((e) => e.id === 'commit-msg-hook');
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain(`the ${PRE_PUSH_HOOK_NAME} hook beside it is an out-of-date commitlore stub (${prePush})`);
+    expect(check?.fix).toBe('commitlore hooks install');
   });
 
   it('reports ok for the current stub', () => {

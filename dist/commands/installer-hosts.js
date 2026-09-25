@@ -11,6 +11,7 @@ import { delimiter, dirname, extname, isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { isMcpProbeFailure, probeMcp } from '../core/mcp-probe.js';
+import { isNewerRelease } from '../core/release-version.js';
 import { runtimeIdentity } from '../core/runtime-identity.js';
 export const INSTALLER_HOSTS_SCHEMA = 'commitlore_installer_hosts.v1';
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -294,10 +295,10 @@ const commandResult = (command, args) => {
 const commandStatus = (command, args, timeout) => {
     const resolved = resolveCommand(command);
     if (resolved === null)
-        return { status: null, detail: `${command} was not found` };
+        return { status: null, stdout: '', detail: `${command} was not found` };
     const result = spawnResolved(resolved, args, timeout);
     const detail = commandFailureDetail(result);
-    return { status: result.status, ...(detail === undefined ? {} : { detail }) };
+    return { status: result.status, stdout: result.stdout, ...(detail === undefined ? {} : { detail }) };
 };
 const cliHost = async (host, wrapper) => {
     const existing = commandResult('codex', ['mcp', 'get', 'commitlore']);
@@ -323,31 +324,86 @@ const cliHost = async (host, wrapper) => {
         ? { host, requested: true, outcome: 'installed', healthy: true, detail: 'Codex registration added and live-verified' }
         : { host, requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
+const CLAUDE_PLUGIN = 'commitlore@commitlore';
 /**
- * Refresh the marketplace, then install. Reported healthy only when both
- * succeed — a plugin that is present at an old version is the case this exists
- * to fix, so "already installed" is not success.
+ * The version `claude plugin list --json` reports for the user-scope plugin,
+ * or why it could not be read. A project- or local-scope install of the same
+ * plugin is a different installation and does not answer for this one.
+ */
+export const claudePluginVersion = (listJson) => {
+    let parsed;
+    try {
+        parsed = JSON.parse(listJson);
+    }
+    catch {
+        return { unknown: 'claude plugin list --json did not print JSON' };
+    }
+    if (!Array.isArray(parsed))
+        return { unknown: 'claude plugin list --json did not print a list' };
+    const entry = parsed.find((item) => typeof item === 'object' && item !== null
+        && item.id === CLAUDE_PLUGIN
+        && (item.scope ?? 'user') === 'user');
+    if (entry === undefined)
+        return { unknown: `claude plugin list does not show ${CLAUDE_PLUGIN} at user scope` };
+    return typeof entry.version === 'string' && entry.version !== ''
+        ? { version: entry.version }
+        : { unknown: `claude plugin list shows ${CLAUDE_PLUGIN} with no version` };
+};
+/**
+ * Refresh the marketplace, install, then update, and judge by the version the
+ * plugin list reports -- a plugin that is present at an old version is the
+ * case this exists to fix, so "already installed" is not success.
+ *
+ * The comment said that and the code did not do it (#1134): `claude plugin
+ * install` exits 0 for a plugin that is already installed at any version, and
+ * that exit was the verdict. An upgrade from 1.5.1 reported "installed from the
+ * refreshed marketplace" and left 1.5.1 in place. `update` is the command that
+ * moves an installed plugin, and the list is the only thing here that says
+ * whether it moved.
+ *
+ * Older is the failure. Newer is not: an install pinned to an earlier release
+ * still gets the marketplace's current plugin, as a fresh install would, and
+ * that is reported rather than refused. A list this cannot read leaves the
+ * verdict with the commands' exits, and the detail says the version was not
+ * confirmed rather than implying it was.
  */
 const claudePluginHost = () => {
     const host = 'claude-code';
     const run = (args) => commandStatus('claude', args, 60_000);
+    const manual = `claude plugin marketplace update commitlore && claude plugin update ${CLAUDE_PLUGIN}`;
     const marketplace = run(['plugin', 'marketplace', 'add', 'MongLong0214/commitlore']);
     if (marketplace.status === null) {
         return { host, requested: true, outcome: 'failed', healthy: false, detail: failureMessage('claude plugin marketplace add could not run', marketplace.detail) };
     }
     // Already-added is not an error, and update is what makes a new version
-    // visible. Both are attempted; only the install decides the verdict.
+    // visible. Both are attempted; the install and the listed version decide.
     run(['plugin', 'marketplace', 'update', 'commitlore']);
-    const install = run(['plugin', 'install', 'commitlore@commitlore', '--scope', 'user']);
-    return install.status === 0
-        ? { host, requested: true, outcome: 'installed', healthy: true, detail: 'Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)' }
-        : { host, requested: true, outcome: 'failed', healthy: false, detail: `${failureMessage('claude plugin install failed', install.detail)} — run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore` };
+    const install = run(['plugin', 'install', CLAUDE_PLUGIN, '--scope', 'user']);
+    if (install.status !== 0) {
+        return { host, requested: true, outcome: 'failed', healthy: false, detail: `${failureMessage('claude plugin install failed', install.detail)} — run manually: claude plugin marketplace update commitlore && claude plugin install ${CLAUDE_PLUGIN}` };
+    }
+    const update = run(['plugin', 'update', CLAUDE_PLUGIN, '--scope', 'user']);
+    const listed = run(['plugin', 'list', '--json']);
+    const found = listed.status === 0 ? claudePluginVersion(listed.stdout) : { unknown: failureMessage('claude plugin list --json failed', listed.detail) };
+    const running = runtimeIdentity().version;
+    if ('unknown' in found) {
+        return { host, requested: true, outcome: 'installed', healthy: true, detail: `Claude Code plugin installed from the refreshed marketplace; its version was not confirmed (${found.unknown}) (restart running sessions to load it)` };
+    }
+    if (isNewerRelease(running, found.version)) {
+        const why = update.status === 0 ? '' : ` (${failureMessage('claude plugin update failed', update.detail)})`;
+        return { host, requested: true, outcome: 'failed', healthy: false, detail: `Claude Code plugin is still at ${found.version}, older than this install (${running})${why} — run: ${manual}` };
+    }
+    return { host, requested: true, outcome: 'installed', healthy: true, detail: `Claude Code plugin at ${found.version} from the refreshed marketplace (restart running sessions to load it)` };
 };
 const codexPluginOutcome = (wrapper) => {
     const result = commandStatus(wrapper, ['plugin', 'install-codex'], 60_000);
-    return result.status === 0
-        ? { ok: true, detail: 'plugin installed' }
-        : { ok: false, detail: `${failureMessage('plugin step failed', result.detail)} — run: commitlore plugin install-codex` };
+    const line = (prefix) => result.stdout.split(/\r?\n/).map((entry) => entry.trim()).find((entry) => entry.startsWith(prefix));
+    if (result.status === 0)
+        return { ok: true, detail: line('upgraded Codex plugin:') ?? 'plugin installed' };
+    // `install-codex` puts what Codex said on the line after its own sentence,
+    // and `detail` is the first line only, so the cause was dropped (#1134).
+    const said = line('codex said:');
+    return { ok: false, detail: `${failureMessage('plugin step failed', result.detail)}${said === undefined ? '' : ` (${said})`} — run: commitlore plugin install-codex` };
 };
 /**
  * Codex is two requested integrations, and the host is healthy only if both
@@ -374,6 +430,21 @@ export const codexResultWithPlugin = (mcp, plugin) => {
     };
 };
 export const inspectAndApplyHosts = async (options) => {
+    // Each row is started only when the one before it has finished (#1137). The
+    // MCP probes are asynchronous, but the Hermes step, the `claude plugin`
+    // commands and `plugin install-codex` run through spawnSync and hold the event
+    // loop. The probe writes `initialize` from a timer, so while the loop was held
+    // the request was never sent; when it was released the write and the timeout
+    // were both overdue, and the timeout won. Five healthy registrations were
+    // reported as `initialize timed out` on a first run and as healthy on the
+    // next, which is the unreproduced first-run timeout recorded on #716.
+    //
+    // Starting the probe's budget at the write instead would not have been enough:
+    // a step that runs while the answer is in flight still outlasts it, and the
+    // second round trip (`tools/list`) is sent only after the first answer is
+    // read. The cost is that the rows take the sum of their durations rather than
+    // the longest one, a few hundred milliseconds per probe. A new row is pushed
+    // as a function, never as a promise that has already started.
     const requested = [];
     const notDetected = [];
     const home = options.home;
@@ -410,10 +481,10 @@ export const inspectAndApplyHosts = async (options) => {
     //
     // Changing any row means changing what that row's wiring does first.
     if (hasCommand('codex')) {
-        requested.push(cliHost('codex', options.wrapper).then((result) => result.healthy ? codexResultWithPlugin(result, codexPluginOutcome(options.wrapper)) : result));
+        requested.push(() => cliHost('codex', options.wrapper).then((result) => result.healthy ? codexResultWithPlugin(result, codexPluginOutcome(options.wrapper)) : result));
     }
     else if (existsSync(join(home, '.codex'))) {
-        requested.push(tomlHost(join(home, '.codex', 'config.toml'), options.wrapper));
+        requested.push(() => tomlHost(join(home, '.codex', 'config.toml'), options.wrapper));
     }
     else
         notDetected.push('codex');
@@ -425,17 +496,19 @@ export const inspectAndApplyHosts = async (options) => {
     ];
     for (const [host, path, format, present] of candidates) {
         if (present)
-            requested.push(jsonHost(host, path, format, options.wrapper));
+            requested.push(() => jsonHost(host, path, format, options.wrapper));
         else
             notDetected.push(host);
     }
     // Hermes is intentionally still delegated to its existing transactional
     // helper. This command judges its exit and reports it in the same schema.
     if (hasCommand('hermes') || existsSync(join(home, '.hermes'))) {
-        const result = commandStatus(options.wrapper, ['hermes', 'install', '--config', join(home, '.hermes', 'config.yaml'), '--command', options.wrapper, '--data-root', options.dataRoot, '--verify'], 30_000);
-        requested.push(Promise.resolve(result.status === 0
-            ? { host: 'hermes', requested: true, outcome: 'installed', healthy: true, detail: 'Hermes setup verified' }
-            : { host: 'hermes', requested: true, outcome: 'failed', healthy: false, detail: failureMessage('Hermes setup failed', result.detail) }));
+        requested.push(() => {
+            const result = commandStatus(options.wrapper, ['hermes', 'install', '--config', join(home, '.hermes', 'config.yaml'), '--command', options.wrapper, '--data-root', options.dataRoot, '--verify'], 30_000);
+            return Promise.resolve(result.status === 0
+                ? { host: 'hermes', requested: true, outcome: 'installed', healthy: true, detail: 'Hermes setup verified' }
+                : { host: 'hermes', requested: true, outcome: 'failed', healthy: false, detail: failureMessage('Hermes setup failed', result.detail) });
+        });
     }
     else
         notDetected.push('hermes');
@@ -453,11 +526,13 @@ export const inspectAndApplyHosts = async (options) => {
      * (#660).
      */
     if (hasCommand('claude')) {
-        requested.push(Promise.resolve(claudePluginHost()));
+        requested.push(() => Promise.resolve(claudePluginHost()));
     }
     else
         notDetected.push('claude-code');
-    const hosts = await Promise.all(requested);
+    const hosts = [];
+    for (const wire of requested)
+        hosts.push(await wire());
     return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
 export const register = (program) => {
