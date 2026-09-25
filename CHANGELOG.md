@@ -4,6 +4,50 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.7.0
+
+Five fixes found while upgrading a machine to 1.6.0. In each case something
+reported success, or reported nothing, while part of the install was not
+working.
+
+**After upgrading, run `commitlore hooks install` once in each repository.** It
+used to rewrite only `commit-msg`. The `prepare-commit-msg`, `post-commit` and
+`pre-push` hooks that `init` installs beside it kept the stub their build
+wrote, and a stub from before 1.1.3 cannot follow an upgrade. Under the `PATH`
+a GUI client or IDE gives a hook, such a stub skips: the commit succeeds with
+no staged record attached, and a push publishes no notes. Both exit 0.
+`hooks install` now also refreshes each of the three that is already a
+commitlore stub from another build. It still installs none that is missing and
+leaves a hook without the marker alone. `hooks status` and doctor's
+`commit-msg-hook` row name an out-of-date one (#1135). If a refresh fails,
+`hooks install` exits 2 after writing `commit-msg`.
+
+- **doctor's transport checks are bounded (#1136).** `notes-refspec` and
+  `notes-push` reached each remote with no time limit and with the ordinary
+  interactive environment, so a remote that stopped answering held the whole
+  report. They now wait 15 seconds, with terminal prompts turned off and
+  batch-mode SSH, and report a remote that does not answer as `could not verify
+  (origin: no answer within 15s)`. `COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS` sets
+  another limit, in milliseconds.
+- **The `pre-push` hook keeps your SSH command (#1138).** The notes push set
+  `GIT_SSH_COMMAND` unless you had, and git reads that variable before `GIT_SSH`
+  and `core.sshCommand`. An SSH command chosen either of those ways carried the
+  branch, and the notes push that followed used plain `ssh` and could fail. The
+  hook and doctor now set it only when none of the three is set.
+- **The installer judges the plugins by the version they end at (#1134).** The
+  Claude Code and Codex plugin rows took "installed" as success, so a plugin left
+  at an older version was reported as installed. Both rows now read the version
+  after updating and fail, naming the command that moves it, when the plugin is
+  still behind the CLI. `plugin install-codex` upgrades a Codex plugin that is
+  behind instead of stopping at "already installed".
+- **The installer's host rows run one at a time (#1137).** They all started at
+  once, and the synchronous steps held the event loop past an MCP probe's
+  timeout. On a first run, healthy registrations were reported as `initialize
+  timed out`, and as healthy on the next run.
+
+Minor rather than patch: `COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS` is a new setting,
+and `hooks install` has a new way to exit 2.
+
 ## 1.6.0
 
 `commitlore sync` no longer publishes the notes mirror to every remote.
