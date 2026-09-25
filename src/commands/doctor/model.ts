@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-import { execGit, type ExecGitOptions, type GitResult } from '../../core/git.js';
+import { execGit, nonInteractiveGitEnv, type ExecGitOptions, type GitResult } from '../../core/git.js';
 import { discoverLiveMcpRuntimes, type LiveMcpRuntimeScan } from '../../core/mcp-probe.js';
 import { openIndex } from '../../core/index-db.js';
 
@@ -182,8 +182,9 @@ export interface RemoteProbe {
  * ordinary interactive environment. A remote that stopped answering held the
  * report, and every check after it, for as long as it stalled. One that asked
  * for credentials waited for a person. The pre-push hook and the release check
- * already bound their calls, and these now follow the pre-push hook: git may
- * not prompt, and SSH refuses interactive authentication.
+ * already bound their calls, and these now share the pre-push hook's
+ * environment, `nonInteractiveGitEnv`: git may not prompt, and SSH refuses
+ * interactive authentication.
  *
  * `GIT_SSH_COMMAND` takes precedence over `GIT_SSH` and `core.sshCommand`, so
  * setting it over a command the user chose would drop the key or routing that
@@ -193,19 +194,15 @@ export interface RemoteProbe {
 export const remoteProbe = (ctx: DoctorContext): RemoteProbe => {
   const raw = Number(ctx.env['COMMITLORE_DOCTOR_REMOTE_TIMEOUT_MS']);
   const timeoutMs = Number.isFinite(raw) && raw > 0 ? raw : REMOTE_PROBE_TIMEOUT_MS;
-  const chosenSsh = ctx.env['GIT_SSH_COMMAND'] !== undefined
-    || ctx.env['GIT_SSH'] !== undefined
-    || ctx.git(['config', '--get', 'core.sshCommand'], gitOptions(ctx.opts)).code === 0;
   return {
     timeoutMs,
     options: {
       ...gitOptions(ctx.opts),
       timeout: timeoutMs,
-      env: {
-        ...ctx.env,
-        GIT_TERMINAL_PROMPT: '0',
-        ...(chosenSsh ? {} : { GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }),
-      },
+      env: nonInteractiveGitEnv(
+        ctx.env,
+        () => ctx.git(['config', '--get', 'core.sshCommand'], gitOptions(ctx.opts)).code === 0,
+      ),
     },
   };
 };

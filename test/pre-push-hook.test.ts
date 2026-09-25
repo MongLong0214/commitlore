@@ -15,7 +15,7 @@
  */
 
 import { execFileSync, spawn } from 'node:child_process';
-import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -247,6 +247,63 @@ describe('the pre-push hook publishes the mirror without re-entering itself', ()
     } finally {
       await new Promise<void>((resolveClose, rejectClose) => server.close((error) => error ? rejectClose(error) : resolveClose()));
     }
+  }, 60_000);
+});
+
+/**
+ * #1138. The notes push set `GIT_SSH_COMMAND` unless the caller had, and git
+ * reads that before `GIT_SSH` and `core.sshCommand`. An SSH command chosen
+ * either of those ways carried the branch and was replaced for the notes.
+ */
+describe('the notes push keeps an SSH command the user chose (#1138)', () => {
+  const sshWrapper = (label: string): { command: string; calls: string } => {
+    const dir = temp(label);
+    const calls = join(dir, 'calls.log');
+    const command = join(dir, 'ssh-wrapper.sh');
+    // It refuses, so the mirror fails at once. What matters is only whether git asked it.
+    writeFileSync(command, `#!/bin/sh\necho "$*" >> '${calls}'\nexit 1\n`);
+    chmodSync(command, 0o755);
+    return { command, calls };
+  };
+
+  // Either one inherited from the runner would count as the caller's choice
+  // and hide the defect.
+  const withoutSsh = (): NodeJS.ProcessEnv => {
+    const env = { ...process.env };
+    delete env['GIT_SSH_COMMAND'];
+    delete env['GIT_SSH'];
+    return env;
+  };
+
+  const repoWithSshNotesRemote = (label: string): string => {
+    const { repo, origin } = repoWithHook(label);
+    writeRecord(git(repo, ['rev-parse', 'HEAD']).trim(), [{ key: 'Warn', value: 'local' }], { cwd: repo });
+    advance(repo, `export const a = '${label}';\n`);
+    failNotesFetchOnly(repo, origin, 'ssh://git@example.invalid/commitlore.git');
+    return repo;
+  };
+
+  it('reaches the remote through core.sshCommand', async () => {
+    const repo = repoWithSshNotesRemote('prepush-core-ssh');
+    const wrapper = sshWrapper('core-ssh');
+    git(repo, ['config', 'core.sshCommand', wrapper.command]);
+
+    const result = await pushWithDeadline(repo, withoutSsh());
+    expect(result.timedOut).toBe(false);
+    expect(result.code).toBe(0);
+    expect(existsSync(wrapper.calls), 'the notes push replaced core.sshCommand').toBe(true);
+    expect(readFileSync(wrapper.calls, 'utf8')).toContain('example.invalid');
+  }, 60_000);
+
+  it('reaches the remote through GIT_SSH', async () => {
+    const repo = repoWithSshNotesRemote('prepush-git-ssh');
+    const wrapper = sshWrapper('git-ssh');
+
+    const result = await pushWithDeadline(repo, { ...withoutSsh(), GIT_SSH: wrapper.command });
+    expect(result.timedOut).toBe(false);
+    expect(result.code).toBe(0);
+    expect(existsSync(wrapper.calls), 'the notes push replaced GIT_SSH').toBe(true);
+    expect(readFileSync(wrapper.calls, 'utf8')).toContain('example.invalid');
   }, 60_000);
 });
 
