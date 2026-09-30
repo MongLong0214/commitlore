@@ -15709,14 +15709,13 @@ var isOwnCommitMirror = (record2, group) => {
   );
 };
 var inheritedOrigin = (record2, group) => {
-  if (record2.source !== "notes") return void 0;
   const stamps = record2.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY);
   if (stamps.length !== 1) return void 0;
   const provenance = parseProvenance(stamps[0]?.value);
   if (provenance?.kind !== "inherited") return void 0;
   if (record2.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY2).length !== 1) return void 0;
   const origins = group.filter(
-    (candidate) => candidate.source === "commit" && candidate.sha?.toLowerCase() === provenance.sha.toLowerCase() && candidate.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY2).length === 1 && candidate.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY).length <= 1
+    (candidate) => candidate.source === "commit" && candidate.sha?.toLowerCase() === provenance.sha.toLowerCase() && candidate.sha.toLowerCase() !== record2.sha?.toLowerCase() && candidate.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY2).length === 1 && candidate.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY).length <= 1
   );
   return origins.length === 1 ? origins[0] : void 0;
 };
@@ -15780,7 +15779,7 @@ var findIdCollisions = (records) => {
   const ordered = chronological(records);
   return [...groups].filter(([recordId, group]) => {
     if (hasAmbiguousGroup(group)) return true;
-    const declared = group.filter((record2) => record2.source !== "notes");
+    const declared = collisionRivals(group).filter((record2) => record2.source !== "notes");
     const retiredSomewhere = ordered.some(
       ({ record: record2 }) => record2.source !== "notes" && record2.trailers.some(
         (trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId

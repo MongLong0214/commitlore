@@ -540,7 +540,6 @@ const isOwnCommitMirror = (record: StaleRecord, group: StaleRecord[]): boolean =
 
 /** A transport stamp is evidence of a link only when its source is in this reachable stream. */
 const inheritedOrigin = (record: StaleRecord, group: StaleRecord[]): StaleRecord | undefined => {
-  if (record.source !== 'notes') return undefined;
   const stamps = record.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY);
   if (stamps.length !== 1) return undefined;
   const provenance = parseProvenance(stamps[0]?.value);
@@ -549,6 +548,7 @@ const inheritedOrigin = (record: StaleRecord, group: StaleRecord[]): StaleRecord
   const origins = group.filter((candidate) =>
     candidate.source === 'commit' &&
     candidate.sha?.toLowerCase() === provenance.sha.toLowerCase() &&
+    candidate.sha.toLowerCase() !== record.sha?.toLowerCase() &&
     candidate.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY).length === 1 &&
     candidate.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY).length <= 1,
   );
@@ -724,7 +724,7 @@ export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
   return [...groups]
     .filter(([recordId, group]) => {
       if (hasAmbiguousGroup(group)) return true;
-      const declared = group.filter((record) => record.source !== 'notes');
+      const declared = collisionRivals(group).filter((record) => record.source !== 'notes');
       // Identical payloads are one record re-declared (§3.2) — **unless the id
       // has been retired somewhere in this history.** Once something declares
       // `Supersedes:` for it, a further declaration is ambiguous about whether

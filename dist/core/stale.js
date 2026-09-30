@@ -458,8 +458,6 @@ const isOwnCommitMirror = (record, group) => {
 };
 /** A transport stamp is evidence of a link only when its source is in this reachable stream. */
 const inheritedOrigin = (record, group) => {
-    if (record.source !== 'notes')
-        return undefined;
     const stamps = record.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY);
     if (stamps.length !== 1)
         return undefined;
@@ -470,6 +468,7 @@ const inheritedOrigin = (record, group) => {
         return undefined;
     const origins = group.filter((candidate) => candidate.source === 'commit' &&
         candidate.sha?.toLowerCase() === provenance.sha.toLowerCase() &&
+        candidate.sha.toLowerCase() !== record.sha?.toLowerCase() &&
         candidate.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY).length === 1 &&
         candidate.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY).length <= 1);
     return origins.length === 1 ? origins[0] : undefined;
@@ -630,7 +629,7 @@ export const findIdCollisions = (records) => {
         .filter(([recordId, group]) => {
         if (hasAmbiguousGroup(group))
             return true;
-        const declared = group.filter((record) => record.source !== 'notes');
+        const declared = collisionRivals(group).filter((record) => record.source !== 'notes');
         // Identical payloads are one record re-declared (§3.2) — **unless the id
         // has been retired somewhere in this history.** Once something declares
         // `Supersedes:` for it, a further declaration is ambiguous about whether
