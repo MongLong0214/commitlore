@@ -556,7 +556,7 @@ describe('squash-preserve', () => {
       repo,
       'first.txt',
       'first\n',
-      'first decision\n\nLimit: the upstream service caps workers at three\nUnverified: a fifth worker has not been load tested\nRecord-Id: r-draft1147a\n',
+      'first decision\n\nLimit: the upstream service caps workers at three\nUnverified: a fifth worker has not been load tested\nEvidence: test/fixture-1147.md\nRecord-Id: r-draft1147a\n',
     );
     const second = commitFile(
       repo,
@@ -577,6 +577,7 @@ describe('squash-preserve', () => {
     expect(value(blockById(blocks, 'r-draft1147a'), 'Unverified')).toBe(
       'a fifth worker has not been load tested',
     );
+    expect(value(blockById(blocks, 'r-draft1147a'), 'Evidence')).toBe('test/fixture-1147.md');
     expect(value(blockById(blocks, 'r-draft1147b'), 'Provenance')).toBe(`inherited ${second}`);
 
     const original = readFileSync(draft, 'utf8');
