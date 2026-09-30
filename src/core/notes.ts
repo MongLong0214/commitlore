@@ -12,7 +12,7 @@
  */
 
 import { type ExecGitOptions, execGit, execGitOrThrow, type RepoFacts } from './git.js';
-import { parseCommitMessage, parseRecordBlocks, type IsolatedBlocks, serializeTrailers } from './trailers.js';
+import { assertRecordBlocksRecovered, parseCommitMessage, parseRecordBlocks, type IsolatedBlocks, serializeTrailers } from './trailers.js';
 import type { Trailer } from './types.js';
 
 /** The mirror's ref. Not configurable: it is part of the protocol (SPEC §1). */
@@ -143,7 +143,14 @@ export const writeRecordBlocks = (
   sha: string,
   blocks: readonly Trailer[][],
   opts: WriteRecordOptions = {},
-): void => writeBody(sha, blocks.map(serializeTrailers).join('\n'), opts);
+): void => {
+  const body = blocks.map(serializeTrailers).join('\n');
+  assertRecordBlocksRecovered(blocks, parseRecordBlocks(`${SYNTHETIC_SUBJECT}\n\n${body}`, {
+    notes: true, ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
+  }), opts.cwd);
+  writeBody(sha, body, opts);
+  assertRecordBlocksRecovered(blocks, readRecordBlocks(sha, opts), opts.cwd);
+};
 
 /** The raw note body on `sha`, or `null` when the object carries none. */
 const showNote = (sha: string, opts: NotesOptions): string | null => {
@@ -208,7 +215,11 @@ export const readRecordBlocks = (
   const note = showNote(sha, opts);
   if (note === null) return [];
   const message = `${SYNTHETIC_SUBJECT}\n\n${note}`;
-  return parseRecordBlocks(message, isolated === undefined ? {} : { isolated });
+  return parseRecordBlocks(message, {
+    notes: true,
+    ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
+    ...(isolated === undefined ? {} : { isolated }),
+  });
 };
 
 /**

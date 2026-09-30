@@ -34,7 +34,7 @@ import {
   renderMessage,
   type SquashPlan,
 } from '../core/squash.js';
-import { serializeTrailers } from '../core/trailers.js';
+import { assertRecordBlocksRecovered, parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
 
 export interface SquashPreserveInput {
   range?: string;
@@ -98,42 +98,12 @@ const countCommits = (range: string, cwd: string | undefined): number => {
   return Number(result.stdout.trim());
 };
 
-/**
- * The warnings a plan carries. Conflicts are one line each; unidentified
- * records beyond the first that a later re-parse cannot tell apart from body
- * prose are one line for the whole plan.
- *
- * Neither is silent. A record dropped without a word is worse than one never
- * written, because the next reader has no way to know a claim used to exist.
- */
-const warningsFor = (plan: SquashPlan): string[] => {
-  const lines = plan.conflicts.map(
-    (conflict) =>
-      `${PREFIX} conflict on ${conflict.recordId} — kept the version from ${shortSha(conflict.kept)}, ` +
-      `dropped ${conflict.dropped.map(shortSha).join(', ')}`,
-  );
-
-  // Every block that already had a `Record-Id` keeps it (SPEC §2.4) — this
-  // plan cannot lose an identity the way the pre-multi-record format did.
-  // What remains a real limitation: `parseRecordBlocks` only recognizes a
-  // *non-final* block by its declared identity, so if more than one inherited
-  // record never declared one, only the last block written stays findable if
-  // this note or message is re-parsed later from stored text. The plan itself
-  // — and this run's `--json` output — still names every one of them.
-  const unidentified = plan.blocks.filter(
-    (block) => !block.some((trailer) => trailer.key === 'Record-Id'),
-  ).length;
-
-  if (unidentified > 1) {
-    lines.push(
-      `${PREFIX} ${unidentified} inherited records declared no Record-Id — only the last one ` +
-        'written stays recoverable if this note or message is re-parsed later; this plan (and ' +
-        '--json) still lists all of them',
-    );
-  }
-
-  return lines;
-};
+/** Conflicting identities remain visible warnings in the preservation plan. */
+const warningsFor = (plan: SquashPlan): string[] => plan.conflicts.map(
+  (conflict) =>
+    `${PREFIX} conflict on ${conflict.recordId} — kept the version from ${shortSha(conflict.kept)}, ` +
+    `dropped ${conflict.dropped.map(shortSha).join(', ')}`,
+);
 
 const readDraft = (path: string): string => {
   try {
@@ -262,6 +232,15 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
 
   const applied: Applied = { messageFile: null, target: null };
   try {
+    const draft = input.messageFile === undefined
+      ? undefined
+      : renderMessage(readDraft(input.messageFile), plan);
+    // Check the draft before either destination changes. Ordinary commit body
+    // recovery still requires Record-Id; notes do not have that restriction.
+    const assertDraft = (text: string): void => assertRecordBlocksRecovered(
+      plan.blocks, parseRecordBlocks(text, input.cwd === undefined ? {} : { cwd: input.cwd }), input.cwd, true,
+    );
+    if (draft !== undefined) assertDraft(draft);
     if (input.target !== undefined) {
       attachToNotes(input.target, plan, {
         ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
@@ -270,7 +249,8 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
       applied.target = input.target;
     }
     if (input.messageFile !== undefined) {
-      writeDraft(input.messageFile, renderMessage(readDraft(input.messageFile), plan));
+      writeDraft(input.messageFile, draft!);
+      assertDraft(readDraft(input.messageFile));
       applied.messageFile = input.messageFile;
     }
   } catch (error) {

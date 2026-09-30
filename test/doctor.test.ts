@@ -2115,8 +2115,14 @@ describe('#527 unattended capture initiator', () => {
         observed === 'initialize-timed-out'
           ? 'registered-command-unverified'
           : 'registered-command-unhealthy',
-      command,
+      command: expect.any(String),
     });
+    // Reports abbreviate HOME for privacy. A TMPDIR under HOME must still
+    // identify the exact registered executable, just as an outside-home one.
+    const reportedCommand = row?.evidence['command'];
+    expect(reportedCommand?.startsWith('~/')
+      ? join(process.env['HOME'] ?? '', reportedCommand.slice(2))
+      : reportedCommand).toBe(command);
   });
 
   it('reports a foreign MCP server as unhealthy', () => {

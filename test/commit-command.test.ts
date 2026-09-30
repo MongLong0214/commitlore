@@ -29,6 +29,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { runCapture } from '../src/commands/capture.js';
 import { recordLanded, runCommit } from '../src/commands/commit.js';
+import { unparsedTrailerLines } from '../src/commands/validate.js';
 import { installHook } from '../src/commands/hooks.js';
 import { readConsideration } from '../src/core/commit-consideration.js';
 import { listPendingNonces, readPending } from '../src/core/pending.js';
@@ -105,6 +106,57 @@ const head = (cwd: string): string => git(cwd, ['rev-parse', 'HEAD']).trim();
 const headBody = (cwd: string): string => git(cwd, ['log', '-1', '--format=%B']);
 
 describe('recording nothing is a complete answer', () => {
+  it('refuses a recognized line Git will not index, while accepting a separate trailer paragraph', () => {
+    const { cwd } = repo('unparsed-trailer');
+    const before = head(cwd);
+    const bad = 'feat: change a\n\nRefs #1\nLimit: the thing left undone';
+    expect(execFileSync('git', ['interpret-trailers', '--parse'], { cwd, input: bad, encoding: 'utf8' })).toBe('');
+    const refused = runCommit({ cwd, message: bad });
+    expect(refused.outcome).toBe('refused');
+    expect(refused.lines.join('\n')).toMatch(/Limit.*not.*index/i);
+    expect(head(cwd)).toBe(before);
+    expect(readConsideration(cwd)).toBeNull();
+
+    const good = runCommit({ cwd, message: 'feat: change a\n\nRefs #1\n\nLimit: the thing left undone' });
+    expect(good.outcome).toBe('empty');
+    expect(execFileSync('git', ['interpret-trailers', '--parse'], { cwd, input: headBody(cwd), encoding: 'utf8' })).toContain('Limit: the thing left undone');
+  });
+  it.each(['Limit:bare', 'X-Team: bare', '\tWarn: bare'])('refuses an unparsed %s without hooks', (line) => {
+    const { cwd } = repo('unparsed-without-hooks', { hooks: false });
+    const before = head(cwd);
+    const message = line.startsWith('\t') ? `feat: change\n\n${line}` : line;
+    expect(execFileSync('git', ['interpret-trailers', '--parse'], { cwd, input: message, encoding: 'utf8' })).toBe('');
+    expect(runCommit({ cwd, message }).outcome).toBe('refused');
+    expect(head(cwd)).toBe(before);
+  });
+  it('accepts a mixed paragraph when Git recognizes a configured trailer', () => {
+    const { cwd } = repo('configured-trailer', { hooks: false });
+    git(cwd, ['config', 'trailer.limit.key', 'Limit']);
+    const message = 'feat: change\n\nRefs #1\nLimit: accepted by Git';
+    expect(execFileSync('git', ['interpret-trailers', '--parse'], { cwd, input: message, encoding: 'utf8' })).toContain('Limit: accepted by Git');
+    expect(runCommit({ cwd, message }).outcome).toBe('empty');
+  });
+  it.each([
+    'feat: change\n\nLimit: accepted\nRefs #1\nWarn: accepted',
+    'feat: change\n\nLimit: accepted  ',
+    'feat: change\n\nLimit: same\nRecord-Id: r-abcdef\n\nother subject\n\nLimit: same\nRecord-Id: r-abcdef',
+  ])('does not diagnose a Git-parsed line as missing: %s', (message) => {
+    const { cwd } = repo('parsed-line-location', { hooks: false });
+    git(cwd, ['config', 'trailer.limit.key', 'Limit']);
+    expect(execFileSync('git', ['interpret-trailers', '--parse'], { cwd, input: message, encoding: 'utf8' })).toContain('Limit:');
+    expect(unparsedTrailerLines(message, cwd)).toEqual([]);
+  });
+  it('preserves value-sensitive Git comment prefixes while probing a line', () => {
+    const { cwd } = repo('comment-prefix', { hooks: false });
+    git(cwd, ['config', 'core.commentString', 'Limit: ']);
+    const parsed = 'feat: change\n\nLimit:bare';
+    expect(execFileSync('git', ['interpret-trailers', '--parse'], { cwd, input: parsed, encoding: 'utf8' })).toContain('Limit: bare');
+    expect(unparsedTrailerLines(parsed, cwd)).toEqual([]);
+    git(cwd, ['config', 'core.commentString', 'Limit: ignored']);
+    const ignored = 'feat: change\n\nLimit: ignored\nWarn: visible';
+    const gitIgnoredIt = !execFileSync('git', ['interpret-trailers', '--parse'], { cwd, input: ignored, encoding: 'utf8' }).includes('Limit:');
+    expect(unparsedTrailerLines(ignored, cwd)).toEqual(gitIgnoredIt ? [{ line: 3, key: 'Limit', tabIndented: false }] : []);
+  });
   it('commits with no draft and no transcript, and says so without hedging', () => {
     const { cwd } = repo('empty');
     const before = head(cwd);

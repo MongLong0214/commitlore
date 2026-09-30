@@ -1,11 +1,11 @@
 {
   "name": "commitlore",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Git-native, lifecycle-aware decision memory for coding agents",
   "license": "MIT",
   "private": true,
   "commitlore": {
-    "indexSchemaVersion": 5
+    "indexSchemaVersion": 6
   },
   "type": "module",
   "files": [

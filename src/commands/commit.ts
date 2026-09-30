@@ -41,6 +41,7 @@ import {
   PREPARE_COMMIT_MSG_HOOK_NAME,
 } from '../hooks/prepare-commit-msg.js';
 import { runCapture } from './capture.js';
+import { unparsedTrailerLines } from './validate.js';
 
 export type CommitOutcome =
   /** Committed, and every verified record is in the message. */
@@ -264,6 +265,20 @@ export const runCommit = (opts: CommitOptions): CommitResult => {
     return result('error', [
       'nothing is staged, so there is no change to record or commit',
       'stage what this commit should carry, or pass --all for tracked changes',
+    ]);
+  }
+
+  const unparsed = unparsedTrailerLines(opts.message, cwd);
+  if (unparsed.length > 0) {
+    return result('refused', [
+      ...unparsed.map(({ line, key, tabIndented }) =>
+        `line ${line}: ${key}: will not be indexed because Git did not parse it as a trailer; ` +
+        (tabIndented
+          ? 'remove the leading tab'
+          : 'put non-trailer prose in its own paragraph and separate the trailer block with a blank line'),
+      ),
+      'nothing was committed or bound',
+      ...(stagedByAll ? ['--all already staged your tracked changes; they are still staged'] : []),
     ]);
   }
 

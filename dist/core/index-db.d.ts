@@ -91,7 +91,7 @@ export type IndexDatabase = DatabaseSync;
  * report the other complete. A v4 index left partial therefore has no position
  * to carry forward, and the version gate rebuilding it is that restart path.
  */
-export declare const SCHEMA_VERSION = 5;
+export declare const SCHEMA_VERSION = 6;
 export declare const NOTES_REF = "refs/notes/commitlore";
 export type RecordSource = 'commit' | 'notes';
 /** One indexed trailer, with the commit context a consumer route needs. */

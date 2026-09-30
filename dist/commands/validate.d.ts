@@ -74,6 +74,18 @@ export interface ValidationCheck {
     status: CheckStatus;
     reason?: string;
 }
+export interface UnparsedTrailerWarning {
+    line: number;
+    key: string;
+    tabIndented: boolean;
+}
+/**
+ * Ask the parser about each candidate's actual occurrence. Appending to its
+ * value retains the original key, whitespace and comment prefix, avoiding guesses
+ * from normalized output (which drops prose and trailing whitespace).
+ * The probe is in memory only; the commit message is never rewritten.
+ */
+export declare const unparsedTrailerLines: (message: string, cwd: string) => UnparsedTrailerWarning[];
 /**
  * Validates one or more commit messages. Never throws for an input problem:
  * every failure comes back as a `code`, so the caller decides how to exit.

@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { type ExecGitOptions, execGit, execGitOrThrow } from './git.js';
-import { KNOWN_KEYS, type Trailer } from './types.js';
+import { KNOWN_KEYS, isCommitLoreKey, type Trailer } from './types.js';
 
 const RECORD_ID_KEY = 'Record-Id';
 
@@ -191,12 +191,12 @@ const EMPTY_ISOLATED: IsolatedBlocks = { get: () => undefined };
  * so which paragraphs are tested stays decided in this module for every reader
  * alike — the same reason {@link parseRecordBlocksWithAtom} exists.
  */
-export const isolateBlocks = (messages: readonly string[]): IsolatedBlocks => {
+export const isolateBlocks = (messages: readonly string[], opts: { notes?: boolean } = {}): IsolatedBlocks => {
   const wanted = new Set<string>();
   for (const message of messages) {
     const paragraphs = splitParagraphs(message);
     for (const paragraph of paragraphs.slice(0, -1)) {
-      if (MENTIONS_RECORD_ID.test(paragraph)) wanted.add(paragraph);
+      if (opts.notes === true || MENTIONS_RECORD_ID.test(paragraph)) wanted.add(paragraph);
     }
   }
   if (wanted.size === 0) return EMPTY_ISOLATED;
@@ -397,8 +397,8 @@ const parseOutputLine = (line: string): Trailer => {
  * A message with no trailer paragraph yields `[]` — that is a commit which
  * recorded nothing, not an error (SPEC §2.1 B7, §4).
  */
-export const parseCommitMessage = (msg: string): Trailer[] => {
-  const stdout = execGitOrThrow(PARSE_ARGS, { stdin: msg });
+export const parseCommitMessage = (msg: string, opts: ExecGitOptions = {}): Trailer[] => {
+  const stdout = execGitOrThrow(PARSE_ARGS, { ...opts, stdin: msg });
   return stdout
     .split('\n')
     .filter((line) => line.length > 0)
@@ -521,8 +521,8 @@ const splitParagraphs = (message: string): string[] =>
  * a regex against it; git decides, the same as everywhere else in this module
  * (SPEC §2.1 B3).
  */
-const asIsolatedBlock = (paragraph: string): Trailer[] =>
-  parseCommitMessage(`x\n\n${paragraph}`);
+const asIsolatedBlock = (paragraph: string, cwd?: string): Trailer[] =>
+  parseCommitMessage(`x\n\n${paragraph}`, cwd === undefined ? {} : { cwd });
 
 /**
  * Parses a message into its record blocks (SPEC §2.4).
@@ -567,9 +567,9 @@ const asIsolatedBlock = (paragraph: string): Trailer[] =>
  */
 export const parseRecordBlocks = (
   message: string,
-  opts: { last?: Trailer[]; isolated?: IsolatedBlocks } = {},
+  opts: { last?: Trailer[]; isolated?: IsolatedBlocks; cwd?: string; notes?: boolean } = {},
 ): Trailer[][] => {
-  const last = opts.last ?? parseCommitMessage(message);
+  const last = opts.last ?? parseCommitMessage(message, opts.cwd === undefined ? {} : { cwd: opts.cwd });
   const paragraphs = splitParagraphs(message);
   const earlier = paragraphs.slice(0, -1);
 
@@ -587,7 +587,10 @@ export const parseRecordBlocks = (
     // deliberately loose -- case-insensitive, unanchored -- because being
     // wrong in the direction of one extra parse costs 8ms and being wrong the
     // other way loses a record.
-    if (!MENTIONS_RECORD_ID.test(paragraph)) continue;
+    // Notes contain canonical record paragraphs, not ordinary commit prose.
+    // Their earlier blocks need no identity; the Git oracle still decides
+    // whether each paragraph is a trailer block.
+    if (opts.notes !== true && !MENTIONS_RECORD_ID.test(paragraph)) continue;
     // `opts.isolated` is the same probe, already run for many paragraphs at
     // once ({@link isolateBlocks}). It replaces only where this paragraph's
     // answer comes from -- which paragraphs are tested, and whether the answer
@@ -595,13 +598,43 @@ export const parseRecordBlocks = (
     // batch and a reader without it compose the grammar in one place. A batch
     // that could not be attributed returns nothing for every paragraph, and
     // this falls through to the process.
-    const candidate = opts.isolated?.get(paragraph) ?? asIsolatedBlock(paragraph);
+    const candidate = opts.isolated?.get(paragraph) ?? asIsolatedBlock(paragraph, opts.cwd);
     if (candidate.length === 0) continue;
-    if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
+    if (!candidate.some((trailer) => opts.notes === true
+      ? isCommitLoreKey(trailer.key)
+      : trailer.key === RECORD_ID_KEY)) continue;
     extra.push(candidate);
   }
 
   return last.length === 0 ? extra : [...extra, last];
+};
+
+/** Refuse silent record loss, including repeated identical blocks. */
+export const assertRecordBlocksRecovered = (
+  expected: readonly Trailer[][],
+  actual: readonly Trailer[][],
+  cwd?: string,
+  allowAdditional = false,
+): void => {
+  const signature = (block: readonly Trailer[]): string => JSON.stringify(
+    block.map(({ key, value }) => [key, value]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+  );
+  const normalized = expected.map((block) => {
+    const parsed = asIsolatedBlock(serializeTrailers(block), cwd);
+    // Git may unfold values, but must not drop any key or occurrence.
+    if (block.length === 0 || parsed.length !== block.length ||
+      JSON.stringify(parsed.map((t) => t.key).sort()) !== JSON.stringify(block.map((t) => t.key).sort())) {
+      throw new Error('record readback cannot recover every intended trailer');
+    }
+    return signature(parsed);
+  }).sort();
+  const recovered = actual.map(signature).sort();
+  for (const block of normalized) {
+    const at = recovered.indexOf(block);
+    if (at === -1) throw new Error('record readback did not recover every intended block and trailer');
+    recovered.splice(at, 1);
+  }
+  if (!allowAdditional && recovered.length > 0) throw new Error('record readback recovered unexpected blocks');
 };
 
 /** One block from `parseRecordBlocks`, labeled for display (`commitlore parse`). */

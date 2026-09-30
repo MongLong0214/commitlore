@@ -15,7 +15,7 @@
  * `spec/contract-cases/stale-*.yaml` is the authority for every rule below;
  * this module is the implementation of those cases, not the definition.
  */
-import { RECORD_ID_RE, SINGLE_VALUED, } from './types.js';
+import { RECORD_ID_RE, SINGLE_VALUED, parseProvenance, } from './types.js';
 const RECORD_ID_KEY = 'Record-Id';
 /** Rewritten per block by the notes mirroring, so it is not payload content. */
 const PROVENANCE_KEY = 'Provenance';
@@ -456,6 +456,45 @@ const isOwnCommitMirror = (record, group) => {
         (payloadSignatureWithoutProvenance(sibling) === payloadSignatureWithoutProvenance(record) ||
             isFoldedComponent(record, sibling)));
 };
+/** A transport stamp is evidence of a link only when its source is in this reachable stream. */
+const inheritedOrigin = (record, group) => {
+    if (record.source !== 'notes')
+        return undefined;
+    const stamps = record.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY);
+    if (stamps.length !== 1)
+        return undefined;
+    const provenance = parseProvenance(stamps[0]?.value);
+    if (provenance?.kind !== 'inherited')
+        return undefined;
+    if (record.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY).length !== 1)
+        return undefined;
+    const origins = group.filter((candidate) => candidate.source === 'commit' &&
+        candidate.sha?.toLowerCase() === provenance.sha.toLowerCase() &&
+        candidate.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY).length === 1 &&
+        candidate.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY).length <= 1);
+    return origins.length === 1 ? origins[0] : undefined;
+};
+/**
+ * Compare declarations, not inherited transport copies. A verified origin's
+ * provenance replaces only the transport stamp for comparison; every other
+ * difference still collides. Original records remain intact for trust grading.
+ */
+const collisionRivals = (group) => group.flatMap((record) => {
+    if (isOwnCommitMirror(record, group))
+        return [];
+    const origin = inheritedOrigin(record, group);
+    if (origin === undefined)
+        return [record];
+    if (payloadSignatureWithoutProvenance(record) === payloadSignatureWithoutProvenance(origin))
+        return [];
+    return [{
+            ...record,
+            trailers: [
+                ...record.trailers.filter((trailer) => trailer.key !== PROVENANCE_KEY),
+                ...origin.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY),
+            ],
+        }];
+});
 /**
  * A notes mirror diverging from the commit block it mirrors. Each note that is
  * its own commit's mirror is dropped before the comparison, so the message
@@ -464,7 +503,7 @@ const isOwnCommitMirror = (record, group) => {
 const notesPayloadDiverges = (group) => {
     if (!group.some((record) => record.source === 'notes'))
         return false;
-    const rivals = group.filter((record) => !isOwnCommitMirror(record, group));
+    const rivals = collisionRivals(group);
     return new Set(rivals.map(payloadSignature)).size > 1;
 };
 const hasAmbiguousGroup = (group) => sharesACommit(group) || instantConflicts(group).size > 0 || notesPayloadDiverges(group);
@@ -505,7 +544,7 @@ export const divergentIdKeys = (records) => {
             continue;
         // Same exclusion the divergence test makes: a note that mirrors its own
         // commit is not a rival, so the pair speaks with one voice.
-        const rivals = group.filter((record) => !isOwnCommitMirror(record, group));
+        const rivals = collisionRivals(group);
         if (rivals.length < 2)
             continue;
         const keys = new Set(rivals.flatMap((record) => record.trailers.map((trailer) => trailer.key)));
