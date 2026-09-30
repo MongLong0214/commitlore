@@ -19,6 +19,7 @@
 import {
   RECORD_ID_RE,
   SINGLE_VALUED,
+  parseProvenance,
   type Lifecycle,
   type Record,
   type Trailer,
@@ -537,6 +538,42 @@ const isOwnCommitMirror = (record: StaleRecord, group: StaleRecord[]): boolean =
   );
 };
 
+/** A transport stamp is evidence of a link only when its source is in this reachable stream. */
+const inheritedOrigin = (record: StaleRecord, group: StaleRecord[]): StaleRecord | undefined => {
+  if (record.source !== 'notes') return undefined;
+  const stamps = record.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY);
+  if (stamps.length !== 1) return undefined;
+  const provenance = parseProvenance(stamps[0]?.value);
+  if (provenance?.kind !== 'inherited') return undefined;
+  if (record.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY).length !== 1) return undefined;
+  const origins = group.filter((candidate) =>
+    candidate.source === 'commit' &&
+    candidate.sha?.toLowerCase() === provenance.sha.toLowerCase() &&
+    candidate.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY).length === 1 &&
+    candidate.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY).length <= 1,
+  );
+  return origins.length === 1 ? origins[0] : undefined;
+};
+
+/**
+ * Compare declarations, not inherited transport copies. A verified origin's
+ * provenance replaces only the transport stamp for comparison; every other
+ * difference still collides. Original records remain intact for trust grading.
+ */
+const collisionRivals = (group: StaleRecord[]): StaleRecord[] => group.flatMap((record) => {
+  if (isOwnCommitMirror(record, group)) return [];
+  const origin = inheritedOrigin(record, group);
+  if (origin === undefined) return [record];
+  if (payloadSignatureWithoutProvenance(record) === payloadSignatureWithoutProvenance(origin)) return [];
+  return [{
+    ...record,
+    trailers: [
+      ...record.trailers.filter((trailer) => trailer.key !== PROVENANCE_KEY),
+      ...origin.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY),
+    ],
+  }];
+});
+
 /**
  * A notes mirror diverging from the commit block it mirrors. Each note that is
  * its own commit's mirror is dropped before the comparison, so the message
@@ -544,7 +581,7 @@ const isOwnCommitMirror = (record: StaleRecord, group: StaleRecord[]): boolean =
  */
 const notesPayloadDiverges = (group: StaleRecord[]): boolean => {
   if (!group.some((record) => record.source === 'notes')) return false;
-  const rivals = group.filter((record) => !isOwnCommitMirror(record, group));
+  const rivals = collisionRivals(group);
   return new Set(rivals.map(payloadSignature)).size > 1;
 };
 
@@ -592,7 +629,7 @@ export const divergentIdKeys = (records: StaleRecord[]): ReadonlySet<string> => 
     if (!notesPayloadDiverges(group)) continue;
     // Same exclusion the divergence test makes: a note that mirrors its own
     // commit is not a rival, so the pair speaks with one voice.
-    const rivals = group.filter((record) => !isOwnCommitMirror(record, group));
+    const rivals = collisionRivals(group);
     if (rivals.length < 2) continue;
 
     const keys = new Set(
