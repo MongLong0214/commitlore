@@ -549,6 +549,49 @@ describe('squash-preserve', () => {
     expect(renderMessage(once, plan)).toBe(once);
   });
 
+  it('validates a two-record preserved draft against its reachable originals (bug-issue-1147)', () => {
+    const repo = initRepo('squash-validate-draft');
+    const base = commitFile(repo, 'seed.txt', 'seed\n', 'seed\n');
+    const first = commitFile(
+      repo,
+      'first.txt',
+      'first\n',
+      'first decision\n\nLimit: the upstream service caps workers at three\nUnverified: a fifth worker has not been load tested\nEvidence: test/fixture-1147.md\nRecord-Id: r-draft1147a\n',
+    );
+    const second = commitFile(
+      repo,
+      'second.txt',
+      'second\n',
+      'second decision\n\nWarn: retain the backpressure before increasing retries\nRecord-Id: r-draft1147b\n',
+    );
+    const draft = draftFile(repo, 'squash two reachable decisions\n');
+
+    expect(runSquashPreserve({ range: `${base}..HEAD`, messageFile: draft, cwd: repo }).code).toBe(0);
+
+    const result = runValidate({ messageFile: draft, cwd: repo });
+
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    const blocks = parseRecordBlocks(readFileSync(draft, 'utf8'));
+    expect(value(blockById(blocks, 'r-draft1147a'), 'Provenance')).toBe(`inherited ${first}`);
+    expect(value(blockById(blocks, 'r-draft1147a'), 'Unverified')).toBe(
+      'a fifth worker has not been load tested',
+    );
+    expect(value(blockById(blocks, 'r-draft1147a'), 'Evidence')).toBe('test/fixture-1147.md');
+    expect(value(blockById(blocks, 'r-draft1147b'), 'Provenance')).toBe(`inherited ${second}`);
+
+    const original = readFileSync(draft, 'utf8');
+    const expectDuplicate = (message: string): void => {
+      writeFileSync(draft, message);
+      expect(runValidate({ messageFile: draft, cwd: repo }).violations).toContainEqual(
+        expect.objectContaining({ rule: 'duplicate-id' }),
+      );
+    };
+    expectDuplicate(original.replace('caps workers at three', 'caps workers at four'));
+    expectDuplicate(original.replace(`inherited ${first}`, `inherited ${second}`));
+    expectDuplicate(original.replace(`inherited ${first}`, `inherited ${'a'.repeat(40)}`));
+  });
+
   it('changes nothing when neither --message-file nor --target is given', () => {
     const { repo, range } = squashFixture('squash-dry');
 
