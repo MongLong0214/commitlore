@@ -23,6 +23,11 @@ Three fixes for trailer visibility and squash preservation:
   missing blocks before publication. A message draft that cannot preserve its
   intended blocks is refused before either destination changes.
 
+- **The production dependency audit passes again.** The MCP SDK's transitive
+  `ip-address` dependency moves from 10.3.1 to compatible 10.7.2, which includes
+  the fixes for [link-local classification](https://github.com/advisories/GHSA-rpw4-54j3-4h4q)
+  and [NAT64 local-use classification](https://github.com/advisories/GHSA-2vr4-cq9g-pvrc).
+
 This is a patch release: it repairs existing behavior and adds no command,
 flag, trailer key, or host setting.
 
