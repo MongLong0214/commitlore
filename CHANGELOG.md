@@ -4,6 +4,28 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.7.1
+
+Three fixes for trailer visibility and squash preservation:
+
+- **Unindexed trailer lines are refused before commit (#1143).** Recognized
+  CommitLore lines that Git does not parse as records now name their line and
+  explain how to separate a trailer block from prose. Git's parsed message and
+  raw commit bytes remain the authority.
+- **Inherited origin copies do not create false ID collisions (#1144).** A
+  notes copy must name a reachable source with the same identity and payload.
+  Changed content and genuine duplicate declarations still collide; notes
+  author and signature grading remain independent of the origin link.
+- **Every no-ID squash notes block remains query-visible (#1145).** Readers
+  recover canonical notes paragraphs individually, including previously written
+  notes, without minting identities or rewriting raw Git data. The derived index
+  is rebuilt from schema v5 to v6. Writers check actual readback and stop on
+  missing blocks before publication. A message draft that cannot preserve its
+  intended blocks is refused before either destination changes.
+
+This is a patch release: it repairs existing behavior and adds no command,
+flag, trailer key, or host setting.
+
 ## 1.7.0
 
 Five fixes found while upgrading a machine to 1.6.0. In each case something
