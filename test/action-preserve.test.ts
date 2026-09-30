@@ -34,6 +34,7 @@ import { load } from 'js-yaml';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestRepo } from './git-fixtures.js';
+import { runQuery } from '../src/core/query.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
@@ -261,6 +262,28 @@ beforeAll(() => {
 }, 180_000);
 
 describe('a squash merge', () => {
+  it('publishes every no-ID source block as a query-visible record', () => {
+    const scenario = squashScenario('no-id', RECORDS.map((message) => message.replace(/^Record-Id:.*\n/gm, '')));
+    const run = runPreserve(scenario);
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.outputs['records']).toBe('3');
+    expect(run.outputs['pushed']).toBe('true');
+    expect(runQuery({ cwd: scenario.repo }).records).toHaveLength(3);
+    expect(noteOn(scenario.origin, scenario.mergeSha)).toBe(noteOn(scenario.repo, scenario.mergeSha));
+  });
+  it.skipIf(process.platform === 'win32')('does not publish when actual note readback loses two written blocks', () => {
+    const scenario = squashScenario('readback-loss');
+    const bin = tempDir('loss-git');
+    // Resolve the executable through PATH, not git's helper directory.
+    const executable = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+    const wrapper = join(bin, 'git');
+    writeFileSync(wrapper, `#!/bin/sh\n"$COMMITLORE_REAL_GIT" "$@"\nresult=$?\nif [ "$result" -eq 0 ] && [ "$1" = notes ] && [ "$3" = add ]; then\n  "$COMMITLORE_REAL_GIT" notes --ref=refs/notes/commitlore add -f -m 'Limit: only the last block remained' "$COMMITLORE_MERGE_SHA"\nfi\nexit "$result"\n`);
+    chmodSync(wrapper, 0o755);
+    const run = runPreserve(scenario, { PATH: `${bin}:${process.env.PATH ?? ''}`, COMMITLORE_REAL_GIT: executable });
+    expect(run.status).toBe(2);
+    expect(`${run.stdout}${run.stderr}`).toMatch(/read.back|recover/i);
+    expect(noteOn(scenario.origin, scenario.mergeSha)).toBeNull();
+  });
   it('carries the branch records onto the merge commit and publishes them', () => {
     const scenario = squashScenario('inherit');
     const run = runPreserve(scenario);
