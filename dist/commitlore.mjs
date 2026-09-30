@@ -11680,12 +11680,12 @@ var parseCommitMessageWithAtom = (message, atom) => atom === void 0 || atomIsAmb
 var MENTIONS_RECORD_ID = /record-id/i;
 var PROBE_BATCH = 128;
 var EMPTY_ISOLATED = { get: () => void 0 };
-var isolateBlocks = (messages) => {
+var isolateBlocks = (messages, opts = {}) => {
   const wanted = /* @__PURE__ */ new Set();
   for (const message of messages) {
     const paragraphs = splitParagraphs(message);
     for (const paragraph of paragraphs.slice(0, -1)) {
-      if (MENTIONS_RECORD_ID.test(paragraph)) wanted.add(paragraph);
+      if (opts.notes === true || MENTIONS_RECORD_ID.test(paragraph)) wanted.add(paragraph);
     }
   }
   if (wanted.size === 0) return EMPTY_ISOLATED;
@@ -11820,8 +11820,8 @@ var parseOutputLine = (line2) => {
     `git interpret-trailers emitted an unparseable line: ${JSON.stringify(line2)}`
   );
 };
-var parseCommitMessage = (msg) => {
-  const stdout = execGitOrThrow(PARSE_ARGS, { stdin: msg });
+var parseCommitMessage = (msg, opts = {}) => {
+  const stdout = execGitOrThrow(PARSE_ARGS, { ...opts, stdin: msg });
   return stdout.split("\n").filter((line2) => line2.length > 0).map(parseOutputLine);
 };
 var RULED_OUT_SEPARATOR = "|";
@@ -11859,22 +11859,41 @@ var serializeTrailers = (trailers) => {
   return ordered.map(serializeOne).join("");
 };
 var splitParagraphs = (message) => message.replace(/\r\n/g, "\n").split(/\n\n+/).filter((paragraph) => paragraph.trim() !== "");
-var asIsolatedBlock = (paragraph) => parseCommitMessage(`x
+var asIsolatedBlock = (paragraph, cwd) => parseCommitMessage(`x
 
-${paragraph}`);
+${paragraph}`, cwd === void 0 ? {} : { cwd });
 var parseRecordBlocks = (message, opts = {}) => {
-  const last = opts.last ?? parseCommitMessage(message);
+  const last = opts.last ?? parseCommitMessage(message, opts.cwd === void 0 ? {} : { cwd: opts.cwd });
   const paragraphs = splitParagraphs(message);
   const earlier = paragraphs.slice(0, -1);
   const extra = [];
   for (const paragraph of earlier) {
-    if (!MENTIONS_RECORD_ID.test(paragraph)) continue;
-    const candidate = opts.isolated?.get(paragraph) ?? asIsolatedBlock(paragraph);
+    if (opts.notes !== true && !MENTIONS_RECORD_ID.test(paragraph)) continue;
+    const candidate = opts.isolated?.get(paragraph) ?? asIsolatedBlock(paragraph, opts.cwd);
     if (candidate.length === 0) continue;
-    if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
+    if (!candidate.some((trailer) => opts.notes === true ? isCommitLoreKey(trailer.key) : trailer.key === RECORD_ID_KEY)) continue;
     extra.push(candidate);
   }
   return last.length === 0 ? extra : [...extra, last];
+};
+var assertRecordBlocksRecovered = (expected, actual, cwd, allowAdditional = false) => {
+  const signature = (block) => JSON.stringify(
+    block.map(({ key, value }) => [key, value]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  );
+  const normalized = expected.map((block) => {
+    const parsed = asIsolatedBlock(serializeTrailers(block), cwd);
+    if (block.length === 0 || parsed.length !== block.length || JSON.stringify(parsed.map((t) => t.key).sort()) !== JSON.stringify(block.map((t) => t.key).sort())) {
+      throw new Error("record readback cannot recover every intended trailer");
+    }
+    return signature(parsed);
+  }).sort();
+  const recovered = actual.map(signature).sort();
+  for (const block of normalized) {
+    const at = recovered.indexOf(block);
+    if (at === -1) throw new Error("record readback did not recover every intended block and trailer");
+    recovered.splice(at, 1);
+  }
+  if (!allowAdditional && recovered.length > 0) throw new Error("record readback recovered unexpected blocks");
 };
 var labelRecordBlocks = (message) => {
   const blocks = parseRecordBlocks(message);
@@ -11933,7 +11952,17 @@ var writeBody = (sha, body, opts) => {
   }
 };
 var writeRecord = (sha, trailers, opts = {}) => writeBody(sha, serializeTrailers(trailers), opts);
-var writeRecordBlocks = (sha, blocks, opts = {}) => writeBody(sha, blocks.map(serializeTrailers).join("\n"), opts);
+var writeRecordBlocks = (sha, blocks, opts = {}) => {
+  const body = blocks.map(serializeTrailers).join("\n");
+  assertRecordBlocksRecovered(blocks, parseRecordBlocks(`${SYNTHETIC_SUBJECT}
+
+${body}`, {
+    notes: true,
+    ...opts.cwd === void 0 ? {} : { cwd: opts.cwd }
+  }), opts.cwd);
+  writeBody(sha, body, opts);
+  assertRecordBlocksRecovered(blocks, readRecordBlocks(sha, opts), opts.cwd);
+};
 var showNote = (sha, opts) => {
   const object3 = resolveObject(sha, opts);
   const result2 = execGit(
@@ -11957,7 +11986,11 @@ var readRecordBlocks = (sha, opts = {}, isolated) => {
   const message = `${SYNTHETIC_SUBJECT}
 
 ${note}`;
-  return parseRecordBlocks(message, isolated === void 0 ? {} : { isolated });
+  return parseRecordBlocks(message, {
+    notes: true,
+    ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
+    ...isolated === void 0 ? {} : { isolated }
+  });
 };
 var noteMessages = (shas, opts = {}) => {
   const messages = /* @__PURE__ */ new Map();
@@ -13112,7 +13145,7 @@ var loadDatabaseCtor = () => {
     );
   }
 };
-var SCHEMA_VERSION = 5;
+var SCHEMA_VERSION = 6;
 var NOTES_REF2 = "refs/notes/commitlore";
 var RESUME_SLICE_MS = 750;
 var LOG_BATCH = 1024;
@@ -13467,7 +13500,7 @@ var readNotesFor = (cwd, commits, excluded, budget, cost, guaranteeFirstBatch = 
     const noteMessages2 = withText.map((entry) => `${NOTE_SUBJECT}
 
 ${entry.text}`);
-    const isolatedNotes = isolateBlocks(noteMessages2);
+    const isolatedNotes = isolateBlocks(noteMessages2, { notes: true });
     const ownBlocks = parseMessagesBatched(noteMessages2);
     const batchRecords = [];
     for (const { note, text } of withText) {
@@ -13476,6 +13509,7 @@ ${entry.text}`);
 ${text}`;
       const own = ownBlocks?.get(message);
       const blocks = parseRecordBlocks(message, {
+        notes: true,
         isolated: isolatedNotes,
         ...own === void 0 ? {} : { last: own }
       });
@@ -15674,9 +15708,34 @@ var isOwnCommitMirror = (record2, group) => {
     (sibling) => sibling.source === "commit" && sibling.sha === record2.sha && (payloadSignatureWithoutProvenance(sibling) === payloadSignatureWithoutProvenance(record2) || isFoldedComponent(record2, sibling))
   );
 };
+var inheritedOrigin = (record2, group) => {
+  if (record2.source !== "notes") return void 0;
+  const stamps = record2.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY);
+  if (stamps.length !== 1) return void 0;
+  const provenance = parseProvenance(stamps[0]?.value);
+  if (provenance?.kind !== "inherited") return void 0;
+  if (record2.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY2).length !== 1) return void 0;
+  const origins = group.filter(
+    (candidate) => candidate.source === "commit" && candidate.sha?.toLowerCase() === provenance.sha.toLowerCase() && candidate.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY2).length === 1 && candidate.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY).length <= 1
+  );
+  return origins.length === 1 ? origins[0] : void 0;
+};
+var collisionRivals = (group) => group.flatMap((record2) => {
+  if (isOwnCommitMirror(record2, group)) return [];
+  const origin = inheritedOrigin(record2, group);
+  if (origin === void 0) return [record2];
+  if (payloadSignatureWithoutProvenance(record2) === payloadSignatureWithoutProvenance(origin)) return [];
+  return [{
+    ...record2,
+    trailers: [
+      ...record2.trailers.filter((trailer) => trailer.key !== PROVENANCE_KEY),
+      ...origin.trailers.filter((trailer) => trailer.key === PROVENANCE_KEY)
+    ]
+  }];
+});
 var notesPayloadDiverges = (group) => {
   if (!group.some((record2) => record2.source === "notes")) return false;
-  const rivals = group.filter((record2) => !isOwnCommitMirror(record2, group));
+  const rivals = collisionRivals(group);
   return new Set(rivals.map(payloadSignature)).size > 1;
 };
 var hasAmbiguousGroup = (group) => sharesACommit(group) || instantConflicts(group).size > 0 || notesPayloadDiverges(group);
@@ -15686,7 +15745,7 @@ var divergentIdKeys = (records) => {
   const diverged = /* @__PURE__ */ new Set();
   for (const group of groupsByRecordId(records).values()) {
     if (!notesPayloadDiverges(group)) continue;
-    const rivals = group.filter((record2) => !isOwnCommitMirror(record2, group));
+    const rivals = collisionRivals(group);
     if (rivals.length < 2) continue;
     const keys = new Set(
       rivals.flatMap((record2) => record2.trailers.map((trailer) => trailer.key))
@@ -19489,9 +19548,9 @@ var register3 = (program3) => {
 
 // src/commands/commit.ts
 import { spawnSync as spawnSync4 } from "node:child_process";
-import { accessSync, constants, existsSync as existsSync8, mkdtempSync as mkdtempSync2, readFileSync as readFileSync9, rmSync as rmSync4, writeFileSync as writeFileSync7 } from "node:fs";
+import { accessSync, constants, existsSync as existsSync8, mkdtempSync as mkdtempSync2, readFileSync as readFileSync10, rmSync as rmSync5, writeFileSync as writeFileSync7 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { join as join4, resolve as resolve7 } from "node:path";
+import { join as join4, resolve as resolve8 } from "node:path";
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash7, randomBytes as randomBytes5 } from "node:crypto";
@@ -20000,15 +20059,937 @@ var register4 = (program3) => {
   });
 };
 
+// src/commands/validate.ts
+import { readFileSync as readFileSync9, rmSync as rmSync4 } from "node:fs";
+import { randomBytes as randomBytes6 } from "node:crypto";
+import { resolve as resolve7 } from "node:path";
+
+// src/commands/stale.ts
+var DEFAULT_SCAN_LIMIT = 1e3;
+var UNIT = "";
+var LOG_FORMAT2 = `%H${UNIT}%cI${UNIT}%B`;
+var EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguous argument 'HEAD'/;
+var CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
+var RECORD_ID_KEY4 = "Record-Id";
+var UNRESOLVED_WANT = "undetermined \u2014 the scanned window does not carry this Record-Id and no commit message declares it; a declaration in the notes mirror outside the window would not be found here, so run with --all-history to decide";
+var newCollectCache = () => ({
+  commits: /* @__PURE__ */ new Map(),
+  notes: /* @__PURE__ */ new Map(),
+  blocks: /* @__PURE__ */ new Map(),
+  last: /* @__PURE__ */ new Map()
+});
+var parseChunk = (chunk, cache, atoms, isolated) => {
+  const firstSep = chunk.indexOf(UNIT);
+  if (firstSep === -1) return [];
+  const secondSep = chunk.indexOf(UNIT, firstSep + 1);
+  if (secondSep === -1) return [];
+  const sha = chunk.slice(0, firstSep);
+  const cached2 = cache?.get(sha);
+  if (cached2 !== void 0) return cached2;
+  const committedAt = canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep));
+  const message = chunk.slice(secondSep + 1);
+  const blocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha), isolated) : [];
+  const records = blocks.length === 0 ? [{ sha, committedAt, trailers: [], source: "commit" }] : blocks.map((trailers) => ({ sha, committedAt, trailers, source: "commit" }));
+  cache?.set(sha, records);
+  return records;
+};
+var collectRecords = (opts = {}) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const mirror = opts.cache?.repository ?? { shas: listRecordShas({ cwd }), availability: notesAvailability({ cwd }) };
+  if (opts.cache !== void 0) opts.cache.repository = mirror;
+  const notes = mirror.availability;
+  const selection = [];
+  if (opts.allHistory !== true) selection.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
+  selection.push("--end-of-options", opts.revision ?? "HEAD");
+  const result2 = execGit(["log", "-z", `--format=${LOG_FORMAT2}`, ...selection], { cwd });
+  if (result2.code !== 0) {
+    if (EMPTY_REPO_RE.test(result2.stderr)) {
+      return { records: [], commits: 0, truncated: false, notes };
+    }
+    throw new Error(`git log failed (exit ${result2.code}): ${result2.stderr.trim()}`);
+  }
+  const chunks = result2.stdout.split("\0").filter((chunk) => chunk.length > 0);
+  const commitCache = opts.cache?.commits;
+  const wouldUseAtom = chunks.filter((chunk) => {
+    const at = chunk.indexOf(UNIT);
+    if (at === -1 || commitCache?.has(chunk.slice(0, at)) === true) return false;
+    const second = chunk.indexOf(UNIT, at + 1);
+    return second !== -1 && CANDIDATE_LINE_RE.test(chunk.slice(second + 1));
+  }).length;
+  const atoms = wouldUseAtom >= 2 ? readTrailersAtom(selection, { cwd }) : void 0;
+  const uncachedMessages = chunks.map((chunk) => {
+    const at = chunk.indexOf(UNIT);
+    if (at === -1 || commitCache?.has(chunk.slice(0, at)) === true) return null;
+    const second = chunk.indexOf(UNIT, at + 1);
+    return second === -1 ? null : chunk.slice(second + 1);
+  }).filter((message) => message !== null && CANDIDATE_LINE_RE.test(message));
+  const isolated = uncachedMessages.length > 0 ? isolateBlocks(uncachedMessages) : void 0;
+  const commitRecords = chunks.flatMap((chunk) => parseChunk(chunk, commitCache, atoms, isolated));
+  const shas = new Set(commitRecords.map((record2) => record2.sha));
+  const trailersBySha = /* @__PURE__ */ new Map();
+  for (const record2 of commitRecords) {
+    const firstId = record2.trailers.find((trailer) => trailer.key === RECORD_ID_KEY4)?.value;
+    const existing = trailersBySha.get(record2.sha);
+    if (existing === void 0) {
+      trailersBySha.set(record2.sha, {
+        committedAt: record2.committedAt,
+        trailers: [...record2.trailers],
+        folds: new Set(firstId === void 0 ? [] : [firstId])
+      });
+    } else {
+      existing.trailers.push(...record2.trailers);
+      if (firstId !== void 0) existing.folds.add(firstId);
+    }
+  }
+  const noteCache = opts.cache?.notes;
+  const noteShas = mirror.shas.filter(
+    (sha) => trailersBySha.has(sha) && noteCache?.has(sha) !== true
+  );
+  const noteText = noteShas.length > 0 ? noteMessages(noteShas, { cwd }) : /* @__PURE__ */ new Map();
+  const isolatedNotes = noteText.size > 0 ? isolateBlocks([...noteText.values()], { notes: true }) : void 0;
+  const noteRecords = mirror.shas.flatMap((sha) => {
+    const commit = trailersBySha.get(sha);
+    if (commit === void 0) return [];
+    const cachedNote = noteCache?.get(sha);
+    const message = noteText.get(sha);
+    const blocks = cachedNote ?? (message === void 0 ? [] : parseRecordBlocks(message, { notes: true, cwd, ...isolatedNotes === void 0 ? {} : { isolated: isolatedNotes } }));
+    if (cachedNote === void 0) noteCache?.set(sha, blocks);
+    return blocks.flatMap((trailers) => {
+      const noteId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY4)?.value;
+      const sameText = trailers.every(
+        (note) => commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value)
+      );
+      const mirrored = noteId === void 0 ? sameText : commit.folds.has(noteId) && sameText;
+      return trailers.length === 0 || mirrored ? [] : [{ sha, committedAt: commit.committedAt, trailers, source: "notes" }];
+    });
+  });
+  return {
+    records: [...commitRecords, ...noteRecords],
+    commits: shas.size,
+    truncated: opts.allHistory !== true && shas.size >= DEFAULT_SCAN_LIMIT,
+    notes
+  };
+};
+var oldestFirst2 = (records) => [
+  ...records.filter((record2) => record2.source !== "notes").reverse(),
+  ...records.filter((record2) => record2.source === "notes")
+];
+var withheldIfInjection = (record2) => {
+  const identityHits = identityCarriesInjection(record2.recordId) ? [.../* @__PURE__ */ new Set([...scanInjection(record2.recordId), ...scanInjection(`Record-Id: ${record2.recordId}`)])] : [];
+  const matched = [
+    .../* @__PURE__ */ new Set([
+      ...record2.resolvedTrailers.flatMap((trailer) => scanTrailer(trailer)),
+      ...identityHits
+    ])
+  ];
+  if (matched.length === 0) return record2;
+  const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`;
+  return {
+    ...record2,
+    // A withheld record whose id is still printed is not withheld.
+    recordId: identityHits.length > 0 ? withheld : record2.recordId,
+    resolvedTrailers: record2.resolvedTrailers.map((trailer) => ({
+      key: trailer.key,
+      value: withheld
+    })),
+    // `expiresAt` carries the `Expires:` value verbatim, condition form and
+    // all, and is serialised beside the trailers. Redacting only
+    // `resolvedTrailers` left this field as an open second channel: a payload
+    // in `Expires:` reached a model through the same tool. Every place the
+    // value appears has to be the same place.
+    ...record2.expiresAt === void 0 ? {} : { expiresAt: withheld }
+  };
+};
+var declaredAnywhere = (cwd, ids) => {
+  const full = collectRecords({
+    ...cwd === void 0 ? {} : { cwd },
+    allHistory: true
+  });
+  const declared = /* @__PURE__ */ new Set();
+  for (const record2 of full.records) {
+    for (const trailer of record2.trailers) {
+      if (trailer.key === RECORD_ID_KEY4) declared.add(trailer.value);
+    }
+  }
+  return new Set(ids.filter((id2) => declared.has(id2)));
+};
+var buildReport = (scan2, at, resolveIn) => {
+  const ordered = oldestFirst2(scan2.records);
+  const states = foldLifecycle(ordered, { at });
+  const stale = states.filter(isStale).map((state) => {
+    const record2 = scan2.records.find(
+      (candidate) => candidate.sha === state.sha && candidate.trailers.some(
+        (trailer) => trailer.key === "Record-Id" && trailer.value === state.recordId
+      )
+    );
+    if (record2 === void 0) throw new Error(`no source for stale record ${state.recordId}`);
+    return withheldIfInjection({ ...state, source: record2.source });
+  });
+  return {
+    at: at.toISOString(),
+    commits: scan2.commits,
+    truncated: scan2.truncated,
+    coverage: scan2.truncated ? "partial" : "complete",
+    notes: scan2.notes,
+    totalRecords: states.length,
+    records: stale,
+    // Both read the stream in order too — `findIdCollisions` asks whether a
+    // *later* commit declared the succession, which is the same question the
+    // fold asks and must get the same order to answer it with.
+    ...partitionRefs(findDanglingRefs(ordered), scan2, resolveIn),
+    idCollisions: findIdCollisions(ordered),
+    unfoldedDeclarations: unfoldedDeclarations(ordered)
+  };
+};
+var partitionRefs = (candidates, scan2, resolveIn) => {
+  if (!scan2.truncated || candidates.length === 0) {
+    return { danglingRefs: candidates, unresolvedRefs: [] };
+  }
+  if (resolveIn === void 0) {
+    return {
+      danglingRefs: [],
+      unresolvedRefs: candidates.map((violation) => ({ ...violation, want: UNRESOLVED_WANT }))
+    };
+  }
+  const ids = [...new Set(candidates.map((violation) => violation.got))];
+  const declared = declaredAnywhere(resolveIn.cwd, ids);
+  return {
+    danglingRefs: candidates.filter((violation) => !declared.has(violation.got)),
+    unresolvedRefs: []
+  };
+};
+var unfoldedDeclarations = (records) => {
+  const declarationsIn = (record2) => record2.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY4).map((trailer) => trailer.value);
+  const folded = /* @__PURE__ */ new Set();
+  for (const record2 of records) {
+    const ids = declarationsIn(record2);
+    if (ids.length > 0) folded.add(ids[0]);
+  }
+  const rows = [];
+  for (const record2 of records) {
+    const ids = declarationsIn(record2);
+    if (ids.length < 2) continue;
+    const unread = ids.slice(1).filter((id2) => !folded.has(id2));
+    if (unread.length === 0) continue;
+    rows.push({
+      sha: record2.sha,
+      source: record2.source,
+      declared: ids.length,
+      unread
+    });
+  }
+  return rows;
+};
+var shortSha2 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
+var location = (state) => `${state.recordId}  ${shortSha2(state.sha)}  [${state.source}]`;
+var section = (title2, lines) => lines.length === 0 ? [] : ["", title2, ...lines.map((line2) => `  ${line2}`)];
+var formatReport = (report) => {
+  const superseded = report.records.filter((state) => state.lifecycle === "superseded");
+  const expired = report.records.filter((state) => state.lifecycle === "expired");
+  const review = report.records.filter((state) => state.lifecycle === "active");
+  const lines = [
+    `stale at ${report.at} \u2014 ${superseded.length} superseded, ${expired.length} expired, ${review.length} for review, of ${report.totalRecords} record(s) in ${report.commits} commit(s)`,
+    ...section(
+      "superseded",
+      superseded.map(
+        (state) => `${location(state)}  by ${shortSha2(state.supersededBy ?? "")}`
+      )
+    ),
+    ...section(
+      "expired",
+      expired.map((state) => `${location(state)}  ${state.expiresAt ?? ""}`)
+    ),
+    ...section(
+      "review",
+      review.map((state) => `${location(state)}  ${state.expiresAt ?? ""}`)
+    ),
+    ...section(
+      "dangling refs",
+      report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)
+    ),
+    ...section(
+      "unresolved refs",
+      report.unresolvedRefs.map((violation) => `${violation.key}: ${violation.got}  ${violation.want}`)
+    ),
+    ...section(
+      "id collisions",
+      report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)
+    ),
+    // Named rather than omitted, the way `unresolved refs` names a window this
+    // could not cover. The fix is `validate`, which is where the violation is
+    // defined, so the row says that rather than leaving the reader to guess
+    // what a declaration the fold skipped is supposed to mean (#1015).
+    ...section(
+      "declarations not folded",
+      report.unfoldedDeclarations.map(
+        (row) => `${shortSha2(row.sha)}${row.source === "notes" ? " (note)" : ""}  ${String(row.unread.length)} of ${String(row.declared)} unread: ${row.unread.join(", ")}`
+      )
+    )
+  ];
+  if (report.unfoldedDeclarations.length > 0) {
+    const unread = report.unfoldedDeclarations.reduce((sum, row) => sum + row.unread.length, 0);
+    lines.push(
+      "",
+      `note: ${String(unread)} declaration(s) have no lifecycle because their block declares more than one Record-Id, which is a cardinality violation \u2014 run commitlore validate on the commits above.`
+    );
+  }
+  if (report.truncated) {
+    lines.push(
+      "",
+      `note: only the most recent ${DEFAULT_SCAN_LIMIT} commits were scanned; run with --all-history for the whole record.`
+    );
+  }
+  if (report.notes === "unfetched") {
+    lines.push("", "note: the notes mirror has not been fetched, so this scan is incomplete; run commitlore doctor --fix and fetch again.");
+  }
+  return `${lines.join("\n")}
+`;
+};
+var evaluationInstant = (raw) => {
+  if (raw === void 0) return /* @__PURE__ */ new Date();
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`--at is not a valid ISO 8601 instant: ${raw}`);
+  }
+  return parsed;
+};
+var register5 = (program3) => {
+  program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
+    "after",
+    "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
+  ).action((options) => {
+    try {
+      const at = evaluationInstant(options.at);
+      const scan2 = collectRecords(
+        options.allHistory === true ? { allHistory: true } : { allHistory: false }
+      );
+      const report = buildReport(scan2, at, {});
+      process.stdout.write(
+        options.json === true ? `${JSON.stringify(report, null, 2)}
+` : formatReport(report)
+      );
+    } catch (error2) {
+      process.stderr.write(`commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
+`);
+      process.exitCode = 2;
+    }
+  });
+};
+
+// src/commands/validate.ts
+var USAGE = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
+var MODE_FLAGS = {
+  messageFile: "--message-file",
+  commit: "--commit",
+  range: "--range"
+};
+var MODE_KEYS = ["messageFile", "commit", "range"];
+var usageError = (message) => ({
+  code: 2,
+  stdout: "",
+  stderr: `commitlore: ${message}
+${USAGE}
+`,
+  violations: [],
+  secrets: [],
+  checks: []
+});
+var installationError = (message) => ({
+  code: 3,
+  stdout: "",
+  stderr: `commitlore: ${message}
+`,
+  violations: [],
+  secrets: [],
+  checks: []
+});
+var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var stripCr = (line2) => line2.endsWith("\r") ? line2.slice(0, -1) : line2;
+var CONTINUATION = /^[ \t]/;
+var LEADING_WHITESPACE = /^[ \t]+/;
+var isComment = (line2) => line2.startsWith("#");
+var MERGE_TITLE = /^Merge (pull request #\d+ from \S+|branch '[^']+'|remote-tracking branch '[^']+'|tag '[^']+')(?: into \S+)?$/;
+var looksLikeMergeTitle = (message) => MERGE_TITLE.test(firstLine(message));
+var matchTrailersAt = (lines, start, trailers) => {
+  const found = [];
+  let cursor = start;
+  for (const trailer of trailers) {
+    while (cursor < lines.length && isComment(lines[cursor] ?? "")) cursor += 1;
+    const line2 = lines[cursor];
+    const prefix = `${trailer.key}:`;
+    if (line2 === void 0 || !line2.startsWith(prefix)) return null;
+    let value = line2.slice(prefix.length).replace(LEADING_WHITESPACE, "");
+    found.push(cursor + 1);
+    cursor += 1;
+    while (cursor < lines.length && CONTINUATION.test(lines[cursor] ?? "")) {
+      value += ` ${(lines[cursor] ?? "").replace(LEADING_WHITESPACE, "")}`;
+      cursor += 1;
+    }
+    if (value !== trailer.value) return null;
+  }
+  return found;
+};
+var locateTrailerLines = (message, trailers) => {
+  if (trailers.length === 0) return [];
+  const lines = message.split("\n").map(stripCr);
+  for (let start = lines.length - 1; start >= 0; start -= 1) {
+    const matched = matchTrailersAt(lines, start, trailers);
+    if (matched !== null) return matched;
+  }
+  return trailers.map(() => void 0);
+};
+var knownTrailerCandidate = (line2) => {
+  const tabIndented = line2.startsWith("	");
+  const candidate = tabIndented ? line2.replace(/^\t+/, "") : line2;
+  const key = /^([^\s:]+):/.exec(candidate)?.[1];
+  return key === void 0 || !isCommitLoreKey(key) ? void 0 : { key, tabIndented };
+};
+var locateUnparsedTrailerWarnings = (message, blocks) => {
+  const lines = message.split("\n").map(stripCr);
+  const contentLines = lines.filter((line2) => line2 !== "" && !isComment(line2));
+  if (contentLines.length > 0 && contentLines.every((line2) => knownTrailerCandidate(line2) !== void 0)) {
+    return [];
+  }
+  const parsedLines = new Set(blocks.flatMap((block) => locateTrailerLines(message, block)));
+  return lines.flatMap((line2, index) => {
+    const candidate = knownTrailerCandidate(line2);
+    if (candidate === void 0 || parsedLines.has(index + 1)) return [];
+    return [{ line: index + 1, ...candidate }];
+  });
+};
+var unparsedTrailerLines = (message, cwd) => {
+  const lines = message.split("\n").map(stripCr);
+  const commentString = execGit(["config", "--get", "core.commentString"], { cwd });
+  const commentChar = commentString.code === 0 ? commentString : execGit(["config", "--get", "core.commentChar"], { cwd });
+  const commentPrefix = commentChar.code === 0 ? commentChar.stdout.replace(/\n$/, "") : "#";
+  return lines.flatMap((line2, index) => {
+    const candidate = knownTrailerCandidate(line2);
+    if (candidate === void 0) return [];
+    let marker;
+    do {
+      marker = randomBytes6(32).toString("hex");
+    } while (`${line2}${marker}`.startsWith(commentPrefix) !== line2.startsWith(commentPrefix));
+    const probe = [...lines];
+    probe[index] = `${line2}${marker}`;
+    const indexed = parseRecordBlocks(probe.join("\n"), { cwd }).some(
+      (block) => block.some((trailer) => trailer.key === candidate.key && trailer.value.includes(marker))
+    );
+    return indexed ? [] : [{ line: index + 1, ...candidate }];
+  });
+};
+var lineForViolation = (violation, trailers, lines) => {
+  const indexesWithKey = trailers.flatMap(
+    (trailer, index) => trailer.key === violation.key ? [index] : []
+  );
+  if (violation.rule === "cardinality" && SINGLE_VALUED.has(violation.key)) {
+    const occurrence = Number(violation.got);
+    if (!Number.isInteger(occurrence)) return void 0;
+    const index = indexesWithKey[occurrence - 1];
+    if (index === void 0 || trailers[index]?.value !== violation.value) return void 0;
+    return lines[index];
+  }
+  const matches = indexesWithKey.filter((index) => trailers[index]?.value === violation.value);
+  const only = matches.length === 1 ? matches[0] : void 0;
+  return only === void 0 ? void 0 : lines[only];
+};
+var violationsForBlock = (source, trailers) => {
+  const lines = locateTrailerLines(source.message, trailers);
+  return validateRecord(trailers).map((violation) => {
+    const line2 = lineForViolation(violation, trailers, lines);
+    return {
+      ...source.sha === void 0 ? {} : { sha: source.sha },
+      ...line2 === void 0 ? {} : { line: line2 },
+      ...violation
+    };
+  });
+};
+var identityCollisionViolations = (source) => {
+  if (source.sha !== void 0) return [];
+  return labelRecordBlocks(source.message).flatMap((block) => {
+    if (!block.identityCollision) return [];
+    const id2 = block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+    if (id2 === void 0) return [];
+    const lines = locateTrailerLines(source.message, block.trailers);
+    const index = block.trailers.findIndex((trailer) => trailer.key === "Record-Id");
+    const line2 = lines[index];
+    return [
+      {
+        ...line2 === void 0 ? {} : { line: line2 },
+        key: "Record-Id",
+        value: id2,
+        rule: "duplicate-id",
+        got: id2,
+        want: UNIQUE_ID_WANT
+      }
+    ];
+  });
+};
+var ambiguousSeparatorWarnings = (source, trailers, lines) => trailers.flatMap((trailer, index) => {
+  if (trailer.key !== RULED_OUT_KEY2) return [];
+  const split = splitRuledOut(trailer.value);
+  if (!split.ambiguous || split.unterminatedCodeSpan) return [];
+  const at = lines[index];
+  const where = `${source.sha?.slice(0, 10) ?? "commit"}${at === void 0 ? "" : `:${at}`}`;
+  return [
+    `commitlore: ${where}: Ruled-out: has more than one "|" and there is no escape, so the first one separates: alternative ${JSON.stringify(split.alternative)}. If that is not the split you meant, rephrase so only the separator is a pipe (SPEC \xA73.1)`
+  ];
+});
+var withheldTrailerWarnings = (source, trailers) => trailers.flatMap(({ trailer, at }) => {
+  const patterns = scanTrailer(trailer);
+  if (patterns.length === 0) return [];
+  const where = `${source.sha?.slice(0, 10) ?? "commit"}${at === void 0 ? "" : `:${at}`}`;
+  return [`commitlore: ${where}: ${explainWithholding(trailer.key, patterns)}`];
+});
+var blocksOf = (message, cache, hint) => {
+  const cached2 = cache?.blocks.get(message);
+  if (cached2 !== void 0) return cached2;
+  const last = hint ?? cache?.last.get(message);
+  const blocks = last === void 0 ? parseRecordBlocks(message) : parseRecordBlocks(message, { last });
+  cache?.blocks.set(message, blocks);
+  return blocks;
+};
+var warmSources = (sources, cwd, cache) => {
+  const uncached = sources.filter((source) => !cache.last.has(source.message));
+  if (uncached.length === 0) return;
+  const shas = uncached.map((source) => source.sha).filter((sha) => sha !== void 0);
+  const atoms = shas.length > 1 ? readTrailersAtom(["--no-walk", "--stdin"], { cwd, stdin: `${shas.join("\n")}
+` }) : /* @__PURE__ */ new Map();
+  const isolated = uncached.length > 1 ? isolateBlocks(uncached.map((source) => source.message)) : void 0;
+  for (const source of uncached) {
+    const atom = source.sha === void 0 ? void 0 : atoms.get(source.sha);
+    const blocks = parseRecordBlocksWithAtom(source.message, atom, isolated);
+    cache.blocks.set(source.message, blocks);
+    cache.last.set(source.message, parseCommitMessageWithAtom(source.message, atom));
+  }
+};
+var inspectSource = (source, cache) => {
+  const trailers = cache?.last.get(source.message) ?? parseCommitMessage(source.message);
+  const blocks = blocksOf(source.message, cache, trailers);
+  const earlierBlocks = trailers.length === 0 ? blocks : blocks.slice(0, -1);
+  const lines = locateTrailerLines(source.message, trailers);
+  const rawViolations = validateRecord(trailers);
+  const firstTrailerLine = lines[0];
+  const nonTrailerParagraph = looksLikeMergeTitle(source.message) && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line2) => line2 !== "").join("\n") : void 0;
+  const lastViolations = (nonTrailerParagraph === void 0 ? rawViolations : []).map(
+    (violation) => {
+      const line2 = lineForViolation(violation, trailers, lines);
+      return {
+        ...source.sha === void 0 ? {} : { sha: source.sha },
+        ...line2 === void 0 ? {} : { line: line2 },
+        ...violation
+      };
+    }
+  );
+  const earlierViolations = earlierBlocks.flatMap((block) => violationsForBlock(source, block));
+  const violations = [
+    ...identityCollisionViolations(source),
+    ...earlierViolations,
+    ...lastViolations
+  ];
+  const warnings = locateUnparsedTrailerWarnings(source.message, blocks).map(
+    (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`
+  );
+  if (nonTrailerParagraph !== void 0) {
+    warnings.push(
+      `commitlore: ${source.sha?.slice(0, 10) ?? "commit"}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`
+    );
+  }
+  warnings.push(...ambiguousSeparatorWarnings(source, trailers, lines));
+  warnings.push(
+    ...withheldTrailerWarnings(source, [
+      ...earlierBlocks.flat().map((trailer) => ({ trailer, at: void 0 })),
+      ...nonTrailerParagraph === void 0 ? trailers.map((trailer, index) => ({ trailer, at: lines[index] })) : []
+    ])
+  );
+  return { violations, warnings };
+};
+var locateReferenceViolations = (source, trailers, violations) => {
+  const lines = locateTrailerLines(source.message, trailers);
+  return violations.map((violation) => {
+    const line2 = lineForViolation(violation, trailers, lines);
+    return {
+      ...source.sha === void 0 ? {} : { sha: source.sha },
+      ...line2 === void 0 ? {} : { line: line2 },
+      ...violation
+    };
+  });
+};
+var resolveCommit2 = (ref, cwd) => {
+  const result2 = execGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], { cwd });
+  if (result2.code !== 0) {
+    throw new Error(`cannot resolve commit ${JSON.stringify(ref)}: ${firstLine(result2.stderr)}`);
+  }
+  return result2.stdout.trim();
+};
+var readCommitSource = (sha, cwd) => {
+  const result2 = execGit(["log", "-1", "--format=%B", sha, "--"], { cwd });
+  if (result2.code !== 0) {
+    throw new Error(`cannot read commit ${sha}: ${firstLine(result2.stderr)}`);
+  }
+  return { sha, message: result2.stdout };
+};
+var readRange = (range, cwd) => {
+  const result2 = execGit(["rev-list", "--reverse", "--end-of-options", range, "--"], { cwd });
+  if (result2.code !== 0) {
+    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine(result2.stderr)}`);
+  }
+  return result2.stdout.split("\n").filter((sha) => sha.length > 0).map((sha) => readCommitSource(sha, cwd));
+};
+var readMessageFile = (path2) => {
+  try {
+    return readFileSync9(path2, "utf8");
+  } catch (error2) {
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf3(error2)}`);
+  }
+};
+var readStdinSync = () => {
+  try {
+    return readFileSync9(0, "utf8");
+  } catch (error2) {
+    throw new Error(`cannot read the commit message from stdin: ${messageOf3(error2)}`);
+  }
+};
+var collectSources2 = (input, cwd) => {
+  if (input.messageFile !== void 0) return [{ message: readMessageFile(input.messageFile) }];
+  if (input.commit !== void 0) {
+    const sha = resolveCommit2(input.commit, cwd);
+    return [readCommitSource(sha, cwd)];
+  }
+  if (input.range !== void 0) return readRange(input.range, cwd);
+  return [{ message: (input.readStdin ?? readStdinSync)() }];
+};
+var SHALLOW_REFERENCE_REASON = "shallow history \u2014 a Record-Id declared below the clone boundary is not visible here (fix: git fetch --unshallow)";
+var PARTIAL_INDEX_REASON = "the index is incomplete \u2014 a time budget left commits unread, so a Follows: or Supersedes: target may exist in history this check did not read (fix: commitlore init)";
+var repositoryAvailable = (cwd) => execGit(["rev-parse", "--git-dir"], { cwd }).code === 0;
+var indexedHeadRecords = (cwd, input = {}) => {
+  const clock = input.scanNow ?? Date.now;
+  const cost = { unreadCommits: 0, unreadNotes: 0 };
+  const { handle } = ensureIndex({
+    cwd,
+    cost,
+    ...input.scanBudgetMs === void 0 ? {} : { budget: { deadline: clock() + input.scanBudgetMs, now: clock } }
+  });
+  try {
+    const records = /* @__PURE__ */ new Map();
+    for (const row of queryTrailers(handle)) {
+      const identity = `${row.sha}\0${row.source}\0${row.block}`;
+      const existing = records.get(identity);
+      if (existing !== void 0) {
+        existing.trailers.push({ key: row.key, value: row.value });
+        continue;
+      }
+      records.set(identity, {
+        sha: row.sha,
+        committedAt: row.committedAt,
+        source: row.source,
+        trailers: [{ key: row.key, value: row.value }]
+      });
+    }
+    return {
+      records: [...records.values()],
+      unreadCommits: Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes)
+    };
+  } finally {
+    closeIndex(handle);
+  }
+};
+var recordsFor = (source, cwd, input = {}, cache) => {
+  if (source.sha !== void 0) {
+    return {
+      ...collectRecords({
+        cwd,
+        allHistory: true,
+        revision: source.sha,
+        ...cache === void 0 ? {} : { cache }
+      }),
+      unreadCommits: 0
+    };
+  }
+  try {
+    const indexed = indexedHeadRecords(cwd, input);
+    return {
+      records: indexed.records,
+      notes: notesAvailability({ cwd }),
+      unreadCommits: indexed.unreadCommits
+    };
+  } catch {
+    return { ...collectRecords({ cwd, allHistory: true, revision: "HEAD" }), unreadCommits: 0 };
+  }
+};
+var consumeAmendMarker = (cwd) => {
+  const located = execGit(["rev-parse", "--git-path", "commitlore-amend"], { cwd });
+  if (located.code !== 0) return null;
+  const path2 = resolve7(cwd, located.stdout.trim());
+  try {
+    const recorded = readFileSync9(path2, "utf8").trim();
+    rmSync4(path2, { force: true });
+    return /^[0-9a-f]{40,64}$/.test(recorded) ? recorded : null;
+  } catch {
+    return null;
+  }
+};
+var reachableShas = (revision, cwd) => {
+  const result2 = execGit(["rev-list", revision], { cwd });
+  if (result2.code !== 0) {
+    throw new Error(firstLine(result2.stderr) || `cannot walk revision ${revision}`);
+  }
+  return new Set(result2.stdout.trim().split("\n").filter(Boolean));
+};
+var checkReferences = (input, sources, cwd, warmed) => {
+  if (input.messageFile === void 0 && input.commit === void 0 && input.range === void 0) {
+    return {
+      check: { class: "reference", status: "not-checked", reason: "no repository" },
+      violations: []
+    };
+  }
+  if (!repositoryAvailable(cwd)) {
+    return {
+      check: { class: "reference", status: "not-checked", reason: "no repository" },
+      violations: []
+    };
+  }
+  try {
+    const violations = [];
+    const tipSha = input.range !== void 0 && sources.length > 0 ? sources[sources.length - 1].sha : void 0;
+    let tipAllRecords;
+    let unreadCommits = 0;
+    const cache = warmed ?? newCollectCache();
+    if (tipSha !== void 0) {
+      const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd, input, cache);
+      if (tipScan.notes === "unfetched") {
+        return {
+          check: {
+            class: "reference",
+            status: "not-checked",
+            reason: "notes mirror not fetched"
+          },
+          violations: []
+        };
+      }
+      const tipReachable = reachableShas(tipSha, cwd);
+      tipAllRecords = tipScan.records.filter(
+        (record2) => record2.sha !== void 0 && tipReachable.has(record2.sha)
+      ).reverse();
+    }
+    for (const source of sources) {
+      const blocks = blocksOf(source.message, cache);
+      const scan2 = recordsFor(source, cwd, input, cache);
+      if (scan2.unreadCommits > unreadCommits) unreadCommits = scan2.unreadCommits;
+      if (scan2.notes === "unfetched") {
+        return {
+          check: {
+            class: "reference",
+            status: "not-checked",
+            reason: "notes mirror not fetched"
+          },
+          violations: []
+        };
+      }
+      const reachable = reachableShas(source.sha ?? "HEAD", cwd);
+      const repositoryRecords = scan2.records.filter(
+        (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
+      );
+      const amendedSha = source.sha === void 0 ? consumeAmendMarker(cwd) : null;
+      const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
+      const priorForCollisions = amendedSha === null ? prior : prior.filter((record2) => record2.sha !== amendedSha);
+      const ownBlocks = blocks.map((trailers) => ({
+        trailers,
+        source: "commit",
+        ...source.sha === void 0 ? {} : { sha: source.sha }
+      }));
+      const ownNotes = repositoryRecords.filter(
+        (record2) => record2.sha === source.sha && record2.source === "notes"
+      );
+      const ownRecords = [...ownBlocks, ...ownNotes];
+      for (const [index, candidate] of ownBlocks.entries()) {
+        const trailers = candidate.trailers;
+        const siblings = ownBlocks.filter((_, other) => other !== index);
+        const dangling = findDanglingRefs([...prior, ...siblings, ...ownNotes], [candidate]);
+        const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+        const collisions = recordId === void 0 ? [] : findIdCollisions([...priorForCollisions, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
+          (violation) => tipAllRecords === void 0 || !isSuccessionDeclared(violation.value, tipAllRecords)
+        );
+        violations.push(
+          ...locateReferenceViolations(source, trailers, [...dangling, ...collisions])
+        );
+      }
+    }
+    const danglingPresent = violations.some((violation) => violation.rule === "dangling-ref");
+    const shallow = danglingPresent && hasShallowHistory(cwd);
+    const partial2 = unreadCommits > 0;
+    const withdrawDangling = shallow || partial2 && danglingPresent;
+    const reported = withdrawDangling ? violations.filter((violation) => violation.rule !== "dangling-ref") : violations;
+    const reasons = [
+      ...partial2 ? [PARTIAL_INDEX_REASON] : [],
+      ...shallow ? [SHALLOW_REFERENCE_REASON] : []
+    ];
+    return {
+      check: {
+        class: "reference",
+        // `not-checked` rather than `ok` when something was withheld: the
+        // green would be the part a reader carries away, and this command has
+        // no verdict to offer on the reference it could not resolve. A commit
+        // accepted against a partial index must not read as fully checked.
+        status: reported.length > 0 ? "failed" : reasons.length > 0 ? "not-checked" : "ok",
+        ...reasons.length > 0 ? { reason: reasons.join("; ") } : {}
+      },
+      violations: reported
+    };
+  } catch (error2) {
+    return {
+      check: {
+        class: "reference",
+        status: "not-checked",
+        reason: `repository scan failed: ${firstLine(messageOf3(error2))}`
+      },
+      violations: []
+    };
+  }
+};
+var formatCheck = (check2) => {
+  const name = check2.class === "reference" ? "references" : check2.class;
+  if (check2.status === "not-checked") {
+    return `${name} not checked (${check2.reason ?? "required information unavailable"})`;
+  }
+  return check2.reason === void 0 ? `${name} ${check2.status}` : `${name} ${check2.status} (${check2.reason})`;
+};
+var violationIdentity = (violation) => JSON.stringify([
+  violation.sha ?? null,
+  violation.line ?? null,
+  violation.rule,
+  violation.key,
+  violation.value,
+  violation.got,
+  violation.want
+]);
+var formatViolation = (violation) => {
+  const parts = [];
+  if (violation.sha !== void 0) parts.push(violation.sha.slice(0, 10));
+  if (violation.line !== void 0) parts.push(String(violation.line));
+  const where = parts.length === 0 ? "" : `${parts.join(":")}: `;
+  const got = JSON.stringify(violation.got);
+  const want = JSON.stringify(violation.want);
+  return `${where}${violation.rule} ${violation.key} \u2014 got ${got}, want ${want}`;
+};
+var runValidate = (input = {}) => {
+  const given = MODE_KEYS.filter((key) => input[key] !== void 0);
+  if (given.length > 1) {
+    const flags = given.map((key) => MODE_FLAGS[key]).join(", ");
+    return usageError(`${flags} are mutually exclusive \u2014 pass exactly one`);
+  }
+  if (input.range !== void 0 && !input.range.includes("..")) {
+    return usageError(`--range expects <a>..<b>, got ${JSON.stringify(input.range)}`);
+  }
+  const cwd = input.cwd ?? process.cwd();
+  let shapeViolations;
+  let warnings;
+  let secrets;
+  let sources;
+  const grammar = newCollectCache();
+  try {
+    sources = collectSources2(input, cwd);
+    warmSources(sources, cwd, grammar);
+    const inspections = sources.map((source) => inspectSource(source, grammar));
+    shapeViolations = inspections.flatMap((inspection) => inspection.violations);
+    warnings = inspections.flatMap((inspection) => inspection.warnings);
+    secrets = sources.flatMap((source) => scanForSecrets(source.message));
+  } catch (error2) {
+    if (isMissingInstalledFile(error2)) return installationError(messageOf3(error2));
+    return usageError(messageOf3(error2));
+  }
+  const references = checkReferences(input, sources, cwd, grammar);
+  const alreadyReported = new Set(shapeViolations.map(violationIdentity));
+  const violations = [
+    ...shapeViolations,
+    ...references.violations.filter(
+      (violation) => !alreadyReported.has(violationIdentity(violation))
+    )
+  ];
+  const checks = [
+    {
+      class: "shape",
+      status: shapeViolations.length > 0 || secrets.length > 0 ? "failed" : "ok"
+    },
+    references.check
+  ];
+  const status = `${checks.map(formatCheck).join(" \xB7 ")}
+`;
+  const failed = violations.length > 0 || secrets.length > 0;
+  const warningText = warnings.length === 0 ? "" : `${warnings.join("\n")}
+`;
+  if (input.json === true) {
+    return {
+      code: failed ? 1 : 0,
+      // `examined` is how many messages were actually read. Without it a
+      // report of an empty range is indistinguishable from a clean one — both
+      // are `ok`/`ok` with no violations — so a gate reading this JSON can
+      // report success having checked nothing (the shape #542 was about, one
+      // level along).
+      stdout: `${JSON.stringify({ examined: sources.length, checks, violations, secrets })}
+`,
+      stderr: warningText,
+      violations,
+      secrets,
+      checks
+    };
+  }
+  if (!failed) {
+    return { code: 0, stdout: status, stderr: warningText, violations, secrets, checks };
+  }
+  const parts = [status.trimEnd()];
+  if (violations.length > 0) parts.push(violations.map(formatViolation).join("\n"));
+  if (secrets.length > 0) parts.push(formatFindings(secrets));
+  const notes = [];
+  if (violations.length > 0) {
+    const plural3 = violations.length === 1 ? "" : "s";
+    notes.push(`${violations.length} violation${plural3} (SPEC \xA76)`);
+  }
+  if (secrets.length > 0) {
+    const plural3 = secrets.length === 1 ? "" : "s";
+    notes.push(`${secrets.length} possible credential${plural3} (ADR-0005)`);
+  }
+  return {
+    code: 1,
+    stdout: `${parts.join("\n")}
+`,
+    stderr: `${warningText}commitlore: ${notes.join(", ")} \u2014 the message was not modified
+`,
+    violations,
+    secrets,
+    checks
+  };
+};
+var register6 = (program3) => {
+  program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
+    "after",
+    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710),\n3 this installation is missing a file it ships, so nothing was examined."
+  ).action((flags) => {
+    const result2 = runValidate({
+      ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
+      ...flags.commit === void 0 ? {} : { commit: flags.commit },
+      ...flags.range === void 0 ? {} : { range: flags.range },
+      ...flags.json === void 0 ? {} : { json: flags.json },
+      // The commit-msg hook is this command with `--message-file`. Four
+      // minutes to accept one commit is worse than a partial check that
+      // says it is partial.
+      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS
+    });
+    if (result2.stdout !== "") process.stdout.write(result2.stdout);
+    if (result2.stderr !== "") process.stderr.write(result2.stderr);
+    if (result2.code !== 0) process.exitCode = result2.code;
+  });
+};
+
 // src/commands/commit.ts
 var result = (outcome, lines, over = {}) => ({ outcome, commit: null, records: 0, rejected: [], lines, ...over });
 var recordsCanBeApplied = (cwd) => {
   const reported = execGit(["rev-parse", "--git-path", `hooks/${PREPARE_COMMIT_MSG_HOOK_NAME}`], { cwd });
   if (reported.code !== 0) return false;
-  const path2 = resolve7(cwd, reported.stdout.trim());
+  const path2 = resolve8(cwd, reported.stdout.trim());
   if (!existsSync8(path2)) return false;
   try {
-    if (!readFileSync9(path2, "utf8").includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) return false;
+    if (!readFileSync10(path2, "utf8").includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) return false;
     accessSync(path2, constants.X_OK);
     return true;
   } catch {
@@ -20042,7 +21023,7 @@ var runGitCommit = (cwd, message, amend) => {
   } catch (error2) {
     return { ok: false, said: error2 instanceof Error ? error2.message : String(error2) };
   } finally {
-    rmSync4(dir, { recursive: true, force: true });
+    rmSync5(dir, { recursive: true, force: true });
   }
 };
 var commitAndReport = (cwd, opts, staged) => {
@@ -20095,6 +21076,16 @@ var runCommit = (opts) => {
     return result("error", [
       "nothing is staged, so there is no change to record or commit",
       "stage what this commit should carry, or pass --all for tracked changes"
+    ]);
+  }
+  const unparsed = unparsedTrailerLines(opts.message, cwd);
+  if (unparsed.length > 0) {
+    return result("refused", [
+      ...unparsed.map(
+        ({ line: line2, key, tabIndented }) => `line ${line2}: ${key}: will not be indexed because Git did not parse it as a trailer; ` + (tabIndented ? "remove the leading tab" : "put non-trailer prose in its own paragraph and separate the trailer block with a blank line")
+      ),
+      "nothing was committed or bound",
+      ...stagedByAll ? ["--all already staged your tracked changes; they are still staged"] : []
     ]);
   }
   if (hasDraft && !hasTranscript) {
@@ -20196,7 +21187,7 @@ var exitCodeFor = (outcome) => {
       return 2;
   }
 };
-var register5 = (program3) => {
+var register7 = (program3) => {
   program3.command("commit").description("consider this change and commit it in one call; recording nothing is a complete answer").requiredOption("-m, --message <message>", "the commit message, subject and body").option("--transcript <path>", "the session transcript the records are checked against").option("--records <path>", "a draft JSON file; omit it to commit with nothing recorded").option("--none", "state that there is nothing to record (the same as omitting --records)").option("--amend", "amend the previous commit rather than making a new one").option("-a, --all", "stage tracked changes first \u2014 unlike git commit -a, they stay staged if the commit is refused").option("--no-commit", "verify and bind without committing, and run git commit yourself").option("--json", "emit the result as JSON").addHelpText(
     "after",
     '\nOne call in place of prepare -> draft -> verify -> stage -> git commit. It composes no message of its own: the records reach the commit through the installed prepare-commit-msg hook, the same way they do when you stage a capture and commit by hand.\n\nRecording nothing is normal and expected. Most commits carry nothing a diff cannot show, and `commitlore commit -m "..."` with no --records is the complete answer for them -- not a shortfall, and nothing downstream asks for more.\n\nAll or nothing: if any record fails verification the commit does not happen and nothing is bound, because committing the survivors would hide the refusal at the moment it matters. Correct the quotes against the transcript, or commit with no records.\n\nExit codes: 0 committed (with or without a record) or bound; 1 a record was refused, git refused the commit, or the message that landed carries no record; 2 nothing was committed because nothing could be attempted -- not a repository, nothing staged, no hook to apply a record -- or because the capture itself failed, such as a draft holding more records than max_records_per_commit allows.'
@@ -20233,8 +21224,8 @@ var register5 = (program3) => {
 };
 
 // src/commands/commit-guard.ts
-import { existsSync as existsSync9, readFileSync as readFileSync10 } from "node:fs";
-import { resolve as resolve8 } from "node:path";
+import { existsSync as existsSync9, readFileSync as readFileSync11 } from "node:fs";
+import { resolve as resolve9 } from "node:path";
 
 // src/core/commit-guard.ts
 import { basename } from "node:path";
@@ -20479,7 +21470,7 @@ var GUARDED_TOOL = "Bash";
 var isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync10(0, "utf8");
+    return readFileSync11(0, "utf8");
   } catch {
     return "";
   }
@@ -20526,7 +21517,7 @@ var liveWorld = () => ({
       const resolved2 = execGit(["rev-parse", "--git-path", name], { cwd });
       if (resolved2.code !== 0) return false;
       const reported = resolved2.stdout.trim();
-      return reported !== "" && existsSync9(resolve8(cwd, reported));
+      return reported !== "" && existsSync9(resolve9(cwd, reported));
     };
     if (marker("MERGE_HEAD")) return "merge";
     for (const name of ["CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"]) {
@@ -20545,7 +21536,7 @@ var liveWorld = () => ({
     return { ...counted, empty: counted.files === 0 };
   }
 });
-var register6 = (program3) => {
+var register8 = (program3) => {
   program3.command("commit-guard").description("decide whether a Bash tool call may commit an unconsidered tree (for a PreToolUse hook)").option("--hook-input", "read a PreToolUse payload on stdin").option("--command <command>", "grade this command instead of reading a payload").addHelpText(
     "after",
     "\nExit codes: 2 refuse the tool call, with the reason on stderr for the agent; 0 allow it. Never 1 -- every failure of this command is an allow, because a gate that blocks on its own confusion is one people disable.\n\nIt asks whether the tree was considered, never whether a record exists. `records: []` satisfies it exactly as completely as ten records do."
@@ -20568,9 +21559,9 @@ var register6 = (program3) => {
 
 // src/commands/demo.ts
 import { execFileSync } from "node:child_process";
-import { mkdtempSync as mkdtempSync3, rmSync as rmSync8, writeFileSync as writeFileSync17, mkdirSync as mkdirSync11 } from "node:fs";
+import { mkdtempSync as mkdtempSync3, rmSync as rmSync9, writeFileSync as writeFileSync17, mkdirSync as mkdirSync11 } from "node:fs";
 import { tmpdir as tmpdir4 } from "node:os";
-import { dirname as dirname14, join as join21, resolve as resolve21 } from "node:path";
+import { dirname as dirname14, join as join21, resolve as resolve22 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/pricing.ts";
@@ -20610,11 +21601,11 @@ import { createInterface } from "node:readline";
 import { existsSync as existsSync27 } from "node:fs";
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
-import { resolve as resolve9 } from "node:path";
+import { resolve as resolve10 } from "node:path";
 
 // src/hooks/claude-settings.ts
-import { randomBytes as randomBytes6 } from "node:crypto";
-import { existsSync as existsSync10, mkdirSync as mkdirSync5, readFileSync as readFileSync11, renameSync as renameSync4, statSync as statSync3, unlinkSync as unlinkSync4, writeFileSync as writeFileSync8 } from "node:fs";
+import { randomBytes as randomBytes7 } from "node:crypto";
+import { existsSync as existsSync10, mkdirSync as mkdirSync5, readFileSync as readFileSync12, renameSync as renameSync4, statSync as statSync3, unlinkSync as unlinkSync4, writeFileSync as writeFileSync8 } from "node:fs";
 import { dirname as dirname4, join as join5 } from "node:path";
 
 // src/core/path-tools.ts
@@ -20627,7 +21618,7 @@ var CLAUDE_HOOK_MATCHER = PATH_TOOL_MATCHER;
 var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
 var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
 var claudeSettingsPath = (cwd) => join5(cwd, ".claude", "settings.json");
-var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var failure = (settingsPath, message) => ({
   code: 2,
@@ -20649,9 +21640,9 @@ var load = (settingsPath) => {
   if (!existsSync10(settingsPath)) return { settings: {}, existed: false };
   let raw;
   try {
-    raw = readFileSync11(settingsPath, "utf8");
+    raw = readFileSync12(settingsPath, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${settingsPath}: ${messageOf3(error2)}`);
+    throw new Error(`cannot read ${settingsPath}: ${messageOf4(error2)}`);
   }
   if (raw.trim() === "") return { settings: {}, existed: true };
   let parsed;
@@ -20659,7 +21650,7 @@ var load = (settingsPath) => {
     parsed = JSON.parse(raw);
   } catch (error2) {
     throw new Error(
-      `${settingsPath} is not valid JSON (${messageOf3(error2)}) \u2014 refusing to overwrite it; fix the file, or move it aside, and run this again`
+      `${settingsPath} is not valid JSON (${messageOf4(error2)}) \u2014 refusing to overwrite it; fix the file, or move it aside, and run this again`
     );
   }
   if (!isPlainObject2(parsed)) {
@@ -20704,7 +21695,7 @@ var readClaudeHookStatus = (settingsPath, command = CLAUDE_HOOK_COMMAND) => {
       state: "unreadable",
       entries: 0,
       commands: [],
-      problem: messageOf3(error2)
+      problem: messageOf4(error2)
     };
   }
   const commands = ourCommands(loaded.settings);
@@ -20748,7 +21739,7 @@ var writeAtomic2 = (settingsPath, settings) => {
   } catch {
     mode = void 0;
   }
-  const temporary = `${settingsPath}.tmp-${process.pid}-${randomBytes6(4).toString("hex")}`;
+  const temporary = `${settingsPath}.tmp-${process.pid}-${randomBytes7(4).toString("hex")}`;
   const body = `${JSON.stringify(settings, null, 2)}
 `;
   try {
@@ -20759,7 +21750,7 @@ var writeAtomic2 = (settingsPath, settings) => {
       unlinkSync4(temporary);
     } catch {
     }
-    throw new Error(`cannot write ${settingsPath}: ${messageOf3(error2)}`);
+    throw new Error(`cannot write ${settingsPath}: ${messageOf4(error2)}`);
   }
 };
 var validateCommand = (command) => {
@@ -20778,7 +21769,7 @@ var installClaudeHook = (input) => {
     validateCommand(command);
     loaded = load(settingsPath);
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf4(error2));
   }
   const before = ourCommands(loaded.settings);
   const { groups } = withoutOurs(eventGroups(loaded.settings));
@@ -20792,7 +21783,7 @@ var installClaudeHook = (input) => {
     try {
       writeAtomic2(settingsPath, next);
     } catch (error2) {
-      return failure(settingsPath, messageOf3(error2));
+      return failure(settingsPath, messageOf4(error2));
     }
   }
   const headline = {
@@ -20815,7 +21806,7 @@ var uninstallClaudeHook = (input) => {
   try {
     loaded = load(settingsPath);
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf4(error2));
   }
   if (!loaded.existed) {
     return success(readClaudeHookStatus(settingsPath, command), [
@@ -20831,7 +21822,7 @@ var uninstallClaudeHook = (input) => {
   try {
     writeAtomic2(settingsPath, withGroups(loaded.settings, groups));
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf4(error2));
   }
   return success(readClaudeHookStatus(settingsPath, command), [
     `removed ${removed} injection hook entr${removed === 1 ? "y" : "ies"}: ${settingsPath}`
@@ -20861,14 +21852,14 @@ var claudeHookStatus = (input) => {
 };
 
 // src/hooks/claude-plugin.ts
-import { existsSync as existsSync11, readFileSync as readFileSync12 } from "node:fs";
+import { existsSync as existsSync11, readFileSync as readFileSync13 } from "node:fs";
 import { homedir } from "node:os";
 import { join as join6 } from "node:path";
 var CLAUDE_PLUGIN_KEY = "commitlore@commitlore";
 var readJson = (path2) => {
   if (!existsSync11(path2)) return null;
   try {
-    return JSON.parse(readFileSync12(path2, "utf8"));
+    return JSON.parse(readFileSync13(path2, "utf8"));
   } catch {
     return null;
   }
@@ -20913,7 +21904,7 @@ var pluginDeliveryProof = (cwd, home = homedir()) => {
 import { spawnSync as spawnSync6 } from "node:child_process";
 
 // src/core/mcp-probe.ts
-import { accessSync as accessSync2, constants as constants2, existsSync as existsSync12, readFileSync as readFileSync13, realpathSync, statSync as statSync4 } from "node:fs";
+import { accessSync as accessSync2, constants as constants2, existsSync as existsSync12, readFileSync as readFileSync14, realpathSync, statSync as statSync4 } from "node:fs";
 import { spawn, spawnSync as spawnSync5 } from "node:child_process";
 import { delimiter, dirname as dirname5, isAbsolute, join as join7 } from "node:path";
 var failure2 = (reason, detail, cleanup) => ({ kind: "failure", reason, detail, ...cleanup === void 0 ? {} : { cleanup } });
@@ -20968,7 +21959,7 @@ var stopProbeChild = async (child) => {
 };
 var packageVersionAt = (root) => {
   try {
-    const parsed = JSON.parse(readFileSync13(join7(root, "package.json"), "utf8"));
+    const parsed = JSON.parse(readFileSync14(join7(root, "package.json"), "utf8"));
     return typeof parsed.version === "string" && parsed.version !== "" ? parsed.version : null;
   } catch {
     return null;
@@ -21505,7 +22496,7 @@ var checkInjectRuntime = (ctx) => {
     cwd,
     hook_event_name: "PreToolUse",
     tool_name: "Edit",
-    tool_input: { file_path: resolve9(cwd, path2) }
+    tool_input: { file_path: resolve10(cwd, path2) }
   });
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
   const executable = configured.slice(0, configured.indexOf(" "));
@@ -21528,27 +22519,27 @@ var checkInjectRuntime = (ctx) => {
 };
 
 // src/commands/doctor/checks/capture-commit-msg-hook.ts
-import { existsSync as existsSync17, readFileSync as readFileSync19 } from "node:fs";
-import { dirname as dirname9, resolve as resolve15 } from "node:path";
+import { existsSync as existsSync17, readFileSync as readFileSync20 } from "node:fs";
+import { dirname as dirname9, resolve as resolve16 } from "node:path";
 
 // src/core/hook-target.ts
 import { lstatSync, realpathSync as realpathSync3, statSync as statSync5 } from "node:fs";
-import { isAbsolute as isAbsolute2, relative, resolve as resolve11, sep } from "node:path";
+import { isAbsolute as isAbsolute2, relative, resolve as resolve12, sep } from "node:path";
 
 // src/core/runtime-identity.ts
 import { createHash as createHash8 } from "node:crypto";
-import { existsSync as existsSync13, readFileSync as readFileSync14, realpathSync as realpathSync2 } from "node:fs";
-import { dirname as dirname6, join as join8, resolve as resolve10 } from "node:path";
+import { existsSync as existsSync13, readFileSync as readFileSync15, realpathSync as realpathSync2 } from "node:fs";
+import { dirname as dirname6, join as join8, resolve as resolve11 } from "node:path";
 var physicalPath = (path2) => {
   try {
     return realpathSync2(path2);
   } catch {
-    return resolve10(path2);
+    return resolve11(path2);
   }
 };
 var manifestAt = (root) => {
   try {
-    return JSON.parse(readFileSync14(join8(root, "package.json"), "utf8"));
+    return JSON.parse(readFileSync15(join8(root, "package.json"), "utf8"));
   } catch {
     return {};
   }
@@ -21571,7 +22562,7 @@ var buildId = (entrypoint) => {
   const target = physicalPath(entrypoint ?? installedPath("dist", "commitlore.mjs"));
   let id2;
   try {
-    id2 = createHash8("sha256").update(readFileSync14(target)).digest("hex").slice(0, 12);
+    id2 = createHash8("sha256").update(readFileSync15(target)).digest("hex").slice(0, 12);
   } catch {
     id2 = "unknown";
   }
@@ -21660,7 +22651,7 @@ var versionProblems = (binPath) => {
 };
 var recordedHookIdentity = (target, cwd) => {
   if (target.bin === "") return null;
-  const path2 = resolve11(cwd, target.bin);
+  const path2 = resolve12(cwd, target.bin);
   try {
     return isFile(path2) ? runtimeIdentity(path2) : null;
   } catch {
@@ -21673,7 +22664,7 @@ var readRecordedHookTarget = (cwd) => {
   const problems = [];
   if (bin === "") problems.push("commitlore.bin is not recorded");
   else {
-    const binPath = resolve11(cwd, bin);
+    const binPath = resolve12(cwd, bin);
     const kind = classifyBinTarget(bin);
     if (kind === null) {
       problems.push("commitlore.bin is not a .js or .mjs file");
@@ -21689,7 +22680,7 @@ var readRecordedHookTarget = (cwd) => {
   }
   if (node === "") problems.push("commitlore.node is not recorded");
   else {
-    const nodePath = resolve11(cwd, node);
+    const nodePath = resolve12(cwd, node);
     if (!isExecutableFile(nodePath)) problems.push("commitlore.node is not an executable file");
     else if (realpathSync3(nodePath) !== realpathSync3(process.execPath)) {
       problems.push("commitlore.node differs from this CLI interpreter");
@@ -21703,24 +22694,24 @@ var describeRecordedHookTarget = (target) => [
 ];
 
 // src/commands/hooks.ts
-import { randomBytes as randomBytes9 } from "node:crypto";
+import { randomBytes as randomBytes10 } from "node:crypto";
 import {
   chmodSync as chmodSync4,
   existsSync as existsSync16,
   mkdirSync as mkdirSync8,
-  readFileSync as readFileSync18,
+  readFileSync as readFileSync19,
   realpathSync as realpathSync4,
   renameSync as renameSync7,
   statSync as statSync6,
   unlinkSync as unlinkSync5,
   writeFileSync as writeFileSync11
 } from "node:fs";
-import { basename as basename3, dirname as dirname8, join as join10, resolve as resolve14 } from "node:path";
+import { basename as basename3, dirname as dirname8, join as join10, resolve as resolve15 } from "node:path";
 
 // src/hooks/post-commit.ts
-import { createHash as createHash9, randomBytes as randomBytes7 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync14, mkdirSync as mkdirSync6, readFileSync as readFileSync16, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
-import { resolve as resolve12 } from "node:path";
+import { createHash as createHash9, randomBytes as randomBytes8 } from "node:crypto";
+import { chmodSync as chmodSync2, existsSync as existsSync14, mkdirSync as mkdirSync6, readFileSync as readFileSync17, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
+import { resolve as resolve13 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
 var POST_COMMIT_CHAINED_HOOK_NAME = `${POST_COMMIT_HOOK_NAME}${CHAINED_SUFFIX}`;
@@ -21730,7 +22721,7 @@ var hookFailure2 = (line2) => ({ code: 2, stdout: "", stderr: `commitlore: ${lin
 ` });
 var postCommitStub = () => captureHookStub().replaceAll("commit-msg", POST_COMMIT_HOOK_NAME).replaceAll('validate --message-file "$1"', "post-commit");
 var writePostCommitHook = (path2) => {
-  const temporary = `${path2}.tmp-${process.pid}-${randomBytes7(4).toString("hex")}`;
+  const temporary = `${path2}.tmp-${process.pid}-${randomBytes8(4).toString("hex")}`;
   writeFileSync9(temporary, postCommitStub(), { mode: HOOK_MODE });
   chmodSync2(temporary, HOOK_MODE);
   renameSync5(temporary, path2);
@@ -21740,14 +22731,14 @@ var installPostCommitHook = (cwd = process.cwd()) => {
   try {
     const result2 = execGit(["rev-parse", "--git-path", `hooks/${POST_COMMIT_HOOK_NAME}`], { cwd });
     if (result2.code !== 0) return hookFailure2(result2.stderr.trim() || "not a git repository");
-    hookPath = resolve12(cwd, result2.stdout.trim());
-    mkdirSync6(resolve12(hookPath, ".."), { recursive: true });
+    hookPath = resolve13(cwd, result2.stdout.trim());
+    mkdirSync6(resolve13(hookPath, ".."), { recursive: true });
   } catch (error2) {
     return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
     if (existsSync14(hookPath)) {
-      const current = readFileSync16(hookPath, "utf8");
+      const current = readFileSync17(hookPath, "utf8");
       if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
         return hookFailure2(`${hookPath} is not a commitlore hook \u2014 left in place`);
       }
@@ -21768,11 +22759,11 @@ var installPostCommitHook = (cwd = process.cwd()) => {
 var resolvePendingDir3 = (cwd) => {
   const result2 = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
   if (result2.code !== 0) return null;
-  return resolve12(cwd, result2.stdout.trim());
+  return resolve13(cwd, result2.stdout.trim());
 };
 var readPendingFile2 = (filePath) => {
   try {
-    const content = readFileSync16(filePath, "utf8");
+    const content = readFileSync17(filePath, "utf8");
     const parsed = JSON.parse(content);
     if (parsed["version"] !== 1) return null;
     return parsed;
@@ -21839,7 +22830,7 @@ var runPostCommitFinaliser = (cwd) => {
   if (msgResult.code !== 0) return;
   const commitMessage = msgResult.stdout;
   for (const file of files) {
-    const filePath = resolve12(pendingDirPath, file);
+    const filePath = resolve13(pendingDirPath, file);
     const pending2 = readPendingFile2(filePath);
     if (!pending2) continue;
     if (pending2.phase !== "applied") continue;
@@ -21858,7 +22849,7 @@ var runPostCommitFinaliser = (cwd) => {
     return;
   }
 };
-var register7 = (program3) => {
+var register9 = (program3) => {
   program3.command("post-commit").description("internal hook command: finalise pending capture consumption after a successful commit").action(() => {
     try {
       runPostCommitFinaliser(process.cwd());
@@ -21869,9 +22860,9 @@ var register7 = (program3) => {
 };
 
 // src/hooks/pre-push.ts
-import { randomBytes as randomBytes8 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync15, mkdirSync as mkdirSync7, readFileSync as readFileSync17, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
-import { resolve as resolve13 } from "node:path";
+import { randomBytes as randomBytes9 } from "node:crypto";
+import { chmodSync as chmodSync3, existsSync as existsSync15, mkdirSync as mkdirSync7, readFileSync as readFileSync18, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
+import { resolve as resolve14 } from "node:path";
 
 // src/core/sync.ts
 var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
@@ -22001,7 +22992,7 @@ var hookFailure3 = (line2) => ({ code: 2, stdout: "", stderr: `commitlore: ${lin
 ` });
 var prePushStub = () => captureHookStub().replaceAll("commit-msg", PRE_PUSH_HOOK_NAME).replaceAll('validate --message-file "$1"', 'pre-push "$@"');
 var writePrePushHook = (path2) => {
-  const temporary = `${path2}.tmp-${process.pid}-${randomBytes8(4).toString("hex")}`;
+  const temporary = `${path2}.tmp-${process.pid}-${randomBytes9(4).toString("hex")}`;
   writeFileSync10(temporary, prePushStub(), { mode: HOOK_MODE });
   chmodSync3(temporary, HOOK_MODE);
   renameSync6(temporary, path2);
@@ -22011,14 +23002,14 @@ var installPrePushHook = (cwd = process.cwd()) => {
   try {
     const result2 = execGit(["rev-parse", "--git-path", `hooks/${PRE_PUSH_HOOK_NAME}`], { cwd });
     if (result2.code !== 0) return hookFailure3(result2.stderr.trim() || "not a git repository");
-    hookPath = resolve13(cwd, result2.stdout.trim());
-    mkdirSync7(resolve13(hookPath, ".."), { recursive: true });
+    hookPath = resolve14(cwd, result2.stdout.trim());
+    mkdirSync7(resolve14(hookPath, ".."), { recursive: true });
   } catch (error2) {
     return hookFailure3(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
     if (existsSync15(hookPath)) {
-      const current = readFileSync17(hookPath, "utf8");
+      const current = readFileSync18(hookPath, "utf8");
       if (!current.includes(PRE_PUSH_HOOK_MARKER)) {
         return hookFailure3(`${hookPath} is not a commitlore hook \u2014 left in place`);
       }
@@ -22047,7 +23038,7 @@ var describeSync = (results, hasLocalRecords = null) => results.filter((result2)
   (result2) => result2.outcome === "diverged" ? `commitlore: notes mirror (${result2.remote}) diverged: ${oneLine2(result2.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it \u2014 run "commitlore sync" to merge them.` : hasLocalRecords === false ? `commitlore: notes mirror (${result2.remote}) failed: ${saidWhy(result2.detail)}. The branch was pushed. Nothing is waiting locally, so nothing was lost.` : `commitlore: notes mirror (${result2.remote}) failed: ${saidWhy(result2.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`
 );
 var notesPushEnv = () => nonInteractiveGitEnv(process.env, () => execGit(["config", "--get", "core.sshCommand"]).code === 0);
-var register8 = (program3) => {
+var register10 = (program3) => {
   program3.command(PRE_PUSH_HOOK_NAME).argument("[remote]", "the remote git is pushing to").argument("[url]", "its URL, as git passes it").description("internal hook command: publish the notes mirror alongside a push").action((remote) => {
     const hasLocalRecords = localRecordsExist();
     try {
@@ -22072,8 +23063,8 @@ var register8 = (program3) => {
 };
 
 // src/commands/hooks.ts
-var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var firstLine2 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure4 = (message) => ({
   code: 2,
   stdout: "",
@@ -22090,9 +23081,9 @@ var success2 = (status, lines) => ({
 var resolveHooksDir = (cwd) => {
   const result2 = execGit(["rev-parse", "--git-path", "hooks"], { cwd });
   if (result2.code !== 0) {
-    throw new Error(`not a git repository (${firstLine(result2.stderr)})`);
+    throw new Error(`not a git repository (${firstLine2(result2.stderr)})`);
   }
-  return resolve14(cwd, result2.stdout.trim());
+  return resolve15(cwd, result2.stdout.trim());
 };
 var isExecutable = (path2) => {
   try {
@@ -22105,7 +23096,7 @@ var readStubState = (hookPath, marker, stub) => {
   if (!existsSync16(hookPath)) return "absent";
   let contents;
   try {
-    contents = readFileSync18(hookPath, "utf8");
+    contents = readFileSync19(hookPath, "utf8");
   } catch {
     return "foreign";
   }
@@ -22128,7 +23119,7 @@ var readHookStatus = (cwd = process.cwd()) => {
   };
 };
 var writeStub = (hookPath) => {
-  const temporary = `${hookPath}.tmp-${process.pid}-${randomBytes9(4).toString("hex")}`;
+  const temporary = `${hookPath}.tmp-${process.pid}-${randomBytes10(4).toString("hex")}`;
   writeFileSync11(temporary, commitMsgStub(), { mode: HOOK_MODE });
   chmodSync4(temporary, HOOK_MODE);
   renameSync7(temporary, hookPath);
@@ -22142,10 +23133,10 @@ var resolveEntryForRecord = (entry, cwd) => {
       return null;
     }
   };
-  if (entry.includes("/")) return existingFile(resolve14(cwd, entry));
+  if (entry.includes("/")) return existingFile(resolve15(cwd, entry));
   for (const dir of (process.env["PATH"] ?? "").split(":")) {
     if (dir === "") continue;
-    const found = existingFile(resolve14(dir, entry));
+    const found = existingFile(resolve15(dir, entry));
     if (found !== null) return found;
   }
   return null;
@@ -22186,7 +23177,7 @@ var installHook = (input = {}) => {
     before = readHookStatus(cwd);
     rootBefore = recordedRootValue(cwd);
   } catch (error2) {
-    return failure4(messageOf4(error2));
+    return failure4(messageOf5(error2));
   }
   try {
     if (before.state === "foreign") {
@@ -22200,7 +23191,7 @@ var installHook = (input = {}) => {
     writeStub(before.hookPath);
     recordBinPath(cwd);
   } catch (error2) {
-    return failure4(`could not install the ${HOOK_NAME} hook: ${messageOf4(error2)}`);
+    return failure4(`could not install the ${HOOK_NAME} hook: ${messageOf5(error2)}`);
   }
   const after = readHookStatus(cwd);
   const rootAfter = recordedRootValue(cwd);
@@ -22228,7 +23219,7 @@ var installHook = (input = {}) => {
       return { code: 2, stdout: `${lines.join("\n")}
 `, stderr: refreshed.stderr, status: after };
     }
-    lines.push(firstLine(refreshed.stdout));
+    lines.push(firstLine2(refreshed.stdout));
   }
   return success2(after, lines);
 };
@@ -22267,7 +23258,7 @@ var removeCaptureHook = (hooksDir, hook) => {
   if (!existsSync16(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
   let contents;
   try {
-    contents = readFileSync18(hookPath, "utf8");
+    contents = readFileSync19(hookPath, "utf8");
   } catch {
     return [`${hookPath} was not installed by commitlore \u2014 left in place`];
   }
@@ -22285,7 +23276,7 @@ var uninstallHook = (input = {}) => {
   try {
     before = readHookStatus(cwd);
   } catch (error2) {
-    return failure4(messageOf4(error2));
+    return failure4(messageOf5(error2));
   }
   const lines = [];
   if (before.state === "absent") {
@@ -22300,7 +23291,7 @@ var uninstallHook = (input = {}) => {
       unlinkSync5(before.hookPath);
       if (before.chained) renameSync7(before.chainedPath, before.hookPath);
     } catch (error2) {
-      return failure4(`could not remove the ${HOOK_NAME} hook: ${messageOf4(error2)}`);
+      return failure4(`could not remove the ${HOOK_NAME} hook: ${messageOf5(error2)}`);
     }
     lines.push(`removed ${HOOK_NAME} hook: ${before.hookPath}`);
     if (before.chained) lines.push(`restored the previous hook: ${before.hookPath}`);
@@ -22309,7 +23300,7 @@ var uninstallHook = (input = {}) => {
     try {
       lines.push(...removeCaptureHook(before.hooksDir, hook));
     } catch (error2) {
-      return failure4(`could not remove the ${hook.name} hook: ${messageOf4(error2)}`);
+      return failure4(`could not remove the ${hook.name} hook: ${messageOf5(error2)}`);
     }
   }
   return success2(readHookStatus(cwd), lines);
@@ -22320,7 +23311,7 @@ var hookStatus = (input = {}) => {
   try {
     status = readHookStatus(cwd);
   } catch (error2) {
-    return failure4(messageOf4(error2));
+    return failure4(messageOf5(error2));
   }
   const describe5 = {
     absent: "not installed",
@@ -22347,7 +23338,7 @@ var emit = (result2) => {
   if (result2.stderr !== "") process.stderr.write(result2.stderr);
   if (result2.code !== 0) process.exitCode = result2.code;
 };
-var register9 = (program3) => {
+var register11 = (program3) => {
   const hooks = program3.command("hooks").description(
     `manage commitlore's git hooks: the ${HOOK_NAME} hook that runs commitlore validate, and the two hooks init installs beside it`
   );
@@ -22387,7 +23378,7 @@ var checkHook = (ctx, runtime) => {
       { evidence: { hook_path: "unavailable", bin: "not_recorded", node: "not_recorded" } }
     );
   }
-  const path2 = resolve15(opts.cwd ?? process.cwd(), located.stdout.trim());
+  const path2 = resolve16(opts.cwd ?? process.cwd(), located.stdout.trim());
   const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
   const override = env["COMMITLORE_BIN"];
   const hookEvidence = {
@@ -22413,7 +23404,7 @@ var checkHook = (ctx, runtime) => {
       { evidence: hookEvidence }
     );
   }
-  const contents = readFileSync19(path2, "utf8");
+  const contents = readFileSync20(path2, "utf8");
   if (!contents.includes(HOOK_MARKER)) {
     return check(
       id2,
@@ -22509,9 +23500,9 @@ var checkHook = (ctx, runtime) => {
 };
 
 // src/commands/doctor/checks/capture-hook-runtime.ts
-import { accessSync as accessSync3, constants as fsConstants, existsSync as existsSync18, rmSync as rmSync5, writeFileSync as writeFileSync12 } from "node:fs";
+import { accessSync as accessSync3, constants as fsConstants, existsSync as existsSync18, rmSync as rmSync6, writeFileSync as writeFileSync12 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
-import { dirname as dirname10, join as join11, resolve as resolve16 } from "node:path";
+import { dirname as dirname10, join as join11, resolve as resolve17 } from "node:path";
 var isExecutable2 = (path2) => {
   try {
     accessSync3(path2, fsConstants.X_OK);
@@ -22552,7 +23543,7 @@ var checkHookRuntime = (ctx) => {
       }
     );
   }
-  const hook = resolve16(cwd, located.stdout.trim());
+  const hook = resolve17(cwd, located.stdout.trim());
   if (!existsSync18(hook)) {
     return check(
       id2,
@@ -22728,320 +23719,8 @@ var checkHookRuntime = (ctx) => {
       }
     );
   } finally {
-    rmSync5(probe, { force: true });
+    rmSync6(probe, { force: true });
   }
-};
-
-// src/commands/stale.ts
-var DEFAULT_SCAN_LIMIT = 1e3;
-var UNIT = "";
-var LOG_FORMAT2 = `%H${UNIT}%cI${UNIT}%B`;
-var EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguous argument 'HEAD'/;
-var CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
-var RECORD_ID_KEY4 = "Record-Id";
-var UNRESOLVED_WANT = "undetermined \u2014 the scanned window does not carry this Record-Id and no commit message declares it; a declaration in the notes mirror outside the window would not be found here, so run with --all-history to decide";
-var newCollectCache = () => ({
-  commits: /* @__PURE__ */ new Map(),
-  notes: /* @__PURE__ */ new Map(),
-  blocks: /* @__PURE__ */ new Map(),
-  last: /* @__PURE__ */ new Map()
-});
-var parseChunk = (chunk, cache, atoms, isolated) => {
-  const firstSep = chunk.indexOf(UNIT);
-  if (firstSep === -1) return [];
-  const secondSep = chunk.indexOf(UNIT, firstSep + 1);
-  if (secondSep === -1) return [];
-  const sha = chunk.slice(0, firstSep);
-  const cached2 = cache?.get(sha);
-  if (cached2 !== void 0) return cached2;
-  const committedAt = canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep));
-  const message = chunk.slice(secondSep + 1);
-  const blocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocksWithAtom(message, atoms?.get(sha), isolated) : [];
-  const records = blocks.length === 0 ? [{ sha, committedAt, trailers: [], source: "commit" }] : blocks.map((trailers) => ({ sha, committedAt, trailers, source: "commit" }));
-  cache?.set(sha, records);
-  return records;
-};
-var collectRecords = (opts = {}) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const mirror = opts.cache?.repository ?? { shas: listRecordShas({ cwd }), availability: notesAvailability({ cwd }) };
-  if (opts.cache !== void 0) opts.cache.repository = mirror;
-  const notes = mirror.availability;
-  const selection = [];
-  if (opts.allHistory !== true) selection.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
-  selection.push("--end-of-options", opts.revision ?? "HEAD");
-  const result2 = execGit(["log", "-z", `--format=${LOG_FORMAT2}`, ...selection], { cwd });
-  if (result2.code !== 0) {
-    if (EMPTY_REPO_RE.test(result2.stderr)) {
-      return { records: [], commits: 0, truncated: false, notes };
-    }
-    throw new Error(`git log failed (exit ${result2.code}): ${result2.stderr.trim()}`);
-  }
-  const chunks = result2.stdout.split("\0").filter((chunk) => chunk.length > 0);
-  const commitCache = opts.cache?.commits;
-  const wouldUseAtom = chunks.filter((chunk) => {
-    const at = chunk.indexOf(UNIT);
-    if (at === -1 || commitCache?.has(chunk.slice(0, at)) === true) return false;
-    const second = chunk.indexOf(UNIT, at + 1);
-    return second !== -1 && CANDIDATE_LINE_RE.test(chunk.slice(second + 1));
-  }).length;
-  const atoms = wouldUseAtom >= 2 ? readTrailersAtom(selection, { cwd }) : void 0;
-  const uncachedMessages = chunks.map((chunk) => {
-    const at = chunk.indexOf(UNIT);
-    if (at === -1 || commitCache?.has(chunk.slice(0, at)) === true) return null;
-    const second = chunk.indexOf(UNIT, at + 1);
-    return second === -1 ? null : chunk.slice(second + 1);
-  }).filter((message) => message !== null && CANDIDATE_LINE_RE.test(message));
-  const isolated = uncachedMessages.length > 0 ? isolateBlocks(uncachedMessages) : void 0;
-  const commitRecords = chunks.flatMap((chunk) => parseChunk(chunk, commitCache, atoms, isolated));
-  const shas = new Set(commitRecords.map((record2) => record2.sha));
-  const trailersBySha = /* @__PURE__ */ new Map();
-  for (const record2 of commitRecords) {
-    const firstId = record2.trailers.find((trailer) => trailer.key === RECORD_ID_KEY4)?.value;
-    const existing = trailersBySha.get(record2.sha);
-    if (existing === void 0) {
-      trailersBySha.set(record2.sha, {
-        committedAt: record2.committedAt,
-        trailers: [...record2.trailers],
-        folds: new Set(firstId === void 0 ? [] : [firstId])
-      });
-    } else {
-      existing.trailers.push(...record2.trailers);
-      if (firstId !== void 0) existing.folds.add(firstId);
-    }
-  }
-  const noteCache = opts.cache?.notes;
-  const noteShas = mirror.shas.filter(
-    (sha) => trailersBySha.has(sha) && noteCache?.has(sha) !== true
-  );
-  const noteText = noteShas.length > 0 ? noteMessages(noteShas, { cwd }) : /* @__PURE__ */ new Map();
-  const isolatedNotes = noteText.size > 0 ? isolateBlocks([...noteText.values()]) : void 0;
-  const noteRecords = mirror.shas.flatMap((sha) => {
-    const commit = trailersBySha.get(sha);
-    if (commit === void 0) return [];
-    const cachedNote = noteCache?.get(sha);
-    const message = noteText.get(sha);
-    const blocks = cachedNote ?? (message === void 0 ? [] : parseRecordBlocks(message, isolatedNotes === void 0 ? {} : { isolated: isolatedNotes }));
-    if (cachedNote === void 0) noteCache?.set(sha, blocks);
-    return blocks.flatMap((trailers) => {
-      const noteId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY4)?.value;
-      const sameText = trailers.every(
-        (note) => commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value)
-      );
-      const mirrored = noteId === void 0 ? sameText : commit.folds.has(noteId) && sameText;
-      return trailers.length === 0 || mirrored ? [] : [{ sha, committedAt: commit.committedAt, trailers, source: "notes" }];
-    });
-  });
-  return {
-    records: [...commitRecords, ...noteRecords],
-    commits: shas.size,
-    truncated: opts.allHistory !== true && shas.size >= DEFAULT_SCAN_LIMIT,
-    notes
-  };
-};
-var oldestFirst2 = (records) => [
-  ...records.filter((record2) => record2.source !== "notes").reverse(),
-  ...records.filter((record2) => record2.source === "notes")
-];
-var withheldIfInjection = (record2) => {
-  const identityHits = identityCarriesInjection(record2.recordId) ? [.../* @__PURE__ */ new Set([...scanInjection(record2.recordId), ...scanInjection(`Record-Id: ${record2.recordId}`)])] : [];
-  const matched = [
-    .../* @__PURE__ */ new Set([
-      ...record2.resolvedTrailers.flatMap((trailer) => scanTrailer(trailer)),
-      ...identityHits
-    ])
-  ];
-  if (matched.length === 0) return record2;
-  const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`;
-  return {
-    ...record2,
-    // A withheld record whose id is still printed is not withheld.
-    recordId: identityHits.length > 0 ? withheld : record2.recordId,
-    resolvedTrailers: record2.resolvedTrailers.map((trailer) => ({
-      key: trailer.key,
-      value: withheld
-    })),
-    // `expiresAt` carries the `Expires:` value verbatim, condition form and
-    // all, and is serialised beside the trailers. Redacting only
-    // `resolvedTrailers` left this field as an open second channel: a payload
-    // in `Expires:` reached a model through the same tool. Every place the
-    // value appears has to be the same place.
-    ...record2.expiresAt === void 0 ? {} : { expiresAt: withheld }
-  };
-};
-var declaredAnywhere = (cwd, ids) => {
-  const full = collectRecords({
-    ...cwd === void 0 ? {} : { cwd },
-    allHistory: true
-  });
-  const declared = /* @__PURE__ */ new Set();
-  for (const record2 of full.records) {
-    for (const trailer of record2.trailers) {
-      if (trailer.key === RECORD_ID_KEY4) declared.add(trailer.value);
-    }
-  }
-  return new Set(ids.filter((id2) => declared.has(id2)));
-};
-var buildReport = (scan2, at, resolveIn) => {
-  const ordered = oldestFirst2(scan2.records);
-  const states = foldLifecycle(ordered, { at });
-  const stale = states.filter(isStale).map((state) => {
-    const record2 = scan2.records.find(
-      (candidate) => candidate.sha === state.sha && candidate.trailers.some(
-        (trailer) => trailer.key === "Record-Id" && trailer.value === state.recordId
-      )
-    );
-    if (record2 === void 0) throw new Error(`no source for stale record ${state.recordId}`);
-    return withheldIfInjection({ ...state, source: record2.source });
-  });
-  return {
-    at: at.toISOString(),
-    commits: scan2.commits,
-    truncated: scan2.truncated,
-    coverage: scan2.truncated ? "partial" : "complete",
-    notes: scan2.notes,
-    totalRecords: states.length,
-    records: stale,
-    // Both read the stream in order too — `findIdCollisions` asks whether a
-    // *later* commit declared the succession, which is the same question the
-    // fold asks and must get the same order to answer it with.
-    ...partitionRefs(findDanglingRefs(ordered), scan2, resolveIn),
-    idCollisions: findIdCollisions(ordered),
-    unfoldedDeclarations: unfoldedDeclarations(ordered)
-  };
-};
-var partitionRefs = (candidates, scan2, resolveIn) => {
-  if (!scan2.truncated || candidates.length === 0) {
-    return { danglingRefs: candidates, unresolvedRefs: [] };
-  }
-  if (resolveIn === void 0) {
-    return {
-      danglingRefs: [],
-      unresolvedRefs: candidates.map((violation) => ({ ...violation, want: UNRESOLVED_WANT }))
-    };
-  }
-  const ids = [...new Set(candidates.map((violation) => violation.got))];
-  const declared = declaredAnywhere(resolveIn.cwd, ids);
-  return {
-    danglingRefs: candidates.filter((violation) => !declared.has(violation.got)),
-    unresolvedRefs: []
-  };
-};
-var unfoldedDeclarations = (records) => {
-  const declarationsIn = (record2) => record2.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY4).map((trailer) => trailer.value);
-  const folded = /* @__PURE__ */ new Set();
-  for (const record2 of records) {
-    const ids = declarationsIn(record2);
-    if (ids.length > 0) folded.add(ids[0]);
-  }
-  const rows = [];
-  for (const record2 of records) {
-    const ids = declarationsIn(record2);
-    if (ids.length < 2) continue;
-    const unread = ids.slice(1).filter((id2) => !folded.has(id2));
-    if (unread.length === 0) continue;
-    rows.push({
-      sha: record2.sha,
-      source: record2.source,
-      declared: ids.length,
-      unread
-    });
-  }
-  return rows;
-};
-var shortSha2 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
-var location = (state) => `${state.recordId}  ${shortSha2(state.sha)}  [${state.source}]`;
-var section = (title2, lines) => lines.length === 0 ? [] : ["", title2, ...lines.map((line2) => `  ${line2}`)];
-var formatReport = (report) => {
-  const superseded = report.records.filter((state) => state.lifecycle === "superseded");
-  const expired = report.records.filter((state) => state.lifecycle === "expired");
-  const review = report.records.filter((state) => state.lifecycle === "active");
-  const lines = [
-    `stale at ${report.at} \u2014 ${superseded.length} superseded, ${expired.length} expired, ${review.length} for review, of ${report.totalRecords} record(s) in ${report.commits} commit(s)`,
-    ...section(
-      "superseded",
-      superseded.map(
-        (state) => `${location(state)}  by ${shortSha2(state.supersededBy ?? "")}`
-      )
-    ),
-    ...section(
-      "expired",
-      expired.map((state) => `${location(state)}  ${state.expiresAt ?? ""}`)
-    ),
-    ...section(
-      "review",
-      review.map((state) => `${location(state)}  ${state.expiresAt ?? ""}`)
-    ),
-    ...section(
-      "dangling refs",
-      report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)
-    ),
-    ...section(
-      "unresolved refs",
-      report.unresolvedRefs.map((violation) => `${violation.key}: ${violation.got}  ${violation.want}`)
-    ),
-    ...section(
-      "id collisions",
-      report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)
-    ),
-    // Named rather than omitted, the way `unresolved refs` names a window this
-    // could not cover. The fix is `validate`, which is where the violation is
-    // defined, so the row says that rather than leaving the reader to guess
-    // what a declaration the fold skipped is supposed to mean (#1015).
-    ...section(
-      "declarations not folded",
-      report.unfoldedDeclarations.map(
-        (row) => `${shortSha2(row.sha)}${row.source === "notes" ? " (note)" : ""}  ${String(row.unread.length)} of ${String(row.declared)} unread: ${row.unread.join(", ")}`
-      )
-    )
-  ];
-  if (report.unfoldedDeclarations.length > 0) {
-    const unread = report.unfoldedDeclarations.reduce((sum, row) => sum + row.unread.length, 0);
-    lines.push(
-      "",
-      `note: ${String(unread)} declaration(s) have no lifecycle because their block declares more than one Record-Id, which is a cardinality violation \u2014 run commitlore validate on the commits above.`
-    );
-  }
-  if (report.truncated) {
-    lines.push(
-      "",
-      `note: only the most recent ${DEFAULT_SCAN_LIMIT} commits were scanned; run with --all-history for the whole record.`
-    );
-  }
-  if (report.notes === "unfetched") {
-    lines.push("", "note: the notes mirror has not been fetched, so this scan is incomplete; run commitlore doctor --fix and fetch again.");
-  }
-  return `${lines.join("\n")}
-`;
-};
-var evaluationInstant = (raw) => {
-  if (raw === void 0) return /* @__PURE__ */ new Date();
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`--at is not a valid ISO 8601 instant: ${raw}`);
-  }
-  return parsed;
-};
-var register10 = (program3) => {
-  program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
-    "after",
-    "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
-  ).action((options) => {
-    try {
-      const at = evaluationInstant(options.at);
-      const scan2 = collectRecords(
-        options.allHistory === true ? { allHistory: true } : { allHistory: false }
-      );
-      const report = buildReport(scan2, at, {});
-      process.stdout.write(
-        options.json === true ? `${JSON.stringify(report, null, 2)}
-` : formatReport(report)
-      );
-    } catch (error2) {
-      process.stderr.write(`commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
-`);
-      process.exitCode = 2;
-    }
-  });
 };
 
 // src/commands/pending.ts
@@ -23198,7 +23877,7 @@ var renderList = (result2, now) => {
   return `${lines.join("\n")}
 `;
 };
-var register11 = (program3) => {
+var register12 = (program3) => {
   const pending2 = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
   pending2.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
     const result2 = runPendingList({});
@@ -23497,11 +24176,11 @@ var checkPolicyOverlay = (ctx) => {
 
 // src/core/mcp-registration.ts
 import { spawnSync as spawnSync7 } from "node:child_process";
-import { randomBytes as randomBytes10 } from "node:crypto";
+import { randomBytes as randomBytes11 } from "node:crypto";
 import {
   existsSync as existsSync19,
   lstatSync as lstatSync2,
-  readFileSync as readFileSync20,
+  readFileSync as readFileSync21,
   renameSync as renameSync8,
   statSync as statSync7,
   unlinkSync as unlinkSync6,
@@ -23513,7 +24192,7 @@ var MCP_SERVER_KEY = "commitlore";
 var MCP_SERVER_COMMAND = "commitlore";
 var MCP_SERVER_ARGS = ["mcp"];
 var isJsonObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isLaunchableEntry = (value) => isJsonObject(value) && typeof value["command"] === "string" && value["command"].trim() !== "";
 var expandHostPlaceholders = (value) => value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (whole, name, fallback) => {
   const set = process.env[name];
@@ -23529,7 +24208,7 @@ var registeredMcpLaunch = (cwd) => {
   if (path2 === null) return null;
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync20(path2, "utf8"));
+    parsed = JSON.parse(readFileSync21(path2, "utf8"));
   } catch {
     return null;
   }
@@ -23563,7 +24242,7 @@ var registersCommitloreMcpServer = (cwd) => {
   if (path2 === null) return false;
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync20(path2, "utf8"));
+    parsed = JSON.parse(readFileSync21(path2, "utf8"));
   } catch {
     return false;
   }
@@ -23575,7 +24254,7 @@ var hostConfigPath = (home) => join12(home, ".claude.json");
 var hostRegistersCommitlore = (home) => {
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync20(hostConfigPath(home), "utf8"));
+    parsed = JSON.parse(readFileSync21(hostConfigPath(home), "utf8"));
   } catch {
     return false;
   }
@@ -23714,7 +24393,7 @@ var writeAtomic3 = (path2, contents) => {
   } catch {
     mode = void 0;
   }
-  const temporary = `${path2}.tmp-${process.pid}-${randomBytes10(4).toString("hex")}`;
+  const temporary = `${path2}.tmp-${process.pid}-${randomBytes11(4).toString("hex")}`;
   try {
     writeFileSync13(temporary, contents, mode === void 0 ? {} : { mode });
     renameSync8(temporary, path2);
@@ -23738,7 +24417,7 @@ var registerCommitloreMcpServer = (cwd) => {
       writeAtomic3(path2, freshConfig());
       return { ok: true, path: path2, state: "created", changed: true };
     } catch (error2) {
-      return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf5(error2)}` };
+      return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf6(error2)}` };
     }
   }
   try {
@@ -23746,19 +24425,19 @@ var registerCommitloreMcpServer = (cwd) => {
       return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is a symbolic link \u2014 left unchanged` };
     }
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be inspected: ${messageOf5(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be inspected: ${messageOf6(error2)}` };
   }
   let source;
   try {
-    source = readFileSync20(path2, "utf8");
+    source = readFileSync21(path2, "utf8");
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be read: ${messageOf5(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be read: ${messageOf6(error2)}` };
   }
   let parsed;
   try {
     parsed = JSON.parse(source);
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is not valid JSON \u2014 left unchanged: ${messageOf5(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is not valid JSON \u2014 left unchanged: ${messageOf6(error2)}` };
   }
   if (!isJsonObject(parsed)) {
     return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} must contain a JSON object \u2014 left unchanged` };
@@ -23808,7 +24487,7 @@ var registerCommitloreMcpServer = (cwd) => {
     writeAtomic3(path2, next);
     return { ok: true, path: path2, state: "merged", changed: true };
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf5(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf6(error2)}` };
   }
 };
 var MCP_SCOPES = ["user", "project", "local", "none"];
@@ -23835,7 +24514,7 @@ var registerWithHost = (scope, cwd) => {
       scope,
       command,
       state: missing ? "host-missing" : "host-failed",
-      error: missing ? `${MCP_HOST_CLI} is not on PATH` : messageOf5(add.error)
+      error: missing ? `${MCP_HOST_CLI} is not on PATH` : messageOf6(add.error)
     };
   }
   if (add.status === 0) return { ok: true, scope, command, state: "registered", error: null };
@@ -24154,20 +24833,20 @@ var checkDirectiveTrustMode = (ctx) => {
 };
 
 // src/mcp/lifecycle.ts
-import { appendFileSync, mkdirSync as mkdirSync9, readFileSync as readFileSync21, statSync as statSync8, writeFileSync as writeFileSync14, writeSync } from "node:fs";
-import { dirname as dirname11, join as join13, resolve as resolve17 } from "node:path";
+import { appendFileSync, mkdirSync as mkdirSync9, readFileSync as readFileSync22, statSync as statSync8, writeFileSync as writeFileSync14, writeSync } from "node:fs";
+import { dirname as dirname11, join as join13, resolve as resolve18 } from "node:path";
 var MAX_BYTES = 64 * 1024;
 var LIFECYCLE_FILE = "mcp-lifecycle.log";
 var lifecyclePath = (cwd = process.cwd()) => {
   const result2 = execGit(["rev-parse", "--git-path", join13("commitlore", LIFECYCLE_FILE)], { cwd });
   if (result2.code !== 0) return null;
   const path2 = result2.stdout.trim();
-  return path2 === "" ? null : resolve17(cwd, path2);
+  return path2 === "" ? null : resolve18(cwd, path2);
 };
 var trim = (path2) => {
   try {
     if (statSync8(path2).size <= MAX_BYTES) return;
-    const lines = readFileSync21(path2, "utf8").split("\n");
+    const lines = readFileSync22(path2, "utf8").split("\n");
     writeFileSync14(path2, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}`);
   } catch {
   }
@@ -24260,7 +24939,7 @@ var readLifecycle = (cwd = process.cwd()) => {
   try {
     const path2 = lifecyclePath(cwd);
     if (path2 === null) return [];
-    return readFileSync21(path2, "utf8").split("\n").flatMap((line2) => {
+    return readFileSync22(path2, "utf8").split("\n").flatMap((line2) => {
       const match = /^(started|exited)\s+(\S+)\s+pid\s+(\d+)\s*(.*)$/.exec(line2.trim());
       if (match === null) return [];
       return [
@@ -24407,7 +25086,7 @@ var checkMcpDeliveryRoutes = (ctx) => {
 
 // src/commands/doctor/checks/delivery-mcp-registration-runtime.ts
 import { spawnSync as spawnSync8 } from "node:child_process";
-import { existsSync as existsSync20, readFileSync as readFileSync22 } from "node:fs";
+import { existsSync as existsSync20, readFileSync as readFileSync23 } from "node:fs";
 import { isAbsolute as isAbsolute3, join as join14 } from "node:path";
 var HOST_PATH = "/usr/bin:/bin";
 var registeredLaunch = (cwd) => {
@@ -24415,7 +25094,7 @@ var registeredLaunch = (cwd) => {
   if (!existsSync20(path2)) return null;
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync22(path2, "utf8"));
+    parsed = JSON.parse(readFileSync23(path2, "utf8"));
   } catch {
     return null;
   }
@@ -24840,7 +25519,7 @@ var DATE_SHAPE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
 var SEMVER_CORE_RE = /^(\d+)\.(\d+)\.(\d+)/;
 var MAX_PARAGRAPH_DROPS = 8;
 var gitOptions4 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
-var firstLine2 = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var firstLine3 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var trailerValue3 = (trailers, key) => trailers.find((trailer) => trailer.key === key)?.value;
 var recordIdOf2 = (record2) => record2.recordId ?? trailerValue3(record2.trailers, RECORD_ID_KEY5);
 var contentSet = (trailers) => new Set(trailers.map((trailer) => `${trailer.key}${NUL}${trailer.value}`));
@@ -24883,7 +25562,7 @@ var collectRange = (range, opts = {}) => {
   const selection = ["--reverse", "--end-of-options", range, "--"];
   const result2 = execGit(["log", "-z", `--format=${LOG_FORMAT3}`, ...selection], gitOptions4(opts));
   if (result2.code !== 0) {
-    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine2(result2.stderr)}`);
+    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine3(result2.stderr)}`);
   }
   const mirrored = opts.cache?.mirrored ?? new Set(listRecordShas(opts));
   if (opts.cache !== void 0) opts.cache.mirrored = mirrored;
@@ -25405,7 +26084,7 @@ var checkSquashConservation = (ctx) => {
 
 // src/commands/doctor/checks/history-squash-inheritance.ts
 import { spawnSync as spawnSync9 } from "node:child_process";
-import { existsSync as existsSync21, readFileSync as readFileSync23, readdirSync as readdirSync5 } from "node:fs";
+import { existsSync as existsSync21, readFileSync as readFileSync24, readdirSync as readdirSync5 } from "node:fs";
 import { join as join15 } from "node:path";
 var WORKFLOW_DIR = join15(".github", "workflows");
 var REFERENCES_ACTION = /uses:\s*\S*action[/\\]preserve/i;
@@ -25425,7 +26104,7 @@ var workflowReferencesAction = (root) => {
     scanned += 1;
     let text;
     try {
-      text = readFileSync23(join15(dir, entry), "utf8");
+      text = readFileSync24(join15(dir, entry), "utf8");
     } catch {
       continue;
     }
@@ -25881,7 +26560,7 @@ var checkInstallationIntegrity = (_ctx) => {
 
 // src/core/latest-release.ts
 import { spawn as spawn2, spawnSync as spawnSync10 } from "node:child_process";
-import { mkdirSync as mkdirSync10, readFileSync as readFileSync24, renameSync as renameSync9, rmSync as rmSync6, writeFileSync as writeFileSync15 } from "node:fs";
+import { mkdirSync as mkdirSync10, readFileSync as readFileSync25, renameSync as renameSync9, rmSync as rmSync7, writeFileSync as writeFileSync15 } from "node:fs";
 import { homedir as homedir2, tmpdir as tmpdir3 } from "node:os";
 import { dirname as dirname12, join as join17 } from "node:path";
 
@@ -25941,7 +26620,7 @@ var sourceUrl = (env = process.env) => {
 var cachePath = (home) => join17(home !== void 0 && home !== "" ? home : homedir2(), ".cache", "commitlore", "latest-release.json");
 var readCache = (path2) => {
   try {
-    const parsed = JSON.parse(readFileSync24(path2, "utf8"));
+    const parsed = JSON.parse(readFileSync25(path2, "utf8"));
     if (typeof parsed !== "object" || parsed === null) return null;
     const entry = parsed;
     if (entry.version !== CACHE_VERSION) return null;
@@ -26072,7 +26751,7 @@ var latestRelease = async (opts = {}) => {
 };
 var forgetCachedRelease = (home) => {
   try {
-    rmSync6(cachePath(home), { force: true });
+    rmSync7(cachePath(home), { force: true });
   } catch {
   }
 };
@@ -26212,7 +26891,7 @@ var checkGit = (ctx) => {
 
 // src/commands/doctor/checks/transport-notes-push.ts
 import { existsSync as existsSync24 } from "node:fs";
-import { resolve as resolve18 } from "node:path";
+import { resolve as resolve19 } from "node:path";
 var checkPush = (ctx) => {
   const { opts, git: git2 } = ctx;
   const title2 = "notes push";
@@ -26287,7 +26966,7 @@ var checkPush = (ctx) => {
     );
   }
   const prePush = existsSync24(
-    resolve18(
+    resolve19(
       opts.cwd ?? process.cwd(),
       git2(["rev-parse", "--git-path", "hooks/pre-push"], gitOptions2(opts)).stdout.trim()
     )
@@ -26309,7 +26988,7 @@ var checkPush = (ctx) => {
 var EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 var escapeConfigValuePattern = (value) => value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
-var firstLine3 = (output) => output.trim().split("\n")[0] ?? "";
+var firstLine4 = (output) => output.trim().split("\n")[0] ?? "";
 var clearAbsenceEvidence = (remote, ctx) => ctx.git(["config", "--local", "--unset-all", notesAbsenceEvidenceKey(remote)], gitOptions2(ctx.opts)).code === 0;
 var recordAbsenceEvidence = (remote, ctx) => {
   const url = ctx.git(["config", "--get", `remote.${remote}.url`], gitOptions2(ctx.opts));
@@ -26444,7 +27123,7 @@ var checkRefspec = (ctx) => {
       "transport",
       title2,
       "warn",
-      `could not verify whether ${NOTES_REF} exists upstream (${unavailable.map(({ remote, result: result2 }) => `${remote}: ${remoteTimedOut(result2, probe) ?? (firstLine3(result2.stderr) || "git ls-remote failed")}`).join("; ")})`,
+      `could not verify whether ${NOTES_REF} exists upstream (${unavailable.map(({ remote, result: result2 }) => `${remote}: ${remoteTimedOut(result2, probe) ?? (firstLine4(result2.stderr) || "git ls-remote failed")}`).join("; ")})`,
       unavailable.map(({ remote }) => `git fetch ${remote}`).join("\n"),
       fixed,
       void 0,
@@ -26607,8 +27286,8 @@ ${formatCheckReport(report, options)}`;
 };
 
 // src/commands/doctor/report.ts
-import { existsSync as existsSync25, readFileSync as readFileSync25 } from "node:fs";
-import { join as join18, resolve as resolve19, sep as sep2 } from "node:path";
+import { existsSync as existsSync25, readFileSync as readFileSync26 } from "node:fs";
+import { join as join18, resolve as resolve20, sep as sep2 } from "node:path";
 
 // src/commands/doctor/runner.ts
 var containedRun = (definition, ctx, dependencies) => {
@@ -26716,11 +27395,11 @@ var deriveInstallSource = ({
   pluginRoot = process.env["CLAUDE_PLUGIN_ROOT"]
 } = {}) => {
   if (pluginRoot !== void 0 && pluginRoot !== "") return "plugin";
-  const segments = resolve19(entryPath).split(sep2);
+  const segments = resolve20(entryPath).split(sep2);
   if (segments.includes("_npx")) return "npx";
   if (segments.includes("node_modules")) return "npm";
   try {
-    const manifest = JSON.parse(readFileSync25(join18(packageRoot, "package.json"), "utf8"));
+    const manifest = JSON.parse(readFileSync26(join18(packageRoot, "package.json"), "utf8"));
     if (manifest.name === "commitlore" && existsSync25(join18(packageRoot, ".git"))) return "source";
   } catch {
   }
@@ -26764,7 +27443,7 @@ var buildReport2 = (checks, options = {}) => {
     exitCode: checks.some((check2) => !check2.optional && check2.status === "fail") ? 1 : 0
   };
 };
-var register12 = (program3) => {
+var register13 = (program3) => {
   program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").option("--verbose", "include diagnostic evidence, skip reasons, and durations for each check").option("--only <ids>", "run only these comma-separated check ids").option("--category <name>", "run only checks in this category").addHelpText(
     "after",
     `
@@ -26791,7 +27470,7 @@ import { spawnSync as spawnSync12 } from "node:child_process";
 
 // src/commands/update.ts
 import { spawnSync as spawnSync11 } from "node:child_process";
-import { readFileSync as readFileSync26, realpathSync as realpathSync5 } from "node:fs";
+import { readFileSync as readFileSync27, realpathSync as realpathSync5 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join19 } from "node:path";
 var installCommand = (tag, platform = process.platform) => {
@@ -26852,7 +27531,7 @@ a newer release is available. To upgrade:
   return `${lines.join("\n")}
 `;
 };
-var register13 = (program3) => {
+var register14 = (program3) => {
   program3.command("upgrade").description("report the installed and newest CommitLore release").option("--check", "report only; make no change (the default in this build)").option("--json", "the same answer as JSON").option("--force", "act even when the newest release is not newer than this one").addHelpText(
     "after",
     "\nExit codes: 0 the check ran, whether or not a newer release exists (SPEC \xA710)."
@@ -26913,7 +27592,7 @@ var resolvedCurrent = (root, platform = process.platform) => {
   try {
     if (platform === "win32") {
       const shim = join19(root, "bin", "commitlore.cmd");
-      const text = readFileSync26(shim, "utf8");
+      const text = readFileSync27(shim, "utf8");
       const match = /([^\s"']*[/\\]v\d+\.\d+\.\d+)[/\\]/.exec(text);
       return match?.[1] ?? null;
     }
@@ -26963,19 +27642,19 @@ var performUpgrade = (tag, deps) => {
 };
 
 // src/core/agents-guidance.ts
-import { existsSync as existsSync26, readFileSync as readFileSync27, renameSync as renameSync10, rmSync as rmSync7, statSync as statSync9, writeFileSync as writeFileSync16 } from "node:fs";
-import { basename as basename4, dirname as dirname13, join as join20, resolve as resolve20 } from "node:path";
+import { existsSync as existsSync26, readFileSync as readFileSync28, renameSync as renameSync10, rmSync as rmSync8, statSync as statSync9, writeFileSync as writeFileSync16 } from "node:fs";
+import { basename as basename4, dirname as dirname13, join as join20, resolve as resolve21 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
 var AGENTS_SECTION_END = "<!-- commitlore:end -->";
-var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var shippedAgentsPath = () => {
   const source = fileURLToPath2(import.meta.url);
   const here = dirname13(source);
-  return basename4(here) === "dist" ? resolve20(here, "..", "AGENTS.md") : resolve20(here, "..", "..", "AGENTS.md");
+  return basename4(here) === "dist" ? resolve21(here, "..", "AGENTS.md") : resolve21(here, "..", "..", "AGENTS.md");
 };
 var readCommitloreAgentsSection = () => {
-  const contents = readFileSync27(shippedAgentsPath(), "utf8");
+  const contents = readFileSync28(shippedAgentsPath(), "utf8");
   const start = contents.indexOf(AGENTS_SECTION_BEGIN);
   const end = contents.indexOf(AGENTS_SECTION_END);
   if (start === -1 || end === -1 || end < start) {
@@ -26992,7 +27671,7 @@ var replaceFile = (path2, contents) => {
     renameSync10(temporary, path2);
   } catch (error2) {
     try {
-      if (existsSync26(temporary)) rmSync7(temporary, { force: true });
+      if (existsSync26(temporary)) rmSync8(temporary, { force: true });
     } catch {
     }
     throw error2;
@@ -27004,21 +27683,21 @@ var installAgentsGuidance = (cwd) => {
   try {
     section2 = readCommitloreAgentsSection();
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf7(error2) };
   }
   if (!existsSync26(path2)) {
     try {
       writeFileSync16(path2, section2);
       return { state: "created", path: path2, error: null };
     } catch (error2) {
-      return { state: "write-failed", path: path2, error: messageOf6(error2) };
+      return { state: "write-failed", path: path2, error: messageOf7(error2) };
     }
   }
   let contents;
   try {
-    contents = readFileSync27(path2, "utf8");
+    contents = readFileSync28(path2, "utf8");
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf7(error2) };
   }
   const begins = markerCount(contents, AGENTS_SECTION_BEGIN);
   const ends = markerCount(contents, AGENTS_SECTION_END);
@@ -27045,13 +27724,13 @@ var installAgentsGuidance = (cwd) => {
     replaceFile(path2, next);
     return { state, path: path2, error: null };
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf7(error2) };
   }
 };
 
 // src/commands/init.ts
 var DEFAULT_MCP_SCOPE = "user";
-var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var runDoctorStep = (opts) => {
   const report = runDoctor({ ...cwdOption(opts), fix: true });
@@ -27086,7 +27765,7 @@ var runIndexStep = (opts) => {
   try {
     handle = openIndex({ cwd });
   } catch (error2) {
-    const message = `could not open the index: ${messageOf7(error2)}`;
+    const message = `could not open the index: ${messageOf8(error2)}`;
     return {
       step: "index",
       title: "index --rebuild",
@@ -27107,7 +27786,7 @@ var runIndexStep = (opts) => {
       detail: { ok: true, message, stats }
     };
   } catch (error2) {
-    const message = `could not rebuild the index: ${messageOf7(error2)}`;
+    const message = `could not rebuild the index: ${messageOf8(error2)}`;
     return {
       step: "index",
       title: "index --rebuild",
@@ -27662,7 +28341,7 @@ var resolveMcpScope = async (options) => {
   }
   return DEFAULT_MCP_SCOPE;
 };
-var register14 = (program3) => {
+var register15 = (program3) => {
   program3.command("init").description(
     "one-command onboarding: hooks install, directive author string, index --rebuild, agent integration, MCP registration, capture policy, doctor --fix"
   ).option(
@@ -27742,7 +28421,7 @@ var runDemo = async (opts = {}) => {
   const cleanup = () => {
     if (tmpDir !== void 0) {
       try {
-        rmSync8(tmpDir, { recursive: true, force: true });
+        rmSync9(tmpDir, { recursive: true, force: true });
       } catch {
       }
       tmpDir = void 0;
@@ -27756,8 +28435,8 @@ var runDemo = async (opts = {}) => {
   process.prependOnceListener("SIGTERM", onSignal);
   try {
     tmpDir = mkdtempSync3(join21(opts.tmpRoot ?? tmpdir4(), "commitlore-demo-"));
-    const userCwd = resolve21(opts.cwd ?? process.cwd());
-    const tmpResolved = resolve21(tmpDir);
+    const userCwd = resolve22(opts.cwd ?? process.cwd());
+    const tmpResolved = resolve22(tmpDir);
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
       throw new Error("demo: temporary directory overlaps with user repository \u2014 aborting");
     }
@@ -27819,7 +28498,7 @@ var runDemo = async (opts = {}) => {
     process.removeListener("SIGTERM", onSignal);
   }
 };
-var register15 = (program3) => {
+var register16 = (program3) => {
   program3.command("demo").description("run a self-contained lifecycle demo in a temporary repository (no network, no model)").action(async () => {
     const result2 = await runDemo();
     if (result2.exitCode !== 0) {
@@ -27833,7 +28512,7 @@ var register15 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync28, writeFileSync as writeFileSync18 } from "node:fs";
+import { readFileSync as readFileSync29, writeFileSync as writeFileSync18 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
@@ -27844,7 +28523,7 @@ var skip2 = (reason) => ({
 });
 var readTextFile = (path2, label) => {
   try {
-    return readFileSync28(path2, "utf8");
+    return readFileSync29(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -27916,7 +28595,7 @@ var runHarvest = (options) => {
 `, exitCode: USAGE_EXIT_CODE };
   }
 };
-var register16 = (program3) => {
+var register17 = (program3) => {
   program3.command("harvest").description("build the harvest prompt contract, or check a draft a session produced").option("--transcript <file>", "agent session transcript to harvest from").option("--diff <file>", "diff to harvest from (default: the staged diff)").option("--out <file>", "write the output here instead of stdout").option("--prompt-only", "print the prompt contract for the session and exit").option("--draft <file>", "check a draft the session produced and print what survived").addHelpText(
     "after",
     "\nExit codes: 0 ran (nothing to harvest counts as ran), 2 a usage error -- an unreadable path or a draft that is not a draft (SPEC \xA710)."
@@ -27929,7 +28608,7 @@ var register16 = (program3) => {
 };
 
 // src/commands/guard.ts
-import { readFileSync as readFileSync29 } from "node:fs";
+import { readFileSync as readFileSync30 } from "node:fs";
 var FLAGGED_EXIT_CODE = 1;
 var USAGE_EXIT_CODE2 = 2;
 var INCOMPLETE_EXIT_CODE = 3;
@@ -27937,8 +28616,8 @@ var STDIN_FD = 0;
 var readProposal = (raw) => {
   if (!raw.startsWith("@")) return raw;
   const path2 = raw.slice(1);
-  if (path2 === "-") return readFileSync29(STDIN_FD, "utf8");
-  return readFileSync29(path2, "utf8");
+  if (path2 === "-") return readFileSync30(STDIN_FD, "utf8");
+  return readFileSync30(path2, "utf8");
 };
 var matchThreshold = (raw) => {
   if (raw === void 0) return void 0;
@@ -28073,7 +28752,7 @@ var runAsHook = async (options) => {
 `
   );
 };
-var register17 = (program3) => {
+var register18 = (program3) => {
   program3.command("guard").description("[experimental advisory] flag a proposal that may revive a ruled-out alternative \u2014 a lead to inspect, not evidence the proposal is wrong (precision 44.8%, recall 22.0%)").argument("[paths...]", "limit the check to records touching these paths").option(
     "--proposal <text>",
     "the proposal to check; @<file> reads a file, @- reads stdin (required outside --hook-input)"
@@ -28135,12 +28814,12 @@ var register17 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync30, writeFileSync as writeFileSync19 } from "node:fs";
+import { readFileSync as readFileSync31, writeFileSync as writeFileSync19 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
   try {
-    return readFileSync30(path2, "utf8");
+    return readFileSync31(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -28218,7 +28897,7 @@ var runHarvestVerify = (options) => {
 `, exitCode: BAD_INPUT };
   }
 };
-var register18 = (program3) => {
+var register19 = (program3) => {
   program3.command("harvest-verify").description("check a harvested draft against the transcript and diff it claims to quote").option("--draft <file>", "the draft a session produced").option("--transcript <file>", "the transcript the draft was harvested from").option("--diff <file>", "the diff the draft was harvested from").option("--out <file>", "write the output here instead of stdout").option("--json", "emit the full report, discarded records included").option("--repair-prompt", "emit the feedback prompt for another draft attempt").addHelpText(
     "after",
     "\nExit codes: 0 ran (a fully rejected draft still exits 0), 2 a usage error -- a missing option, an unreadable path, a draft that is not a draft (SPEC \xA710)."
@@ -28232,12 +28911,12 @@ var register18 = (program3) => {
 
 // src/commands/hermes.ts
 import { spawnSync as spawnSync13 } from "node:child_process";
-import { copyFileSync, existsSync as existsSync28, mkdirSync as mkdirSync12, readFileSync as readFileSync31, renameSync as renameSync11, statSync as statSync10, writeFileSync as writeFileSync20 } from "node:fs";
+import { copyFileSync, existsSync as existsSync28, mkdirSync as mkdirSync12, readFileSync as readFileSync32, renameSync as renameSync11, statSync as statSync10, writeFileSync as writeFileSync20 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
-import { basename as basename5, dirname as dirname15, join as join22, resolve as resolve23 } from "node:path";
+import { basename as basename5, dirname as dirname15, join as join22, resolve as resolve24 } from "node:path";
 
 // src/core/hermes-config.ts
-import { relative as relative2, resolve as resolve22, sep as sep3 } from "node:path";
+import { relative as relative2, resolve as resolve23, sep as sep3 } from "node:path";
 var HERMES_SERVER_KEY = "commitlore";
 var splitLines = (contents) => {
   const lines = [];
@@ -28377,8 +29056,8 @@ var skillsBlock = (skillsDir, newline) => ["  external_dirs:", `    - ${yamlStri
 var topLevelMcpBlock = (wrapperPath, newline) => [`mcp_servers:`, mcpBlock(wrapperPath, newline)].join(newline);
 var topLevelSkillsBlock = (skillsDir, newline) => [`skills:`, skillsBlock(skillsDir, newline)].join(newline);
 var isManagedHermesSkillsDir = (value, dataRoot2, installedSkillsDir) => {
-  if (installedSkillsDir !== void 0 && resolve22(value) === resolve22(installedSkillsDir)) return true;
-  const rel = relative2(resolve22(dataRoot2), resolve22(value));
+  if (installedSkillsDir !== void 0 && resolve23(value) === resolve23(installedSkillsDir)) return true;
+  const rel = relative2(resolve23(dataRoot2), resolve23(value));
   const parts = rel.split(sep3);
   return parts.length === 3 && parts[0] !== "" && parts[0] !== ".." && !parts[0]?.startsWith("..") && parts[1] === "hermes" && parts[2] === "skills";
 };
@@ -28581,10 +29260,10 @@ var runHermesInstall = (options = {}) => {
     };
   }
   const wrapperPath = options.wrapperPath ?? join22(home, ".local", "bin", "commitlore");
-  const before = existsSync28(configPath) ? readFileSync31(configPath, "utf8") : "";
+  const before = existsSync28(configPath) ? readFileSync32(configPath, "utf8") : "";
   const edit = addHermesConfig(before, {
     wrapperPath,
-    skillsDir: resolve23(skillsDir),
+    skillsDir: resolve24(skillsDir),
     dataRoot: dataRoot2
   });
   if (edit.blocked.length > 0) {
@@ -28621,7 +29300,7 @@ var runHermesInstall = (options = {}) => {
     verified
   };
 };
-var register19 = (program3) => {
+var register20 = (program3) => {
   const hermes = program3.command("hermes").description("configure the active Hermes profile with CommitLore MCP tools and skills");
   hermes.command("install").description("wire Hermes host configuration; repository setup remains `commitlore init`").option("--config <path>", "Hermes config.yaml path (defaults to the active profile)").option("--command <path>", "CommitLore wrapper Hermes should execute (defaults to ~/.local/bin/commitlore)").option("--data-root <path>", "CommitLore install data root, used when replacing an older skill bundle").option("--verify", "probe skill discovery and MCP tools after configuring").action((options) => {
     const result2 = runHermesInstall({
@@ -28708,7 +29387,7 @@ var runIndex = (options) => {
     closeIndex(handle);
   }
 };
-var register20 = (program3) => {
+var register21 = (program3) => {
   program3.command("index").description("build or refresh the derived record index (.git/commitlore/index.db)").option("--rebuild", "discard the index and rebuild it from git").option("--no-index", "answer from git alone, writing nothing (the fallback path)").option("--json", "emit the run as JSON").option("--stats", "report what the index currently holds").addHelpText(
     "after",
     "\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or the SQLite binding is unavailable, in which case every read still answers from git with --no-index (SPEC \xA710)."
@@ -28732,8 +29411,8 @@ var register20 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync32, realpathSync as realpathSync6 } from "node:fs";
-import { basename as basename6, dirname as dirname16, isAbsolute as isAbsolute4, join as join23, relative as relative3, resolve as resolve24, sep as sep4 } from "node:path";
+import { readFileSync as readFileSync33, realpathSync as realpathSync6 } from "node:fs";
+import { basename as basename6, dirname as dirname16, isAbsolute as isAbsolute4, join as join23, relative as relative3, resolve as resolve25, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash10 } from "node:crypto";
@@ -29169,7 +29848,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject3 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin2 = () => {
   try {
-    return readFileSync32(0, "utf8");
+    return readFileSync33(0, "utf8");
   } catch {
     return "";
   }
@@ -29192,7 +29871,7 @@ var repositoryRoot2 = (cwd) => {
   return result2.code === 0 ? result2.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve24(target);
+  const absolute = resolve25(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
@@ -29223,7 +29902,7 @@ var payloadPath = (payload, cwd) => {
   }
   const root = repositoryRoot2(cwd);
   if (root === void 0) throw new Error("repository root could not be resolved");
-  const target = canonical(isAbsolute4(raw) ? raw : resolve24(cwd, raw));
+  const target = canonical(isAbsolute4(raw) ? raw : resolve25(cwd, raw));
   const scoped = relative3(canonical(root), target);
   if (scoped === "") throw new Error("file_path resolves to the repository root");
   if (scoped === ".." || scoped.startsWith(`..${sep4}`) || isAbsolute4(scoped)) {
@@ -29326,7 +30005,7 @@ var hookInput = (options) => ({
   settingsPath: settingsFile(options),
   ...options.command === void 0 ? {} : { command: options.command }
 });
-var register21 = (program3) => {
+var register22 = (program3) => {
   const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: current UTC day)").option(
     "--trusted-author <author>",
     "an author string whose records may render as instructions (repeatable; not identity proof)",
@@ -29361,7 +30040,7 @@ var register21 = (program3) => {
 };
 
 // src/commands/installer-hosts.ts
-import { accessSync as accessSync4, constants as constants3, existsSync as existsSync29, mkdirSync as mkdirSync13, renameSync as renameSync12, statSync as statSync11, unlinkSync as unlinkSync7, writeFileSync as writeFileSync21, readFileSync as readFileSync33 } from "node:fs";
+import { accessSync as accessSync4, constants as constants3, existsSync as existsSync29, mkdirSync as mkdirSync13, renameSync as renameSync12, statSync as statSync11, unlinkSync as unlinkSync7, writeFileSync as writeFileSync21, readFileSync as readFileSync34 } from "node:fs";
 import { delimiter as delimiter2, dirname as dirname17, extname, isAbsolute as isAbsolute5, join as join24 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync as spawnSync14 } from "node:child_process";
@@ -29395,7 +30074,7 @@ var atomicJsonWrite = (path2, value) => {
     if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") {
       throw new Error("interrupted before atomic rename");
     }
-    JSON.parse(readFileSync33(temporary, "utf8"));
+    JSON.parse(readFileSync34(temporary, "utf8"));
     renameSync12(temporary, path2);
   } finally {
     try {
@@ -29408,7 +30087,7 @@ var jsonHost = async (host, path2, format, wrapper) => {
   let config3;
   let existed = true;
   try {
-    config3 = JSON.parse(readFileSync33(path2, "utf8"));
+    config3 = JSON.parse(readFileSync34(path2, "utf8"));
     if (!isObject3(config3)) throw new Error("root is not an object");
   } catch (error2) {
     if (!existsSync29(path2)) {
@@ -29456,7 +30135,7 @@ var tomlRegistration = (source) => {
 var tomlHost = async (path2, wrapper) => {
   let source = "";
   try {
-    source = readFileSync33(path2, "utf8");
+    source = readFileSync34(path2, "utf8");
   } catch (error2) {
     if (existsSync29(path2)) return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `${path2} could not be read: ${String(error2)}` };
   }
@@ -29482,7 +30161,7 @@ args = ["mcp"]
     try {
       writeFileSync21(temporary, next, { encoding: "utf8", mode: 384 });
       if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") throw new Error("interrupted before atomic rename");
-      tomlRegistration(readFileSync33(temporary, "utf8"));
+      tomlRegistration(readFileSync34(temporary, "utf8"));
       renameSync12(temporary, path2);
     } finally {
       try {
@@ -29694,7 +30373,7 @@ var inspectAndApplyHosts = async (options) => {
   for (const wire of requested) hosts.push(await wire());
   return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
-var register22 = (program3) => {
+var register23 = (program3) => {
   program3.command("installer-hosts").description("inspect, apply, and live-verify detected CommitLore host registrations").requiredOption("--wrapper <path>", "the verified CommitLore wrapper path").requiredOption("--data-root <path>", "the CommitLore data root").requiredOption("--home <path>", "the target user home directory").option("--json", "emit the installer host summary as JSON").action(async (options) => {
     const summary2 = await inspectAndApplyHosts(options);
     process.stdout.write(`${JSON.stringify(summary2)}
@@ -29705,7 +30384,7 @@ var register22 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute6, relative as relative4, resolve as resolve26, sep as sep5 } from "node:path";
+import { isAbsolute as isAbsolute6, relative as relative4, resolve as resolve27, sep as sep5 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -38597,7 +39276,7 @@ var define = (program3, name, description, keys, render3) => {
     }
   });
 };
-var register23 = (program3) => {
+var register24 = (program3) => {
   define(
     program3,
     "context",
@@ -38715,7 +39394,7 @@ var beforeChange = (opts) => {
 
 // src/core/repository-assertion.ts
 import { realpathSync as realpathSync7 } from "node:fs";
-import { resolve as resolve25 } from "node:path";
+import { resolve as resolve26 } from "node:path";
 var gitValue = (cwd, args) => {
   const result2 = execGit([...args], { cwd });
   if (result2.code !== 0) return null;
@@ -38735,7 +39414,7 @@ var treeFacts = (cwd) => {
   const commonDir = gitValue(cwd, ["rev-parse", "--git-common-dir"]);
   return {
     root: resolved(root),
-    commonDir: commonDir === null ? null : resolved(resolve25(cwd, commonDir)),
+    commonDir: commonDir === null ? null : resolved(resolve26(cwd, commonDir)),
     head: gitValue(cwd, ["rev-parse", "HEAD"]),
     branch: gitValue(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])
   };
@@ -38876,7 +39555,7 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute6(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved2 = resolve26(root, raw);
+  const resolved2 = resolve27(root, raw);
   if (resolved2 !== root && !resolved2.startsWith(`${root}${sep5}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
@@ -39143,7 +39822,7 @@ var stagedRecordIds = (nonce, cwd) => {
 };
 var createServer = (opts = {}) => {
   const unbound = /* @__PURE__ */ new Set();
-  const root = resolve26(opts.cwd ?? process.cwd());
+  const root = resolve27(opts.cwd ?? process.cwd());
   const captureAssets = preflightCaptureAssets();
   const captureReady = captureAssets.ready;
   const captureDiagnostic = captureUnavailableMessage(captureAssets);
@@ -39461,7 +40140,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register24 = (program3) => {
+var register25 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -39475,7 +40154,7 @@ var register24 = (program3) => {
 
 // src/core/codex-plugin.ts
 import { spawnSync as spawnSync15 } from "node:child_process";
-import { existsSync as existsSync30, mkdirSync as mkdirSync14, readFileSync as readFileSync34, rmSync as rmSync9, writeFileSync as writeFileSync22 } from "node:fs";
+import { existsSync as existsSync30, mkdirSync as mkdirSync14, readFileSync as readFileSync35, rmSync as rmSync10, writeFileSync as writeFileSync22 } from "node:fs";
 import { homedir as homedir5 } from "node:os";
 import { join as join25 } from "node:path";
 
@@ -39617,7 +40296,7 @@ var readCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) =
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
   if (!existsSync30(markerPath)) return null;
   try {
-    const parsed = JSON.parse(readFileSync34(markerPath, "utf8"));
+    const parsed = JSON.parse(readFileSync35(markerPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
     const marker = parsed;
     const expected = markerFor(plugin);
@@ -39627,7 +40306,7 @@ var readCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) =
   }
 };
 var removeCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) => {
-  rmSync9(codexPluginMarkerPath(plugin, dataHome), { force: true });
+  rmSync10(codexPluginMarkerPath(plugin, dataHome), { force: true });
 };
 var writeCodexPluginMarker = (plugin, dataHome) => {
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
@@ -39757,7 +40436,7 @@ var installCodexPlugin = (options = {}) => {
 };
 
 // src/commands/plugin.ts
-var register25 = (program3) => {
+var register26 = (program3) => {
   const plugin = program3.command("plugin").description("manage CommitLore coding-agent plugins");
   plugin.command("install-codex").description("install or repair the CommitLore Codex plugin through the Codex CLI").option("--print", "print the one command instead of running it").addHelpText(
     "after",
@@ -39774,18 +40453,18 @@ var register25 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync35, writeFileSync as writeFileSync23 } from "node:fs";
+import { readFileSync as readFileSync36, writeFileSync as writeFileSync23 } from "node:fs";
 var PREFIX4 = "commitlore:";
-var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
+var USAGE2 = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
-var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var firstLine4 = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var messageOf9 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var firstLine5 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var shortSha6 = (sha) => sha.length > SHORT_SHA ? sha.slice(0, SHORT_SHA) : sha;
-var usageError = (message) => ({
+var usageError2 = (message) => ({
   code: 2,
   stdout: "",
   stderr: `${PREFIX4} ${message}
-${USAGE}
+${USAGE2}
 `,
   plan: null
 });
@@ -39795,29 +40474,18 @@ var countCommits = (range, cwd) => {
     cwd === void 0 ? {} : { cwd }
   );
   if (result2.code !== 0) {
-    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine4(result2.stderr)}`);
+    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine5(result2.stderr)}`);
   }
   return Number(result2.stdout.trim());
 };
-var warningsFor = (plan) => {
-  const lines = plan.conflicts.map(
-    (conflict) => `${PREFIX4} conflict on ${conflict.recordId} \u2014 kept the version from ${shortSha6(conflict.kept)}, dropped ${conflict.dropped.map(shortSha6).join(", ")}`
-  );
-  const unidentified = plan.blocks.filter(
-    (block) => !block.some((trailer) => trailer.key === "Record-Id")
-  ).length;
-  if (unidentified > 1) {
-    lines.push(
-      `${PREFIX4} ${unidentified} inherited records declared no Record-Id \u2014 only the last one written stays recoverable if this note or message is re-parsed later; this plan (and --json) still lists all of them`
-    );
-  }
-  return lines;
-};
+var warningsFor = (plan) => plan.conflicts.map(
+  (conflict) => `${PREFIX4} conflict on ${conflict.recordId} \u2014 kept the version from ${shortSha6(conflict.kept)}, dropped ${conflict.dropped.map(shortSha6).join(", ")}`
+);
 var readDraft2 = (path2) => {
   try {
-    return readFileSync35(path2, "utf8");
+    return readFileSync36(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf9(error2)}`);
   }
 };
 var recordIdOfBlock = (block) => block.find((trailer) => trailer.key === "Record-Id")?.value;
@@ -39840,19 +40508,19 @@ var writeDraft = (path2, text) => {
   try {
     writeFileSync23(path2, text);
   } catch (error2) {
-    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
+    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf9(error2)}`);
   }
 };
 var runSquashPreserve = (input = {}) => {
   const range = input.range;
-  if (range === void 0 || range === "") return usageError("a range is required");
+  if (range === void 0 || range === "") return usageError2("a range is required");
   let plan;
   let skippedRecordIds = [];
   let commits;
   try {
     commits = countCommits(range, input.cwd);
     if (commits === 0) {
-      return usageError(
+      return usageError2(
         `the range ${JSON.stringify(range)} holds no commits \u2014 nothing was squashed`
       );
     }
@@ -39861,7 +40529,7 @@ var runSquashPreserve = (input = {}) => {
     );
     ({ plan, skippedRecordIds } = withoutRecordIds(resolved2, input.excludeRecordIds ?? []));
   } catch (error2) {
-    return usageError(messageOf8(error2));
+    return usageError2(messageOf9(error2));
   }
   const warnings = warningsFor(plan).map((line2) => `${line2}
 `).join("");
@@ -39881,6 +40549,14 @@ var runSquashPreserve = (input = {}) => {
 `;
   const applied = { messageFile: null, target: null };
   try {
+    const draft = input.messageFile === void 0 ? void 0 : renderMessage(readDraft2(input.messageFile), plan);
+    const assertDraft = (text) => assertRecordBlocksRecovered(
+      plan.blocks,
+      parseRecordBlocks(text, input.cwd === void 0 ? {} : { cwd: input.cwd }),
+      input.cwd,
+      true
+    );
+    if (draft !== void 0) assertDraft(draft);
     if (input.target !== void 0) {
       attachToNotes(input.target, plan, {
         ...input.cwd === void 0 ? {} : { cwd: input.cwd },
@@ -39889,11 +40565,12 @@ var runSquashPreserve = (input = {}) => {
       applied.target = input.target;
     }
     if (input.messageFile !== void 0) {
-      writeDraft(input.messageFile, renderMessage(readDraft2(input.messageFile), plan));
+      writeDraft(input.messageFile, draft);
+      assertDraft(readDraft2(input.messageFile));
       applied.messageFile = input.messageFile;
     }
   } catch (error2) {
-    return { code: 2, stdout: "", stderr: `${warnings}${multiBlockNotice}${PREFIX4} ${messageOf8(error2)}
+    return { code: 2, stdout: "", stderr: `${warnings}${multiBlockNotice}${PREFIX4} ${messageOf9(error2)}
 `, plan };
   }
   if (input.json === true) {
@@ -39921,7 +40598,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${multiBlockNotice}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register26 = (program3) => {
+var register27 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").option(
     "--exclude-record-id <id>",
     "do not apply a record identity the destination already carries (repeatable)",
@@ -40039,600 +40716,13 @@ var runSync = (options = {}) => {
   return { code, stdout: `${[...results.map(line), ...skipped].join("\n")}
 ` };
 };
-var register27 = (program3) => {
+var register28 = (program3) => {
   program3.command("sync").description("publish and collect the notes mirror (the pre-push hook runs this for you)").option("--remote <name>", "sync this remote instead of the branch's push remote (repeatable)", (value, previous = []) => [
     ...previous,
     value
   ]).option("--fetch-only", "collect from the remote and publish nothing").option("--dry-run", "report what would happen and change nothing").option("--json", "machine-readable output").action((options) => {
     const result2 = runSync(options);
     process.stdout.write(result2.stdout);
-    if (result2.code !== 0) process.exitCode = result2.code;
-  });
-};
-
-// src/commands/validate.ts
-import { readFileSync as readFileSync36, rmSync as rmSync10 } from "node:fs";
-import { resolve as resolve27 } from "node:path";
-var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
-var MODE_FLAGS = {
-  messageFile: "--message-file",
-  commit: "--commit",
-  range: "--range"
-};
-var MODE_KEYS = ["messageFile", "commit", "range"];
-var usageError2 = (message) => ({
-  code: 2,
-  stdout: "",
-  stderr: `commitlore: ${message}
-${USAGE2}
-`,
-  violations: [],
-  secrets: [],
-  checks: []
-});
-var installationError = (message) => ({
-  code: 3,
-  stdout: "",
-  stderr: `commitlore: ${message}
-`,
-  violations: [],
-  secrets: [],
-  checks: []
-});
-var messageOf9 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var firstLine5 = (text) => (text.trim().split("\n")[0] ?? "").trim();
-var stripCr = (line2) => line2.endsWith("\r") ? line2.slice(0, -1) : line2;
-var CONTINUATION = /^[ \t]/;
-var LEADING_WHITESPACE = /^[ \t]+/;
-var isComment = (line2) => line2.startsWith("#");
-var MERGE_TITLE = /^Merge (pull request #\d+ from \S+|branch '[^']+'|remote-tracking branch '[^']+'|tag '[^']+')(?: into \S+)?$/;
-var looksLikeMergeTitle = (message) => MERGE_TITLE.test(firstLine5(message));
-var matchTrailersAt = (lines, start, trailers) => {
-  const found = [];
-  let cursor = start;
-  for (const trailer of trailers) {
-    while (cursor < lines.length && isComment(lines[cursor] ?? "")) cursor += 1;
-    const line2 = lines[cursor];
-    const prefix = `${trailer.key}:`;
-    if (line2 === void 0 || !line2.startsWith(prefix)) return null;
-    let value = line2.slice(prefix.length).replace(LEADING_WHITESPACE, "");
-    found.push(cursor + 1);
-    cursor += 1;
-    while (cursor < lines.length && CONTINUATION.test(lines[cursor] ?? "")) {
-      value += ` ${(lines[cursor] ?? "").replace(LEADING_WHITESPACE, "")}`;
-      cursor += 1;
-    }
-    if (value !== trailer.value) return null;
-  }
-  return found;
-};
-var locateTrailerLines = (message, trailers) => {
-  if (trailers.length === 0) return [];
-  const lines = message.split("\n").map(stripCr);
-  for (let start = lines.length - 1; start >= 0; start -= 1) {
-    const matched = matchTrailersAt(lines, start, trailers);
-    if (matched !== null) return matched;
-  }
-  return trailers.map(() => void 0);
-};
-var knownTrailerCandidate = (line2) => {
-  const tabIndented = line2.startsWith("	");
-  const candidate = tabIndented ? line2.replace(/^\t+/, "") : line2;
-  const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
-  return key === void 0 ? void 0 : { key, tabIndented };
-};
-var locateUnparsedTrailerWarnings = (message, blocks) => {
-  const lines = message.split("\n").map(stripCr);
-  const contentLines = lines.filter((line2) => line2 !== "" && !isComment(line2));
-  if (contentLines.length > 0 && contentLines.every((line2) => knownTrailerCandidate(line2) !== void 0)) {
-    return [];
-  }
-  const parsedLines = new Set(blocks.flatMap((block) => locateTrailerLines(message, block)));
-  return lines.flatMap((line2, index) => {
-    const candidate = knownTrailerCandidate(line2);
-    if (candidate === void 0 || parsedLines.has(index + 1)) return [];
-    return [{ line: index + 1, ...candidate }];
-  });
-};
-var lineForViolation = (violation, trailers, lines) => {
-  const indexesWithKey = trailers.flatMap(
-    (trailer, index) => trailer.key === violation.key ? [index] : []
-  );
-  if (violation.rule === "cardinality" && SINGLE_VALUED.has(violation.key)) {
-    const occurrence = Number(violation.got);
-    if (!Number.isInteger(occurrence)) return void 0;
-    const index = indexesWithKey[occurrence - 1];
-    if (index === void 0 || trailers[index]?.value !== violation.value) return void 0;
-    return lines[index];
-  }
-  const matches = indexesWithKey.filter((index) => trailers[index]?.value === violation.value);
-  const only = matches.length === 1 ? matches[0] : void 0;
-  return only === void 0 ? void 0 : lines[only];
-};
-var violationsForBlock = (source, trailers) => {
-  const lines = locateTrailerLines(source.message, trailers);
-  return validateRecord(trailers).map((violation) => {
-    const line2 = lineForViolation(violation, trailers, lines);
-    return {
-      ...source.sha === void 0 ? {} : { sha: source.sha },
-      ...line2 === void 0 ? {} : { line: line2 },
-      ...violation
-    };
-  });
-};
-var identityCollisionViolations = (source) => {
-  if (source.sha !== void 0) return [];
-  return labelRecordBlocks(source.message).flatMap((block) => {
-    if (!block.identityCollision) return [];
-    const id2 = block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-    if (id2 === void 0) return [];
-    const lines = locateTrailerLines(source.message, block.trailers);
-    const index = block.trailers.findIndex((trailer) => trailer.key === "Record-Id");
-    const line2 = lines[index];
-    return [
-      {
-        ...line2 === void 0 ? {} : { line: line2 },
-        key: "Record-Id",
-        value: id2,
-        rule: "duplicate-id",
-        got: id2,
-        want: UNIQUE_ID_WANT
-      }
-    ];
-  });
-};
-var ambiguousSeparatorWarnings = (source, trailers, lines) => trailers.flatMap((trailer, index) => {
-  if (trailer.key !== RULED_OUT_KEY2) return [];
-  const split = splitRuledOut(trailer.value);
-  if (!split.ambiguous || split.unterminatedCodeSpan) return [];
-  const at = lines[index];
-  const where = `${source.sha?.slice(0, 10) ?? "commit"}${at === void 0 ? "" : `:${at}`}`;
-  return [
-    `commitlore: ${where}: Ruled-out: has more than one "|" and there is no escape, so the first one separates: alternative ${JSON.stringify(split.alternative)}. If that is not the split you meant, rephrase so only the separator is a pipe (SPEC \xA73.1)`
-  ];
-});
-var withheldTrailerWarnings = (source, trailers) => trailers.flatMap(({ trailer, at }) => {
-  const patterns = scanTrailer(trailer);
-  if (patterns.length === 0) return [];
-  const where = `${source.sha?.slice(0, 10) ?? "commit"}${at === void 0 ? "" : `:${at}`}`;
-  return [`commitlore: ${where}: ${explainWithholding(trailer.key, patterns)}`];
-});
-var blocksOf = (message, cache, hint) => {
-  const cached2 = cache?.blocks.get(message);
-  if (cached2 !== void 0) return cached2;
-  const last = hint ?? cache?.last.get(message);
-  const blocks = last === void 0 ? parseRecordBlocks(message) : parseRecordBlocks(message, { last });
-  cache?.blocks.set(message, blocks);
-  return blocks;
-};
-var warmSources = (sources, cwd, cache) => {
-  const uncached = sources.filter((source) => !cache.last.has(source.message));
-  if (uncached.length === 0) return;
-  const shas = uncached.map((source) => source.sha).filter((sha) => sha !== void 0);
-  const atoms = shas.length > 1 ? readTrailersAtom(["--no-walk", "--stdin"], { cwd, stdin: `${shas.join("\n")}
-` }) : /* @__PURE__ */ new Map();
-  const isolated = uncached.length > 1 ? isolateBlocks(uncached.map((source) => source.message)) : void 0;
-  for (const source of uncached) {
-    const atom = source.sha === void 0 ? void 0 : atoms.get(source.sha);
-    const blocks = parseRecordBlocksWithAtom(source.message, atom, isolated);
-    cache.blocks.set(source.message, blocks);
-    cache.last.set(source.message, parseCommitMessageWithAtom(source.message, atom));
-  }
-};
-var inspectSource = (source, cache) => {
-  const trailers = cache?.last.get(source.message) ?? parseCommitMessage(source.message);
-  const blocks = blocksOf(source.message, cache, trailers);
-  const earlierBlocks = trailers.length === 0 ? blocks : blocks.slice(0, -1);
-  const lines = locateTrailerLines(source.message, trailers);
-  const rawViolations = validateRecord(trailers);
-  const firstTrailerLine = lines[0];
-  const nonTrailerParagraph = looksLikeMergeTitle(source.message) && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line2) => line2 !== "").join("\n") : void 0;
-  const lastViolations = (nonTrailerParagraph === void 0 ? rawViolations : []).map(
-    (violation) => {
-      const line2 = lineForViolation(violation, trailers, lines);
-      return {
-        ...source.sha === void 0 ? {} : { sha: source.sha },
-        ...line2 === void 0 ? {} : { line: line2 },
-        ...violation
-      };
-    }
-  );
-  const earlierViolations = earlierBlocks.flatMap((block) => violationsForBlock(source, block));
-  const violations = [
-    ...identityCollisionViolations(source),
-    ...earlierViolations,
-    ...lastViolations
-  ];
-  const warnings = locateUnparsedTrailerWarnings(source.message, blocks).map(
-    (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`
-  );
-  if (nonTrailerParagraph !== void 0) {
-    warnings.push(
-      `commitlore: ${source.sha?.slice(0, 10) ?? "commit"}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`
-    );
-  }
-  warnings.push(...ambiguousSeparatorWarnings(source, trailers, lines));
-  warnings.push(
-    ...withheldTrailerWarnings(source, [
-      ...earlierBlocks.flat().map((trailer) => ({ trailer, at: void 0 })),
-      ...nonTrailerParagraph === void 0 ? trailers.map((trailer, index) => ({ trailer, at: lines[index] })) : []
-    ])
-  );
-  return { violations, warnings };
-};
-var locateReferenceViolations = (source, trailers, violations) => {
-  const lines = locateTrailerLines(source.message, trailers);
-  return violations.map((violation) => {
-    const line2 = lineForViolation(violation, trailers, lines);
-    return {
-      ...source.sha === void 0 ? {} : { sha: source.sha },
-      ...line2 === void 0 ? {} : { line: line2 },
-      ...violation
-    };
-  });
-};
-var resolveCommit2 = (ref, cwd) => {
-  const result2 = execGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], { cwd });
-  if (result2.code !== 0) {
-    throw new Error(`cannot resolve commit ${JSON.stringify(ref)}: ${firstLine5(result2.stderr)}`);
-  }
-  return result2.stdout.trim();
-};
-var readCommitSource = (sha, cwd) => {
-  const result2 = execGit(["log", "-1", "--format=%B", sha, "--"], { cwd });
-  if (result2.code !== 0) {
-    throw new Error(`cannot read commit ${sha}: ${firstLine5(result2.stderr)}`);
-  }
-  return { sha, message: result2.stdout };
-};
-var readRange = (range, cwd) => {
-  const result2 = execGit(["rev-list", "--reverse", "--end-of-options", range, "--"], { cwd });
-  if (result2.code !== 0) {
-    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine5(result2.stderr)}`);
-  }
-  return result2.stdout.split("\n").filter((sha) => sha.length > 0).map((sha) => readCommitSource(sha, cwd));
-};
-var readMessageFile = (path2) => {
-  try {
-    return readFileSync36(path2, "utf8");
-  } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf9(error2)}`);
-  }
-};
-var readStdinSync = () => {
-  try {
-    return readFileSync36(0, "utf8");
-  } catch (error2) {
-    throw new Error(`cannot read the commit message from stdin: ${messageOf9(error2)}`);
-  }
-};
-var collectSources2 = (input, cwd) => {
-  if (input.messageFile !== void 0) return [{ message: readMessageFile(input.messageFile) }];
-  if (input.commit !== void 0) {
-    const sha = resolveCommit2(input.commit, cwd);
-    return [readCommitSource(sha, cwd)];
-  }
-  if (input.range !== void 0) return readRange(input.range, cwd);
-  return [{ message: (input.readStdin ?? readStdinSync)() }];
-};
-var SHALLOW_REFERENCE_REASON = "shallow history \u2014 a Record-Id declared below the clone boundary is not visible here (fix: git fetch --unshallow)";
-var PARTIAL_INDEX_REASON = "the index is incomplete \u2014 a time budget left commits unread, so a Follows: or Supersedes: target may exist in history this check did not read (fix: commitlore init)";
-var repositoryAvailable = (cwd) => execGit(["rev-parse", "--git-dir"], { cwd }).code === 0;
-var indexedHeadRecords = (cwd, input = {}) => {
-  const clock = input.scanNow ?? Date.now;
-  const cost = { unreadCommits: 0, unreadNotes: 0 };
-  const { handle } = ensureIndex({
-    cwd,
-    cost,
-    ...input.scanBudgetMs === void 0 ? {} : { budget: { deadline: clock() + input.scanBudgetMs, now: clock } }
-  });
-  try {
-    const records = /* @__PURE__ */ new Map();
-    for (const row of queryTrailers(handle)) {
-      const identity = `${row.sha}\0${row.source}\0${row.block}`;
-      const existing = records.get(identity);
-      if (existing !== void 0) {
-        existing.trailers.push({ key: row.key, value: row.value });
-        continue;
-      }
-      records.set(identity, {
-        sha: row.sha,
-        committedAt: row.committedAt,
-        source: row.source,
-        trailers: [{ key: row.key, value: row.value }]
-      });
-    }
-    return {
-      records: [...records.values()],
-      unreadCommits: Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes)
-    };
-  } finally {
-    closeIndex(handle);
-  }
-};
-var recordsFor = (source, cwd, input = {}, cache) => {
-  if (source.sha !== void 0) {
-    return {
-      ...collectRecords({
-        cwd,
-        allHistory: true,
-        revision: source.sha,
-        ...cache === void 0 ? {} : { cache }
-      }),
-      unreadCommits: 0
-    };
-  }
-  try {
-    const indexed = indexedHeadRecords(cwd, input);
-    return {
-      records: indexed.records,
-      notes: notesAvailability({ cwd }),
-      unreadCommits: indexed.unreadCommits
-    };
-  } catch {
-    return { ...collectRecords({ cwd, allHistory: true, revision: "HEAD" }), unreadCommits: 0 };
-  }
-};
-var consumeAmendMarker = (cwd) => {
-  const located = execGit(["rev-parse", "--git-path", "commitlore-amend"], { cwd });
-  if (located.code !== 0) return null;
-  const path2 = resolve27(cwd, located.stdout.trim());
-  try {
-    const recorded = readFileSync36(path2, "utf8").trim();
-    rmSync10(path2, { force: true });
-    return /^[0-9a-f]{40,64}$/.test(recorded) ? recorded : null;
-  } catch {
-    return null;
-  }
-};
-var reachableShas = (revision, cwd) => {
-  const result2 = execGit(["rev-list", revision], { cwd });
-  if (result2.code !== 0) {
-    throw new Error(firstLine5(result2.stderr) || `cannot walk revision ${revision}`);
-  }
-  return new Set(result2.stdout.trim().split("\n").filter(Boolean));
-};
-var checkReferences = (input, sources, cwd, warmed) => {
-  if (input.messageFile === void 0 && input.commit === void 0 && input.range === void 0) {
-    return {
-      check: { class: "reference", status: "not-checked", reason: "no repository" },
-      violations: []
-    };
-  }
-  if (!repositoryAvailable(cwd)) {
-    return {
-      check: { class: "reference", status: "not-checked", reason: "no repository" },
-      violations: []
-    };
-  }
-  try {
-    const violations = [];
-    const tipSha = input.range !== void 0 && sources.length > 0 ? sources[sources.length - 1].sha : void 0;
-    let tipAllRecords;
-    let unreadCommits = 0;
-    const cache = warmed ?? newCollectCache();
-    if (tipSha !== void 0) {
-      const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd, input, cache);
-      if (tipScan.notes === "unfetched") {
-        return {
-          check: {
-            class: "reference",
-            status: "not-checked",
-            reason: "notes mirror not fetched"
-          },
-          violations: []
-        };
-      }
-      const tipReachable = reachableShas(tipSha, cwd);
-      tipAllRecords = tipScan.records.filter(
-        (record2) => record2.sha !== void 0 && tipReachable.has(record2.sha)
-      ).reverse();
-    }
-    for (const source of sources) {
-      const blocks = blocksOf(source.message, cache);
-      const scan2 = recordsFor(source, cwd, input, cache);
-      if (scan2.unreadCommits > unreadCommits) unreadCommits = scan2.unreadCommits;
-      if (scan2.notes === "unfetched") {
-        return {
-          check: {
-            class: "reference",
-            status: "not-checked",
-            reason: "notes mirror not fetched"
-          },
-          violations: []
-        };
-      }
-      const reachable = reachableShas(source.sha ?? "HEAD", cwd);
-      const repositoryRecords = scan2.records.filter(
-        (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
-      );
-      const amendedSha = source.sha === void 0 ? consumeAmendMarker(cwd) : null;
-      const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
-      const priorForCollisions = amendedSha === null ? prior : prior.filter((record2) => record2.sha !== amendedSha);
-      const ownBlocks = blocks.map((trailers) => ({
-        trailers,
-        source: "commit",
-        ...source.sha === void 0 ? {} : { sha: source.sha }
-      }));
-      const ownNotes = repositoryRecords.filter(
-        (record2) => record2.sha === source.sha && record2.source === "notes"
-      );
-      const ownRecords = [...ownBlocks, ...ownNotes];
-      for (const [index, candidate] of ownBlocks.entries()) {
-        const trailers = candidate.trailers;
-        const siblings = ownBlocks.filter((_, other) => other !== index);
-        const dangling = findDanglingRefs([...prior, ...siblings, ...ownNotes], [candidate]);
-        const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-        const collisions = recordId === void 0 ? [] : findIdCollisions([...priorForCollisions, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
-          (violation) => tipAllRecords === void 0 || !isSuccessionDeclared(violation.value, tipAllRecords)
-        );
-        violations.push(
-          ...locateReferenceViolations(source, trailers, [...dangling, ...collisions])
-        );
-      }
-    }
-    const danglingPresent = violations.some((violation) => violation.rule === "dangling-ref");
-    const shallow = danglingPresent && hasShallowHistory(cwd);
-    const partial2 = unreadCommits > 0;
-    const withdrawDangling = shallow || partial2 && danglingPresent;
-    const reported = withdrawDangling ? violations.filter((violation) => violation.rule !== "dangling-ref") : violations;
-    const reasons = [
-      ...partial2 ? [PARTIAL_INDEX_REASON] : [],
-      ...shallow ? [SHALLOW_REFERENCE_REASON] : []
-    ];
-    return {
-      check: {
-        class: "reference",
-        // `not-checked` rather than `ok` when something was withheld: the
-        // green would be the part a reader carries away, and this command has
-        // no verdict to offer on the reference it could not resolve. A commit
-        // accepted against a partial index must not read as fully checked.
-        status: reported.length > 0 ? "failed" : reasons.length > 0 ? "not-checked" : "ok",
-        ...reasons.length > 0 ? { reason: reasons.join("; ") } : {}
-      },
-      violations: reported
-    };
-  } catch (error2) {
-    return {
-      check: {
-        class: "reference",
-        status: "not-checked",
-        reason: `repository scan failed: ${firstLine5(messageOf9(error2))}`
-      },
-      violations: []
-    };
-  }
-};
-var formatCheck = (check2) => {
-  const name = check2.class === "reference" ? "references" : check2.class;
-  if (check2.status === "not-checked") {
-    return `${name} not checked (${check2.reason ?? "required information unavailable"})`;
-  }
-  return check2.reason === void 0 ? `${name} ${check2.status}` : `${name} ${check2.status} (${check2.reason})`;
-};
-var violationIdentity = (violation) => JSON.stringify([
-  violation.sha ?? null,
-  violation.line ?? null,
-  violation.rule,
-  violation.key,
-  violation.value,
-  violation.got,
-  violation.want
-]);
-var formatViolation = (violation) => {
-  const parts = [];
-  if (violation.sha !== void 0) parts.push(violation.sha.slice(0, 10));
-  if (violation.line !== void 0) parts.push(String(violation.line));
-  const where = parts.length === 0 ? "" : `${parts.join(":")}: `;
-  const got = JSON.stringify(violation.got);
-  const want = JSON.stringify(violation.want);
-  return `${where}${violation.rule} ${violation.key} \u2014 got ${got}, want ${want}`;
-};
-var runValidate = (input = {}) => {
-  const given = MODE_KEYS.filter((key) => input[key] !== void 0);
-  if (given.length > 1) {
-    const flags = given.map((key) => MODE_FLAGS[key]).join(", ");
-    return usageError2(`${flags} are mutually exclusive \u2014 pass exactly one`);
-  }
-  if (input.range !== void 0 && !input.range.includes("..")) {
-    return usageError2(`--range expects <a>..<b>, got ${JSON.stringify(input.range)}`);
-  }
-  const cwd = input.cwd ?? process.cwd();
-  let shapeViolations;
-  let warnings;
-  let secrets;
-  let sources;
-  const grammar = newCollectCache();
-  try {
-    sources = collectSources2(input, cwd);
-    warmSources(sources, cwd, grammar);
-    const inspections = sources.map((source) => inspectSource(source, grammar));
-    shapeViolations = inspections.flatMap((inspection) => inspection.violations);
-    warnings = inspections.flatMap((inspection) => inspection.warnings);
-    secrets = sources.flatMap((source) => scanForSecrets(source.message));
-  } catch (error2) {
-    if (isMissingInstalledFile(error2)) return installationError(messageOf9(error2));
-    return usageError2(messageOf9(error2));
-  }
-  const references = checkReferences(input, sources, cwd, grammar);
-  const alreadyReported = new Set(shapeViolations.map(violationIdentity));
-  const violations = [
-    ...shapeViolations,
-    ...references.violations.filter(
-      (violation) => !alreadyReported.has(violationIdentity(violation))
-    )
-  ];
-  const checks = [
-    {
-      class: "shape",
-      status: shapeViolations.length > 0 || secrets.length > 0 ? "failed" : "ok"
-    },
-    references.check
-  ];
-  const status = `${checks.map(formatCheck).join(" \xB7 ")}
-`;
-  const failed = violations.length > 0 || secrets.length > 0;
-  const warningText = warnings.length === 0 ? "" : `${warnings.join("\n")}
-`;
-  if (input.json === true) {
-    return {
-      code: failed ? 1 : 0,
-      // `examined` is how many messages were actually read. Without it a
-      // report of an empty range is indistinguishable from a clean one — both
-      // are `ok`/`ok` with no violations — so a gate reading this JSON can
-      // report success having checked nothing (the shape #542 was about, one
-      // level along).
-      stdout: `${JSON.stringify({ examined: sources.length, checks, violations, secrets })}
-`,
-      stderr: warningText,
-      violations,
-      secrets,
-      checks
-    };
-  }
-  if (!failed) {
-    return { code: 0, stdout: status, stderr: warningText, violations, secrets, checks };
-  }
-  const parts = [status.trimEnd()];
-  if (violations.length > 0) parts.push(violations.map(formatViolation).join("\n"));
-  if (secrets.length > 0) parts.push(formatFindings(secrets));
-  const notes = [];
-  if (violations.length > 0) {
-    const plural3 = violations.length === 1 ? "" : "s";
-    notes.push(`${violations.length} violation${plural3} (SPEC \xA76)`);
-  }
-  if (secrets.length > 0) {
-    const plural3 = secrets.length === 1 ? "" : "s";
-    notes.push(`${secrets.length} possible credential${plural3} (ADR-0005)`);
-  }
-  return {
-    code: 1,
-    stdout: `${parts.join("\n")}
-`,
-    stderr: `${warningText}commitlore: ${notes.join(", ")} \u2014 the message was not modified
-`,
-    violations,
-    secrets,
-    checks
-  };
-};
-var register28 = (program3) => {
-  program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
-    "after",
-    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710),\n3 this installation is missing a file it ships, so nothing was examined."
-  ).action((flags) => {
-    const result2 = runValidate({
-      ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
-      ...flags.commit === void 0 ? {} : { commit: flags.commit },
-      ...flags.range === void 0 ? {} : { range: flags.range },
-      ...flags.json === void 0 ? {} : { json: flags.json },
-      // The commit-msg hook is this command with `--message-file`. Four
-      // minutes to accept one commit is worse than a partial check that
-      // says it is partial.
-      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS
-    });
-    if (result2.stdout !== "") process.stdout.write(result2.stdout);
-    if (result2.stderr !== "") process.stderr.write(result2.stderr);
     if (result2.code !== 0) process.exitCode = result2.code;
   });
 };
@@ -40963,35 +41053,35 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 program2.command("internal", { hidden: true }).command("mcp-probe", { hidden: true }).requiredOption("--command <command>", "MCP command to verify").requiredOption("--args-json <json>", "JSON array of MCP command arguments").action(async (options) => {
   await internalMcpProbe(options.command, options.argsJson);
 });
-register27(program2);
-register8(program2);
 register28(program2);
-registerUninstall(program2);
-register9(program2);
-register20(program2);
-register23(program2);
 register10(program2);
-register13(program2);
-register12(program2);
-register14(program2);
-register2(program2);
-register16(program2);
-register18(program2);
-register19(program2);
-register26(program2);
-register4(program2);
-register7(program2);
-register17(program2);
+register6(program2);
+registerUninstall(program2);
+register11(program2);
 register21(program2);
+register24(program2);
+register5(program2);
+register14(program2);
+register13(program2);
+register15(program2);
+register2(program2);
+register17(program2);
+register19(program2);
+register20(program2);
+register27(program2);
+register4(program2);
+register9(program2);
+register18(program2);
+register22(program2);
 register(program2);
 register3(program2);
-register5(program2);
-register6(program2);
-register15(program2);
-register24(program2);
-register11(program2);
+register7(program2);
+register8(program2);
+register16(program2);
 register25(program2);
-register22(program2);
+register12(program2);
+register26(program2);
+register23(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",

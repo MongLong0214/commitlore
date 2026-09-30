@@ -206,7 +206,7 @@ export const collectRecords = (opts = {}) => {
     const noteCache = opts.cache?.notes;
     const noteShas = mirror.shas.filter((sha) => trailersBySha.has(sha) && noteCache?.has(sha) !== true);
     const noteText = noteShas.length > 0 ? noteMessages(noteShas, { cwd }) : new Map();
-    const isolatedNotes = noteText.size > 0 ? isolateBlocks([...noteText.values()]) : undefined;
+    const isolatedNotes = noteText.size > 0 ? isolateBlocks([...noteText.values()], { notes: true }) : undefined;
     const noteRecords = mirror.shas.flatMap((sha) => {
         const commit = trailersBySha.get(sha);
         if (commit === undefined)
@@ -222,7 +222,7 @@ export const collectRecords = (opts = {}) => {
         const blocks = cachedNote ??
             (message === undefined
                 ? []
-                : parseRecordBlocks(message, isolatedNotes === undefined ? {} : { isolated: isolatedNotes }));
+                : parseRecordBlocks(message, { notes: true, cwd, ...(isolatedNotes === undefined ? {} : { isolated: isolatedNotes }) }));
         if (cachedNote === undefined)
             noteCache?.set(sha, blocks);
         // Each block is its own record, and each is judged a mirror on its own

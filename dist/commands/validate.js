@@ -19,6 +19,7 @@
  * input mode identifies a repository.
  */
 import { readFileSync, rmSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { collectRecords, newCollectCache } from './stale.js';
 import { execGit, hasShallowHistory } from '../core/git.js';
@@ -30,7 +31,7 @@ import { CONSUMER_SCAN_BUDGET_MS, RULED_OUT_KEY } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
 import { findDanglingRefs, findIdCollisions, isSuccessionDeclared, UNIQUE_ID_WANT, } from '../core/stale.js';
 import { isolateBlocks, labelRecordBlocks, parseCommitMessage, parseCommitMessageWithAtom, parseRecordBlocks, parseRecordBlocksWithAtom, readTrailersAtom, splitRuledOut, } from '../core/trailers.js';
-import { KNOWN_KEYS, SINGLE_VALUED } from '../core/types.js';
+import { isCommitLoreKey, SINGLE_VALUED } from '../core/types.js';
 import { scanForSecrets, formatFindings } from '../core/secret-guard.js';
 export const CHECK_CLASS_NEEDS = {
     shape: 'message',
@@ -151,8 +152,8 @@ const locateTrailerLines = (message, trailers) => {
 const knownTrailerCandidate = (line) => {
     const tabIndented = line.startsWith('\t');
     const candidate = tabIndented ? line.replace(/^\t+/, '') : line;
-    const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
-    return key === undefined ? undefined : { key, tabIndented };
+    const key = /^([^\s:]+):/.exec(candidate)?.[1];
+    return key === undefined || !isCommitLoreKey(key) ? undefined : { key, tabIndented };
 };
 const locateUnparsedTrailerWarnings = (message, blocks) => {
     const lines = message.split('\n').map(stripCr);
@@ -170,6 +171,33 @@ const locateUnparsedTrailerWarnings = (message, blocks) => {
         if (candidate === undefined || parsedLines.has(index + 1))
             return [];
         return [{ line: index + 1, ...candidate }];
+    });
+};
+/**
+ * Ask the parser about each candidate's actual occurrence. Appending to its
+ * value retains the original key, whitespace and comment prefix, avoiding guesses
+ * from normalized output (which drops prose and trailing whitespace).
+ * The probe is in memory only; the commit message is never rewritten.
+ */
+export const unparsedTrailerLines = (message, cwd) => {
+    const lines = message.split('\n').map(stripCr);
+    const commentString = execGit(['config', '--get', 'core.commentString'], { cwd });
+    const commentChar = commentString.code === 0
+        ? commentString
+        : execGit(['config', '--get', 'core.commentChar'], { cwd });
+    const commentPrefix = commentChar.code === 0 ? commentChar.stdout.replace(/\n$/, '') : '#';
+    return lines.flatMap((line, index) => {
+        const candidate = knownTrailerCandidate(line);
+        if (candidate === undefined)
+            return [];
+        let marker;
+        do {
+            marker = randomBytes(32).toString('hex');
+        } while (`${line}${marker}`.startsWith(commentPrefix) !== line.startsWith(commentPrefix));
+        const probe = [...lines];
+        probe[index] = `${line}${marker}`;
+        const indexed = parseRecordBlocks(probe.join('\n'), { cwd }).some((block) => block.some((trailer) => trailer.key === candidate.key && trailer.value.includes(marker)));
+        return indexed ? [] : [{ line: index + 1, ...candidate }];
     });
 };
 /**

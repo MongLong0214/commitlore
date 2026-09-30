@@ -120,7 +120,9 @@ export interface IsolatedBlocks {
  * so which paragraphs are tested stays decided in this module for every reader
  * alike — the same reason {@link parseRecordBlocksWithAtom} exists.
  */
-export declare const isolateBlocks: (messages: readonly string[]) => IsolatedBlocks;
+export declare const isolateBlocks: (messages: readonly string[], opts?: {
+    notes?: boolean;
+}) => IsolatedBlocks;
 /**
  * `parseCommitMessage` for many whole messages, in one process.
  *
@@ -153,7 +155,7 @@ export declare const parseMessagesBatched: (messages: readonly string[]) => Map<
  * A message with no trailer paragraph yields `[]` — that is a commit which
  * recorded nothing, not an error (SPEC §2.1 B7, §4).
  */
-export declare const parseCommitMessage: (msg: string) => Trailer[];
+export declare const parseCommitMessage: (msg: string, opts?: ExecGitOptions) => Trailer[];
 export interface RuledOutValue {
     /** Everything before the first separator, trimmed. */
     alternative: string;
@@ -250,7 +252,11 @@ export declare const serializeTrailers: (trailers: Trailer[]) => string;
 export declare const parseRecordBlocks: (message: string, opts?: {
     last?: Trailer[];
     isolated?: IsolatedBlocks;
+    cwd?: string;
+    notes?: boolean;
 }) => Trailer[][];
+/** Refuse silent record loss, including repeated identical blocks. */
+export declare const assertRecordBlocksRecovered: (expected: readonly Trailer[][], actual: readonly Trailer[][], cwd?: string, allowAdditional?: boolean) => void;
 /** One block from `parseRecordBlocks`, labeled for display (`commitlore parse`). */
 export interface LabeledBlock {
     /** Whether this is the message's own trailer block (the last paragraph, SPEC §2.1 B1) rather than an earlier one the grammar recovered (SPEC §2.4). */

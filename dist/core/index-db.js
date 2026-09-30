@@ -129,7 +129,7 @@ const loadDatabaseCtor = () => {
  * report the other complete. A v4 index left partial therefore has no position
  * to carry forward, and the version gate rebuilding it is that restart path.
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const NOTES_REF = 'refs/notes/commitlore';
 /**
  * How much of a budgeted call may go into finishing a previous truncated scan.
@@ -801,7 +801,7 @@ guaranteeFirstBatch = false) => {
         // *last* paragraph in isolation would be a different question, and is the
         // shape that fabricated a record once -- it is not what this does.
         const noteMessages = withText.map((entry) => `${NOTE_SUBJECT}\n\n${entry.text}`);
-        const isolatedNotes = isolateBlocks(noteMessages);
+        const isolatedNotes = isolateBlocks(noteMessages, { notes: true });
         // `null` when the batch could not be attributed. Every note then pays its
         // own process again, which is the previous behaviour rather than a wrong
         // answer.
@@ -813,6 +813,7 @@ guaranteeFirstBatch = false) => {
             const message = `${NOTE_SUBJECT}\n\n${text}`;
             const own = ownBlocks?.get(message);
             const blocks = parseRecordBlocks(message, {
+                notes: true,
                 isolated: isolatedNotes,
                 ...(own === undefined ? {} : { last: own }),
             });

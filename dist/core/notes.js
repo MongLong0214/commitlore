@@ -11,7 +11,7 @@
  * exactly as for a commit message. There is no second format.
  */
 import { execGit, execGitOrThrow } from './git.js';
-import { parseCommitMessage, parseRecordBlocks, serializeTrailers } from './trailers.js';
+import { assertRecordBlocksRecovered, parseCommitMessage, parseRecordBlocks, serializeTrailers } from './trailers.js';
 /** The mirror's ref. Not configurable: it is part of the protocol (SPEC §1). */
 export const NOTES_REF = 'refs/notes/commitlore';
 /**
@@ -96,7 +96,14 @@ export const writeRecord = (sha, trailers, opts = {}) => writeBody(sha, serializ
  * `serializeTrailers` once over the whole array, which reorders into SPEC §3
  * vocabulary order and would scramble two blocks' trailers together.
  */
-export const writeRecordBlocks = (sha, blocks, opts = {}) => writeBody(sha, blocks.map(serializeTrailers).join('\n'), opts);
+export const writeRecordBlocks = (sha, blocks, opts = {}) => {
+    const body = blocks.map(serializeTrailers).join('\n');
+    assertRecordBlocksRecovered(blocks, parseRecordBlocks(`${SYNTHETIC_SUBJECT}\n\n${body}`, {
+        notes: true, ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
+    }), opts.cwd);
+    writeBody(sha, body, opts);
+    assertRecordBlocksRecovered(blocks, readRecordBlocks(sha, opts), opts.cwd);
+};
 /** The raw note body on `sha`, or `null` when the object carries none. */
 const showNote = (sha, opts) => {
     const object = resolveObject(sha, opts);
@@ -146,7 +153,11 @@ export const readRecordBlocks = (sha, opts = {}, isolated) => {
     if (note === null)
         return [];
     const message = `${SYNTHETIC_SUBJECT}\n\n${note}`;
-    return parseRecordBlocks(message, isolated === undefined ? {} : { isolated });
+    return parseRecordBlocks(message, {
+        notes: true,
+        ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
+        ...(isolated === undefined ? {} : { isolated }),
+    });
 };
 /**
  * The message each sha's note is read through, for a caller that wants to hand
