@@ -4,6 +4,19 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.7.2
+
+- **Squash-preserved drafts validate against their reachable originals (#1147).**
+  `squash-preserve --message-file` now treats `Provenance: inherited <sha>` as
+  transport metadata only when it names a reachable, distinct original with the
+  same Record-Id and identical remaining trailers. This preserves the original
+  record's meaning, Evidence, and Unverified notes; changed content, a wrong,
+  unreachable, or self origin, and same-message duplicates still fail as
+  `duplicate-id`.
+
+This is a patch release: it repairs existing validation behavior and adds no
+command, flag, trailer key, or host setting.
+
 ## 1.7.1
 
 Three fixes for trailer visibility and squash preservation:
