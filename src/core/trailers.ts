@@ -397,8 +397,8 @@ const parseOutputLine = (line: string): Trailer => {
  * A message with no trailer paragraph yields `[]` — that is a commit which
  * recorded nothing, not an error (SPEC §2.1 B7, §4).
  */
-export const parseCommitMessage = (msg: string): Trailer[] => {
-  const stdout = execGitOrThrow(PARSE_ARGS, { stdin: msg });
+export const parseCommitMessage = (msg: string, opts: ExecGitOptions = {}): Trailer[] => {
+  const stdout = execGitOrThrow(PARSE_ARGS, { ...opts, stdin: msg });
   return stdout
     .split('\n')
     .filter((line) => line.length > 0)
@@ -521,8 +521,8 @@ const splitParagraphs = (message: string): string[] =>
  * a regex against it; git decides, the same as everywhere else in this module
  * (SPEC §2.1 B3).
  */
-const asIsolatedBlock = (paragraph: string): Trailer[] =>
-  parseCommitMessage(`x\n\n${paragraph}`);
+const asIsolatedBlock = (paragraph: string, cwd?: string): Trailer[] =>
+  parseCommitMessage(`x\n\n${paragraph}`, cwd === undefined ? {} : { cwd });
 
 /**
  * Parses a message into its record blocks (SPEC §2.4).
@@ -567,9 +567,9 @@ const asIsolatedBlock = (paragraph: string): Trailer[] =>
  */
 export const parseRecordBlocks = (
   message: string,
-  opts: { last?: Trailer[]; isolated?: IsolatedBlocks } = {},
+  opts: { last?: Trailer[]; isolated?: IsolatedBlocks; cwd?: string } = {},
 ): Trailer[][] => {
-  const last = opts.last ?? parseCommitMessage(message);
+  const last = opts.last ?? parseCommitMessage(message, opts.cwd === undefined ? {} : { cwd: opts.cwd });
   const paragraphs = splitParagraphs(message);
   const earlier = paragraphs.slice(0, -1);
 
@@ -595,7 +595,7 @@ export const parseRecordBlocks = (
     // batch and a reader without it compose the grammar in one place. A batch
     // that could not be attributed returns nothing for every paragraph, and
     // this falls through to the process.
-    const candidate = opts.isolated?.get(paragraph) ?? asIsolatedBlock(paragraph);
+    const candidate = opts.isolated?.get(paragraph) ?? asIsolatedBlock(paragraph, opts.cwd);
     if (candidate.length === 0) continue;
     if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
     extra.push(candidate);

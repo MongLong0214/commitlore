@@ -20,6 +20,7 @@
  */
 
 import { readFileSync, rmSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import type { Command } from 'commander';
@@ -49,7 +50,7 @@ import {
   readTrailersAtom,
   splitRuledOut,
 } from '../core/trailers.js';
-import { KNOWN_KEYS, SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
+import { isCommitLoreKey, SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
 import { scanForSecrets, formatFindings, type SecretFinding } from '../core/secret-guard.js';
 
 /**
@@ -250,7 +251,7 @@ const locateTrailerLines = (message: string, trailers: Trailer[]): (number | und
   return trailers.map(() => undefined);
 };
 
-interface UnparsedTrailerWarning {
+export interface UnparsedTrailerWarning {
   line: number;
   key: string;
   tabIndented: boolean;
@@ -261,8 +262,8 @@ const knownTrailerCandidate = (
 ): Pick<UnparsedTrailerWarning, 'key' | 'tabIndented'> | undefined => {
   const tabIndented = line.startsWith('\t');
   const candidate = tabIndented ? line.replace(/^\t+/, '') : line;
-  const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
-  return key === undefined ? undefined : { key, tabIndented };
+  const key = /^([^\s:]+):/.exec(candidate)?.[1];
+  return key === undefined || !isCommitLoreKey(key) ? undefined : { key, tabIndented };
 };
 
 const locateUnparsedTrailerWarnings = (
@@ -286,6 +287,37 @@ const locateUnparsedTrailerWarnings = (
     const candidate = knownTrailerCandidate(line);
     if (candidate === undefined || parsedLines.has(index + 1)) return [];
     return [{ line: index + 1, ...candidate }];
+  });
+};
+
+/**
+ * Ask the parser about each candidate's actual occurrence. Appending to its
+ * value retains the original key, whitespace and comment prefix, avoiding guesses
+ * from normalized output (which drops prose and trailing whitespace).
+ * The probe is in memory only; the commit message is never rewritten.
+ */
+export const unparsedTrailerLines = (message: string, cwd: string): UnparsedTrailerWarning[] => {
+  const lines = message.split('\n').map(stripCr);
+  const commentString = execGit(['config', '--get', 'core.commentString'], { cwd });
+  const commentChar = commentString.code === 0
+    ? commentString
+    : execGit(['config', '--get', 'core.commentChar'], { cwd });
+  const commentPrefix = commentChar.code === 0 ? commentChar.stdout.replace(/\n$/, '') : '#';
+  return lines.flatMap((line, index) => {
+    const candidate = knownTrailerCandidate(line);
+    if (candidate === undefined) return [];
+    let marker: string;
+    do {
+      marker = randomBytes(32).toString('hex');
+    } while (
+      `${line}${marker}`.startsWith(commentPrefix) !== line.startsWith(commentPrefix)
+    );
+    const probe = [...lines];
+    probe[index] = `${line}${marker}`;
+    const indexed = parseRecordBlocks(probe.join('\n'), { cwd }).some((block) =>
+      block.some((trailer) => trailer.key === candidate.key && trailer.value.includes(marker)),
+    );
+    return indexed ? [] : [{ line: index + 1, ...candidate }];
   });
 };
 
