@@ -19,6 +19,7 @@
 import {
   RECORD_ID_RE,
   SINGLE_VALUED,
+  isCommitLoreKey,
   parseProvenance,
   type Lifecycle,
   type Record,
@@ -472,6 +473,36 @@ const payloadSignatureWithoutProvenance = (record: StaleRecord): string =>
     .join('\u0001');
 
 /**
+ * `payloadSignatureWithoutProvenance` restricted to the keys this protocol
+ * defines (`types.ts isCommitLoreKey`).
+ *
+ * What an inherited copy carries is the record, not whatever else the origin's
+ * trailer paragraph happened to hold: `squash-preserve` drops the foreign keys
+ * so the message it composes passes `validate` at all (#1153), and a
+ * `Signed-off-by:` on the origin is an attestation about that commit which
+ * must not be copied onto another. Compared in full, every faithful copy of
+ * such a record would read as divergent and be reported as a `duplicate-id`
+ * -- the same false refusal #1148 removed for the provenance stamp, one key
+ * class over.
+ *
+ * Only the inherited-copy comparison uses this. Weakening it costs the case
+ * where a copy carries a *different* value for a foreign key than its origin
+ * did, which stops being a collision; the record's own content still has to
+ * match exactly.
+ */
+const recordPayloadSignature = (record: StaleRecord): string =>
+  record.trailers
+    .filter(
+      (trailer) =>
+        trailer.key !== RECORD_ID_KEY &&
+        trailer.key !== PROVENANCE_KEY &&
+        isCommitLoreKey(trailer.key),
+    )
+    .map((trailer) => `${trailer.key}\u0000${trailer.value}`)
+    .sort()
+    .join('\u0001');
+
+/**
  * Whether `message` is a fold of several records and `note` is one of them
  * (#1116).
  *
@@ -564,7 +595,7 @@ const collisionRivals = (group: StaleRecord[]): StaleRecord[] => group.flatMap((
   if (isOwnCommitMirror(record, group)) return [];
   const origin = inheritedOrigin(record, group);
   if (origin === undefined) return [record];
-  if (payloadSignatureWithoutProvenance(record) === payloadSignatureWithoutProvenance(origin)) return [];
+  if (recordPayloadSignature(record) === recordPayloadSignature(origin)) return [];
   return [{
     ...record,
     trailers: [

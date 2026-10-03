@@ -710,4 +710,111 @@ describe('squash-preserve', () => {
     expect(outcome.stderr).toContain('nothing to preserve');
     expect(readFileSync(draft, 'utf8')).toBe(GITHUB_DRAFT);
   });
+
+  /**
+   * bug-issue-1153: the paragraph a non-CommitLore trailer forms is a trailer
+   * block to git and not a record to this protocol, and inheriting it put a key
+   * SPEC §3 does not define into the message the squash was about to commit —
+   * which `commitlore validate` then refused, blocking the merge it was run to
+   * protect.
+   */
+  it('inherits nothing from a paragraph that carries no record key (bug-issue-1153)', () => {
+    const repo = initRepo('squash-nonrecord-paragraph');
+    const base = commitFile(repo, 'seed.txt', 'seed\n', 'seed\n');
+    const merge = commitFile(
+      repo,
+      'merge.txt',
+      'merge\n',
+      'Merge pull request #1051 from feature\n\nClaude-Session: https://claude.ai/code/session_01ABC\n',
+    );
+    const recorded = commitFile(
+      repo,
+      'queue.ts',
+      'export const workers = 3;\n',
+      'cap the pool\n\nLimit: the vendor caps us at three concurrent workers\nRecord-Id: r-nonrec1153\n',
+    );
+    const draft = draftFile(repo, 'squash the branch\n');
+
+    const outcome = runSquashPreserve({ range: `${base}..HEAD`, messageFile: draft, cwd: repo });
+    expect(outcome.code).toBe(0);
+
+    const composed = readFileSync(draft, 'utf8');
+    // The specific diagnosis, not merely "validate passed": the unfixed build
+    // failed with exactly this violation, and a draft can fail validate for
+    // reasons that have nothing to do with this issue.
+    const result = runValidate({ messageFile: draft, cwd: repo });
+    expect(result.violations).not.toContainEqual(
+      expect.objectContaining({ rule: 'unknown-key', key: 'Claude-Session' }),
+    );
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    expect(composed).not.toContain('Claude-Session');
+    expect(composed).not.toContain(`inherited ${merge}`);
+    expect(composed).not.toContain(merge);
+
+    // Control: the commit that did record something is still inherited, so the
+    // fix is a filter on non-records and not a filter on everything.
+    const blocks = parseRecordBlocks(composed);
+    expect(value(blockById(blocks, 'r-nonrec1153'), 'Limit')).toBe(
+      'the vendor caps us at three concurrent workers',
+    );
+    expect(value(blockById(blocks, 'r-nonrec1153'), 'Provenance')).toBe(`inherited ${recorded}`);
+    expect(collectRange(`${base}..HEAD`, { cwd: repo }).map((entry) => entry.sha)).toEqual([
+      recorded,
+    ]);
+
+    // The notes mirror carries what the message does, so the same non-record
+    // paragraph cannot come back through the other channel on the next squash.
+    git(repo, ['commit', '--quiet', '-F', draft, '--allow-empty']);
+    expect(runSquashPreserve({ range: `${base}..HEAD`, target: 'HEAD', cwd: repo }).code).toBe(0);
+    for (const block of readRecordBlocks(head(repo), { cwd: repo })) {
+      expect(block.map((trailer) => trailer.key)).not.toContain('Claude-Session');
+    }
+  });
+
+  /**
+   * The same defect through the door the first case does not cover: a record
+   * and a foreign trailer in one paragraph. Dropping the whole block would lose
+   * a real record, so the filter is per trailer — an inherited block carries
+   * only keys this protocol defines, which is what makes the composed message
+   * validate by construction rather than by luck.
+   */
+  it('inherits only protocol keys from a block that mixes them (bug-issue-1153)', () => {
+    const repo = initRepo('squash-mixed-paragraph');
+    const base = commitFile(repo, 'seed.txt', 'seed\n', 'seed\n');
+    const mixed = commitFile(
+      repo,
+      'queue.ts',
+      'export const retries = 2;\n',
+      'retry on 429\n\n' +
+        'Warn: do not raise the retry ceiling without re-reading the vendor quota\n' +
+        'Record-Id: r-mixed1153\n' +
+        'X-Deploy-Window: tuesdays\n' +
+        'Signed-off-by: A Committer <committer@example.invalid>\n' +
+        'Claude-Session: https://claude.ai/code/session_01ABC\n',
+    );
+    const draft = draftFile(repo, 'squash the mixed branch\n');
+
+    expect(runSquashPreserve({ range: `${base}..HEAD`, messageFile: draft, cwd: repo }).code).toBe(
+      0,
+    );
+
+    const composed = readFileSync(draft, 'utf8');
+    const block = blockById(parseRecordBlocks(composed), 'r-mixed1153');
+    expect(value(block, 'Warn')).toBe(
+      'do not raise the retry ceiling without re-reading the vendor quota',
+    );
+    expect(value(block, 'Provenance')).toBe(`inherited ${mixed}`);
+    // An `X-` extension is SPEC §3 vocabulary and stays; a sign-off is an
+    // attestation about another commit and is not inheritable onto this one.
+    expect(value(block, 'X-Deploy-Window')).toBe('tuesdays');
+    expect(block.map((trailer) => trailer.key)).not.toContain('Claude-Session');
+    expect(block.map((trailer) => trailer.key)).not.toContain('Signed-off-by');
+
+    const result = runValidate({ messageFile: draft, cwd: repo });
+    expect(result.violations).not.toContainEqual(
+      expect.objectContaining({ rule: 'unknown-key', key: 'Claude-Session' }),
+    );
+    expect(result.code).toBe(0);
+  });
 });
