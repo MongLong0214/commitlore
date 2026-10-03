@@ -16,6 +16,21 @@ updates:
       dev-dependencies:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # `@types/node` tracks the oldest runtime this package supports, not the
+      # newest one that exists. `engines.node` is `>=22.23.2` and the dependency
+      # is pinned `^22.10.0` for that reason: types from a later major describe
+      # APIs node 22 does not have, and the type checker is the only thing that
+      # would refuse them -- a release would compile here and fail on a
+      # supported runtime. Dependabot opened the 22 -> 26 bump as #1151, which
+      # typechecked cleanly and was still wrong for that reason.
+      #
+      # A major bump here is therefore a decision about the support floor, made
+      # by hand together with `engines`, not a monthly pull request. Minor and
+      # patch updates inside the pinned major still arrive as usual, and a
+      # security advisory ignores this block entirely.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     commit-message:
       # Dependabot commits on GitHub's side, so the local commit-msg hook never
       # sees them. What does see them is the dogfooding gate, which validates

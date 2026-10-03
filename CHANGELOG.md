@@ -4,6 +4,29 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.7.3
+
+- **A trailer paragraph that carries no record is no longer inherited as one
+  (#1153).** Git reads a message's last paragraph as a trailer block whatever
+  its keys mean, so `squash-preserve` collected a merge commit whose only
+  trailer was `Claude-Session:` as an inherited record, stamped it
+  `Provenance: inherited <sha>`, and composed a message `commitlore validate`
+  then refused as `unknown-key` — blocking the squash merge it had been run to
+  protect. An inherited block now carries only the keys SPEC §3 defines, per
+  trailer rather than per block, so a paragraph that mixes `Limit:` with a
+  foreign key keeps its record and loses only the foreign key, and a block left
+  with nothing contributes nothing. The identity-collision check compares an
+  inherited copy by its record content, so a faithful copy of such a record is
+  no longer reported as `duplicate-id`.
+
+- **Dependencies.** `@modelcontextprotocol/sdk` 1.30.1, `js-yaml` 5.4.2 (dev),
+  and `docker/setup-qemu-action` v4.4.0 in CI. `@types/node` stays on 22.x:
+  `engines.node` is `>=22.23.2`, and types from a later major would admit APIs
+  that runtime does not have.
+
+This is a patch release: it repairs existing squash and validation behavior and
+adds no command, flag, trailer key, or host setting.
+
 ## 1.7.2
 
 - **Squash-preserved drafts validate against their reachable originals (#1147).**
