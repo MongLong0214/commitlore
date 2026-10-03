@@ -52,7 +52,7 @@
     "esbuild": "^0.28.2",
     "js-yaml": "^5.4.2",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.2"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
