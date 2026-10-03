@@ -15696,6 +15696,9 @@ var undecidableExpiry = (ordered) => {
   return found;
 };
 var payloadSignatureWithoutProvenance = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2 && trailer.key !== PROVENANCE_KEY).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
+var recordPayloadSignature = (record2) => record2.trailers.filter(
+  (trailer) => trailer.key !== RECORD_ID_KEY2 && trailer.key !== PROVENANCE_KEY && isCommitLoreKey(trailer.key)
+).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
 var isFoldedComponent = (note, message) => {
   const identities = message.trailers.filter((trailer) => trailer.key === RECORD_ID_KEY2);
   if (identities.length < 2) return false;
@@ -15724,7 +15727,7 @@ var collisionRivals = (group) => group.flatMap((record2) => {
   if (isOwnCommitMirror(record2, group)) return [];
   const origin = inheritedOrigin(record2, group);
   if (origin === void 0) return [record2];
-  if (payloadSignatureWithoutProvenance(record2) === payloadSignatureWithoutProvenance(origin)) return [];
+  if (recordPayloadSignature(record2) === recordPayloadSignature(origin)) return [];
   return [{
     ...record2,
     trailers: [
@@ -25523,6 +25526,7 @@ var firstLine3 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var trailerValue3 = (trailers, key) => trailers.find((trailer) => trailer.key === key)?.value;
 var recordIdOf2 = (record2) => record2.recordId ?? trailerValue3(record2.trailers, RECORD_ID_KEY5);
 var contentSet = (trailers) => new Set(trailers.map((trailer) => `${trailer.key}${NUL}${trailer.value}`));
+var recordsAmong = (blocks) => blocks.map((block) => block.filter((trailer) => isCommitLoreKey(trailer.key))).filter((block) => block.length > 0);
 var mergeCommitBlocks = (messageBlocks, noteBlocks) => {
   const claimed = /* @__PURE__ */ new Set();
   const blocks = [];
@@ -25591,7 +25595,7 @@ var collectRange = (range, opts = {}) => {
     const cachedNote = opts.cache?.notes.get(sha);
     const noteBlocks = cachedNote ?? (mirrored.has(sha) ? readRecordBlocks(sha, opts) : []);
     if (cachedNote === void 0) opts.cache?.notes.set(sha, noteBlocks);
-    const blocks = mergeCommitBlocks(messageBlocks, noteBlocks);
+    const blocks = mergeCommitBlocks(recordsAmong(messageBlocks), recordsAmong(noteBlocks));
     for (const trailers of blocks) {
       if (trailers.length === 0) continue;
       const recordId = trailerValue3(trailers, RECORD_ID_KEY5);

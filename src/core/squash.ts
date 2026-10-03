@@ -69,6 +69,7 @@ import {
   CERTAINTY_VALUES,
   SINGLE_VALUED,
   UNDO_VALUES,
+  isCommitLoreKey,
   type Trailer,
 } from './types.js';
 
@@ -292,6 +293,36 @@ const contentSet = (trailers: readonly Trailer[]): Set<string> =>
   new Set(trailers.map((trailer) => `${trailer.key}${NUL}${trailer.value}`));
 
 /**
+ * One commit's blocks reduced to the records among them: the trailers whose
+ * keys this protocol defines, and no block left without one.
+ *
+ * git's grammar decides what a trailer block is, and a message's last
+ * paragraph qualifies whatever its keys mean -- so a paragraph holding only
+ * `Claude-Session:` is a trailer block. It is not a record, and inheriting it
+ * wrote a key SPEC §3 does not define into the message the squash was about to
+ * commit, which `commitlore validate` then refused, blocking the merge
+ * `squash-preserve` had been run to protect (#1153).
+ *
+ * `types.ts isCommitLoreKey` already answers this question for the index,
+ * where the same paragraphs were served to agents as recorded decisions
+ * (#335). Here it is asked per trailer rather than per block, because what
+ * this module emits is a commit message that has to validate: a paragraph
+ * mixing `Limit:` with a foreign key is a real record, and dropping the whole
+ * block to be rid of the foreign key would lose it. `Signed-off-by:` goes the
+ * same way as any other key outside the vocabulary -- it is an attestation
+ * about the commit that carried it, and inheriting it would assert a sign-off
+ * on a commit nobody signed.
+ *
+ * Applied where both channels become candidate records, before they are
+ * matched (`mergeCommitBlocks`), so a message cannot reintroduce through its
+ * mirror what the mirror dropped, or the other way round.
+ */
+const recordsAmong = (blocks: readonly Trailer[][]): Trailer[][] =>
+  blocks
+    .map((block) => block.filter((trailer) => isCommitLoreKey(trailer.key)))
+    .filter((block) => block.length > 0);
+
+/**
  * Matches one commit's message blocks against its mirrored note blocks
  * (SPEC §2.4), so a source commit that itself carries several record blocks —
  * ordinarily the previous squash-preserve run's own output, being squashed
@@ -433,7 +464,7 @@ export const collectRange = (range: string, opts: SquashOptions = {}): Collected
     const noteBlocks =
       cachedNote ?? (mirrored.has(sha) ? readRecordBlocks(sha, opts) : []);
     if (cachedNote === undefined) opts.cache?.notes.set(sha, noteBlocks);
-    const blocks = mergeCommitBlocks(messageBlocks, noteBlocks);
+    const blocks = mergeCommitBlocks(recordsAmong(messageBlocks), recordsAmong(noteBlocks));
 
     for (const trailers of blocks) {
       if (trailers.length === 0) continue;
