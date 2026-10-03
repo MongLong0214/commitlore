@@ -40,7 +40,7 @@ const CI_WORKFLOW_FILE_PATH = fileURLToPath(new URL(`../${CI_WORKFLOW_PATH}`, im
 // shell command; without this lock replacing every job body with `true` would
 // still look like a real successful run. Update deliberately with the CI
 // workflow when its reviewed job contract changes.
-export const EXPECTED_CI_WORKFLOW_SHA256 = 'e82d9cdc4de7c5acad722fb887d41535b6c38ebd9cc057edc0df70c07f45ef00';
+export const EXPECTED_CI_WORKFLOW_SHA256 = '57d776e9b87a00ca7a11643d6ccb4098c2c6b8d82b9614c62e9e946456e81819';
 
 // Fixed rather than inferred from returned jobs: absence must fail rather
 // than define itself away. `lint` only runs for pull requests and is therefore
