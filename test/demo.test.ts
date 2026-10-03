@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createTestRepo } from './git-fixtures.js';
 import { runDemo } from '../src/commands/demo.js';
@@ -80,6 +80,90 @@ describe('commitlore demo', () => {
     }
     // But the temp directory must still be cleaned up
     expect(readdirSync(caseRoot)).toEqual([]);
+  });
+
+  /**
+   * bug-issue-1163. The crash-cleanup test went red once in CI naming a
+   * leftover `commitlore-demo-*` directory, passed on re-run of the same
+   * commit, and passed on the other node leg of the same run. Nothing said why,
+   * because `cleanup` discarded the `rmSync` error — so the one occurrence
+   * carried no errno, and a race, a permission and a full disk were
+   * indistinguishable from each other and from "the removal never ran".
+   *
+   * The failure is injected rather than provoked: a real race is not reliably
+   * reproducible, and a test that waits for one would be the flake it is meant
+   * to explain. What is pinned here is the reporting — a cleanup that fails
+   * says so, naming the directory and the reason — plus the repository setting
+   * that removes the most plausible writer.
+   */
+  it('reports a cleanup failure instead of discarding it (bug-issue-1163)', async () => {
+    const caseRoot = mkdtempSync(join(demoRoot, 'cleanupfail-'));
+    const stderr: string[] = [];
+
+    vi.resetModules();
+    vi.doMock('node:fs', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:fs')>();
+      return {
+        ...actual,
+        default: actual,
+        rmSync: (): never => {
+          throw Object.assign(
+            new Error(`EACCES: permission denied, rmdir '${caseRoot}/injected'`),
+            { code: 'EACCES' },
+          );
+        },
+      };
+    });
+
+    try {
+      const { runDemo: isolated } = await import('../src/commands/demo.js');
+      const spy = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation((chunk: unknown): boolean => {
+          stderr.push(String(chunk));
+          return true;
+        });
+
+      let thrown: unknown;
+      try {
+        await isolated({ cwd: userRepo, crashTest: true, tmpRoot: caseRoot });
+      } catch (error) {
+        thrown = error;
+      } finally {
+        spy.mockRestore();
+      }
+
+      // The error being unwound still reaches the caller: reporting the cleanup
+      // failure must not replace the reason the run ended.
+      expect((thrown as Error | undefined)?.message).toContain('simulated crash');
+
+      const reported = stderr.join('');
+      expect(reported).toContain('could not remove');
+      // The two things the CI occurrence lacked: which directory, and why.
+      expect(reported).toContain(caseRoot);
+      expect(reported).toContain('EACCES');
+    } finally {
+      vi.doUnmock('node:fs');
+      vi.resetModules();
+    }
+
+    // Arrival: the injection really did stop the removal, so the assertions
+    // above were made about a cleanup that failed rather than one that never
+    // happened. The directory is also the artifact the next assertion reads.
+    const leftOver = readdirSync(caseRoot);
+    expect(leftOver).toHaveLength(1);
+    const repo = join(caseRoot, leftOver[0] as string);
+
+    // The demo's repository forbids background maintenance, so `git commit`
+    // cannot leave a process writing inside the directory that is about to be
+    // removed — the mechanism this issue's one occurrence is most consistent
+    // with.
+    const config = (key: string): string =>
+      execFileSync('git', ['-C', repo, 'config', '--get', key], { encoding: 'utf8' }).trim();
+    expect(config('gc.auto')).toBe('0');
+    expect(config('maintenance.auto')).toBe('false');
+
+    rmSync(caseRoot, { recursive: true, force: true });
   });
 
   it('user repository is never written to (safety property)', async () => {

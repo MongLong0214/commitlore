@@ -84,6 +84,16 @@ const git = (args: string[], cwd: string): string =>
   }).trim();
 
 /**
+ * Why a cleanup failed, in one line.
+ *
+ * `Error.message` from `fs` already carries the errno and the syscall --
+ * `EACCES: permission denied, rmdir '/tmp/...'` -- which is the part that says
+ * whether the next occurrence is a race, a permission, or a mount.
+ */
+const reasonFor = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+/**
  * Runs the demo scenario in a temporary repository.
  *
  * The function is async-shaped for future flexibility but executes
@@ -101,10 +111,21 @@ export const runDemo = async (opts: DemoOptions = {}): Promise<DemoResult> => {
   // Signal handler for cleanup on interrupt
   const cleanup = (): void => {
     if (tmpDir !== undefined) {
+      const removing = tmpDir;
       try {
-        rmSync(tmpDir, { recursive: true, force: true });
-      } catch {
-        // Best-effort cleanup
+        // `maxRetries` because the failure being handled is a race with a
+        // writer rather than a permanent condition: node retries `EBUSY`,
+        // `EMFILE`, `ENFILE`, `ENOTEMPTY` and `EPERM` for this option, which is
+        // the set a concurrent writer produces.
+        rmSync(removing, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+      } catch (error) {
+        // Reported, never rethrown. This also runs from a signal handler, where
+        // a throw has nowhere to go, and on the crash path it must not mask the
+        // error it is unwinding. What cannot happen again is losing it: the
+        // leftover directory reached CI with no cause attached, and the `catch`
+        // that discarded the errno was the only reason it could not be read
+        // (#1163).
+        process.stderr.write(`commitlore demo: could not remove ${removing}: ${reasonFor(error)}\n`);
       }
       tmpDir = undefined;
     }
@@ -136,6 +157,17 @@ export const runDemo = async (opts: DemoOptions = {}): Promise<DemoResult> => {
     git(['config', 'user.name', 'CommitLore Demo'], tmpDir);
     git(['config', 'user.email', 'demo@commitlore.example'], tmpDir);
     git(['config', 'commit.gpgsign', 'false'], tmpDir);
+    // A throwaway repository must not start anything that outlives the command.
+    // `git commit` may spawn background maintenance (`gc.auto`,
+    // `maintenance.auto`), and a git process still writing inside the directory
+    // while `rmSync` walks it is the most plausible reading of the one leftover
+    // directory CI has reported: a removal that raced a writer, not one that
+    // never ran (#1163). Written into the repository's own config rather than
+    // passed per invocation, so anything this demo starts later -- `runInit`'s
+    // hooks included -- inherits it, and so the setting is readable on a
+    // directory that outlived a failed cleanup.
+    git(['config', 'gc.auto', '0'], tmpDir);
+    git(['config', 'maintenance.auto', 'false'], tmpDir);
 
     // Create the target file so the path exists
     const targetFullPath = join(tmpDir, targetPath);
