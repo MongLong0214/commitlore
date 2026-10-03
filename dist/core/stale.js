@@ -15,7 +15,7 @@
  * `spec/contract-cases/stale-*.yaml` is the authority for every rule below;
  * this module is the implementation of those cases, not the definition.
  */
-import { RECORD_ID_RE, SINGLE_VALUED, parseProvenance, } from './types.js';
+import { RECORD_ID_RE, SINGLE_VALUED, isCommitLoreKey, parseProvenance, } from './types.js';
 const RECORD_ID_KEY = 'Record-Id';
 /** Rewritten per block by the notes mirroring, so it is not payload content. */
 const PROVENANCE_KEY = 'Provenance';
@@ -394,6 +394,31 @@ const payloadSignatureWithoutProvenance = (record) => record.trailers
     .sort()
     .join('\u0001');
 /**
+ * `payloadSignatureWithoutProvenance` restricted to the keys this protocol
+ * defines (`types.ts isCommitLoreKey`).
+ *
+ * What an inherited copy carries is the record, not whatever else the origin's
+ * trailer paragraph happened to hold: `squash-preserve` drops the foreign keys
+ * so the message it composes passes `validate` at all (#1153), and a
+ * `Signed-off-by:` on the origin is an attestation about that commit which
+ * must not be copied onto another. Compared in full, every faithful copy of
+ * such a record would read as divergent and be reported as a `duplicate-id`
+ * -- the same false refusal #1148 removed for the provenance stamp, one key
+ * class over.
+ *
+ * Only the inherited-copy comparison uses this. Weakening it costs the case
+ * where a copy carries a *different* value for a foreign key than its origin
+ * did, which stops being a collision; the record's own content still has to
+ * match exactly.
+ */
+const recordPayloadSignature = (record) => record.trailers
+    .filter((trailer) => trailer.key !== RECORD_ID_KEY &&
+    trailer.key !== PROVENANCE_KEY &&
+    isCommitLoreKey(trailer.key))
+    .map((trailer) => `${trailer.key}\u0000${trailer.value}`)
+    .sort()
+    .join('\u0001');
+/**
  * Whether `message` is a fold of several records and `note` is one of them
  * (#1116).
  *
@@ -484,7 +509,7 @@ const collisionRivals = (group) => group.flatMap((record) => {
     const origin = inheritedOrigin(record, group);
     if (origin === undefined)
         return [record];
-    if (payloadSignatureWithoutProvenance(record) === payloadSignatureWithoutProvenance(origin))
+    if (recordPayloadSignature(record) === recordPayloadSignature(origin))
         return [];
     return [{
             ...record,
