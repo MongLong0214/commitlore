@@ -28416,6 +28416,7 @@ var git = (args, cwd) => execFileSync("git", args, {
     GIT_COMMITTER_EMAIL: "demo@commitlore.example"
   }
 }).trim();
+var reasonFor2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var runDemo = async (opts = {}) => {
   const platformError = checkPlatform(opts.platformOverride);
   if (platformError !== null) {
@@ -28424,9 +28425,12 @@ var runDemo = async (opts = {}) => {
   let tmpDir;
   const cleanup = () => {
     if (tmpDir !== void 0) {
+      const removing = tmpDir;
       try {
-        rmSync9(tmpDir, { recursive: true, force: true });
-      } catch {
+        rmSync9(removing, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+      } catch (error2) {
+        process.stderr.write(`commitlore demo: could not remove ${removing}: ${reasonFor2(error2)}
+`);
       }
       tmpDir = void 0;
     }
@@ -28448,6 +28452,8 @@ var runDemo = async (opts = {}) => {
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
+    git(["config", "gc.auto", "0"], tmpDir);
+    git(["config", "maintenance.auto", "false"], tmpDir);
     const targetFullPath = join21(tmpDir, targetPath);
     mkdirSync11(dirname14(targetFullPath), { recursive: true });
     writeFileSync17(targetFullPath, "export const calculatePrice = () => {};\n");

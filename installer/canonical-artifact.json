@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "01c4ceb94a72be4e24462a478af20300e3da5bfb7a885c630fcb20122a9c3762"
+    "sha256": "782e4d82ccc92f82289706def5f34ebe64630fe1795d256d1e35be257512106b"
   },
   "artifact": {
-    "sha256": "148696fcc3cda54db7e539c2cb63ab40eebc325e7ff5c2ab7c82a8599ed75e8b",
+    "sha256": "67bcaf9020c78e2a9cee84d85c1bf8fc84a86399e5ae2172a3d346ef4f6811a8",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -98,11 +98,11 @@
       },
       {
         "path": "dist/commands/demo.js",
-        "sha256": "075a2c08ef33c1f19da4c0a286f6e500376e72f6b2f6094cab7bcb8d67c476fb"
+        "sha256": "c09a47c98b42a9460babe4bb3d7a3bd25d0e58747fb014b14e230d322860ee63"
       },
       {
         "path": "dist/commands/demo.js.map",
-        "sha256": "d257b82db28b64631dbb3f603cbeacd60bb38aa60feab5c320438074b099051a"
+        "sha256": "3ba91143c82428198f1150f45ac23ed5ba8b69b967878456a00596dbb58bfd36"
       },
       {
         "path": "dist/commands/doctor.d.ts",
@@ -682,7 +682,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "9e3b770f9248d50e2abc86a5616de65bf195260cce9085faa7273036d5df5919"
+        "sha256": "3b5dc90fc9d14106afc5f822d08741c121d463f46eb75752d78dccc1863c2b3e"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
