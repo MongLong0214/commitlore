@@ -81,14 +81,39 @@ const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
  * Folding actionable warnings back into "3/3 steps completed cleanly" is the
  * silent-success shape #63 and #67 were.
  */
+/**
+ * The row `--no-agent-hooks` declines. Its absence is then the state the caller
+ * asked for, not a requirement nobody met.
+ */
+const INJECT_ROW = 'inject-runtime';
 const runDoctorStep = (opts) => {
     const report = runDoctor({ ...cwdOption(opts), fix: true });
-    const code = report.checks.some((entry) => entry.needsAttention) ? 1 : 0;
+    /*
+     * A caller that declined the working-tree hook must still be able to read
+     * init's own verdict, which is the half of #1181 that a clean tree alone does
+     * not give: with the hook skipped, `inject-runtime` is the only row that
+     * needs attention, so every `--no-agent-hooks` run would report 1 and an
+     * automated caller would have traded a dirty checkout for a failed verdict.
+     *
+     * Excluded from the verdict, never from the report. The row still prints with
+     * its own wording, and a line says why it was not counted -- a step that went
+     * quiet about something it skipped is what #63 and #67 are about.
+     */
+    const declined = opts.agentHooks === false;
+    const needsAttention = report.checks.filter((entry) => entry.needsAttention);
+    const counted = declined
+        ? needsAttention.filter((entry) => entry.id !== INJECT_ROW)
+        : needsAttention;
+    const lines = formatCheckReport(report).trimEnd().split('\n');
+    if (declined && needsAttention.length !== counted.length) {
+        lines.push('PreToolUse hook runtime is not counted against this verdict: --no-agent-hooks declined it, ' +
+            'so nothing was written inside the working tree');
+    }
     return {
         step: 'doctor',
         title: 'doctor --fix',
-        code,
-        lines: formatCheckReport(report).trimEnd().split('\n'),
+        code: counted.length > 0 ? 1 : 0,
+        lines,
         detail: report,
     };
 };
@@ -203,10 +228,16 @@ const runAgentIntegrationStep = (opts) => {
     // plugin nobody enabled, a shape that changed under us: all of those write
     // the hook, because being wrong toward a duplicate is a cost somebody
     // notices and being wrong toward silence is one nobody does.
-    const plugin = pluginDeliveryProof(cwd);
-    const result = plugin.willFire
-        ? skippedClaudeHook(settingsPath, plugin.reason)
-        : installClaudeHook({ settingsPath });
+    //
+    // `--no-agent-hooks` is asked first, and it is the one answer that is not a
+    // guess about the host: the caller has said not to write inside its working
+    // tree. The bias above still decides every other case (#1181).
+    const plugin = opts.agentHooks === false ? null : pluginDeliveryProof(cwd);
+    const result = plugin === null
+        ? skippedClaudeHook(settingsPath, '--no-agent-hooks was given, so nothing was written inside the working tree')
+        : plugin.willFire
+            ? skippedClaudeHook(settingsPath, plugin.reason)
+            : installClaudeHook({ settingsPath });
     // `AGENTS.md` is a convention, not a requirement, and this step writes into a
     // file the repository owns -- 105 lines into an existing one, or a new file
     // where the repository had none. Capture works without it: an end-to-end run
@@ -953,6 +984,7 @@ export const register = (program) => {
         .option('--unattended', 'enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)')
         .option('--no-unattended', 'leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)')
         .option('--agents-md', 'also write the capture procedure into AGENTS.md (off by default; the MCP server already carries it)')
+        .option('--no-agent-hooks', 'write nothing inside the working tree: skip the PreToolUse injection hook at .claude/settings.json (for a caller that must keep the checkout clean)')
         .addHelpText('after', '\nRuns seven setup steps in sequence — hooks install, directive author string, index --rebuild, agent ' +
         'integration, MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
         'pass/fail. A step this command could not complete is named, never absorbed into a success message ' +
@@ -975,6 +1007,13 @@ export const register = (program) => {
         'end up in the same place. `user` and `local` are written by ' + MCP_HOST_CLI + ', because that file is the ' +
         'host\'s own; `project` is written here, merging without disturbing servers somebody else put in the file. ' +
         'A `project` registration uses `commitlore mcp`, not a machine-local path, so it survives the next clone.' +
+        '\n\nWhat lands where: inside the working tree, only the `PreToolUse` injection hook at ' +
+        '`.claude/settings.json`, and `AGENTS.md` when `--agents-md` asks for it. Everything else is ' +
+        'outside it — the four git hooks and the record index under `.git/`, the directive author string in ' +
+        'git config, the capture policy in ' + POLICY_FILE_NAME + ' (which is meant to be committed), and an ' +
+        '`mcp-scope` of `user` or `local` in the host\'s own configuration. `--no-agent-hooks` skips the one ' +
+        'working-tree write and changes nothing else, for a caller that has to leave the checkout clean; the ' +
+        'step still reports what it did not do.' +
         '\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` ' +
         'still exist on their own for anyone who wants one piece rather than all seven.' +
         '\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not ' +
@@ -1002,6 +1041,10 @@ export const register = (program) => {
         initOptions.mcpScope = scope;
         if (options.agentsMd === true)
             initOptions.agentsGuidance = true;
+        // Commander gives `false` only when `--no-agent-hooks` was typed, so the
+        // default install is byte-identical to what it was.
+        if (options.agentHooks === false)
+            initOptions.agentHooks = false;
         if (options.upgrade === true)
             initOptions.upgrade = true;
         const report = runInit(initOptions);

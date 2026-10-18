@@ -27786,14 +27786,23 @@ var installAgentsGuidance = (cwd) => {
 var DEFAULT_MCP_SCOPE = "user";
 var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
+var INJECT_ROW = "inject-runtime";
 var runDoctorStep = (opts) => {
   const report = runDoctor({ ...cwdOption(opts), fix: true });
-  const code = report.checks.some((entry) => entry.needsAttention) ? 1 : 0;
+  const declined = opts.agentHooks === false;
+  const needsAttention = report.checks.filter((entry) => entry.needsAttention);
+  const counted = declined ? needsAttention.filter((entry) => entry.id !== INJECT_ROW) : needsAttention;
+  const lines = formatCheckReport(report).trimEnd().split("\n");
+  if (declined && needsAttention.length !== counted.length) {
+    lines.push(
+      "PreToolUse hook runtime is not counted against this verdict: --no-agent-hooks declined it, so nothing was written inside the working tree"
+    );
+  }
   return {
     step: "doctor",
     title: "doctor --fix",
-    code,
-    lines: formatCheckReport(report).trimEnd().split("\n"),
+    code: counted.length > 0 ? 1 : 0,
+    lines,
     detail: report
   };
 };
@@ -27875,8 +27884,11 @@ var skippedClaudeHook = (settingsPath, reason) => ({
 var runAgentIntegrationStep = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   const settingsPath = claudeSettingsPath(cwd);
-  const plugin = pluginDeliveryProof(cwd);
-  const result2 = plugin.willFire ? skippedClaudeHook(settingsPath, plugin.reason) : installClaudeHook({ settingsPath });
+  const plugin = opts.agentHooks === false ? null : pluginDeliveryProof(cwd);
+  const result2 = plugin === null ? skippedClaudeHook(
+    settingsPath,
+    "--no-agent-hooks was given, so nothing was written inside the working tree"
+  ) : plugin.willFire ? skippedClaudeHook(settingsPath, plugin.reason) : installClaudeHook({ settingsPath });
   if (opts.agentsGuidance !== true) {
     const lines2 = [
       "AGENTS.md left alone \u2014 the capture procedure ships in the MCP server every host receives (--agents-md writes it into the repository as well)",
@@ -28410,9 +28422,12 @@ var register15 = (program3) => {
   ).option(
     "--agents-md",
     "also write the capture procedure into AGENTS.md (off by default; the MCP server already carries it)"
+  ).option(
+    "--no-agent-hooks",
+    "write nothing inside the working tree: skip the PreToolUse injection hook at .claude/settings.json (for a caller that must keep the checkout clean)"
   ).addHelpText(
     "after",
-    "\nRuns seven setup steps in sequence \u2014 hooks install, directive author string, index --rebuild, agent integration, MCP registration, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to authorise it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. The policy does not install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session transcript before commit, because ordinary git commits cannot start capture. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\nMCP registration asks where the capture server should be registered, and every scope the host supports is available. `user` is one registration covering every repository you open, `local` is this repository for you only, and `project` writes " + MCP_REGISTRATION_FILE + " \u2014 which is committed, so it applies to everyone who clones the repository. `none` writes nothing, which is the right answer when the Claude Code or Codex plugin already carries the server. The default is " + DEFAULT_MCP_SCOPE + " in both directions: it is what a bare Enter takes and what a run with no terminal uses, so a script and a person end up in the same place. `user` and `local` are written by " + MCP_HOST_CLI + ", because that file is the host's own; `project` is written here, merging without disturbing servers somebody else put in the file. A `project` registration uses `commitlore mcp`, not a machine-local path, so it survives the next clone.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all seven.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write could not run at all (SPEC \xA710). Agent integration writes or refreshes only CommitLore's marked section in AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server's instructions, which every wired host receives on initialize, so the file is not how the procedure travels. An MCP registration that cannot be written leaves the install degraded rather than broken; doctor reports it when unattended capture needs an initiator. A `user` or `local` scope asked of a machine with no " + MCP_HOST_CLI + " on PATH is not a failure at all: it reports at 0 and names the command to run later."
+    "\nRuns seven setup steps in sequence \u2014 hooks install, directive author string, index --rebuild, agent integration, MCP registration, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to authorise it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. The policy does not install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session transcript before commit, because ordinary git commits cannot start capture. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\nMCP registration asks where the capture server should be registered, and every scope the host supports is available. `user` is one registration covering every repository you open, `local` is this repository for you only, and `project` writes " + MCP_REGISTRATION_FILE + " \u2014 which is committed, so it applies to everyone who clones the repository. `none` writes nothing, which is the right answer when the Claude Code or Codex plugin already carries the server. The default is " + DEFAULT_MCP_SCOPE + " in both directions: it is what a bare Enter takes and what a run with no terminal uses, so a script and a person end up in the same place. `user` and `local` are written by " + MCP_HOST_CLI + ", because that file is the host's own; `project` is written here, merging without disturbing servers somebody else put in the file. A `project` registration uses `commitlore mcp`, not a machine-local path, so it survives the next clone.\n\nWhat lands where: inside the working tree, only the `PreToolUse` injection hook at `.claude/settings.json`, and `AGENTS.md` when `--agents-md` asks for it. Everything else is outside it \u2014 the four git hooks and the record index under `.git/`, the directive author string in git config, the capture policy in " + POLICY_FILE_NAME + " (which is meant to be committed), and an `mcp-scope` of `user` or `local` in the host's own configuration. `--no-agent-hooks` skips the one working-tree write and changes nothing else, for a caller that has to leave the checkout clean; the step still reports what it did not do.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all seven.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write could not run at all (SPEC \xA710). Agent integration writes or refreshes only CommitLore's marked section in AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server's instructions, which every wired host receives on initialize, so the file is not how the procedure travels. An MCP registration that cannot be written leaves the install degraded rather than broken; doctor reports it when unattended capture needs an initiator. A `user` or `local` scope asked of a machine with no " + MCP_HOST_CLI + " on PATH is not a failure at all: it reports at 0 and names the command to run later."
   ).action(async (options) => {
     if (options.mcpScope !== void 0 && !isMcpScope(options.mcpScope)) {
       process.stderr.write(
@@ -28431,6 +28446,7 @@ var register15 = (program3) => {
     initOptions.unattended = choice;
     initOptions.mcpScope = scope;
     if (options.agentsMd === true) initOptions.agentsGuidance = true;
+    if (options.agentHooks === false) initOptions.agentHooks = false;
     if (options.upgrade === true) initOptions.upgrade = true;
     const report = runInit(initOptions);
     let output;

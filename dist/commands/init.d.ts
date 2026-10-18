@@ -77,6 +77,28 @@ export interface InitOptions {
      */
     agentsGuidance?: boolean;
     /**
+     * Whether the agent-integration step may write into the working tree.
+     *
+     * Absent means yes, which is the behaviour every interactive install has had.
+     * `false` is how an automated caller says "wire this repository, but leave my
+     * working tree exactly as you found it": the `PreToolUse` injection hook is
+     * the only thing `init` writes inside the tree (`AGENTS.md` is already opt-in
+     * through {@link agentsGuidance}), and its path is fixed at
+     * `<cwd>/.claude/settings.json`.
+     *
+     * It matters because the file is untracked, so after `init` the tree is no
+     * longer clean -- and a caller whose whole job is to verify a clean checkout
+     * then sees its own observation as a change (#1181, reported from
+     * agent-control-plane's bootstrap, where `init` is a required observation).
+     * `--mcp-scope none` reads as "register nothing" but never covered this,
+     * because hooks under `.git/` and git config do not show up in `git status`
+     * and this file does.
+     *
+     * Only the write is skipped. The step still reports its own outcome, which is
+     * what #63 and #67 are about, and every other step runs unchanged.
+     */
+    agentHooks?: boolean;
+    /**
      * Which MCP scope to register the capture server at.
      *
      * **Absent means `none`, not {@link DEFAULT_MCP_SCOPE}.** The default belongs
