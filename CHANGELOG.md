@@ -4,6 +4,25 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.7.5
+
+- **`init` can leave the working tree exactly as it found it (#1181).** The
+  `PreToolUse` injection hook at `.claude/settings.json` is the only file `init`
+  writes inside the tree, and it is untracked — so a caller whose job is to
+  verify a clean checkout saw its own observation as a change. `--mcp-scope
+  none` never covered it, because everything else `init` wires lands under
+  `.git/`, in git config, or in the host's own configuration.
+  `commitlore init --no-agent-hooks` skips that one write and changes nothing
+  else: all four git hooks, the directive author string, the index rebuild, the
+  policy step and the final check still run, and the step reports what it did
+  not do. The final check leaves `inject-runtime` out of its verdict when the
+  caller declined the hook — out of the verdict only, never out of the report —
+  so a declined hook no longer turns a clean checkout into exit 1. `init --help`
+  now says which steps write inside the working tree and which write outside it.
+
+This is a patch release: it adds one flag, `init --no-agent-hooks`, and changes
+no default. No trailer key or host setting moves.
+
 ## 1.7.4
 
 Security, and the three capture faults a 118.7 MB transcript uncovered.
