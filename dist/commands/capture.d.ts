@@ -51,6 +51,16 @@ export interface CaptureResult {
     transcript_window?: TranscriptWindow;
     guard_advisory?: GuardAdvisory | null;
     /**
+     * The nonces of staged transactions this stage replaced (#1170).
+     *
+     * A second capture on the same base and staged diff stages a second
+     * transaction; `prepare-commit-msg` applies the newest and passes over the
+     * rest. That was the rule and nothing reported it, so an author who captured
+     * again saw two staged transactions and later read `doctor` calling the
+     * earlier one a capture that expired and was dropped.
+     */
+    superseded?: string[];
+    /**
      * Every reason a record was refused (#309). Both sources are included: the
      * draft parser, which rejects a shape, and the verifier, which rejects a
      * citation. Both were computed and discarded before this existed, so `capture`

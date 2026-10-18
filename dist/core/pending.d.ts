@@ -47,6 +47,21 @@ export interface PendingRecord {
     validation_result: 'pass' | 'partial' | 'empty' | null;
     overlap_check: 'canonical_exact_only' | null;
     incomplete: boolean;
+    /**
+     * The nonce of a later transaction that staged over this one (#1170).
+     *
+     * Two `staged` transactions can exist for the same base and the same staged
+     * diff -- capture again after staging and there are. `prepare-commit-msg`
+     * applies the newest and silently passes over the rest, so the older one is
+     * not waiting for anything: it is replaced. Nothing said so, and `doctor`
+     * described it as a capture that "expired before reaching a commit and
+     * [was] dropped", which reads as a lost decision rather than a superseded
+     * one.
+     *
+     * Absent on every transaction nothing replaced, so a repository that never
+     * re-captures writes byte-identical files.
+     */
+    superseded_by?: string;
     guard_advisory?: GuardAdvisory | null;
     /**
      * Present — and only ever `true` — when the capture declared itself
@@ -228,6 +243,30 @@ export interface StagePendingOptions {
  * CEO amendment 1: stamps expires_at = staged_at + 5 minutes (or expiryMinutes).
  */
 export declare const stagePending: (nonce: string, opts: StagePendingOptions) => boolean;
+/**
+ * Marks every other `staged` transaction bound to the same tree as superseded
+ * by `nonce`, and returns the ones marked (#1170).
+ *
+ * Bound to the same tree means the same `base_head` and the same
+ * `staged_diff_hash`: those are two of the five gates `prepare-commit-msg`
+ * applies, so a transaction that differs on either was never a candidate for
+ * this commit and is not replaced by this one. Among the candidates the hook
+ * takes the newest by `created_at` and passes over the rest
+ * (`compareCaptureCandidates`), and r-phaseunderlock989 records that the
+ * selection is not serialised with staging -- this writes the rule down rather
+ * than changing it.
+ *
+ * `applied` is deliberately not touched. Its trailer is already in a commit
+ * message and the post-commit hook is still owed the finalisation; it is not a
+ * rival to a transaction that has only just staged.
+ *
+ * Best-effort per sibling: a file that cannot be read or written is left alone
+ * rather than failing a stage that is otherwise complete. The cost of missing
+ * one is the row this exists to relabel, not a lost record.
+ */
+export declare const supersedeStagedSiblings: (nonce: string, opts: {
+    cwd: string;
+}) => string[];
 export interface MarkAppliedOptions {
     cwd: string;
 }

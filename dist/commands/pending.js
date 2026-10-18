@@ -25,6 +25,7 @@ const summarise = (record, head) => ({
     base_head: record.base_head,
     stale: pendingIsStale(record, head),
     gc_eligible: gcEligible(record),
+    ...(record.superseded_by === undefined ? {} : { superseded_by: record.superseded_by }),
 });
 export const runPendingList = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
@@ -116,6 +117,17 @@ export const runPendingShow = (opts) => {
  * and there is no way to tell that from a file they are tired of seeing. It
  * refuses a file it cannot read for the same reason inverted: an unknown phase
  * might be one of those two.
+ *
+ * `force` is how a person says which it is, for `staged` only (#1170). The
+ * reported case was a staged record whose wording turned out to be wrong, found
+ * at the one moment it is worth fixing, with no supported way to withdraw it:
+ * `rm` refused, and capturing again left two staged transactions where the hook
+ * silently applied the newer. A `staged` transaction has not reached a commit,
+ * so withdrawing it costs exactly the record the caller is asking to drop.
+ *
+ * `applied` stays refused even with `force`. Its trailer is already in a commit
+ * message and only the post-commit hook can finish the job; removing it would
+ * lose a record that is already in history, which is not a withdrawal.
  */
 export const runPendingRemove = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
@@ -141,12 +153,18 @@ export const runPendingRemove = (opts) => {
             error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`,
         };
     }
-    if (PROTECTED_PHASES.has(record.phase)) {
+    const withdrawable = record.phase === 'staged' && opts.force === true;
+    if (PROTECTED_PHASES.has(record.phase) && !withdrawable) {
+        const remedy = record.phase === 'staged'
+            ? ` If you meant to withdraw it before the commit, run \`commitlore pending rm ${only} --force\`: ` +
+                'the record it holds is dropped and the next commit carries nothing from it.'
+            : '';
         return {
             removed: null,
             phase: record.phase,
             error: `${only} is ${record.phase}: the post-commit hook may still finalise it into a record, ` +
-                `and removing it now would lose that. It is collected once the commit it belongs to lands.`,
+                `and removing it now would lose that. It is collected once the commit it belongs to lands.` +
+                remedy,
         };
     }
     if (!deletePending(only, { cwd })) {
@@ -174,7 +192,14 @@ const renderList = (result, now) => {
     }
     const lines = ['NONCE     PHASE     RECORDS  VALIDATION  AGE   BASE      FLAGS'];
     for (const row of result.transactions) {
-        const flags = [row.stale ? 'stale' : '', row.gc_eligible ? '' : 'never-collected']
+        const flags = [
+            row.superseded_by === undefined
+                ? row.stale
+                    ? 'stale'
+                    : ''
+                : `superseded-by ${row.superseded_by.slice(0, 8)}`,
+            row.gc_eligible ? '' : 'never-collected',
+        ]
             .filter((flag) => flag !== '')
             .join(',');
         lines.push([
@@ -235,10 +260,11 @@ export const register = (program) => {
     pending
         .command('rm')
         .argument('<nonce>', 'the transaction nonce, or enough of its start to be unambiguous')
-        .description('delete one capture transaction; refuses a staged or applied one')
+        .description('delete one capture transaction; refuses an applied one, and a staged one without --force')
         .option('--json', 'emit structured JSON output')
+        .option('--force', 'withdraw a staged transaction before the commit: the record it holds is dropped')
         .action((nonce, options) => {
-        const result = runPendingRemove({ nonce });
+        const result = runPendingRemove({ nonce, ...(options.force === true ? { force: true } : {}) });
         if (options.json === true) {
             process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
             if (result.removed === null)
