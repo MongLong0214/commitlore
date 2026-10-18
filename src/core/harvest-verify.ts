@@ -189,23 +189,55 @@ const NEIGHBOUR_LINES = 1;
 const DETAIL_LIMIT = 80;
 
 /**
- * A source with the two indexes the checks need: the whitespace-collapsed text
- * a quote is matched against, and enough bookkeeping to map a position in that
- * text back to the line it came from.
+ * A source, plus the one thing about it that cannot be computed on demand.
+ *
+ * This used to carry two indexes as well: the whitespace-collapsed text a quote
+ * was matched against, and an `offsets` array mapping each of its characters
+ * back to the original. Both held one element per character, and `Array.push`
+ * refuses past V8's `FixedArray` ceiling: measured here, a 118.7 MB session
+ * transcript threw `RangeError: Invalid array length` at 112,813,858 elements.
+ * The verifier caught that, bound the transaction to an empty verification, and
+ * the caller was told its receipt was missing -- a size limit reported as a
+ * receipt fault (#1168).
+ *
+ * So nothing proportional to the input is built. A quote is matched against
+ * `raw` directly by a pattern that reproduces the collapse (`occurrences`), and
+ * line boundaries are found by walking outward from a match
+ * (`neighbourhood`). The matching rule is unchanged, and
+ * `test/harvest-verify-scan.test.ts` holds it to the old definition
+ * character for character.
  */
 interface ScannedSource {
   raw: string;
-  /** Whitespace-collapsed. Identical to `raw.replace(/\s+/g, ' ').trim()`. */
-  text: string;
-  /** `offsets[i]` is the index in `raw` of `text[i]`. */
-  offsets: number[];
-  /** Index in `raw` where each line begins. */
-  lineStarts: number[];
+  /**
+   * Whether `raw` holds no non-whitespace character at all — what
+   * `text === ''` used to answer, for the one message that needs it.
+   */
+  blank: boolean;
 }
 
 type ScannedSources = Record<EvidenceSource, ScannedSource>;
 
-const SPACE = /\s/;
+const NON_SPACE = /\S/;
+
+/**
+ * `quote` as a pattern over the *original* text: its tokens, escaped, joined by
+ * `\s+`.
+ *
+ * This is the same normalisation read from the other end. The quote arrives
+ * already collapsed, so it holds no run of whitespace and no leading or
+ * trailing space, and every token is therefore whitespace-free. A match can
+ * only begin and end on a non-whitespace character, which is what makes the
+ * positions it reports the same ones a search over the collapsed copy reported.
+ */
+const quotePattern = (quote: string): RegExp =>
+  new RegExp(
+    quote
+      .split(' ')
+      .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('\\s+'),
+    'g',
+  );
 
 /**
  * The entire normalisation this verifier performs, and the reason it is written
@@ -219,33 +251,7 @@ const SPACE = /\s/;
  * exactly the fabrications the module exists to catch, since a fabricated
  * sentence is by construction *almost* what was said.
  */
-const scan = (raw: string): ScannedSource => {
-  const chars: string[] = [];
-  const offsets: number[] = [];
-  let pendingSpace = false;
-
-  for (let index = 0; index < raw.length; index += 1) {
-    const char = raw[index] ?? '';
-    if (SPACE.test(char)) {
-      if (chars.length > 0) pendingSpace = true;
-      continue;
-    }
-    if (pendingSpace) {
-      chars.push(' ');
-      offsets.push(index);
-      pendingSpace = false;
-    }
-    chars.push(char);
-    offsets.push(index);
-  }
-
-  const lineStarts = [0];
-  for (let index = 0; index < raw.length; index += 1) {
-    if (raw[index] === '\n') lineStarts.push(index + 1);
-  }
-
-  return { raw, text: chars.join(''), offsets, lineStarts };
-};
+const scan = (raw: string): ScannedSource => ({ raw, blank: !NON_SPACE.test(raw) });
 
 /** The quote side of the same normalisation. */
 const normalize = (text: string): string => text.replace(/\s+/g, ' ').trim();
@@ -255,17 +261,9 @@ const scanSources = (sources: Sources): ScannedSources => ({
   diff: scan(sources.diff),
 });
 
-/** Which line of `raw` contains `offset`. */
-const lineIndexOf = (lineStarts: readonly number[], offset: number): number => {
-  let low = 0;
-  let high = lineStarts.length - 1;
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    if ((lineStarts[mid] ?? 0) <= offset) low = mid;
-    else high = mid - 1;
-  }
-  return low;
-};
+/** Where the line containing `offset` begins. */
+const lineStartAt = (raw: string, offset: number): number =>
+  offset <= 0 ? 0 : raw.lastIndexOf('\n', offset - 1) + 1;
 
 /**
  * Positions of `quote` in `source.text`, capped: a two-word quote can occur
@@ -274,29 +272,54 @@ const lineIndexOf = (lineStarts: readonly number[], offset: number): number => {
  */
 const OCCURRENCE_LIMIT = 32;
 
-const occurrences = (source: ScannedSource, quote: string): number[] => {
+/** Where one occurrence sits in the original text; both ends inclusive. */
+interface Occurrence {
+  start: number;
+  end: number;
+}
+
+/**
+ * Advanced by one character per step, not by the length of the match: the
+ * collapsed-copy search this replaces used `indexOf(quote, at + 1)`, so
+ * overlapping occurrences counted, and the cap has to fall on the same ones.
+ */
+const occurrences = (source: ScannedSource, quote: string): Occurrence[] => {
   if (quote === '') return [];
-  const found: number[] = [];
-  let at = source.text.indexOf(quote);
-  while (at !== -1 && found.length < OCCURRENCE_LIMIT) {
-    found.push(at);
-    at = source.text.indexOf(quote, at + 1);
+  const pattern = quotePattern(quote);
+  const found: Occurrence[] = [];
+  let from = 0;
+  while (found.length < OCCURRENCE_LIMIT && from <= source.raw.length) {
+    pattern.lastIndex = from;
+    const match = pattern.exec(source.raw);
+    if (match === null) break;
+    found.push({ start: match.index, end: match.index + match[0].length - 1 });
+    from = match.index + 1;
   }
   return found;
 };
 
-/** The quoted lines plus `NEIGHBOUR_LINES` either side, as raw text. */
-const neighbourhood = (source: ScannedSource, start: number, length: number): string => {
-  const rawStart = source.offsets[start] ?? 0;
-  const rawEnd = source.offsets[start + length - 1] ?? rawStart;
-  const first = Math.max(0, lineIndexOf(source.lineStarts, rawStart) - NEIGHBOUR_LINES);
-  const last = Math.min(
-    source.lineStarts.length - 1,
-    lineIndexOf(source.lineStarts, rawEnd) + NEIGHBOUR_LINES,
-  );
-  const from = source.lineStarts[first] ?? 0;
-  const to = source.lineStarts[last + 1] ?? source.raw.length;
-  return source.raw.slice(from, to);
+/**
+ * The quoted lines plus `NEIGHBOUR_LINES` either side, as raw text.
+ *
+ * Found by walking out from the match rather than by indexing every line in the
+ * file: a transcript large enough to matter has no reason to pay for an array
+ * of its own line starts, and one made only of newlines would hit exactly the
+ * ceiling this module no longer goes near.
+ */
+const neighbourhood = (source: ScannedSource, at: Occurrence): string => {
+  const { raw } = source;
+  let from = lineStartAt(raw, at.start);
+  for (let back = 0; back < NEIGHBOUR_LINES && from > 0; back += 1) {
+    from = lineStartAt(raw, from - 1);
+  }
+
+  // `to` lands just past the newline that ends the last included line, which is
+  // where the next line used to start — the slice keeps that newline.
+  let to = raw.indexOf('\n', at.end);
+  for (let forward = 0; forward < NEIGHBOUR_LINES && to !== -1; forward += 1) {
+    to = raw.indexOf('\n', to + 1);
+  }
+  return raw.slice(from, to === -1 ? raw.length : to + 1);
 };
 
 /** Marker matching folds case and curly apostrophes; the quote check never does. */
@@ -309,7 +332,7 @@ const hasOutcomeRejection = (window: string): boolean =>
 const hasRejectionContext = (source: ScannedSource, quote: string): boolean => {
   const normalized = normalize(quote);
   return occurrences(source, normalized).some((at) => {
-    const window = forMarkers(neighbourhood(source, at, normalized.length));
+    const window = forMarkers(neighbourhood(source, at));
     return REJECTION_MARKERS.some((marker) => window.includes(marker)) || hasOutcomeRejection(window);
   });
 };
@@ -392,7 +415,7 @@ const missingEvidence = (record: DraftRecord): RejectedRecord | null => {
 };
 
 const notFound = (cite: DraftEvidence, source: ScannedSource): string => {
-  const where = source.text === '' ? ` (the ${cite.source} is empty)` : '';
+  const where = source.blank ? ` (the ${cite.source} is empty)` : '';
   return `${cite.key}: the ${cite.source} does not contain "${brief(cite.quote)}"${where}`;
 };
 

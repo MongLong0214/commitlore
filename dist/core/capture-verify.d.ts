@@ -92,6 +92,21 @@ export interface VerifyCaptureResult {
      */
     source_mismatch?: 'transcript' | 'diff';
     /**
+     * Why an empty, incomplete answer is empty — when this call knows (#1168).
+     *
+     * An unhandled exception used to leave no trace at all: the caller received
+     * `{validation_result: "empty", incomplete: true}` and nothing else, so a
+     * size limit, an unreadable history and a held lock were one shape. The
+     * reported case was a 118.7 MB transcript, and what the CLI printed was that
+     * a receipt had not been presented.
+     *
+     * `detail` carries the exception's own message, which is where the errno or
+     * the `RangeError` lives. Both are advisory: a caller may read `reason` as a
+     * code and must not parse `detail`.
+     */
+    reason?: 'internal-error';
+    detail?: string;
+    /**
      * Set when the nonce names no transaction at all (#1023).
      *
      * That case returned `validation_result: "empty"` with `incomplete: true` and
