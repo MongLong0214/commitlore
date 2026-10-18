@@ -127,11 +127,19 @@ export interface VerifyCaptureResult {
    * reported case was a 118.7 MB transcript, and what the CLI printed was that
    * a receipt had not been presented.
    *
-   * `detail` carries the exception's own message, which is where the errno or
-   * the `RangeError` lives. Both are advisory: a caller may read `reason` as a
-   * code and must not parse `detail`.
+   * Four causes answer to it, and before #1169 they were one shape: a transcript
+   * the verifier could not read (`internal-error`), a notes mirror nobody
+   * fetched (`notes-unfetched`), a history it could not load
+   * (`history-unavailable`), and a nonce another call holds (`locked`). The
+   * reporter spent a diagnosis on the wrong one, and `context` and `doctor`
+   * already knew how to say "the notes mirror is unfetched" while this path did
+   * not.
+   *
+   * `detail` is a sentence for a person, and it names the move that resolves
+   * the cause where there is one. Both are advisory: a caller may read `reason`
+   * as a code and must not parse `detail`.
    */
-  reason?: 'internal-error';
+  reason?: 'notes-unfetched' | 'history-unavailable' | 'locked' | 'internal-error';
   detail?: string;
   /**
    * Set when the nonce names no transaction at all (#1023).
@@ -387,6 +395,10 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         validation_result: 'empty',
         incomplete: true,
         overlap_check: 'canonical_exact_only',
+        reason: 'locked',
+        detail:
+          'another call is verifying this transaction; nothing was read and nothing was bound. ' +
+          'Wait for it to finish, or prepare a new transaction.',
       };
     }
     createdLock = lock.created;
@@ -655,6 +667,11 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
         validation_result: 'empty',
         incomplete: true,
         overlap_check: 'canonical_exact_only',
+        reason: 'notes-unfetched',
+        detail:
+          'the notes mirror on refs/notes/commitlore is not fetched here, so the duplicate ' +
+          'check cannot run. Run `commitlore doctor --fix`, or fetch it directly: ' +
+          "git fetch origin 'refs/notes/*:refs/notes/*' -- then verify again.",
       };
       return settle(result);
     }
@@ -669,6 +686,11 @@ const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResul
         validation_result: 'empty',
         incomplete: true,
         overlap_check: 'canonical_exact_only',
+        reason: 'history-unavailable',
+        detail:
+          "this repository's active records could not be read, so a draft cannot be checked " +
+          'against them. `commitlore doctor` reports which of the history, the index and the ' +
+          'notes mirror is unreadable.',
       };
       return settle(result);
     }
