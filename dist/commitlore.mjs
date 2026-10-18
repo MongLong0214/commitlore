@@ -18406,7 +18406,9 @@ var verifyCaptureRecords = (opts) => {
         rejected: [],
         validation_result: "empty",
         incomplete: true,
-        overlap_check: "canonical_exact_only"
+        overlap_check: "canonical_exact_only",
+        reason: "locked",
+        detail: "another call is verifying this transaction; nothing was read and nothing was bound. Wait for it to finish, or prepare a new transaction."
       };
     }
     createdLock = lock.created;
@@ -18521,7 +18523,9 @@ var runVerifyCaptureRecords = (opts) => {
         rejected: [],
         validation_result: "empty",
         incomplete: true,
-        overlap_check: "canonical_exact_only"
+        overlap_check: "canonical_exact_only",
+        reason: "notes-unfetched",
+        detail: "the notes mirror on refs/notes/commitlore is not fetched here, so the duplicate check cannot run. Run `commitlore doctor --fix`, or fetch it directly: git fetch origin 'refs/notes/*:refs/notes/*' -- then verify again."
       };
       return settle(result3);
     }
@@ -18532,7 +18536,9 @@ var runVerifyCaptureRecords = (opts) => {
         rejected: [],
         validation_result: "empty",
         incomplete: true,
-        overlap_check: "canonical_exact_only"
+        overlap_check: "canonical_exact_only",
+        reason: "history-unavailable",
+        detail: "this repository's active records could not be read, so a draft cannot be checked against them. `commitlore doctor` reports which of the history, the index and the notes mirror is unreadable."
       };
       return settle(result3);
     }
@@ -19314,11 +19320,12 @@ commitlore capture: the built-in defaults were used for this capture
     ...replacing === void 0 ? {} : { replacing }
   });
   if (verifyResult.reason !== void 0) {
+    const outcome = verifyResult.reason === "internal-error" ? "internal" : "operational";
     return {
-      outcome: "internal",
+      outcome,
       nonce: prepareResult.nonce,
       staged: false,
-      error: `Verification did not run (${verifyResult.reason}): ${verifyResult.detail ?? "no detail"}. The transaction is still prepared, so verifying it again is the next move; nothing was bound and nothing was staged.`,
+      error: `Verification did not run (${verifyResult.reason}): ${verifyResult.detail ?? "no detail"} The transaction is still prepared, so verifying it again is the next move; nothing was bound and nothing was staged.`,
       guard_advisory: prepareResult.guard_advisory,
       rejected: draftRejections
     };
@@ -40044,7 +40051,15 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         // will require once the three-step migration finishes; today stage
         // ignores it, so this field is additive and changes nothing a host
         // already does.
-        ...result2.receipt === void 0 ? {} : { receipt: result2.receipt }
+        ...result2.receipt === void 0 ? {} : { receipt: result2.receipt },
+        // Why an empty, incomplete answer is empty, when the verifier knows
+        // (#1169). Four causes shared one shape here -- unfetched notes, an
+        // unreadable history, a held lock, an internal error -- so a caller
+        // could not tell which, and the reporter diagnosed the wrong one.
+        // `reason` is a code to branch on; `detail` is a sentence for a person
+        // and names the move that resolves it.
+        ...result2.reason === void 0 ? {} : { reason: result2.reason },
+        ...result2.detail === void 0 ? {} : { detail: result2.detail }
       });
     },
     [STAGE_CAPTURE_TOOL]: (args) => {

@@ -872,6 +872,14 @@ export const createServer = (opts = {}) => {
                 // ignores it, so this field is additive and changes nothing a host
                 // already does.
                 ...(result.receipt === undefined ? {} : { receipt: result.receipt }),
+                // Why an empty, incomplete answer is empty, when the verifier knows
+                // (#1169). Four causes shared one shape here -- unfetched notes, an
+                // unreadable history, a held lock, an internal error -- so a caller
+                // could not tell which, and the reporter diagnosed the wrong one.
+                // `reason` is a code to branch on; `detail` is a sentence for a person
+                // and names the move that resolves it.
+                ...(result.reason === undefined ? {} : { reason: result.reason }),
+                ...(result.detail === undefined ? {} : { detail: result.detail }),
             });
         },
         [STAGE_CAPTURE_TOOL]: (args) => {
