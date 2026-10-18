@@ -92,6 +92,29 @@ export interface VerifyCaptureResult {
      */
     source_mismatch?: 'transcript' | 'diff';
     /**
+     * Why an empty, incomplete answer is empty — when this call knows (#1168).
+     *
+     * An unhandled exception used to leave no trace at all: the caller received
+     * `{validation_result: "empty", incomplete: true}` and nothing else, so a
+     * size limit, an unreadable history and a held lock were one shape. The
+     * reported case was a 118.7 MB transcript, and what the CLI printed was that
+     * a receipt had not been presented.
+     *
+     * Four causes answer to it, and before #1169 they were one shape: a transcript
+     * the verifier could not read (`internal-error`), a notes mirror nobody
+     * fetched (`notes-unfetched`), a history it could not load
+     * (`history-unavailable`), and a nonce another call holds (`locked`). The
+     * reporter spent a diagnosis on the wrong one, and `context` and `doctor`
+     * already knew how to say "the notes mirror is unfetched" while this path did
+     * not.
+     *
+     * `detail` is a sentence for a person, and it names the move that resolves
+     * the cause where there is one. Both are advisory: a caller may read `reason`
+     * as a code and must not parse `detail`.
+     */
+    reason?: 'notes-unfetched' | 'history-unavailable' | 'locked' | 'internal-error';
+    detail?: string;
+    /**
      * Set when the nonce names no transaction at all (#1023).
      *
      * That case returned `validation_result: "empty"` with `incomplete: true` and

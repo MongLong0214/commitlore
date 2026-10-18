@@ -12866,75 +12866,51 @@ var PAST_OUTCOME_PATTERNS = [
 ];
 var NEIGHBOUR_LINES = 1;
 var DETAIL_LIMIT = 80;
-var SPACE = /\s/;
-var scan = (raw) => {
-  const chars = [];
-  const offsets = [];
-  let pendingSpace = false;
-  for (let index = 0; index < raw.length; index += 1) {
-    const char = raw[index] ?? "";
-    if (SPACE.test(char)) {
-      if (chars.length > 0) pendingSpace = true;
-      continue;
-    }
-    if (pendingSpace) {
-      chars.push(" ");
-      offsets.push(index);
-      pendingSpace = false;
-    }
-    chars.push(char);
-    offsets.push(index);
-  }
-  const lineStarts = [0];
-  for (let index = 0; index < raw.length; index += 1) {
-    if (raw[index] === "\n") lineStarts.push(index + 1);
-  }
-  return { raw, text: chars.join(""), offsets, lineStarts };
-};
+var NON_SPACE = /\S/;
+var quotePattern = (quote) => new RegExp(
+  quote.split(" ").map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"),
+  "g"
+);
+var scan = (raw) => ({ raw, blank: !NON_SPACE.test(raw) });
 var normalize = (text) => text.replace(/\s+/g, " ").trim();
 var scanSources = (sources) => ({
   transcript: scan(sources.transcript),
   diff: scan(sources.diff)
 });
-var lineIndexOf = (lineStarts, offset) => {
-  let low = 0;
-  let high = lineStarts.length - 1;
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    if ((lineStarts[mid] ?? 0) <= offset) low = mid;
-    else high = mid - 1;
-  }
-  return low;
-};
+var lineStartAt = (raw, offset) => offset <= 0 ? 0 : raw.lastIndexOf("\n", offset - 1) + 1;
 var OCCURRENCE_LIMIT = 32;
 var occurrences = (source, quote) => {
   if (quote === "") return [];
+  const pattern = quotePattern(quote);
   const found = [];
-  let at = source.text.indexOf(quote);
-  while (at !== -1 && found.length < OCCURRENCE_LIMIT) {
-    found.push(at);
-    at = source.text.indexOf(quote, at + 1);
+  let from = 0;
+  while (found.length < OCCURRENCE_LIMIT && from <= source.raw.length) {
+    pattern.lastIndex = from;
+    const match = pattern.exec(source.raw);
+    if (match === null) break;
+    found.push({ start: match.index, end: match.index + match[0].length - 1 });
+    from = match.index + 1;
   }
   return found;
 };
-var neighbourhood = (source, start, length) => {
-  const rawStart = source.offsets[start] ?? 0;
-  const rawEnd = source.offsets[start + length - 1] ?? rawStart;
-  const first = Math.max(0, lineIndexOf(source.lineStarts, rawStart) - NEIGHBOUR_LINES);
-  const last = Math.min(
-    source.lineStarts.length - 1,
-    lineIndexOf(source.lineStarts, rawEnd) + NEIGHBOUR_LINES
-  );
-  const from = source.lineStarts[first] ?? 0;
-  const to = source.lineStarts[last + 1] ?? source.raw.length;
-  return source.raw.slice(from, to);
+var neighbourhood = (source, at) => {
+  const { raw } = source;
+  let from = lineStartAt(raw, at.start);
+  for (let back = 0; back < NEIGHBOUR_LINES && from > 0; back += 1) {
+    from = lineStartAt(raw, from - 1);
+  }
+  let to = raw.indexOf("\n", at.end);
+  for (let forward = 0; forward < NEIGHBOUR_LINES && to !== -1; forward += 1) {
+    to = raw.indexOf("\n", to + 1);
+  }
+  return raw.slice(from, to === -1 ? raw.length : to + 1);
 };
 var forMarkers = (text) => normalize(text).toLowerCase().replace(/[’‘]/g, "'");
 var hasOutcomeRejection = (window) => PAST_OUTCOME_PHRASES.some((phrase) => window.includes(phrase)) || PAST_OUTCOME_PATTERNS.some((pattern) => pattern.test(window));
 var hasRejectionContext = (source, quote) => {
   const normalized = normalize(quote);
   return occurrences(source, normalized).some((at) => {
-    const window = forMarkers(neighbourhood(source, at, normalized.length));
+    const window = forMarkers(neighbourhood(source, at));
     return REJECTION_MARKERS.some((marker) => window.includes(marker)) || hasOutcomeRejection(window);
   });
 };
@@ -12983,7 +12959,7 @@ var missingEvidence = (record2) => {
   return null;
 };
 var notFound = (cite, source) => {
-  const where = source.text === "" ? ` (the ${cite.source} is empty)` : "";
+  const where = source.blank ? ` (the ${cite.source} is empty)` : "";
   return `${cite.key}: the ${cite.source} does not contain "${brief(cite.quote)}"${where}`;
 };
 var unfoundEvidence = (record2, sources) => {
@@ -18430,7 +18406,9 @@ var verifyCaptureRecords = (opts) => {
         rejected: [],
         validation_result: "empty",
         incomplete: true,
-        overlap_check: "canonical_exact_only"
+        overlap_check: "canonical_exact_only",
+        reason: "locked",
+        detail: "another call is verifying this transaction; nothing was read and nothing was bound. Wait for it to finish, or prepare a new transaction."
       };
     }
     createdLock = lock.created;
@@ -18545,7 +18523,9 @@ var runVerifyCaptureRecords = (opts) => {
         rejected: [],
         validation_result: "empty",
         incomplete: true,
-        overlap_check: "canonical_exact_only"
+        overlap_check: "canonical_exact_only",
+        reason: "notes-unfetched",
+        detail: "the notes mirror on refs/notes/commitlore is not fetched here, so the duplicate check cannot run. Run `commitlore doctor --fix`, or fetch it directly: git fetch origin 'refs/notes/*:refs/notes/*' -- then verify again."
       };
       return settle(result3);
     }
@@ -18556,7 +18536,9 @@ var runVerifyCaptureRecords = (opts) => {
         rejected: [],
         validation_result: "empty",
         incomplete: true,
-        overlap_check: "canonical_exact_only"
+        overlap_check: "canonical_exact_only",
+        reason: "history-unavailable",
+        detail: "this repository's active records could not be read, so a draft cannot be checked against them. `commitlore doctor` reports which of the history, the index and the notes mirror is unreadable."
       };
       return settle(result3);
     }
@@ -18633,18 +18615,15 @@ var runVerifyCaptureRecords = (opts) => {
     return settle(result2);
   } catch (error2) {
     if (isUnreadablePendingFile(error2)) throw error2;
-    const result2 = {
+    return {
       accepted: [],
       rejected: [],
       validation_result: "empty",
       incomplete: true,
-      overlap_check: "canonical_exact_only"
+      overlap_check: "canonical_exact_only",
+      reason: "internal-error",
+      detail: messageOf2(error2)
     };
-    try {
-      persist(result2);
-    } catch {
-    }
-    return result2;
   }
 };
 var verifyCaptureRecordsReadOnly = (opts) => verifyCaptureRecords({ ...opts, readOnly: true });
@@ -19340,6 +19319,17 @@ commitlore capture: the built-in defaults were used for this capture
     cwd,
     ...replacing === void 0 ? {} : { replacing }
   });
+  if (verifyResult.reason !== void 0) {
+    const outcome = verifyResult.reason === "internal-error" ? "internal" : "operational";
+    return {
+      outcome,
+      nonce: prepareResult.nonce,
+      staged: false,
+      error: `Verification did not run (${verifyResult.reason}): ${verifyResult.detail ?? "no detail"} The transaction is still prepared, so verifying it again is the next move; nothing was bound and nothing was staged.`,
+      guard_advisory: prepareResult.guard_advisory,
+      rejected: draftRejections
+    };
+  }
   const rejected = [
     ...draftRejections,
     ...verifyResult.rejected.map((rejection, index) => ({
@@ -37255,6 +37245,9 @@ var Protocol = class {
       this.setRequestHandler(GetTaskPayloadRequestSchema, async (request, extra) => {
         const handleTaskResult = async () => {
           const taskId = request.params.taskId;
+          if (!await this._taskStore.getTask(taskId, extra.sessionId)) {
+            throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
+          }
           if (this._taskMessageQueue) {
             let queuedMessage;
             while (queuedMessage = await this._taskMessageQueue.dequeue(taskId, extra.sessionId)) {
@@ -37285,12 +37278,12 @@ var Protocol = class {
             throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
           }
           if (!isTerminal(task.status)) {
-            await this._waitForTaskUpdate(taskId, extra.signal);
+            await this._waitForTaskUpdate(taskId, extra.signal, extra.sessionId);
             return await handleTaskResult();
           }
           if (isTerminal(task.status)) {
             const result2 = await this._taskStore.getTaskResult(taskId, extra.sessionId);
-            this._clearTaskQueue(taskId);
+            this._clearTaskQueue(taskId, extra.sessionId);
             return {
               ...result2,
               _meta: {
@@ -37327,7 +37320,7 @@ var Protocol = class {
             throw new McpError(ErrorCode.InvalidParams, `Cannot cancel task in terminal status: ${task.status}`);
           }
           await this._taskStore.updateTaskStatus(request.params.taskId, "cancelled", "Client cancelled task execution.", extra.sessionId);
-          this._clearTaskQueue(request.params.taskId);
+          this._clearTaskQueue(request.params.taskId, extra.sessionId);
           const cancelledTask = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
           if (!cancelledTask) {
             throw new McpError(ErrorCode.InvalidParams, `Task not found after cancellation: ${request.params.taskId}`);
@@ -37455,6 +37448,19 @@ var Protocol = class {
     const handler = this._requestHandlers.get(request.method) ?? this.fallbackRequestHandler;
     const capturedTransport = this._transport;
     const relatedTaskId = request.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
+    const sessionId = capturedTransport?.sessionId;
+    const store = this._taskStore;
+    let relatedTaskFound = true;
+    let relatedTaskLookup;
+    if (relatedTaskId && store && this._taskMessageQueue && sessionId !== void 0) {
+      relatedTaskFound = false;
+      relatedTaskLookup = (async () => {
+        if (!await store.getTask(relatedTaskId, sessionId)) {
+          throw new McpError(ErrorCode.InvalidParams, `Task not found: ${relatedTaskId}`);
+        }
+        relatedTaskFound = true;
+      })();
+    }
     if (handler === void 0) {
       const errorResponse = {
         jsonrpc: "2.0",
@@ -37464,7 +37470,10 @@ var Protocol = class {
           message: "Method not found"
         }
       };
-      if (relatedTaskId && this._taskMessageQueue) {
+      if (relatedTaskId && relatedTaskLookup) {
+        const queuedError = { type: "error", message: errorResponse, timestamp: Date.now() };
+        relatedTaskLookup.then(() => this._enqueueTaskMessage(relatedTaskId, queuedError, sessionId), () => capturedTransport?.send(errorResponse)).catch((error2) => this._onerror(new Error(`Failed to send an error response: ${error2}`)));
+      } else if (relatedTaskId && this._taskMessageQueue) {
         this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
           message: errorResponse,
@@ -37515,7 +37524,10 @@ var Protocol = class {
       closeSSEStream: extra?.closeSSEStream,
       closeStandaloneSSEStream: extra?.closeStandaloneSSEStream
     };
-    Promise.resolve().then(() => {
+    (relatedTaskLookup ?? Promise.resolve()).then(() => {
+      if (relatedTaskLookup && abortController.signal.aborted) {
+        throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
+      }
       if (taskCreationParams) {
         this.assertTaskHandlerCapability(request.method);
       }
@@ -37550,7 +37562,7 @@ var Protocol = class {
           ...error2["data"] !== void 0 && { data: error2["data"] }
         }
       };
-      if (relatedTaskId && this._taskMessageQueue) {
+      if (relatedTaskId && this._taskMessageQueue && relatedTaskFound) {
         await this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
           message: errorResponse,
@@ -38030,7 +38042,7 @@ var Protocol = class {
       throw new Error("Cannot enqueue task message: taskStore and taskMessageQueue are not configured");
     }
     const maxQueueSize = this._options?.maxTaskQueueSize;
-    await this._taskMessageQueue.enqueue(taskId, message, sessionId, maxQueueSize);
+    await this._taskMessageQueue.enqueue(taskId, message, sessionId ?? this._transport?.sessionId, maxQueueSize);
   }
   /**
    * Clears the message queue for a task and rejects any pending request resolvers.
@@ -38059,12 +38071,13 @@ var Protocol = class {
    * Uses polling to check for updates at the task's configured poll interval.
    * @param taskId The task ID to wait for
    * @param signal Abort signal to cancel the wait
+   * @param sessionId Session of the request that waits, passed to the task store
    * @returns Promise that resolves when an update occurs or rejects if aborted
    */
-  async _waitForTaskUpdate(taskId, signal) {
+  async _waitForTaskUpdate(taskId, signal, sessionId) {
     let interval = this._options?.defaultTaskPollInterval ?? 1e3;
     try {
-      const task = await this._taskStore?.getTask(taskId);
+      const task = await this._taskStore?.getTask(taskId, sessionId);
       if (task?.pollInterval) {
         interval = task.pollInterval;
       }
@@ -40038,7 +40051,15 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         // will require once the three-step migration finishes; today stage
         // ignores it, so this field is additive and changes nothing a host
         // already does.
-        ...result2.receipt === void 0 ? {} : { receipt: result2.receipt }
+        ...result2.receipt === void 0 ? {} : { receipt: result2.receipt },
+        // Why an empty, incomplete answer is empty, when the verifier knows
+        // (#1169). Four causes shared one shape here -- unfetched notes, an
+        // unreadable history, a held lock, an internal error -- so a caller
+        // could not tell which, and the reporter diagnosed the wrong one.
+        // `reason` is a code to branch on; `detail` is a sentence for a person
+        // and names the move that resolves it.
+        ...result2.reason === void 0 ? {} : { reason: result2.reason },
+        ...result2.detail === void 0 ? {} : { detail: result2.detail }
       });
     },
     [STAGE_CAPTURE_TOOL]: (args) => {

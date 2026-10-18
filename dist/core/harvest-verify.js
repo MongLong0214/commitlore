@@ -137,7 +137,21 @@ const PAST_OUTCOME_PATTERNS = [
 const NEIGHBOUR_LINES = 1;
 /** Longest quote echoed back in a rejection detail. Details are read in terminals. */
 const DETAIL_LIMIT = 80;
-const SPACE = /\s/;
+const NON_SPACE = /\S/;
+/**
+ * `quote` as a pattern over the *original* text: its tokens, escaped, joined by
+ * `\s+`.
+ *
+ * This is the same normalisation read from the other end. The quote arrives
+ * already collapsed, so it holds no run of whitespace and no leading or
+ * trailing space, and every token is therefore whitespace-free. A match can
+ * only begin and end on a non-whitespace character, which is what makes the
+ * positions it reports the same ones a search over the collapsed copy reported.
+ */
+const quotePattern = (quote) => new RegExp(quote
+    .split(' ')
+    .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('\\s+'), 'g');
 /**
  * The entire normalisation this verifier performs, and the reason it is written
  * out by hand rather than as a one-line `replace`: the checks need to know
@@ -150,77 +164,63 @@ const SPACE = /\s/;
  * exactly the fabrications the module exists to catch, since a fabricated
  * sentence is by construction *almost* what was said.
  */
-const scan = (raw) => {
-    const chars = [];
-    const offsets = [];
-    let pendingSpace = false;
-    for (let index = 0; index < raw.length; index += 1) {
-        const char = raw[index] ?? '';
-        if (SPACE.test(char)) {
-            if (chars.length > 0)
-                pendingSpace = true;
-            continue;
-        }
-        if (pendingSpace) {
-            chars.push(' ');
-            offsets.push(index);
-            pendingSpace = false;
-        }
-        chars.push(char);
-        offsets.push(index);
-    }
-    const lineStarts = [0];
-    for (let index = 0; index < raw.length; index += 1) {
-        if (raw[index] === '\n')
-            lineStarts.push(index + 1);
-    }
-    return { raw, text: chars.join(''), offsets, lineStarts };
-};
+const scan = (raw) => ({ raw, blank: !NON_SPACE.test(raw) });
 /** The quote side of the same normalisation. */
 const normalize = (text) => text.replace(/\s+/g, ' ').trim();
 const scanSources = (sources) => ({
     transcript: scan(sources.transcript),
     diff: scan(sources.diff),
 });
-/** Which line of `raw` contains `offset`. */
-const lineIndexOf = (lineStarts, offset) => {
-    let low = 0;
-    let high = lineStarts.length - 1;
-    while (low < high) {
-        const mid = Math.ceil((low + high) / 2);
-        if ((lineStarts[mid] ?? 0) <= offset)
-            low = mid;
-        else
-            high = mid - 1;
-    }
-    return low;
-};
+/** Where the line containing `offset` begins. */
+const lineStartAt = (raw, offset) => offset <= 0 ? 0 : raw.lastIndexOf('\n', offset - 1) + 1;
 /**
  * Positions of `quote` in `source.text`, capped: a two-word quote can occur
  * hundreds of times in a diff, and the rejection-context scan only needs enough
  * occurrences to find one that is grounded.
  */
 const OCCURRENCE_LIMIT = 32;
+/**
+ * Advanced by one character per step, not by the length of the match: the
+ * collapsed-copy search this replaces used `indexOf(quote, at + 1)`, so
+ * overlapping occurrences counted, and the cap has to fall on the same ones.
+ */
 const occurrences = (source, quote) => {
     if (quote === '')
         return [];
+    const pattern = quotePattern(quote);
     const found = [];
-    let at = source.text.indexOf(quote);
-    while (at !== -1 && found.length < OCCURRENCE_LIMIT) {
-        found.push(at);
-        at = source.text.indexOf(quote, at + 1);
+    let from = 0;
+    while (found.length < OCCURRENCE_LIMIT && from <= source.raw.length) {
+        pattern.lastIndex = from;
+        const match = pattern.exec(source.raw);
+        if (match === null)
+            break;
+        found.push({ start: match.index, end: match.index + match[0].length - 1 });
+        from = match.index + 1;
     }
     return found;
 };
-/** The quoted lines plus `NEIGHBOUR_LINES` either side, as raw text. */
-const neighbourhood = (source, start, length) => {
-    const rawStart = source.offsets[start] ?? 0;
-    const rawEnd = source.offsets[start + length - 1] ?? rawStart;
-    const first = Math.max(0, lineIndexOf(source.lineStarts, rawStart) - NEIGHBOUR_LINES);
-    const last = Math.min(source.lineStarts.length - 1, lineIndexOf(source.lineStarts, rawEnd) + NEIGHBOUR_LINES);
-    const from = source.lineStarts[first] ?? 0;
-    const to = source.lineStarts[last + 1] ?? source.raw.length;
-    return source.raw.slice(from, to);
+/**
+ * The quoted lines plus `NEIGHBOUR_LINES` either side, as raw text.
+ *
+ * Found by walking out from the match rather than by indexing every line in the
+ * file: a transcript large enough to matter has no reason to pay for an array
+ * of its own line starts, and one made only of newlines would hit exactly the
+ * ceiling this module no longer goes near.
+ */
+const neighbourhood = (source, at) => {
+    const { raw } = source;
+    let from = lineStartAt(raw, at.start);
+    for (let back = 0; back < NEIGHBOUR_LINES && from > 0; back += 1) {
+        from = lineStartAt(raw, from - 1);
+    }
+    // `to` lands just past the newline that ends the last included line, which is
+    // where the next line used to start — the slice keeps that newline.
+    let to = raw.indexOf('\n', at.end);
+    for (let forward = 0; forward < NEIGHBOUR_LINES && to !== -1; forward += 1) {
+        to = raw.indexOf('\n', to + 1);
+    }
+    return raw.slice(from, to === -1 ? raw.length : to + 1);
 };
 /** Marker matching folds case and curly apostrophes; the quote check never does. */
 const forMarkers = (text) => normalize(text).toLowerCase().replace(/[’‘]/g, "'");
@@ -229,7 +229,7 @@ const hasOutcomeRejection = (window) => PAST_OUTCOME_PHRASES.some((phrase) => wi
 const hasRejectionContext = (source, quote) => {
     const normalized = normalize(quote);
     return occurrences(source, normalized).some((at) => {
-        const window = forMarkers(neighbourhood(source, at, normalized.length));
+        const window = forMarkers(neighbourhood(source, at));
         return REJECTION_MARKERS.some((marker) => window.includes(marker)) || hasOutcomeRejection(window);
     });
 };
@@ -288,7 +288,7 @@ const missingEvidence = (record) => {
     return null;
 };
 const notFound = (cite, source) => {
-    const where = source.text === '' ? ` (the ${cite.source} is empty)` : '';
+    const where = source.blank ? ` (the ${cite.source} is empty)` : '';
     return `${cite.key}: the ${cite.source} does not contain "${brief(cite.quote)}"${where}`;
 };
 /**

@@ -16,6 +16,7 @@
  *   empty one.
  * - Default maximum is one record per commit.
  */
+import { messageOf } from './capture-outcome.js';
 import { writeConsideration } from './commit-consideration.js';
 import { createHash } from 'node:crypto';
 import { verifyDraft } from './harvest-verify.js';
@@ -229,6 +230,9 @@ export const verifyCaptureRecords = (opts) => {
                 validation_result: 'empty',
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
+                reason: 'locked',
+                detail: 'another call is verifying this transaction; nothing was read and nothing was bound. ' +
+                    'Wait for it to finish, or prepare a new transaction.',
             };
         }
         createdLock = lock.created;
@@ -486,6 +490,10 @@ const runVerifyCaptureRecords = (opts) => {
                 validation_result: 'empty',
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
+                reason: 'notes-unfetched',
+                detail: 'the notes mirror on refs/notes/commitlore is not fetched here, so the duplicate ' +
+                    'check cannot run. Run `commitlore doctor --fix`, or fetch it directly: ' +
+                    "git fetch origin 'refs/notes/*:refs/notes/*' -- then verify again.",
             };
             return settle(result);
         }
@@ -499,6 +507,10 @@ const runVerifyCaptureRecords = (opts) => {
                 validation_result: 'empty',
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
+                reason: 'history-unavailable',
+                detail: "this repository's active records could not be read, so a draft cannot be checked " +
+                    'against them. `commitlore doctor` reports which of the history, the index and the ' +
+                    'notes mirror is unreadable.',
             };
             return settle(result);
         }
@@ -619,24 +631,28 @@ const runVerifyCaptureRecords = (opts) => {
         // established that the draft was checked, so an empty answer is "unknown",
         // not "nothing survived". Reporting `incomplete: false` told a caller the
         // opposite of what had happened.
-        const result = {
+        //
+        // And never binds. This used to `persist(result)`, which moves the
+        // transaction to `verified` and issues a receipt — so a verification that
+        // did not run took ownership of the nonce, the receipt was not returned
+        // with the result, and `stage` then refused the caller for presenting no
+        // receipt. A 118.7 MB transcript was reported as a receipt fault, and the
+        // transaction it left behind could never be staged by anyone (#1168).
+        //
+        // Leaving the transaction `prepared` keeps the one move that helps: verify
+        // the same nonce again with inputs this build can read — the same choice
+        // r-emptystaysprepared1021 made for an empty consideration. Nothing stale
+        // can be staged in the meantime, because `stageCaptureRecord` requires
+        // `verified`. And the exception is reported rather than inferred.
+        return {
             accepted: [],
             rejected: [],
             validation_result: 'empty',
             incomplete: true,
             overlap_check: 'canonical_exact_only',
+            reason: 'internal-error',
+            detail: messageOf(error),
         };
-        // The one exit that does not go through `settle`, and the only one where
-        // that is right: this result is already `empty` with `incomplete: true`,
-        // which is exactly what `settle` would substitute if the store refused. A
-        // failed store cannot change the answer, so it cannot be worth throwing for.
-        try {
-            persist(result);
-        }
-        catch {
-            // Never throw from the handler that exists so nothing throws.
-        }
-        return result;
     }
 };
 /**
