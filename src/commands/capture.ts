@@ -22,6 +22,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import type { Command } from 'commander';
 
 import { prepareCaptureContext } from '../core/capture-prepare.js';
+import { runPendingList } from './pending.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
 import { POLICY_FILE_NAME } from '../core/capture-policy.js';
@@ -88,6 +89,16 @@ export interface CaptureResult {
    */
   transcript_window?: TranscriptWindow;
   guard_advisory?: GuardAdvisory | null;
+  /**
+   * The nonces of staged transactions this stage replaced (#1170).
+   *
+   * A second capture on the same base and staged diff stages a second
+   * transaction; `prepare-commit-msg` applies the newest and passes over the
+   * rest. That was the rule and nothing reported it, so an author who captured
+   * again saw two staged transactions and later read `doctor` calling the
+   * earlier one a capture that expired and was dropped.
+   */
+  superseded?: string[];
   /**
    * Every reason a record was refused (#309). Both sources are included: the
    * draft parser, which rejects a shape, and the verifier, which rejects a
@@ -462,12 +473,26 @@ const runCapturePipeline = (opts: {
   }
 
   if (stagedNonce !== null) {
+    /*
+     * Which earlier transactions this stage replaced, read back from the files
+     * `stageCaptureRecord` just stamped.
+     *
+     * Reported because nothing did: a second capture on the same tree stages a
+     * second transaction, the commit hook applies the newest and passes over
+     * the rest, and the caller was told only that this one staged (#1170).
+     * Read rather than returned so the stamping can stay inside stage, where
+     * both the CLI and the MCP tool reach it.
+     */
+    const superseded = runPendingList({ cwd })
+      .transactions.filter((transaction) => transaction.superseded_by === stagedNonce)
+      .map((transaction) => transaction.nonce);
     return {
       outcome: 'staged',
       nonce: stagedNonce,
       staged: true,
       guard_advisory: prepareResult.guard_advisory,
       rejected,
+      ...(superseded.length === 0 ? {} : { superseded }),
     };
   }
   return {
@@ -511,6 +536,16 @@ const emitCaptureOutcome = (
     }
   } else if (result.staged) {
     process.stdout.write(`staged: ${result.nonce}\n`);
+    if (result.superseded !== undefined && result.superseded.length > 0) {
+      // Said out loud because the alternative is what #1170 reported: two
+      // staged transactions, the newest silently winning, and the other
+      // described later as a capture that expired and was dropped.
+      process.stdout.write(
+        `superseded ${result.superseded.join(', ')} — ${
+          result.superseded.length === 1 ? 'it was' : 'they were'
+        } staged for this same tree and the commit will carry this record instead\n`,
+      );
+    }
     if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
       process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):\n`);
       writeGuardMatches(result.guard_advisory);

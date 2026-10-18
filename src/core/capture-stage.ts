@@ -16,7 +16,8 @@
 import { writeConsideration } from './commit-consideration.js';
 import { createHash } from 'node:crypto';
 import { markCaptureError } from './capture-outcome.js';
-import { readPending, stagePending, type PendingRecord } from './pending.js';
+import { readPending, stagePending,
+  supersedeStagedSiblings, type PendingRecord } from './pending.js';
 import { POLICY_FILE_NAME, resolvePolicy } from './capture-policy.js';
 import { execGitOrThrow } from './git.js';
 
@@ -165,6 +166,24 @@ export const stageCaptureRecord = (opts: StageCaptureOptions): string | null => 
     expiryMinutes !== undefined ? { cwd, expiryMinutes } : { cwd };
   const success = stagePending(nonce, stageOpts);
   if (!success) return null;
+
+  /*
+   * A second stage on the same tree replaces the first, and now says so.
+   *
+   * `prepare-commit-msg` already applied only the newest candidate and passed
+   * over the rest. What was missing was anywhere that said which: the older
+   * transaction stayed `staged`, `pending ls` showed it `never-collected`, and
+   * `doctor` reported it as a capture that expired before reaching a commit and
+   * was dropped -- a lost decision, when it had been deliberately replaced
+   * (#1170). Stamped here rather than in either caller, because the CLI
+   * pipeline and the MCP tool both stage through this function.
+   *
+   * The stamp is a label, not a retirement. Withdraw the newer transaction and
+   * this one is the newest candidate again, so it stays protected from gc
+   * exactly as r-c44a1edb requires -- post-commit may still finalise a staged
+   * file, and that is true of this one the moment its replacement is gone.
+   */
+  supersedeStagedSiblings(nonce, { cwd });
 
   /*
    * The tree was considered and a record came out of it -- recorded here, in
