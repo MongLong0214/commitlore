@@ -4,6 +4,52 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.7.4
+
+Security, and the three capture faults a 118.7 MB transcript uncovered.
+
+- **Two production advisories are patched.** `@modelcontextprotocol/sdk` moves
+  to 1.32.1, closing a high-severity hole where an OAuth client could send
+  credentials to an authorization server the MCP server chose
+  ([GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h)),
+  and `proxy-addr` moves to 2.0.8 for a critical IP-spoofing advisory reached
+  through the SDK's express
+  ([GHSA-jqcg-44mw-7w3h](https://github.com/advisories/GHSA-jqcg-44mw-7w3h)).
+  `npm audit --omit=dev` reports 0.
+
+- **A large transcript can be verified at all (#1168).** The quote matcher built
+  one array element per character, and `Array.push` refuses past V8's
+  `FixedArray` ceiling — measured at 112,813,858 elements. The verifier caught
+  that `RangeError`, bound the transaction to an empty verification, withheld
+  the receipt it had just issued, and the CLI reported a missing receipt for what
+  was a size limit. Nothing proportional to the input is built now: a quote is
+  matched against the original text by a pattern that reproduces the whitespace
+  collapse, and the lines around a match are found by walking outward from it.
+  The matching rule is unchanged, and a new suite holds it to the rule the module
+  documents from both sides. A verification that cannot run no longer binds the
+  transaction, so the same nonce can be verified again.
+
+- **An empty verification says which empty it is (#1169).** Unfetched notes, an
+  unreadable history, a held lock and an internal error all answered
+  `{"validation_result":"empty","incomplete":true}` and nothing else. Each now
+  carries a `reason` code and a `detail` sentence naming the move that resolves
+  it — for unfetched notes, `commitlore doctor --fix` or fetching
+  `refs/notes/*`. `verify_capture` forwards both. The CLI reports the three host
+  conditions as `operational` and keeps `internal` for the exception nobody
+  anticipated.
+
+- **A staged capture can be withdrawn, and a replaced one is called replaced
+  (#1170).** `commitlore pending rm <nonce> --force` withdraws a `staged`
+  transaction before the commit; `applied` stays refused, because its trailer is
+  already in a commit message. A second stage on the same tree stamps
+  `superseded_by` on the earlier transactions it replaces, the capture output
+  names them, `pending ls` shows `superseded-by <nonce>`, and `doctor` reports
+  superseded captures as superseded instead of as captures that expired and were
+  dropped.
+
+This is a patch release: it repairs existing capture behavior and adds one flag,
+`pending rm --force`. No trailer key or host setting changes.
+
 ## 1.7.3
 
 - **A trailer paragraph that carries no record is no longer inherited as one
