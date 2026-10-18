@@ -230,6 +230,30 @@ const runCapturePipeline = (opts) => {
         cwd,
         ...(replacing === undefined ? {} : { replacing }),
     });
+    /*
+     * A verification that could not run is reported as that, and nothing else is
+     * attempted with it.
+     *
+     * Without this the pipeline walked on to stage, which refused the transaction
+     * for presenting no receipt -- a message about receipt handling, which was
+     * working, for a fault that was a `RangeError` inside the verifier. The
+     * reported case was a 118.7 MB transcript: the real cause never reached the
+     * output at all (#1168). `internal` is the outcome #543 reserved for an
+     * exception the code did not anticipate, and `detail` carries the exception's
+     * own message, which is where the cause is named.
+     */
+    if (verifyResult.reason !== undefined) {
+        return {
+            outcome: 'internal',
+            nonce: prepareResult.nonce,
+            staged: false,
+            error: `Verification did not run (${verifyResult.reason}): ${verifyResult.detail ?? 'no detail'}. ` +
+                'The transaction is still prepared, so verifying it again is the next move; ' +
+                'nothing was bound and nothing was staged.',
+            guard_advisory: prepareResult.guard_advisory,
+            rejected: draftRejections,
+        };
+    }
     const rejected = [
         ...draftRejections,
         ...verifyResult.rejected.map((rejection, index) => ({

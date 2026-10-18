@@ -12866,75 +12866,51 @@ var PAST_OUTCOME_PATTERNS = [
 ];
 var NEIGHBOUR_LINES = 1;
 var DETAIL_LIMIT = 80;
-var SPACE = /\s/;
-var scan = (raw) => {
-  const chars = [];
-  const offsets = [];
-  let pendingSpace = false;
-  for (let index = 0; index < raw.length; index += 1) {
-    const char = raw[index] ?? "";
-    if (SPACE.test(char)) {
-      if (chars.length > 0) pendingSpace = true;
-      continue;
-    }
-    if (pendingSpace) {
-      chars.push(" ");
-      offsets.push(index);
-      pendingSpace = false;
-    }
-    chars.push(char);
-    offsets.push(index);
-  }
-  const lineStarts = [0];
-  for (let index = 0; index < raw.length; index += 1) {
-    if (raw[index] === "\n") lineStarts.push(index + 1);
-  }
-  return { raw, text: chars.join(""), offsets, lineStarts };
-};
+var NON_SPACE = /\S/;
+var quotePattern = (quote) => new RegExp(
+  quote.split(" ").map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"),
+  "g"
+);
+var scan = (raw) => ({ raw, blank: !NON_SPACE.test(raw) });
 var normalize = (text) => text.replace(/\s+/g, " ").trim();
 var scanSources = (sources) => ({
   transcript: scan(sources.transcript),
   diff: scan(sources.diff)
 });
-var lineIndexOf = (lineStarts, offset) => {
-  let low = 0;
-  let high = lineStarts.length - 1;
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    if ((lineStarts[mid] ?? 0) <= offset) low = mid;
-    else high = mid - 1;
-  }
-  return low;
-};
+var lineStartAt = (raw, offset) => offset <= 0 ? 0 : raw.lastIndexOf("\n", offset - 1) + 1;
 var OCCURRENCE_LIMIT = 32;
 var occurrences = (source, quote) => {
   if (quote === "") return [];
+  const pattern = quotePattern(quote);
   const found = [];
-  let at = source.text.indexOf(quote);
-  while (at !== -1 && found.length < OCCURRENCE_LIMIT) {
-    found.push(at);
-    at = source.text.indexOf(quote, at + 1);
+  let from = 0;
+  while (found.length < OCCURRENCE_LIMIT && from <= source.raw.length) {
+    pattern.lastIndex = from;
+    const match = pattern.exec(source.raw);
+    if (match === null) break;
+    found.push({ start: match.index, end: match.index + match[0].length - 1 });
+    from = match.index + 1;
   }
   return found;
 };
-var neighbourhood = (source, start, length) => {
-  const rawStart = source.offsets[start] ?? 0;
-  const rawEnd = source.offsets[start + length - 1] ?? rawStart;
-  const first = Math.max(0, lineIndexOf(source.lineStarts, rawStart) - NEIGHBOUR_LINES);
-  const last = Math.min(
-    source.lineStarts.length - 1,
-    lineIndexOf(source.lineStarts, rawEnd) + NEIGHBOUR_LINES
-  );
-  const from = source.lineStarts[first] ?? 0;
-  const to = source.lineStarts[last + 1] ?? source.raw.length;
-  return source.raw.slice(from, to);
+var neighbourhood = (source, at) => {
+  const { raw } = source;
+  let from = lineStartAt(raw, at.start);
+  for (let back = 0; back < NEIGHBOUR_LINES && from > 0; back += 1) {
+    from = lineStartAt(raw, from - 1);
+  }
+  let to = raw.indexOf("\n", at.end);
+  for (let forward = 0; forward < NEIGHBOUR_LINES && to !== -1; forward += 1) {
+    to = raw.indexOf("\n", to + 1);
+  }
+  return raw.slice(from, to === -1 ? raw.length : to + 1);
 };
 var forMarkers = (text) => normalize(text).toLowerCase().replace(/[’‘]/g, "'");
 var hasOutcomeRejection = (window) => PAST_OUTCOME_PHRASES.some((phrase) => window.includes(phrase)) || PAST_OUTCOME_PATTERNS.some((pattern) => pattern.test(window));
 var hasRejectionContext = (source, quote) => {
   const normalized = normalize(quote);
   return occurrences(source, normalized).some((at) => {
-    const window = forMarkers(neighbourhood(source, at, normalized.length));
+    const window = forMarkers(neighbourhood(source, at));
     return REJECTION_MARKERS.some((marker) => window.includes(marker)) || hasOutcomeRejection(window);
   });
 };
@@ -12983,7 +12959,7 @@ var missingEvidence = (record2) => {
   return null;
 };
 var notFound = (cite, source) => {
-  const where = source.text === "" ? ` (the ${cite.source} is empty)` : "";
+  const where = source.blank ? ` (the ${cite.source} is empty)` : "";
   return `${cite.key}: the ${cite.source} does not contain "${brief(cite.quote)}"${where}`;
 };
 var unfoundEvidence = (record2, sources) => {
@@ -18633,18 +18609,15 @@ var runVerifyCaptureRecords = (opts) => {
     return settle(result2);
   } catch (error2) {
     if (isUnreadablePendingFile(error2)) throw error2;
-    const result2 = {
+    return {
       accepted: [],
       rejected: [],
       validation_result: "empty",
       incomplete: true,
-      overlap_check: "canonical_exact_only"
+      overlap_check: "canonical_exact_only",
+      reason: "internal-error",
+      detail: messageOf2(error2)
     };
-    try {
-      persist(result2);
-    } catch {
-    }
-    return result2;
   }
 };
 var verifyCaptureRecordsReadOnly = (opts) => verifyCaptureRecords({ ...opts, readOnly: true });
@@ -19340,6 +19313,16 @@ commitlore capture: the built-in defaults were used for this capture
     cwd,
     ...replacing === void 0 ? {} : { replacing }
   });
+  if (verifyResult.reason !== void 0) {
+    return {
+      outcome: "internal",
+      nonce: prepareResult.nonce,
+      staged: false,
+      error: `Verification did not run (${verifyResult.reason}): ${verifyResult.detail ?? "no detail"}. The transaction is still prepared, so verifying it again is the next move; nothing was bound and nothing was staged.`,
+      guard_advisory: prepareResult.guard_advisory,
+      rejected: draftRejections
+    };
+  }
   const rejected = [
     ...draftRejections,
     ...verifyResult.rejected.map((rejection, index) => ({
