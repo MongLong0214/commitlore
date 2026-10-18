@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "0933b1c5298ea89c26a2add1d1cc880a923b062bce5f285466daac1c93bd1764"
+    "sha256": "96bdc73b3ee79446b3476f90f6848e884bfdefe65f4d32e4bcd5ddca15097e56"
   },
   "artifact": {
-    "sha256": "b86d30c2ccf748e878d65f4cf3fdd1d050efa2591b36c17d083ea29465df728b",
+    "sha256": "13c333bf2a27aae95cefe71ca63c80a91b6ab209e3b3c700d8681c13021d229a",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -58,15 +58,15 @@
       },
       {
         "path": "dist/commands/capture.d.ts",
-        "sha256": "3eee711bb74f371d8298f56a4053fe3e8e6f0d79d1e12b2aaeb5e755ed3b2d95"
+        "sha256": "67254be9e01a28fbedacf262450b02ca18e0c9eeaf4a42b989909c983225ef6b"
       },
       {
         "path": "dist/commands/capture.js",
-        "sha256": "d964d9b3c9f1136590cecc54760ec1c8596fc0d8f967608e2a08509e37330b35"
+        "sha256": "a6b34d3bed05a135f70b6897043d4ce64dba678dbe6ec2d2a25f03ac56e9ce61"
       },
       {
         "path": "dist/commands/capture.js.map",
-        "sha256": "5bf3143c116bd1c04b6f1af6d659f7c7e2e8a5e7bd23adc4fd9b424ad839f708"
+        "sha256": "cd50331a782e0f58ca9ea3efdefe5c6c3e8a7c917f0ebc6ca30861e3dc3a4dfa"
       },
       {
         "path": "dist/commands/commit-guard.d.ts",
@@ -146,11 +146,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/capture-pending-backlog.js",
-        "sha256": "f161e4c9bec2eaca696c101c58afce5c41344e01b8cd3d402f7f568ad21e5aef"
+        "sha256": "bafb71bc3cb014afde1396ef9f978efa6d073a500135efa7705bd00656045a31"
       },
       {
         "path": "dist/commands/doctor/checks/capture-pending-backlog.js.map",
-        "sha256": "c3ca8538d1c2117dcda3aa90b45a5d64882f92a375ca3807819f5c896dfa763c"
+        "sha256": "69ea8c2f6dc88537ee22b565a02d3010d6f6e12933e27d63c2ce80256aa32153"
       },
       {
         "path": "dist/commands/doctor/checks/capture-policy-overlay.d.ts",
@@ -574,15 +574,15 @@
       },
       {
         "path": "dist/commands/pending.d.ts",
-        "sha256": "5fb3de75bbedc33af2ffb72feb7e2f460994dff46ec9dee7bdb5d8c315033af4"
+        "sha256": "e7e6775db6975aef50b2010d709f9e53a0a1576e709be9d9d4e913c2fa5642de"
       },
       {
         "path": "dist/commands/pending.js",
-        "sha256": "c2f578b498710b8039130babc8b153d49b962d1d138e1a7f8aa78da09ff696f1"
+        "sha256": "466e1a38af3f406ad70bae1cd89fe8ff342c13477b8b37d1f107f30564176591"
       },
       {
         "path": "dist/commands/pending.js.map",
-        "sha256": "7274b6c680358aedc3a702452af58cf8f7ed053ca14ac289ff4639599d2f7c68"
+        "sha256": "d50efd389e01c0e3aa6218a40f29abbe0f901386faf413488a3b9862907fb7a9"
       },
       {
         "path": "dist/commands/plugin.d.ts",
@@ -682,7 +682,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "97be0cc8ab50849d18af030cedc716af0be1cf6c85a919a944534422727a8428"
+        "sha256": "f56490048e6baedb9999019aeaef3a150f67659ef50a6de244dfd074456fe771"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -786,11 +786,11 @@
       },
       {
         "path": "dist/core/capture-stage.js",
-        "sha256": "a8052439ef95d4106989411d25d55b226609c18f44bcadd6221f41002596fc50"
+        "sha256": "65b3ba4d7aa4728fee00e44fbf372d1dd86531c89dab0822117bcf218d87cf38"
       },
       {
         "path": "dist/core/capture-stage.js.map",
-        "sha256": "17ce0296978bcfe0402a8f51434a1a4308ed7ac5d96762634d9437571e69a3fd"
+        "sha256": "1591ea937c9c21df7c30bfccf5cba4918860eb25fbf307a2d1927ea124941578"
       },
       {
         "path": "dist/core/capture-verify.d.ts",
@@ -1034,15 +1034,15 @@
       },
       {
         "path": "dist/core/pending.d.ts",
-        "sha256": "f7ba892dea30e82dfb41189b78dcfb691cadbad07e287a6ae1b04d6b6bb0781f"
+        "sha256": "5820517b5a96403a2101f93dc853c11c2b9440ecfa471153eebd72a94e2e648d"
       },
       {
         "path": "dist/core/pending.js",
-        "sha256": "6fc3d37eaadb51ee53ec8511207ab63938a3c591e8dd87a321d928bb603a4868"
+        "sha256": "dbf4876e2341f53992f6d0736a0d8f013abcba43126b8e098db8c6877baf2be5"
       },
       {
         "path": "dist/core/pending.js.map",
-        "sha256": "7decd209fe4a7acdb336822f9498eeba797d6a6c06fef2a2a3ab74a55e3727bb"
+        "sha256": "399b494e4e325566436dc301f4452fb42621543c9350f2a1278a87a078d83a41"
       },
       {
         "path": "dist/core/query.d.ts",

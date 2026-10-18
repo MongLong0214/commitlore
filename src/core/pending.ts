@@ -62,6 +62,21 @@ export interface PendingRecord {
   validation_result: 'pass' | 'partial' | 'empty' | null;
   overlap_check: 'canonical_exact_only' | null;
   incomplete: boolean;
+  /**
+   * The nonce of a later transaction that staged over this one (#1170).
+   *
+   * Two `staged` transactions can exist for the same base and the same staged
+   * diff -- capture again after staging and there are. `prepare-commit-msg`
+   * applies the newest and silently passes over the rest, so the older one is
+   * not waiting for anything: it is replaced. Nothing said so, and `doctor`
+   * described it as a capture that "expired before reaching a commit and
+   * [was] dropped", which reads as a lost decision rather than a superseded
+   * one.
+   *
+   * Absent on every transaction nothing replaced, so a repository that never
+   * re-captures writes byte-identical files.
+   */
+  superseded_by?: string;
   guard_advisory?: GuardAdvisory | null;
   /**
    * Present — and only ever `true` — when the capture declared itself
@@ -611,6 +626,64 @@ const stageUnderLock = (nonce: string, opts: StagePendingOptions): boolean => {
   const filePath = pendingFilePath(nonce, opts.cwd);
   atomicWriteJson(filePath, updated);
   return true;
+};
+
+/**
+ * Marks every other `staged` transaction bound to the same tree as superseded
+ * by `nonce`, and returns the ones marked (#1170).
+ *
+ * Bound to the same tree means the same `base_head` and the same
+ * `staged_diff_hash`: those are two of the five gates `prepare-commit-msg`
+ * applies, so a transaction that differs on either was never a candidate for
+ * this commit and is not replaced by this one. Among the candidates the hook
+ * takes the newest by `created_at` and passes over the rest
+ * (`compareCaptureCandidates`), and r-phaseunderlock989 records that the
+ * selection is not serialised with staging -- this writes the rule down rather
+ * than changing it.
+ *
+ * `applied` is deliberately not touched. Its trailer is already in a commit
+ * message and the post-commit hook is still owed the finalisation; it is not a
+ * rival to a transaction that has only just staged.
+ *
+ * Best-effort per sibling: a file that cannot be read or written is left alone
+ * rather than failing a stage that is otherwise complete. The cost of missing
+ * one is the row this exists to relabel, not a lost record.
+ */
+export const supersedeStagedSiblings = (nonce: string, opts: { cwd: string }): string[] => {
+  validateNonce(nonce);
+  const winner = readPending(nonce, { cwd: opts.cwd });
+  if (winner === null || winner.phase !== 'staged') return [];
+
+  const superseded: string[] = [];
+  for (const other of listPendingNonces(opts.cwd).nonces) {
+    if (other === nonce) continue;
+    let record: PendingRecord | null = null;
+    try {
+      record = readPending(other, { cwd: opts.cwd });
+    } catch {
+      continue;
+    }
+    if (record === null) continue;
+    if (record.phase !== 'staged') continue;
+    if (record.superseded_by !== undefined) continue;
+    if (record.base_head !== winner.base_head) continue;
+    if (record.staged_diff_hash !== winner.staged_diff_hash) continue;
+    if (record.created_at > winner.created_at) continue;
+
+    const lock = tryLockPending(other, opts.cwd);
+    if (!lock.held) continue;
+    try {
+      const fresh = readPending(other, { cwd: opts.cwd });
+      if (fresh === null || fresh.phase !== 'staged' || fresh.superseded_by !== undefined) continue;
+      atomicWriteJson(pendingFilePath(other, opts.cwd), { ...fresh, superseded_by: nonce });
+      superseded.push(other);
+    } catch {
+      // Left alone; see the doc comment.
+    } finally {
+      if (lock.created) unlockPending(other, opts.cwd);
+    }
+  }
+  return superseded;
 };
 
 export interface MarkAppliedOptions {

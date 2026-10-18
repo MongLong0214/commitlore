@@ -17980,6 +17980,39 @@ var stageUnderLock = (nonce, opts) => {
   atomicWriteJson(filePath, updated);
   return true;
 };
+var supersedeStagedSiblings = (nonce, opts) => {
+  validateNonce(nonce);
+  const winner = readPending(nonce, { cwd: opts.cwd });
+  if (winner === null || winner.phase !== "staged") return [];
+  const superseded = [];
+  for (const other of listPendingNonces(opts.cwd).nonces) {
+    if (other === nonce) continue;
+    let record2 = null;
+    try {
+      record2 = readPending(other, { cwd: opts.cwd });
+    } catch {
+      continue;
+    }
+    if (record2 === null) continue;
+    if (record2.phase !== "staged") continue;
+    if (record2.superseded_by !== void 0) continue;
+    if (record2.base_head !== winner.base_head) continue;
+    if (record2.staged_diff_hash !== winner.staged_diff_hash) continue;
+    if (record2.created_at > winner.created_at) continue;
+    const lock = tryLockPending(other, opts.cwd);
+    if (!lock.held) continue;
+    try {
+      const fresh = readPending(other, { cwd: opts.cwd });
+      if (fresh === null || fresh.phase !== "staged" || fresh.superseded_by !== void 0) continue;
+      atomicWriteJson(pendingFilePath(other, opts.cwd), { ...fresh, superseded_by: nonce });
+      superseded.push(other);
+    } catch {
+    } finally {
+      if (lock.created) unlockPending(other, opts.cwd);
+    }
+  }
+  return superseded;
+};
 var markApplied = (nonce, recordHash, opts) => {
   validateNonce(nonce);
   const lock = tryLockPending(nonce, opts.cwd);
@@ -18203,6 +18236,218 @@ var prepareCaptureContextReadOnly = (opts) => {
     guard_advisory: prepared.guard_advisory,
     pending: pending2
   };
+};
+
+// src/commands/pending.ts
+var PROTECTED_PHASES = /* @__PURE__ */ new Set(["staged", "applied"]);
+var gcEligible = (record2) => !PROTECTED_PHASES.has(record2.phase);
+var summarise = (record2, head) => ({
+  nonce: record2.nonce,
+  phase: record2.phase,
+  records: record2.records.length,
+  validation_result: record2.validation_result,
+  created_at: record2.created_at,
+  expires_at: record2.expires_at,
+  base_head: record2.base_head,
+  stale: pendingIsStale(record2, head),
+  gc_eligible: gcEligible(record2),
+  ...record2.superseded_by === void 0 ? {} : { superseded_by: record2.superseded_by }
+});
+var runPendingList = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const head = resolveHead(cwd);
+  const transactions = [];
+  const unreadable2 = [];
+  const listed = listPendingNonces(cwd);
+  if (listed.state === "unreadable") {
+    return { transactions, unreadable: unreadable2, state: listed.state, error: listed.error };
+  }
+  for (const nonce of listed.nonces) {
+    let record2 = null;
+    try {
+      record2 = readPending(nonce, { cwd });
+    } catch {
+      unreadable2.push(nonce);
+      continue;
+    }
+    if (record2 === null) {
+      unreadable2.push(nonce);
+      continue;
+    }
+    transactions.push(summarise(record2, head));
+  }
+  transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
+  return { transactions, unreadable: unreadable2, state: listed.state, error: listed.error };
+};
+var resolvePrefix = (cwd, prefix) => {
+  const wanted = prefix.trim().toLowerCase();
+  const listed = listPendingNonces(cwd);
+  if (listed.state === "unreadable") {
+    return { nonce: null, error: `pending state could not be read (${listed.error ?? "unknown"})` };
+  }
+  const candidates = listed.nonces.filter((nonce) => nonce.startsWith(wanted));
+  if (candidates.length === 0) {
+    return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
+  }
+  if (candidates.length > 1) {
+    return {
+      nonce: null,
+      error: `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions (${candidates.map((nonce) => nonce.slice(0, 8)).join(", ")}); give more of the nonce`
+    };
+  }
+  const [only = ""] = candidates;
+  return { nonce: only, error: null };
+};
+var runPendingShow = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { transaction: null, error: error2 };
+  let record2 = null;
+  try {
+    record2 = readPending(only, { cwd });
+  } catch (error3) {
+    const detail = error3 instanceof Error ? error3.message : String(error3);
+    return { transaction: null, error: `${only} could not be read: ${detail}` };
+  }
+  if (record2 === null) {
+    return { transaction: null, error: `${only} could not be read as a transaction` };
+  }
+  const head = resolveHead(cwd);
+  return {
+    transaction: {
+      ...record2,
+      stale: pendingIsStale(record2, head),
+      gc_eligible: gcEligible(record2)
+    },
+    error: null
+  };
+};
+var runPendingRemove = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { removed: null, phase: null, error: error2 };
+  let record2 = null;
+  try {
+    record2 = readPending(only, { cwd });
+  } catch (error3) {
+    const detail = error3 instanceof Error ? error3.message : String(error3);
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read: ${detail}; its phase is unknown, so it is left in place`
+    };
+  }
+  if (record2 === null) {
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`
+    };
+  }
+  const withdrawable = record2.phase === "staged" && opts.force === true;
+  if (PROTECTED_PHASES.has(record2.phase) && !withdrawable) {
+    const remedy = record2.phase === "staged" ? ` If you meant to withdraw it before the commit, run \`commitlore pending rm ${only} --force\`: the record it holds is dropped and the next commit carries nothing from it.` : "";
+    return {
+      removed: null,
+      phase: record2.phase,
+      error: `${only} is ${record2.phase}: the post-commit hook may still finalise it into a record, and removing it now would lose that. It is collected once the commit it belongs to lands.` + remedy
+    };
+  }
+  if (!deletePending(only, { cwd })) {
+    return { removed: null, phase: record2.phase, error: `${only} could not be removed` };
+  }
+  return { removed: only, phase: record2.phase, error: null };
+};
+var age = (from, now) => {
+  const started = Date.parse(from);
+  if (Number.isNaN(started)) return "?";
+  const minutes = Math.max(0, Math.round((now - started) / 6e4));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
+};
+var renderList = (result2, now) => {
+  if (result2.state === "unreadable") {
+    return `pending state could not be read (${result2.error ?? "unknown"}); no conclusion can be drawn
+`;
+  }
+  if (result2.transactions.length === 0 && result2.unreadable.length === 0) {
+    return "no pending capture transactions\n";
+  }
+  const lines = ["NONCE     PHASE     RECORDS  VALIDATION  AGE   BASE      FLAGS"];
+  for (const row of result2.transactions) {
+    const flags = [
+      row.superseded_by === void 0 ? row.stale ? "stale" : "" : `superseded-by ${row.superseded_by.slice(0, 8)}`,
+      row.gc_eligible ? "" : "never-collected"
+    ].filter((flag) => flag !== "").join(",");
+    lines.push(
+      [
+        row.nonce.slice(0, 8).padEnd(9),
+        row.phase.padEnd(9),
+        String(row.records).padEnd(8),
+        (row.validation_result ?? "-").padEnd(11),
+        age(row.created_at, now).padEnd(5),
+        row.base_head.slice(0, 8).padEnd(9),
+        flags
+      ].join(" ")
+    );
+  }
+  for (const nonce of result2.unreadable) {
+    lines.push(`${nonce.slice(0, 8)} unreadable`);
+  }
+  return `${lines.join("\n")}
+`;
+};
+var register3 = (program3) => {
+  const pending2 = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
+  pending2.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
+    const result2 = runPendingList({});
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result2, null, 2)}
+`);
+      if (result2.state === "unreadable") process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(renderList(result2, Date.now()));
+    if (result2.state === "unreadable") process.exitCode = 1;
+  });
+  pending2.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
+    const result2 = runPendingShow({ nonce });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result2, null, 2)}
+`);
+      if (result2.transaction === null) process.exitCode = 1;
+      return;
+    }
+    if (result2.transaction === null) {
+      process.stderr.write(`commitlore pending: ${result2.error ?? "not found"}
+`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`${JSON.stringify(result2.transaction, null, 2)}
+`);
+  });
+  pending2.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses an applied one, and a staged one without --force").option("--json", "emit structured JSON output").option(
+    "--force",
+    "withdraw a staged transaction before the commit: the record it holds is dropped"
+  ).action((nonce, options) => {
+    const result2 = runPendingRemove({ nonce, ...options.force === true ? { force: true } : {} });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result2, null, 2)}
+`);
+      if (result2.removed === null) process.exitCode = 1;
+      return;
+    }
+    if (result2.removed === null) {
+      process.stderr.write(`commitlore pending: ${result2.error ?? "not removed"}
+`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`removed ${result2.removed} (${result2.phase ?? "unknown"})
+`);
+  });
 };
 
 // src/core/commit-consideration.ts
@@ -18708,6 +18953,7 @@ var stageCaptureRecord = (opts) => {
   const stageOpts = expiryMinutes !== void 0 ? { cwd, expiryMinutes } : { cwd };
   const success3 = stagePending(nonce, stageOpts);
   if (!success3) return null;
+  supersedeStagedSiblings(nonce, { cwd });
   writeConsideration({ cwd, outcome: "recorded", records: 1 });
   return nonce;
 };
@@ -19035,7 +19281,7 @@ import { existsSync as existsSync6, readdirSync as readdirSync2, readFileSync as
 import { resolve as resolve5 } from "node:path";
 var CONSUMED_RETENTION_MS = 24 * 60 * 60 * 1e3;
 var UNSTAMPED_RETENTION_MS = 24 * 60 * 60 * 1e3;
-var PROTECTED_PHASES = /* @__PURE__ */ new Set(["staged", "applied"]);
+var PROTECTED_PHASES2 = /* @__PURE__ */ new Set(["staged", "applied"]);
 var UNSTAMPED_PHASES = /* @__PURE__ */ new Set(["prepared", "verified"]);
 var KNOWN_PHASES = /* @__PURE__ */ new Set(["prepared", "verified", "staged", "applied", "consumed"]);
 var resolvePendingDir = (cwd) => {
@@ -19085,7 +19331,7 @@ var gcPending = (cwd) => {
       kept.push(file);
       continue;
     }
-    if (PROTECTED_PHASES.has(phase)) {
+    if (PROTECTED_PHASES2.has(phase)) {
       kept.push(file);
       continue;
     }
@@ -19365,12 +19611,14 @@ commitlore capture: the built-in defaults were used for this capture
     return { ...failureResult(error2), guard_advisory: prepareResult.guard_advisory, rejected };
   }
   if (stagedNonce !== null) {
+    const superseded = runPendingList({ cwd }).transactions.filter((transaction) => transaction.superseded_by === stagedNonce).map((transaction) => transaction.nonce);
     return {
       outcome: "staged",
       nonce: stagedNonce,
       staged: true,
       guard_advisory: prepareResult.guard_advisory,
-      rejected
+      rejected,
+      ...superseded.length === 0 ? {} : { superseded }
     };
   }
   return {
@@ -19411,6 +19659,12 @@ var emitCaptureOutcome = (result2, opts) => {
   } else if (result2.staged) {
     process.stdout.write(`staged: ${result2.nonce}
 `);
+    if (result2.superseded !== void 0 && result2.superseded.length > 0) {
+      process.stdout.write(
+        `superseded ${result2.superseded.join(", ")} \u2014 ${result2.superseded.length === 1 ? "it was" : "they were"} staged for this same tree and the commit will carry this record instead
+`
+      );
+    }
     if (result2.guard_advisory && result2.guard_advisory.matches.length > 0) {
       process.stdout.write(`guard advisory (${result2.guard_advisory.disclosure}):
 `);
@@ -19432,7 +19686,7 @@ var emitCaptureOutcome = (result2, opts) => {
   }
   process.exitCode = exitCodeForCaptureOutcome(result2.outcome);
 };
-var register3 = (program3) => {
+var register4 = (program3) => {
   const capture = program3.command("capture").description(
     "prepare \u2192 verify \u2192 stage a record from a transcript and draft (no trailer syntax needed)"
   ).option(
@@ -20040,7 +20294,7 @@ var recordAmendIntent = (cwd, source, sha) => {
   } catch {
   }
 };
-var register4 = (program3) => {
+var register5 = (program3) => {
   program3.command("prepare-commit-msg").argument("<message-file>").argument("[source]").argument("[sha]").description("internal hook command: append records from a local squash draft").action((messageFile, source, sha) => {
     recordAmendIntent(process.cwd(), source, sha);
     preserveSquashRecords(messageFile);
@@ -20346,7 +20600,7 @@ var evaluationInstant = (raw) => {
   }
   return parsed;
 };
-var register5 = (program3) => {
+var register6 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -20953,7 +21207,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register6 = (program3) => {
+var register7 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710),\n3 this installation is missing a file it ships, so nothing was examined."
@@ -21180,7 +21434,7 @@ var exitCodeFor = (outcome) => {
       return 2;
   }
 };
-var register7 = (program3) => {
+var register8 = (program3) => {
   program3.command("commit").description("consider this change and commit it in one call; recording nothing is a complete answer").requiredOption("-m, --message <message>", "the commit message, subject and body").option("--transcript <path>", "the session transcript the records are checked against").option("--records <path>", "a draft JSON file; omit it to commit with nothing recorded").option("--none", "state that there is nothing to record (the same as omitting --records)").option("--amend", "amend the previous commit rather than making a new one").option("-a, --all", "stage tracked changes first \u2014 unlike git commit -a, they stay staged if the commit is refused").option("--no-commit", "verify and bind without committing, and run git commit yourself").option("--json", "emit the result as JSON").addHelpText(
     "after",
     '\nOne call in place of prepare -> draft -> verify -> stage -> git commit. It composes no message of its own: the records reach the commit through the installed prepare-commit-msg hook, the same way they do when you stage a capture and commit by hand.\n\nRecording nothing is normal and expected. Most commits carry nothing a diff cannot show, and `commitlore commit -m "..."` with no --records is the complete answer for them -- not a shortfall, and nothing downstream asks for more.\n\nAll or nothing: if any record fails verification the commit does not happen and nothing is bound, because committing the survivors would hide the refusal at the moment it matters. Correct the quotes against the transcript, or commit with no records.\n\nExit codes: 0 committed (with or without a record) or bound; 1 a record was refused, git refused the commit, or the message that landed carries no record; 2 nothing was committed because nothing could be attempted -- not a repository, nothing staged, no hook to apply a record -- or because the capture itself failed, such as a draft holding more records than max_records_per_commit allows.'
@@ -21529,7 +21783,7 @@ var liveWorld = () => ({
     return { ...counted, empty: counted.files === 0 };
   }
 });
-var register8 = (program3) => {
+var register9 = (program3) => {
   program3.command("commit-guard").description("decide whether a Bash tool call may commit an unconsidered tree (for a PreToolUse hook)").option("--hook-input", "read a PreToolUse payload on stdin").option("--command <command>", "grade this command instead of reading a payload").addHelpText(
     "after",
     "\nExit codes: 2 refuse the tool call, with the reason on stderr for the agent; 0 allow it. Never 1 -- every failure of this command is an allow, because a gate that blocks on its own confusion is one people disable.\n\nIt asks whether the tree was considered, never whether a record exists. `records: []` satisfies it exactly as completely as ten records do."
@@ -22842,7 +23096,7 @@ var runPostCommitFinaliser = (cwd) => {
     return;
   }
 };
-var register9 = (program3) => {
+var register10 = (program3) => {
   program3.command("post-commit").description("internal hook command: finalise pending capture consumption after a successful commit").action(() => {
     try {
       runPostCommitFinaliser(process.cwd());
@@ -23031,7 +23285,7 @@ var describeSync = (results, hasLocalRecords = null) => results.filter((result2)
   (result2) => result2.outcome === "diverged" ? `commitlore: notes mirror (${result2.remote}) diverged: ${oneLine2(result2.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it \u2014 run "commitlore sync" to merge them.` : hasLocalRecords === false ? `commitlore: notes mirror (${result2.remote}) failed: ${saidWhy(result2.detail)}. The branch was pushed. Nothing is waiting locally, so nothing was lost.` : `commitlore: notes mirror (${result2.remote}) failed: ${saidWhy(result2.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`
 );
 var notesPushEnv = () => nonInteractiveGitEnv(process.env, () => execGit(["config", "--get", "core.sshCommand"]).code === 0);
-var register10 = (program3) => {
+var register11 = (program3) => {
   program3.command(PRE_PUSH_HOOK_NAME).argument("[remote]", "the remote git is pushing to").argument("[url]", "its URL, as git passes it").description("internal hook command: publish the notes mirror alongside a push").action((remote) => {
     const hasLocalRecords = localRecordsExist();
     try {
@@ -23331,7 +23585,7 @@ var emit = (result2) => {
   if (result2.stderr !== "") process.stderr.write(result2.stderr);
   if (result2.code !== 0) process.exitCode = result2.code;
 };
-var register11 = (program3) => {
+var register12 = (program3) => {
   const hooks = program3.command("hooks").description(
     `manage commitlore's git hooks: the ${HOOK_NAME} hook that runs commitlore validate, and the two hooks init installs beside it`
   );
@@ -23716,209 +23970,6 @@ var checkHookRuntime = (ctx) => {
   }
 };
 
-// src/commands/pending.ts
-var PROTECTED_PHASES2 = /* @__PURE__ */ new Set(["staged", "applied"]);
-var gcEligible = (record2) => !PROTECTED_PHASES2.has(record2.phase);
-var summarise = (record2, head) => ({
-  nonce: record2.nonce,
-  phase: record2.phase,
-  records: record2.records.length,
-  validation_result: record2.validation_result,
-  created_at: record2.created_at,
-  expires_at: record2.expires_at,
-  base_head: record2.base_head,
-  stale: pendingIsStale(record2, head),
-  gc_eligible: gcEligible(record2)
-});
-var runPendingList = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const head = resolveHead(cwd);
-  const transactions = [];
-  const unreadable2 = [];
-  const listed = listPendingNonces(cwd);
-  if (listed.state === "unreadable") {
-    return { transactions, unreadable: unreadable2, state: listed.state, error: listed.error };
-  }
-  for (const nonce of listed.nonces) {
-    let record2 = null;
-    try {
-      record2 = readPending(nonce, { cwd });
-    } catch {
-      unreadable2.push(nonce);
-      continue;
-    }
-    if (record2 === null) {
-      unreadable2.push(nonce);
-      continue;
-    }
-    transactions.push(summarise(record2, head));
-  }
-  transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
-  return { transactions, unreadable: unreadable2, state: listed.state, error: listed.error };
-};
-var resolvePrefix = (cwd, prefix) => {
-  const wanted = prefix.trim().toLowerCase();
-  const listed = listPendingNonces(cwd);
-  if (listed.state === "unreadable") {
-    return { nonce: null, error: `pending state could not be read (${listed.error ?? "unknown"})` };
-  }
-  const candidates = listed.nonces.filter((nonce) => nonce.startsWith(wanted));
-  if (candidates.length === 0) {
-    return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
-  }
-  if (candidates.length > 1) {
-    return {
-      nonce: null,
-      error: `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions (${candidates.map((nonce) => nonce.slice(0, 8)).join(", ")}); give more of the nonce`
-    };
-  }
-  const [only = ""] = candidates;
-  return { nonce: only, error: null };
-};
-var runPendingShow = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
-  if (only === null) return { transaction: null, error: error2 };
-  let record2 = null;
-  try {
-    record2 = readPending(only, { cwd });
-  } catch (error3) {
-    const detail = error3 instanceof Error ? error3.message : String(error3);
-    return { transaction: null, error: `${only} could not be read: ${detail}` };
-  }
-  if (record2 === null) {
-    return { transaction: null, error: `${only} could not be read as a transaction` };
-  }
-  const head = resolveHead(cwd);
-  return {
-    transaction: {
-      ...record2,
-      stale: pendingIsStale(record2, head),
-      gc_eligible: gcEligible(record2)
-    },
-    error: null
-  };
-};
-var runPendingRemove = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
-  if (only === null) return { removed: null, phase: null, error: error2 };
-  let record2 = null;
-  try {
-    record2 = readPending(only, { cwd });
-  } catch (error3) {
-    const detail = error3 instanceof Error ? error3.message : String(error3);
-    return {
-      removed: null,
-      phase: null,
-      error: `${only} could not be read: ${detail}; its phase is unknown, so it is left in place`
-    };
-  }
-  if (record2 === null) {
-    return {
-      removed: null,
-      phase: null,
-      error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`
-    };
-  }
-  if (PROTECTED_PHASES2.has(record2.phase)) {
-    return {
-      removed: null,
-      phase: record2.phase,
-      error: `${only} is ${record2.phase}: the post-commit hook may still finalise it into a record, and removing it now would lose that. It is collected once the commit it belongs to lands.`
-    };
-  }
-  if (!deletePending(only, { cwd })) {
-    return { removed: null, phase: record2.phase, error: `${only} could not be removed` };
-  }
-  return { removed: only, phase: record2.phase, error: null };
-};
-var age = (from, now) => {
-  const started = Date.parse(from);
-  if (Number.isNaN(started)) return "?";
-  const minutes = Math.max(0, Math.round((now - started) / 6e4));
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
-};
-var renderList = (result2, now) => {
-  if (result2.state === "unreadable") {
-    return `pending state could not be read (${result2.error ?? "unknown"}); no conclusion can be drawn
-`;
-  }
-  if (result2.transactions.length === 0 && result2.unreadable.length === 0) {
-    return "no pending capture transactions\n";
-  }
-  const lines = ["NONCE     PHASE     RECORDS  VALIDATION  AGE   BASE      FLAGS"];
-  for (const row of result2.transactions) {
-    const flags = [row.stale ? "stale" : "", row.gc_eligible ? "" : "never-collected"].filter((flag) => flag !== "").join(",");
-    lines.push(
-      [
-        row.nonce.slice(0, 8).padEnd(9),
-        row.phase.padEnd(9),
-        String(row.records).padEnd(8),
-        (row.validation_result ?? "-").padEnd(11),
-        age(row.created_at, now).padEnd(5),
-        row.base_head.slice(0, 8).padEnd(9),
-        flags
-      ].join(" ")
-    );
-  }
-  for (const nonce of result2.unreadable) {
-    lines.push(`${nonce.slice(0, 8)} unreadable`);
-  }
-  return `${lines.join("\n")}
-`;
-};
-var register12 = (program3) => {
-  const pending2 = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
-  pending2.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
-    const result2 = runPendingList({});
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result2, null, 2)}
-`);
-      if (result2.state === "unreadable") process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(renderList(result2, Date.now()));
-    if (result2.state === "unreadable") process.exitCode = 1;
-  });
-  pending2.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
-    const result2 = runPendingShow({ nonce });
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result2, null, 2)}
-`);
-      if (result2.transaction === null) process.exitCode = 1;
-      return;
-    }
-    if (result2.transaction === null) {
-      process.stderr.write(`commitlore pending: ${result2.error ?? "not found"}
-`);
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`${JSON.stringify(result2.transaction, null, 2)}
-`);
-  });
-  pending2.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses a staged or applied one").option("--json", "emit structured JSON output").action((nonce, options) => {
-    const result2 = runPendingRemove({ nonce });
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result2, null, 2)}
-`);
-      if (result2.removed === null) process.exitCode = 1;
-      return;
-    }
-    if (result2.removed === null) {
-      process.stderr.write(`commitlore pending: ${result2.error ?? "not removed"}
-`);
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`removed ${result2.removed} (${result2.phase ?? "unknown"})
-`);
-  });
-};
-
 // src/commands/doctor/checks/capture-pending-backlog.ts
 var reachedHistory = (cwd, nonces) => {
   const values = [];
@@ -24040,9 +24091,17 @@ var checkPendingBacklog = (ctx) => {
       }
     );
   }
-  const lost = stranded.filter((transaction) => transaction.phase === "staged");
+  const replaced = stranded.filter((transaction) => transaction.superseded_by !== void 0);
+  const lost = stranded.filter(
+    (transaction) => transaction.phase === "staged" && transaction.superseded_by === void 0
+  );
   const oldest = stranded.map((transaction) => transaction.created_at).sort()[0];
-  const detail = lost.length > 0 ? `${String(lost.length)} staged capture(s) expired before reaching a commit and were dropped` + (stranded.length > lost.length ? `, alongside ${String(stranded.length - lost.length)} earlier draft(s) that never staged` : "") : `${String(stranded.length)} capture(s) can no longer apply \u2014 their base commit is no longer HEAD`;
+  const others = stranded.length - lost.length - replaced.length;
+  const alongside = [
+    replaced.length > 0 ? `${String(replaced.length)} superseded by a later capture` : "",
+    others > 0 ? `${String(others)} earlier draft(s) that never staged` : ""
+  ].filter((part) => part !== "");
+  const detail = lost.length > 0 ? `${String(lost.length)} staged capture(s) expired before reaching a commit and were dropped` + (alongside.length > 0 ? `, alongside ${alongside.join(" and ")}` : "") : replaced.length === stranded.length ? `${String(replaced.length)} capture(s) were superseded by a later capture on the same tree \u2014 nothing was dropped, and \`capture gc\` collects them` : `${String(stranded.length)} capture(s) can no longer apply \u2014 their base commit is no longer HEAD` + (replaced.length > 0 ? `, ${String(replaced.length)} of them superseded by a later capture rather than dropped` : "");
   const reached = lost.length > 0 ? reachedHistory(
     cwd,
     stranded.filter((transaction) => transaction.phase === "staged").map((t) => t.nonce)
@@ -24065,6 +24124,7 @@ var checkPendingBacklog = (ctx) => {
       evidence: {
         stranded: String(stranded.length),
         staged_expired: String(lost.length),
+        superseded: String(replaced.length),
         oldest: oldest ?? "unknown"
       }
     }
@@ -41085,13 +41145,13 @@ program2.command("internal", { hidden: true }).command("mcp-probe", { hidden: tr
   await internalMcpProbe(options.command, options.argsJson);
 });
 register28(program2);
-register10(program2);
-register6(program2);
-registerUninstall(program2);
 register11(program2);
+register7(program2);
+registerUninstall(program2);
+register12(program2);
 register21(program2);
 register24(program2);
-register5(program2);
+register6(program2);
 register14(program2);
 register13(program2);
 register15(program2);
@@ -41100,17 +41160,17 @@ register17(program2);
 register19(program2);
 register20(program2);
 register27(program2);
-register4(program2);
-register9(program2);
+register5(program2);
+register10(program2);
 register18(program2);
 register22(program2);
 register(program2);
-register3(program2);
-register7(program2);
+register4(program2);
 register8(program2);
+register9(program2);
 register16(program2);
 register25(program2);
-register12(program2);
+register3(program2);
 register26(program2);
 register23(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([

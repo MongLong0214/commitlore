@@ -445,6 +445,75 @@ const stageUnderLock = (nonce, opts) => {
     return true;
 };
 /**
+ * Marks every other `staged` transaction bound to the same tree as superseded
+ * by `nonce`, and returns the ones marked (#1170).
+ *
+ * Bound to the same tree means the same `base_head` and the same
+ * `staged_diff_hash`: those are two of the five gates `prepare-commit-msg`
+ * applies, so a transaction that differs on either was never a candidate for
+ * this commit and is not replaced by this one. Among the candidates the hook
+ * takes the newest by `created_at` and passes over the rest
+ * (`compareCaptureCandidates`), and r-phaseunderlock989 records that the
+ * selection is not serialised with staging -- this writes the rule down rather
+ * than changing it.
+ *
+ * `applied` is deliberately not touched. Its trailer is already in a commit
+ * message and the post-commit hook is still owed the finalisation; it is not a
+ * rival to a transaction that has only just staged.
+ *
+ * Best-effort per sibling: a file that cannot be read or written is left alone
+ * rather than failing a stage that is otherwise complete. The cost of missing
+ * one is the row this exists to relabel, not a lost record.
+ */
+export const supersedeStagedSiblings = (nonce, opts) => {
+    validateNonce(nonce);
+    const winner = readPending(nonce, { cwd: opts.cwd });
+    if (winner === null || winner.phase !== 'staged')
+        return [];
+    const superseded = [];
+    for (const other of listPendingNonces(opts.cwd).nonces) {
+        if (other === nonce)
+            continue;
+        let record = null;
+        try {
+            record = readPending(other, { cwd: opts.cwd });
+        }
+        catch {
+            continue;
+        }
+        if (record === null)
+            continue;
+        if (record.phase !== 'staged')
+            continue;
+        if (record.superseded_by !== undefined)
+            continue;
+        if (record.base_head !== winner.base_head)
+            continue;
+        if (record.staged_diff_hash !== winner.staged_diff_hash)
+            continue;
+        if (record.created_at > winner.created_at)
+            continue;
+        const lock = tryLockPending(other, opts.cwd);
+        if (!lock.held)
+            continue;
+        try {
+            const fresh = readPending(other, { cwd: opts.cwd });
+            if (fresh === null || fresh.phase !== 'staged' || fresh.superseded_by !== undefined)
+                continue;
+            atomicWriteJson(pendingFilePath(other, opts.cwd), { ...fresh, superseded_by: nonce });
+            superseded.push(other);
+        }
+        catch {
+            // Left alone; see the doc comment.
+        }
+        finally {
+            if (lock.created)
+                unlockPending(other, opts.cwd);
+        }
+    }
+    return superseded;
+};
+/**
  * Records that the pending transaction was applied (trailer appended to commit message).
  * Only succeeds if phase is 'staged'.
  */

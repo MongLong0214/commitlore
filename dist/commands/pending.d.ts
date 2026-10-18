@@ -35,6 +35,8 @@ export interface PendingSummary {
     base_head: string;
     /** `base_head` is no longer HEAD and nothing consumed it, so it cannot apply. */
     stale: boolean;
+    /** The nonce that staged over this one, when a later stage replaced it (#1170). */
+    superseded_by?: string;
     /** Whether `capture gc` would ever remove this file. */
     gc_eligible: boolean;
 }
@@ -80,9 +82,21 @@ export declare const runPendingShow: (opts: {
  * and there is no way to tell that from a file they are tired of seeing. It
  * refuses a file it cannot read for the same reason inverted: an unknown phase
  * might be one of those two.
+ *
+ * `force` is how a person says which it is, for `staged` only (#1170). The
+ * reported case was a staged record whose wording turned out to be wrong, found
+ * at the one moment it is worth fixing, with no supported way to withdraw it:
+ * `rm` refused, and capturing again left two staged transactions where the hook
+ * silently applied the newer. A `staged` transaction has not reached a commit,
+ * so withdrawing it costs exactly the record the caller is asking to drop.
+ *
+ * `applied` stays refused even with `force`. Its trailer is already in a commit
+ * message and only the post-commit hook can finish the job; removing it would
+ * lose a record that is already in history, which is not a withdrawal.
  */
 export declare const runPendingRemove: (opts: {
     cwd?: string;
     nonce: string;
+    force?: boolean;
 }) => PendingRemoveResult;
 export declare const register: (program: Command) => void;
