@@ -1393,3 +1393,89 @@ describe('commitlore_prepare_capture unattended declaration (#511)', () => {
     expect(content[0]?.text).toContain('unattended must be a boolean');
   });
 });
+
+/**
+ * bug-issue-1169: `commitlore_verify_capture` says which empty it is.
+ *
+ * The reported call was made in a clone whose notes were never fetched, and the
+ * answer was `{"validation_result":"empty","accepted":[],"rejected":[],
+ * "incomplete":true,"overlap_check":"canonical_exact_only"}` — the same shape a
+ * held lock, an unreadable history and an internal error produced. Nothing in
+ * it said to fetch `refs/notes/*`, although `context` and `doctor` already knew
+ * how to say so.
+ *
+ * This is the tool's own response rather than the core result: the handler
+ * builds its payload field by field, so a field the core adds reaches a host
+ * only if this one is changed too.
+ */
+describe('commitlore_verify_capture names an unfetched notes mirror (bug-issue-1169)', () => {
+  let clone: string;
+  let stub: Stub;
+
+  const TRANSCRIPT = 'We decided to keep the retry ceiling at three attempts.\n';
+  const RECORD = {
+    trailers: [{ key: 'Limit', value: 'the retry ceiling stays at three attempts' }],
+    evidence: [
+      {
+        key: 'Limit',
+        source: 'transcript',
+        quote: 'We decided to keep the retry ceiling at three attempts.',
+        locator: 'L1-L1',
+      },
+    ],
+  };
+
+  beforeAll(async () => {
+    const origin = makeRepo();
+    // A record on the mirror, so the clone is missing something rather than
+    // having nothing to miss.
+    const head = execGitOrThrow(['-C', origin, 'rev-parse', 'HEAD'], { cwd: origin }).trim();
+    execGitOrThrow(
+      [...GIT_CONFIG, '-C', origin, 'notes', '--ref=commitlore', 'add', '-m', 'Limit: the vendor caps us at three workers', head],
+      { cwd: origin },
+    );
+
+    clone = mkdtempSync(join(tmpdir(), 'commitlore-mcp-nonotes-'));
+    temporaries.push(clone);
+    rmSync(clone, { recursive: true, force: true });
+    execGitOrThrow(['clone', '--quiet', '--template=', origin, clone], { cwd: tmpdir() });
+    writeFileSync(join(clone, 'queue.ts'), 'export const retries = 2;\n');
+    execGitOrThrow([...GIT_CONFIG, '-C', clone, 'add', '-A'], { cwd: clone });
+
+    stub = startStub(clone);
+    await stub.request('initialize', {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 'test', version: '0' },
+    });
+  });
+
+  afterAll(() => {
+    stub?.close();
+  });
+
+  it('carries the reason and the fetch that resolves it', async () => {
+    const prepared = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: TRANSCRIPT },
+    });
+    const nonce = toolJson(prepared)['nonce'] as string;
+    const diff = execGitOrThrow([...GIT_CONFIG, '-C', clone, 'diff', '--cached'], { cwd: clone });
+
+    const verified = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: { nonce, draft: JSON.stringify({ records: [RECORD] }), transcript: TRANSCRIPT, diff },
+    });
+    const payload = toolJson(verified);
+
+    // Arrival: the reported shape, not some other refusal.
+    expect(payload['validation_result']).toBe('empty');
+    expect(payload['incomplete']).toBe(true);
+    expect(payload['accepted']).toEqual([]);
+    expect(payload['receipt']).toBeUndefined();
+
+    expect(payload['reason']).toBe('notes-unfetched');
+    expect(String(payload['detail'])).toContain('refs/notes');
+    expect(String(payload['detail'])).toContain('doctor --fix');
+  });
+});

@@ -230,6 +230,9 @@ export const verifyCaptureRecords = (opts) => {
                 validation_result: 'empty',
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
+                reason: 'locked',
+                detail: 'another call is verifying this transaction; nothing was read and nothing was bound. ' +
+                    'Wait for it to finish, or prepare a new transaction.',
             };
         }
         createdLock = lock.created;
@@ -487,6 +490,10 @@ const runVerifyCaptureRecords = (opts) => {
                 validation_result: 'empty',
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
+                reason: 'notes-unfetched',
+                detail: 'the notes mirror on refs/notes/commitlore is not fetched here, so the duplicate ' +
+                    'check cannot run. Run `commitlore doctor --fix`, or fetch it directly: ' +
+                    "git fetch origin 'refs/notes/*:refs/notes/*' -- then verify again.",
             };
             return settle(result);
         }
@@ -500,6 +507,10 @@ const runVerifyCaptureRecords = (opts) => {
                 validation_result: 'empty',
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
+                reason: 'history-unavailable',
+                detail: "this repository's active records could not be read, so a draft cannot be checked " +
+                    'against them. `commitlore doctor` reports which of the history, the index and the ' +
+                    'notes mirror is unreadable.',
             };
             return settle(result);
         }

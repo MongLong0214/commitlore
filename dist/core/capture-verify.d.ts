@@ -100,11 +100,19 @@ export interface VerifyCaptureResult {
      * reported case was a 118.7 MB transcript, and what the CLI printed was that
      * a receipt had not been presented.
      *
-     * `detail` carries the exception's own message, which is where the errno or
-     * the `RangeError` lives. Both are advisory: a caller may read `reason` as a
-     * code and must not parse `detail`.
+     * Four causes answer to it, and before #1169 they were one shape: a transcript
+     * the verifier could not read (`internal-error`), a notes mirror nobody
+     * fetched (`notes-unfetched`), a history it could not load
+     * (`history-unavailable`), and a nonce another call holds (`locked`). The
+     * reporter spent a diagnosis on the wrong one, and `context` and `doctor`
+     * already knew how to say "the notes mirror is unfetched" while this path did
+     * not.
+     *
+     * `detail` is a sentence for a person, and it names the move that resolves
+     * the cause where there is one. Both are advisory: a caller may read `reason`
+     * as a code and must not parse `detail`.
      */
-    reason?: 'internal-error';
+    reason?: 'notes-unfetched' | 'history-unavailable' | 'locked' | 'internal-error';
     detail?: string;
     /**
      * Set when the nonce names no transaction at all (#1023).

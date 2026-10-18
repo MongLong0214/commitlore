@@ -384,12 +384,20 @@ const runCapturePipeline = (opts: {
    * own message, which is where the cause is named.
    */
   if (verifyResult.reason !== undefined) {
+    /*
+     * `internal` is for the exception nobody anticipated; the other three are
+     * conditions of the host or the repository, which is what `operational`
+     * (exit 3) has always meant here -- the same code `validate` ships for a
+     * host problem. Reporting a notes mirror nobody fetched as an internal
+     * fault would send the reader looking for a bug in the verifier (#1169).
+     */
+    const outcome = verifyResult.reason === 'internal-error' ? 'internal' : 'operational';
     return {
-      outcome: 'internal',
+      outcome,
       nonce: prepareResult.nonce,
       staged: false,
       error:
-        `Verification did not run (${verifyResult.reason}): ${verifyResult.detail ?? 'no detail'}. ` +
+        `Verification did not run (${verifyResult.reason}): ${verifyResult.detail ?? 'no detail'} ` +
         'The transaction is still prepared, so verifying it again is the next move; ' +
         'nothing was bound and nothing was staged.',
       guard_advisory: prepareResult.guard_advisory,
